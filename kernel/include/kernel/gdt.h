@@ -11,11 +11,11 @@ typedef struct GDTEntry {
 } __attribute__((packed)) GDTEntry;
 
 typedef struct GDT {
-    uint16_t limit;
-    uint32_t base;
+    uint16_t size;
+    uint32_t offset;
 } __attribute__((packed)) GDT;
 
-void gdt_initialize();
+void gdt_initialize(void);
 void gdt_entry(uint8_t *target, struct GDTEntry source);
 
 #endif

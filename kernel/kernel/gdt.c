@@ -6,6 +6,7 @@
 extern void gdt_set(GDT *gdt_ptr);
 extern void reload_segments();
 
+GDT gdtptr;
 uint32_t segment_desc[GDT_SIZE*2];
 GDTEntry gdt_entries[GDT_SIZE] = {
     {0, 0, 0, 0},
@@ -13,11 +14,10 @@ GDTEntry gdt_entries[GDT_SIZE] = {
     {0, 0xFFFFF, 0x92, 0xC}
     //{&TSS, sizeof(TSS), 0x89, 0x0}
 };
-GDT gdtptr;
 
 void gdt_initialize() {
-    gdtptr.limit = (64 * GDT_SIZE) - 1;
-    gdtptr.base = (uint32_t)&segment_desc;
+    gdtptr.size = (64 * GDT_SIZE) - 1;
+    gdtptr.offset = (uint32_t)&segment_desc;
 
     uint8_t *ptr = (uint8_t*)segment_desc;
     gdt_entry(ptr, gdt_entries[0]);
