@@ -1,8 +1,23 @@
 #include <stdio.h>
+#include <stdint.h>
+
 #include <kernel/gdt.h>
 
 #define GDT_SIZE 3
 
+typedef struct GDTEntry {
+    uint32_t base;
+    uint32_t limit;
+    uint8_t access_byte;
+    uint8_t flags;
+} __attribute__((packed)) GDTEntry;
+
+typedef struct GDT {
+    uint16_t size;
+    uint32_t offset;
+} __attribute__((packed)) GDT;
+
+void gdt_entry(uint8_t *target, struct GDTEntry source);
 extern void gdt_set(GDT *gdt_ptr);
 extern void reload_segments();
 

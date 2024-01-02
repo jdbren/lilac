@@ -8,4 +8,7 @@ void kernel_main(void) {
 	printf("\n\n\n");
 	
 	gdt_initialize();
+	int i;
+	asm("mov %%cs, %0" : "=r"(i));
+	printf("CS: %x\n", i);
 }
