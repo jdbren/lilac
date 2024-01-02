@@ -41,6 +41,8 @@ void gdt_initialize() {
 
     gdt_set(&gdtptr);	
     reload_segments();
+    
+    printf("GDT initialized\n");
 }
 
 void gdt_entry(uint8_t *target, struct GDTEntry source)

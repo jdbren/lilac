@@ -1,5 +1,5 @@
-#ifndef _GDT_H
-#define _GDT_H
+#ifndef KERNEL_GDT_H
+#define KERNEL_GDT_H
 
 void gdt_initialize(void);
 
