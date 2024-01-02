@@ -22,9 +22,13 @@ typedef struct IDT {
 IDT idtptr;
 IDTGate idt_entries[IDT_SIZE];
 
+extern void div0(void);
+
 void idt_initialize(void) {
     idtptr.size = (sizeof(IDTGate) * IDT_SIZE) - 1;
     idtptr.offset = (uint32_t)&idt_entries;
+
+    idt_entry(0, (uint32_t)div0, 0x08, TRAP_GATE);
 
     // Remap the PIC - all disabled initially
     pic_initialize();

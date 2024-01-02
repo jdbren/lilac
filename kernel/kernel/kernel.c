@@ -22,6 +22,6 @@ void kernel_main(void) {
 	enable_interrupts();
 
 	while(1) {
-		asm("nop");
+		asm("hlt");
 	}
 }

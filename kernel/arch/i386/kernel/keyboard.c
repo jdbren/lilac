@@ -14,8 +14,7 @@ uint8_t keyboard_read(void) {
 }
 
 void keyboard_initialize(void) {
-    idt_entry(0x21, (uint32_t)keyboard_handler, 0x08, INT_GATE);
-
+    idt_entry(0x20 + 1, (uint32_t)keyboard_handler, 0x08, INT_GATE);
     IRQ_clear_mask(1);
     printf("Keyboard initialized\n");
 }
