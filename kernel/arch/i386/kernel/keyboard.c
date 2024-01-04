@@ -3,7 +3,7 @@
 #include <kernel/idt.h>
 #include <kernel/pic.h>
 #include <kernel/keyboard.h>
-#include <kernel/keymap.h>
+#include <utility/keymap.h>
 
 #include "io.h"
 
