@@ -28,6 +28,7 @@ stack_top:
 
 .section .bss, "aw", @nobits
 .align __PAGE_OFFSET
+.globl page_directory
 page_directory:
 	.fill 1024,4,0
 boot_page_table0:
@@ -89,6 +90,12 @@ _start:
 	addl $(4*768), %edi
 	movl %esi, (%edi)
 
+	movl $pa(page_directory), %eax
+	movl %eax, %edi
+	addl $(4*1023), %edi
+	orl  $3, %eax
+	movl %eax, (%edi)
+
 	# Enable paging.
 	movl $pa(page_directory), %eax
 	movl %eax, %cr3
@@ -109,7 +116,7 @@ _start:
 	cmpl $(boot_page_table0 + 4096), %edi
 	jne  4b
 
-	# Reload crc3 to force a TLB flush so the changes to take effect.
+	# Reload cr3 to force a TLB flush so the changes to take effect.
 	movl %cr3, %ecx
 	movl %ecx, %cr3
 

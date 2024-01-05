@@ -25,6 +25,17 @@ invalid_opcode:
 double_fault:
     hlt
 
+# need to implement
+.extern pg_fault_handler
+.globl page_fault
+page_fault:
+    pushad
+    cld
+    call pg_fault_handler
+    popad
+    iretd
+
+
 
 .extern keyboard_interrupt
 .global keyboard_handler
