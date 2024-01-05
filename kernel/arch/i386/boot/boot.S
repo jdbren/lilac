@@ -90,6 +90,7 @@ _start:
 	addl $(4*768), %edi
 	movl %esi, (%edi)
 
+	# Recursive map
 	movl $pa(page_directory), %eax
 	movl %eax, %edi
 	addl $(4*1023), %edi
@@ -100,7 +101,7 @@ _start:
 	movl $pa(page_directory), %eax
 	movl %eax, %cr3
 	movl %cr0, %eax
-	orl  $(0x80000000), %eax
+	orl  $(0x80010000), %eax # pg enable, write-protect enable
 	movl %eax, %cr0
 
 	# Switch to the higher half.

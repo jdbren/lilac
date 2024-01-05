@@ -5,10 +5,9 @@
 #define MEMORY_SPACE 0x100000000 // 4GB
 
 #define CHECK_BIT(var,pos) ((var) & (1<<(pos)))
+#define BITMAP_SIZE (MEMORY_SPACE / PAGE_SIZE / 8 / 4)
 
 extern const uint32_t _kernel_end;
-
-#define BITMAP_SIZE (MEMORY_SPACE / PAGE_SIZE / 8 / 4)
 static const uint32_t FIRST_PAGE = (uint32_t)&_kernel_end - 0xC0000000;
 
 static uint32_t pg_frame_bitmap[BITMAP_SIZE];
@@ -79,7 +78,7 @@ void free_frame(void *frame, int num_pages) {
     }
 
     /*
-    int start = ((uint32_t*)frame - FIRST_PAGE) / 32;
+    int start = ((uint32_t)frame - FIRST_PAGE) / 32;
     int end = start + num_pages;
 
     for (int i = start; i < end; i++) {
@@ -100,10 +99,7 @@ static void* __alloc_frame() {
                 if (!CHECK_BIT(pg_frame_bitmap[i], j)) {
                     pg_frame_bitmap[i] |= (1 << j);
                     last = i;
-                    printf("value of j = %d\n", j);
-                    void *ptr = (void*)(FIRST_PAGE + (i * 32 + j) * PAGE_SIZE);
-                    printf("Allocating page %x in __alloc_frame()\n", ptr);
-                    return ptr;
+                    return (void*)(FIRST_PAGE + (i * 32 + j) * PAGE_SIZE);
                 }
             }
         }
@@ -115,7 +111,7 @@ static void* __alloc_frame() {
                 if (!CHECK_BIT(pg_frame_bitmap[i], j)) {
                     pg_frame_bitmap[i] |= (1 << j);
                     last = i;
-                    return (void*)(FIRST_PAGE + (i * 32 + j));
+                    return (void*)(FIRST_PAGE + (i * 32 + j) * PAGE_SIZE);
                 }
             }
         }
@@ -126,8 +122,8 @@ static void* __alloc_frame() {
 }
 
 static void __free_frame(uint32_t *frame) {
-    // int index = (frame - FIRST_PAGE) / 32;
-    // int offset = (frame - FIRST_PAGE) % 32;
+    int index = ((uint32_t)frame - FIRST_PAGE) / 32;
+    int offset = ((uint32_t)frame - FIRST_PAGE) % 32;
 
-    // pg_frame_bitmap[index] &= ~(1 << offset);
+    pg_frame_bitmap[index] &= ~(1 << offset);
 }

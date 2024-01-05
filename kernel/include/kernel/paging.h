@@ -1,7 +1,9 @@
 #ifndef KERNEL_PAGING_H
 #define KERNEL_PAGING_H
 
-void map_page(void *physaddr, void *virtualaddr, unsigned int flags);
-void unmap_page(void *virtualaddr);
+#include <stdint.h>
+
+int map_page(void *physaddr, void *virtualaddr, uint16_t flags);
+int unmap_page(void *virtualaddr);
 
 #endif
