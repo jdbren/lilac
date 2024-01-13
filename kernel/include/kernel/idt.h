@@ -8,7 +8,7 @@
 #define TASK_GATE 0x85
 
 void idt_initialize(void);
-void idt_entry(int, uint32_t, uint16_t, uint8_t);
+void idt_entry(int num, uint32_t offset, uint16_t selector, uint8_t attr);
 
 static inline void enable_interrupts(void) {
     asm volatile("sti");

@@ -54,7 +54,7 @@ _start:
 	leal -__KERNEL_BASE(%ecx), %esp
 	cld
 
-	# Identity map the first 4MB of memory.
+	# Identity map the kernel.
 	movl $pa(boot_page_table0), %edi # page table entry
 	xorl %eax, %eax				 # start addr = 0
 
@@ -117,7 +117,7 @@ _start:
 	cmpl $(boot_page_table0 + 4096), %edi
 	jne  4b
 
-	# Reload cr3 to force a TLB flush so the changes to take effect.
+	# Reload cr3 to force a TLB flush so the changes take effect.
 	movl %cr3, %ecx
 	movl %ecx, %cr3
 
