@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 
 #include <kernel/tty.h>
 #include <kernel/gdt.h>
@@ -6,6 +7,7 @@
 #include <kernel/idt.h>
 #include <kernel/pgframe.h>
 #include <kernel/paging.h>
+#include <kernel/mm.h>
 
 void kernel_main(void) {
 	terminal_initialize();
@@ -13,16 +15,18 @@ void kernel_main(void) {
 	idt_initialize();
 	keyboard_initialize();
 	enable_interrupts();
+	mm_init();
 
-	uint32_t *page = alloc_frame(1);
-	printf("Allocated test page in main: %x\n", page);
-	map_page(page, (void*)0x4F55C000, 0x3);
-	int *ptr = (int*)0x4F55C000;
-	*ptr = 0xDEADBEEF;
-	printf("Value at %x: %x\n", ptr, *ptr);
-	unmap_page((void*)0x4F55C000);
-	free_frame(page, 1);
-	//printf("Value at %x: %x\n", ptr, *ptr);
+	printf("\nMore testing:\n");
+	void *virtual_alloc = kvirtual_alloc(1);
+	printf("Allocated %x\n", virtual_alloc);
+	memset(virtual_alloc, 'a', 4096);
+	printf("%x: %c\n", (char*)virtual_alloc + 10, *((char*)virtual_alloc + 10));
+
+	virtual_alloc = kvirtual_alloc(2);
+	memset(virtual_alloc, 'b', 8128);
+	printf("%x: %c\n", (char*)virtual_alloc + 10000, *((char*)virtual_alloc + 10000));
+
 
 	while(1) {
 		asm("hlt");

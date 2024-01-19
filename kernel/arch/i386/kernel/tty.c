@@ -17,7 +17,7 @@ static uint8_t terminal_color;
 static uint16_t* terminal_buffer;
 
 void terminal_initialize(void) {
-	terminal_row = 0;
+	terminal_row = 2;
 	terminal_column = 0;
 	terminal_color = vga_entry_color(VGA_COLOR_CYAN, VGA_COLOR_BLACK);
 	terminal_buffer = VGA_MEMORY;
@@ -27,7 +27,7 @@ void terminal_initialize(void) {
 			terminal_buffer[index] = vga_entry(' ', terminal_color);
 		}
 	}
-	terminal_writestring("\n\n\nTerminal initialized\n");
+	terminal_writestring("Terminal initialized\n");
 }
 
 void terminal_setcolor(uint8_t color) {
@@ -39,19 +39,32 @@ void terminal_putentryat(unsigned char c, uint8_t color, size_t x, size_t y) {
 	terminal_buffer[index] = vga_entry(c, color);
 }
 
+void terminal_scroll() {
+	int i, k, j;
+	for (k = 2, j = 1; k < VGA_HEIGHT; k++, j++) {
+		for (i = 0; i < VGA_WIDTH; i++) {
+			terminal_putentryat(terminal_buffer[k * VGA_WIDTH + i], 
+				terminal_color, i, j);
+		}
+	}
+	for (i = 0; i < VGA_WIDTH; i++)
+		terminal_putentryat(' ', terminal_color, i, VGA_HEIGHT-1);
+	terminal_row--;
+}
+
 void terminal_putchar(char c) {
 	unsigned char uc = c;
 	if(c == '\n') {
 		terminal_column = 0;
 		if (++terminal_row == VGA_HEIGHT)
-			terminal_row = 0;
+			terminal_scroll();
 		return;
 	}
 	terminal_putentryat(uc, terminal_color, terminal_column, terminal_row);
 	if (++terminal_column == VGA_WIDTH) {
 		terminal_column = 0;
 		if (++terminal_row == VGA_HEIGHT)
-			terminal_row = 0;
+			terminal_scroll();
 	}
 }
 

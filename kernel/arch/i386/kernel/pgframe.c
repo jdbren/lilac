@@ -19,7 +19,6 @@ static void __free_frame(uint32_t *frame);
 // 0 = free, 1 = used
 
 void* alloc_frame(int num_pages) {
-    printf("FIRST_PAGE: %x\n", FIRST_PAGE);
     if (num_pages == 0) {
         return 0;
     }
@@ -99,6 +98,7 @@ static void* __alloc_frame() {
                 if (!CHECK_BIT(pg_frame_bitmap[i], j)) {
                     pg_frame_bitmap[i] |= (1 << j);
                     last = i;
+                    printf("Allocated phys page %x\n", (void*)(FIRST_PAGE + (i * 32 + j) * PAGE_SIZE));
                     return (void*)(FIRST_PAGE + (i * 32 + j) * PAGE_SIZE);
                 }
             }

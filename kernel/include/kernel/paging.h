@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define PAGE_BYTES 4096
+
 int map_page(void *physaddr, void *virtualaddr, uint16_t flags);
 int unmap_page(void *virtualaddr);
 

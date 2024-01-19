@@ -3,8 +3,8 @@
 
 #include <stdint.h>
 
-void mm_init();
-void* virtual_alloc(int num_pages);
-void virtual_free(void* addr, int num_pages);
+void mm_init(void);
+void* kvirtual_alloc(unsigned int num_pages);
+void kvirtual_free(void* addr, unsigned int num_pages);
 
 #endif
