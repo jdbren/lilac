@@ -65,27 +65,27 @@ int printf(const char* restrict format, ...) {
 				return -1;
 			written += len;
 		} 
-		else if(*format == 'd') {
+		else if (*format == 'd') {
 			format++;
 			int i = va_arg(parameters, int);
-			if(i<0) { 
+			if (i<0) { 
 				i = -i;
 				putchar('-'); 
 			} 
 			char *s = convert(i, 10);
 			int len = strlen(s);
-			if(!print(s, len))
+			if (!print(s, len))
 				return -1;
 			written += len;
 		}
-		else if(*format == 'x') {
+		else if (*format == 'x') {
 			format++;
 			int i = va_arg(parameters, int); 
 			char *s = convert(i, 16);
 			*--s = 'x';
 			*--s = '0';
 			int len = strlen(s);
-			if(!print(s, len))
+			if (!print(s, len))
 				return -1;
 			written += len;
 		}
@@ -118,7 +118,7 @@ char *convert(unsigned int num, int base) {
     do { 
         *--ptr = Representation[num%base]; 
         num /= base; 
-    } while(num != 0); 
+    } while (num != 0); 
 
     return(ptr); 
 }

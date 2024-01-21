@@ -24,7 +24,7 @@ void keyboard_interrupt(void) {
     keycode = inb(KEYBOARD_DATA_PORT);
     /* Only print characters on keydown event that have
      * a non-zero mapping */
-    if(keycode >= 0 && keyboard_map[keycode]) {
+    if (keycode >= 0 && keyboard_map[keycode]) {
         printf("%c", keyboard_map[keycode]);
     }
 

@@ -53,7 +53,7 @@ void terminal_scroll() {
 
 void terminal_putchar(char c) {
 	unsigned char uc = c;
-	if(c == '\n') {
+	if (c == '\n') {
 		terminal_column = 0;
 		if (++terminal_row == VGA_HEIGHT)
 			terminal_scroll();

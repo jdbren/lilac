@@ -100,11 +100,11 @@ void* malloc_small(size_t size) {
     SBHeader *header = NULL;
 
     // check if there is any memory available
-    if(allLists[bucketIndex].freeCount == 0) {
+    if (allLists[bucketIndex].freeCount == 0) {
         // allocate new superblock
         void *block = mmap(NULL, SUPERBLOCKSIZE, PROT_READ|PROT_WRITE,
             MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-        if(block == MAP_FAILED) {
+        if (block == MAP_FAILED) {
             perror("mmap failed");
             return NULL;
         }
@@ -119,17 +119,17 @@ void* malloc_small(size_t size) {
     else {
         // use existing superblock
         header = (SBHeader*)allLists[bucketIndex].list;
-        while(header->freeCount == 0) {
+        while (header->freeCount == 0) {
             header = header->nextSB;
         }
         // move superblock to front of list if it has room
         // trying to improve locality, I think Hoard does something similar
-        if(header->freeCount > 1 && header != allLists[bucketIndex].list) {
+        if (header->freeCount > 1 && header != allLists[bucketIndex].list) {
             moveToFront(header, bucketIndex);
         }
     }
 
-    if(header->isFree) {
+    if (header->isFree) {
         allLists[bucketIndex].numFreeSB--;
         header->isFree = false;
     }
@@ -164,7 +164,7 @@ void initSuper(SBHeader *header, size_t size, int bucketIndex) {
 
     // make free list
     Alloc *current = header->free, *next = 0;
-    for(int i = 1; i < header->freeCount; i++) {
+    for (int i = 1; i < header->freeCount; i++) {
         next = (Alloc*)((byte*)(current) + size);
         current->free = next;
         current = next;
@@ -173,12 +173,12 @@ void initSuper(SBHeader *header, size_t size, int bucketIndex) {
 
 // Move superblock to front of list
 void moveToFront(SBHeader *header, int bucketIndex) {
-    if(header->prevSB != NULL)
+    if (header->prevSB != NULL)
         header->prevSB->nextSB = header->nextSB;
-    if(header->nextSB != NULL)
+    if (header->nextSB != NULL)
         header->nextSB->prevSB = header->prevSB;
     header->nextSB = allLists[bucketIndex].list;
-    if(header->nextSB != NULL)
+    if (header->nextSB != NULL)
         header->nextSB->prevSB = header;
     header->prevSB = NULL;
     allLists[bucketIndex].list = header;
@@ -187,7 +187,7 @@ void moveToFront(SBHeader *header, int bucketIndex) {
 // Add superblock to front of list
 void addToFront(SBHeader *header, int bucketIndex) {
     header->nextSB = allLists[bucketIndex].list;
-    if(header->nextSB != NULL)
+    if (header->nextSB != NULL)
         header->nextSB->prevSB = header;
     header->prevSB = NULL;
 
@@ -196,7 +196,7 @@ void addToFront(SBHeader *header, int bucketIndex) {
 
 // Keeps or frees an empty superblock
 SBHeader* manageEmptySuperblock(SBHeader *header, int bucketIndex) {
-    if(allLists[bucketIndex].numSB <= RETAIN_FREE_SUPERBLOCK_COUNT) {
+    if (allLists[bucketIndex].numSB <= RETAIN_FREE_SUPERBLOCK_COUNT) {
         // keep superblock in list
         allLists[bucketIndex].numFreeSB++;
         header->isFree = true;
@@ -205,23 +205,23 @@ SBHeader* manageEmptySuperblock(SBHeader *header, int bucketIndex) {
     }
     else {
         // remove superblock from list
-        if(header == allLists[bucketIndex].list) {
+        if (header == allLists[bucketIndex].list) {
             // list front block is empty
             allLists[bucketIndex].list = header->nextSB;
             allLists[bucketIndex].list->prevSB = NULL;
         }
         else {
             // remove superblock from list
-            if(header->prevSB != NULL)
+            if (header->prevSB != NULL)
                 header->prevSB->nextSB = header->nextSB;   
-            if(header->nextSB != NULL)
+            if (header->nextSB != NULL)
                 header->nextSB->prevSB = header->prevSB;
         }
         allLists[bucketIndex].numSB--;
         allLists[bucketIndex].freeCount -= header->freeCount;
         // free superblock
         munmap(header, SUPERBLOCKSIZE);
-        if(errno != 0) {
+        if (errno != 0) {
             perror("munmap failed");
             return NULL;
         }
@@ -235,7 +235,7 @@ SBHeader* manageEmptySuperblock(SBHeader *header, int bucketIndex) {
 size_t nextPowerOfTwo(size_t nextPow2){
     nextPow2--;
     nextPow2 |= nextPow2 >> 1;
-    for(int i = 2; i < sizeof(size_t); i++) {
+    for (int i = 2; i < sizeof(size_t); i++) {
         nextPow2 |= nextPow2 >> i;
     }
     nextPow2++;

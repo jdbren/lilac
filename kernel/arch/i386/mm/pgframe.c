@@ -3,18 +3,16 @@
 
 #define PAGE_SIZE 0x1000
 #define MEMORY_SPACE 0x100000000 // 4GB
-
-#define CHECK_BIT(var,pos) ((var) & (1<<(pos)))
 #define BITMAP_SIZE (MEMORY_SPACE / PAGE_SIZE / 8 / 4)
 
-
+#define check_bit(var,pos) ((var) & (1<<(pos)))
 
 typedef struct {
     uint8_t pg[PAGE_SIZE];
 } __attribute__((packed)) page_t;
 
 extern const uint32_t _kernel_end;
-static uint32_t FIRST_PAGE = (uint32_t)&_kernel_end - (uint32_t)0xC0000000;
+static const uint32_t FIRST_PAGE = (uint32_t)&_kernel_end - (uint32_t)0xC0000000;
 
 static uint32_t pg_frame_bitmap[BITMAP_SIZE];
 
@@ -25,8 +23,10 @@ static void __free_frame(page_t *frame);
 // bit #i in byte #n define the status of page #n*8+i
 // 0 = free, 1 = used
 
-void* alloc_frames(uint32_t num_pages) {
-    if (num_pages == 0) return 0;
+void* alloc_frames(uint32_t num_pages) 
+{
+    if (num_pages == 0) 
+        return 0;
 
     int start = 0;
     int count = 0;
@@ -44,19 +44,21 @@ void* alloc_frames(uint32_t num_pages) {
     return 0;
 }
 
-void free_frames(void *frame, uint32_t num_pages) {
-    if (num_pages == 0) return;
+void free_frames(void *frame, uint32_t num_pages) 
+{
+    if (num_pages == 0) 
+        return;
 
-    for(page_t *pg = (page_t*)frame, 
-        *end = (page_t*)frame + num_pages; pg < end; pg++) 
-    {
+    for (page_t *pg = (page_t*)frame, *end = (page_t*)frame + num_pages; 
+    pg < end; pg++) {
         __free_frame(pg);
     }
 }
 
-static void* __check_bitmap(int i, int num_pages, int *count, int *start) {
+static void* __check_bitmap(int i, int num_pages, int *count, int *start) 
+{
     for (int j = 0; j < 32; j++) {
-        if (!CHECK_BIT(pg_frame_bitmap[i], j)) {
+        if (!check_bit(pg_frame_bitmap[i], j)) {
             if (*count == 0)
                 *start = i * 32 + j;
 
@@ -73,7 +75,8 @@ static void* __check_bitmap(int i, int num_pages, int *count, int *start) {
     return 0;
 }
 
-static void* __do_frame_alloc(int start, int num_pages) {
+static void* __do_frame_alloc(int start, int num_pages) 
+{
     for (int k = start; k < start + num_pages; k++) {
         int index = k / 32;
         int offset = k % 32;
@@ -88,7 +91,8 @@ static void* __do_frame_alloc(int start, int num_pages) {
     return (void*)(FIRST_PAGE + start * PAGE_SIZE);
 }
 
-static void __free_frame(page_t *frame) {
+static void __free_frame(page_t *frame)
+{
     printf("Freeing phys page %x\n", frame);
 
     uint32_t index = ((uint32_t)frame - FIRST_PAGE) / (32 * PAGE_SIZE);
