@@ -89,7 +89,7 @@ static int pde(int index, uint8_t priv, uint8_t rw) {
     // 3...0: cache enabled, write-through disabled, u/s mode
     uint8_t flags = default_flags | (priv << 2) | (rw << 1);
 
-    void *addr = alloc_frame(1);
+    void *addr = alloc_frame();
     assert(is_aligned(addr, PAGE_BYTES));
 
     pde_t entry = (uint32_t)addr | flags;

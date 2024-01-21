@@ -37,6 +37,7 @@ void kernel_main(void) {
 	printf("%x: %c\n", (char*)virtual_alloc + 10, *((char*)virtual_alloc + 10));
 
 	virtual_alloc = kvirtual_alloc(2);
+	printf("Allocated %x\n", virtual_alloc);
 	memset(virtual_alloc, 'b', 8128);
 	printf("%x: %c\n", (char*)virtual_alloc + 5000, *((char*)virtual_alloc + 5000));
 

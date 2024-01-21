@@ -32,15 +32,10 @@ void mm_init(void) {
     void *phys = alloc_frames(HEAP_MANAGE_PAGES);
     map_pages(phys, (void*)kernel_avail, 0x3, HEAP_MANAGE_PAGES);
 
-    list = kernel_avail;
+    list = 0;
     memset(kernel_avail, 0, HEAP_MANAGE_PAGES * sizeof(memory_desc_t));
 
-    kernel_avail[0].prev = 0;
-    kernel_avail[0].next = 0;
-    kernel_avail[0].size = 1;
-    kernel_avail[0].start = (uint8_t*)KHEAP_MAX_ADDR;
-
-    unused_heap_addr = KHEAP_MAX_ADDR - PAGE_SIZE;
+    unused_heap_addr = KHEAP_MAX_ADDR;
 
     printf("Kernel virtual address allocation enabled\n");
 }
@@ -79,8 +74,8 @@ void* kvirtual_alloc(unsigned int num_pages) {
                 list = mem_addr->next;
 
             memset(mem_addr, 0, sizeof(memory_desc_t));
-            void *phys = alloc_frame(1);
-            map_page(phys, ptr, 0x3);
+            void *phys = alloc_frames(num_pages);
+            map_pages(phys, ptr, 0x3, num_pages);
 
             return ptr;
         }
@@ -89,13 +84,13 @@ void* kvirtual_alloc(unsigned int num_pages) {
     }
 
     if(unused_heap_addr >= KHEAP_START_ADDR)
-        ptr = (void*)unused_heap_addr;
+        ptr = (void*)unused_heap_addr - (num_pages - 1) * PAGE_SIZE;
     else 
         kerror("KERNEL OUT OF VIRTUAL MEMORY");
 
     unused_heap_addr = (uint32_t)unused_heap_addr - num_pages * PAGE_SIZE;
-    void *phys = alloc_frame(1);
-    map_page(phys, ptr, 0x3);
+    void *phys = alloc_frames(num_pages);
+    map_pages(phys, ptr, 0x3, num_pages);
 
     return ptr;
 }
