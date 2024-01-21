@@ -9,10 +9,6 @@
 
 void idt_initialize(void);
 void idt_entry(int num, uint32_t offset, uint16_t selector, uint8_t attr);
-
-static inline void enable_interrupts(void) {
-    asm volatile("sti");
-    printf("Interrupts enabled\n");
-}
+void enable_interrupts(void);
 
 #endif

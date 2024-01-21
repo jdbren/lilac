@@ -29,7 +29,6 @@ LIBS:=$(LIBS) $(KERNEL_ARCH_LIBS)
 
 KERNEL_OBJS=\
 $(KERNEL_ARCH_OBJS) \
-kernel/kernel.o \
 
 OBJS=\
 $(ARCHDIR)/boot/crti.o \

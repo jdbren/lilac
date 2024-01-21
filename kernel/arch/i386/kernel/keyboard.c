@@ -1,11 +1,10 @@
 #include <stdio.h>
 
-#include <kernel/idt.h>
-#include <kernel/pic.h>
 #include <kernel/keyboard.h>
 #include <utility/keymap.h>
-
-#include "io.h"
+#include <arch/x86/idt.h>
+#include <arch/x86/io.h>
+#include <arch/x86/pic.h>
 
 extern void keyboard_handler(void);
 

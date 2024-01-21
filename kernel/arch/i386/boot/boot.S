@@ -45,14 +45,22 @@ _start:
 
 	# Set up the boot segment registers.
 	lgdt pa(boot_gdt_descr)
-	movl $(__BOOT_DS),%eax
-	movl %eax,%ds
-	movl %eax,%es
-	movl %eax,%fs
-	movl %eax,%gs
-	movl %eax,%ss
+	movl $(__BOOT_DS), %eax
+	movl %eax, %ds
+	movl %eax, %es
+	movl %eax, %fs
+	movl %eax, %gs
+	movl %eax, %ss
 	leal -__KERNEL_BASE(%ecx), %esp
+
+	# Clear the bss.
 	cld
+	xorl %eax, %eax
+	movl $pa(_bss_start), %edi
+	movl $pa(_bss_end), %ecx
+	subl %edi, %ecx
+	shrl $2, %ecx
+	rep ; stosl
 
 	# Identity map the kernel.
 	movl $pa(boot_page_table0), %edi # page table entry
@@ -63,12 +71,12 @@ _start:
 	movl %esi, (%edi)			# set page table entry
 	addl $4, %edi				# next page table entry
 	addl $4096, %eax			# next page address
-	cmpl $(pa(_kernel_end)), %eax		# check if we are done
+	cmpl $pa(_kernel_end), %eax	# check if we are done
 	jne  1b 					# if not, continue
 
 	# Set up the kernel page mapping (higher half).
-	movl $0, %eax
-	movl $(pa(boot_page_table768)), %edi # addresses 0xC0000000...kernel end
+	xorl %eax, %eax
+	movl $pa(boot_page_table768), %edi # addresses 0xC0000000...kernel end
 	movl $pa(_kernel_end), %ecx
 
 2:	movl %eax, %esi

@@ -2,12 +2,12 @@
 #include <string.h>
 
 #include <kernel/tty.h>
-#include <kernel/gdt.h>
 #include <kernel/keyboard.h>
-#include <kernel/idt.h>
-#include <kernel/pgframe.h>
-#include <kernel/paging.h>
-#include <kernel/mm.h>
+#include <arch/x86/gdt.h>
+#include <arch/x86/idt.h>
+#include <mm/pgframe.h>
+#include <mm/paging.h>
+#include <mm/kmm.h>
 
 void kernel_main(void) {
 	terminal_initialize();
@@ -17,6 +17,19 @@ void kernel_main(void) {
 	enable_interrupts();
 	mm_init();
 
+	/*
+	void *physical_alloc = alloc_frames(3);
+	int *virt_addr = (int*)0x55555000;
+	map_pages(physical_alloc, (void*)virt_addr, 0x3, 3);
+	virt_addr[200] = 0x12345678;
+	printf("%x: %x\n", virt_addr + 200, virt_addr[200]);
+	unmap_pages(virt_addr, 3);
+	free_frames(physical_alloc, 3);
+	alloc_frame();
+	alloc_frame();
+	alloc_frame();
+	*/
+
 	printf("\nMore testing:\n");
 	void *virtual_alloc = kvirtual_alloc(1);
 	printf("Allocated %x\n", virtual_alloc);
@@ -25,8 +38,7 @@ void kernel_main(void) {
 
 	virtual_alloc = kvirtual_alloc(2);
 	memset(virtual_alloc, 'b', 8128);
-	printf("%x: %c\n", (char*)virtual_alloc + 10000, *((char*)virtual_alloc + 10000));
-
+	printf("%x: %c\n", (char*)virtual_alloc + 5000, *((char*)virtual_alloc + 5000));
 
 	while(1) {
 		asm("hlt");

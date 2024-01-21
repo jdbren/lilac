@@ -1,6 +1,6 @@
 #include <stdint.h>
-#include <kernel/pic.h>
-#include "io.h"
+#include <arch/x86/pic.h>
+#include <arch/x86/io.h>
 
 void pic_initialize(void) {
     pic_disable();

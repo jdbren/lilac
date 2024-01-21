@@ -1,8 +1,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include <kernel/idt.h>
-#include <kernel/pic.h>
+#include <arch/x86/idt.h>
+#include <arch/x86/pic.h>
 
 #define IDT_SIZE 256
 
@@ -24,6 +24,11 @@ IDTGate idt_entries[IDT_SIZE];
 
 extern void div0(void);
 extern void page_fault(void);
+
+void enable_interrupts(void) {
+    asm volatile("sti");
+    printf("Interrupts enabled\n");
+}
 
 void idt_initialize(void) {
     idtptr.size = (sizeof(IDTGate) * IDT_SIZE) - 1;
