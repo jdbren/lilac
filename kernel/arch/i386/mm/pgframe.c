@@ -31,7 +31,7 @@ void* alloc_frames(uint32_t num_pages)
     int start = 0;
     int count = 0;
     for (int i = 0; i < BITMAP_SIZE; i++) {
-        if (pg_frame_bitmap[i] != ~0) {
+        if (pg_frame_bitmap[i] != ~0UL) {
             void *ptr = __check_bitmap(i, num_pages, &count, &start);
             if (ptr)
                 return ptr;
@@ -84,17 +84,15 @@ static void* __do_frame_alloc(int start, int num_pages)
         pg_frame_bitmap[index] |= (1 << offset);
     }
 
-    printf("Allocated phys pages %x to %x\n", 
-        (void*)(FIRST_PAGE + start * PAGE_SIZE), 
-        (void*)(FIRST_PAGE + (start + num_pages) * PAGE_SIZE));
+    // printf("Allocated phys pages %x to %x\n", 
+    //     (void*)(FIRST_PAGE + start * PAGE_SIZE), 
+    //     (void*)(FIRST_PAGE + (start + num_pages) * PAGE_SIZE));
     
     return (void*)(FIRST_PAGE + start * PAGE_SIZE);
 }
 
 static void __free_frame(page_t *frame)
 {
-    printf("Freeing phys page %x\n", frame);
-
     uint32_t index = ((uint32_t)frame - FIRST_PAGE) / (32 * PAGE_SIZE);
     uint32_t offset = (((uint32_t)frame - FIRST_PAGE) / PAGE_SIZE) % 32;
 

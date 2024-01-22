@@ -31,7 +31,8 @@ GDTEntry gdt_entries[GDT_SIZE] = {
     //{&TSS, sizeof(TSS), 0x89, 0x0}
 };
 
-void gdt_initialize() {
+void gdt_initialize()
+{
     gdtptr.size = (64 * GDT_SIZE) - 1;
     gdtptr.offset = (uint32_t)&segment_desc;
 
@@ -46,7 +47,8 @@ void gdt_initialize() {
     printf("GDT initialized\n");
 }
 
-void gdt_entry(uint8_t *target, struct GDTEntry *source) {
+void gdt_entry(uint8_t *target, struct GDTEntry *source)
+{
     // Check the limit to make sure that it can be encoded
     if (source->limit > 0xFFFFF) {
         kerror("GDT cannot encode limits larger than 0xFFFFF");

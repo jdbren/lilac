@@ -25,12 +25,14 @@ IDTGate idt_entries[IDT_SIZE];
 extern void div0(void);
 extern void page_fault(void);
 
-void enable_interrupts(void) {
+void enable_interrupts(void)
+{
     asm volatile("sti");
     printf("Interrupts enabled\n");
 }
 
-void idt_initialize(void) {
+void idt_initialize(void)
+{
     idtptr.size = (sizeof(IDTGate) * IDT_SIZE) - 1;
     idtptr.offset = (uint32_t)&idt_entries;
 
@@ -45,7 +47,8 @@ void idt_initialize(void) {
     printf("Loaded IDT\n");
 }
 
-void idt_entry(int num, uint32_t offset, uint16_t selector, uint8_t attr) {
+void idt_entry(int num, uint32_t offset, uint16_t selector, uint8_t attr)
+{
     IDTGate *target = idt_entries + num;
     target->offset_low = offset & 0xFFFF;
     target->offset_high = (offset >> 16) & 0xFFFF;

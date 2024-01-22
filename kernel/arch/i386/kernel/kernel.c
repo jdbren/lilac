@@ -8,8 +8,10 @@
 #include <mm/pgframe.h>
 #include <mm/paging.h>
 #include <mm/kmm.h>
+#include <mm/kheap.h>
 
-void kernel_main(void) {
+void kernel_main(void)
+{
 	terminal_initialize();
 	gdt_initialize();
 	idt_initialize();
@@ -46,8 +48,29 @@ void kernel_main(void) {
 	virtual_alloc = kvirtual_alloc(4);
 	printf("Allocated %x\n", virtual_alloc);
 
-	kvirtual_free(virtual_alloc, 4);
-	printf("Freed %x\n", virtual_alloc);
+	virtual_alloc = kvirtual_alloc(20);
+	printf("Allocated %x\n", virtual_alloc);
+
+	virtual_alloc = kvirtual_alloc(1);
+	printf("Allocated %x\n", virtual_alloc);
+
+	int *alloc = (int*)kmalloc(sizeof(int) * 101);
+	printf("Allocated %x\n", alloc);
+	alloc[45] = 0x12345678;
+	printf("%x: %x\n", &alloc[45], alloc[45]);
+	kfree(alloc);
+
+	alloc = (int*)kmalloc(sizeof(int) * 4723);
+	printf("allocated %x\n", alloc);
+	alloc[504] = 0x87654321;
+	printf("%x: %x\n", &alloc[504], alloc[504]);
+	kfree(alloc);
+
+	alloc = (int*)kmalloc(sizeof(int) * 10843);
+	printf("allocated %x\n", alloc);
+	alloc[6823] = 0xAABBCCDD;
+	printf("%x: %x\n", &alloc[6823], alloc[6823]);
+	kfree(alloc);
 
 	while (1) {
 		asm("hlt");

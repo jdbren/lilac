@@ -1,24 +1,24 @@
 #include <stdint.h>
 #include <stdbool.h>
-#include <kernel/heap.h>
-#include <kernel/paging.h>
-#include <kernel/pgframe.h>
+#include <math.h>
+
+#include <kernel/panic.h>
+#include <mm/kheap.h>
+#include <mm/kmm.h>
+#include <mm/paging.h>
+#include <mm/pgframe.h>
 
 #define PAGE_SIZE PAGE_BYTES
-#define KHEAP_MAX_ADDR 0xFFFEF000
-#define KHEAP_PAGES KHEAP_SIZE / PAGE_SIZE
-
-extern uint32_t _kernel_end;
-const uint32_t KHEAP_START_ADDR = (uint32_t)(&_kernel_end);
-
-#define MIN_ALLOC 32
-#define MIN_ALLOC_POWER 5
-#define SUPERBLOCKSIZE PAGE_SIZE
-#define BUCKETS 7
-#define RETAIN_FREE_SUPERBLOCK_COUNT 10
-#define SUPERBLOCKMASK (~(SUPERBLOCKSIZE - 1))
+#define MIN_ALLOC 4
+#define MIN_ALLOC_POWER 2
+#define RETAIN_FREE_SUPERBLOCK_COUNT 4
+#define PAGE_MASK (~(PAGE_SIZE - 1))
 #define is_aligned(POINTER, BYTE_COUNT) \
-    (((uintptr_t)(const void *)(POINTER)) % (BYTE_COUNT) == 0)
+    (((uintptr_t)(POINTER)) % (BYTE_COUNT) == 0)
+
+static const int SUPERBLOCKSIZE = PAGE_SIZE * 8;
+static const int SUPERBLOCKPAGES = SUPERBLOCKSIZE / PAGE_SIZE;
+#define BUCKETS 13
 
 typedef struct SBList SBList;
 typedef struct SBHeader SBHeader;
@@ -27,11 +27,10 @@ typedef unsigned char byte;
 
 struct SBList {
     SBHeader *list;
-    unsigned int allocSize;
-    unsigned int freeCount;
-    unsigned int numSB;
-    unsigned int numFreeSB;
-};
+    uint32_t allocSize;
+    uint32_t freeCount;
+    uint32_t numSB;
+}; // 16 bytes
 
 struct SBHeader {
     SBHeader *nextSB;
@@ -44,8 +43,7 @@ struct SBHeader {
     unsigned short freeCount;
     bool isFree;
     bool isLarge;
-    char padding[2];
-}; // 32 bytes
+} __attribute__((aligned(32))); 
 
 union Alloc {
     Alloc *free;
@@ -69,46 +67,79 @@ void moveToFront(SBHeader*, int);
 void addToFront(SBHeader*, int);
 size_t nextPowerOfTwo(size_t);
 
-void heap_initialize(void) {
-    void *addr_storage = alloc_frame(0x400);
-    map_page(addr_storage, KHEAP_START_ADDR, 0x3);
-    page_list->next = 0;
-    page_list->prev = 0;
-    page_list->space = PAGE_SIZE - sizeof(SmallHeader);
-    page_list->largest_gap = page_list->space;
-    page_list->free_list = KHEAP_START_ADDR;
+
+void* kmalloc(int size)
+{
+    if(size <= 0) return NULL;
+    assert(BUCKETS >= log2(SUPERBLOCKSIZE)-MIN_ALLOC_POWER);
     
+    void *alloc = NULL;
+
+    if(size > SUPERBLOCKSIZE/2)
+        alloc = malloc_large(size);
+    else
+        alloc = malloc_small(size);
+
+    assert(is_aligned(alloc, MIN_ALLOC));
+
+    return alloc;
 }
 
-void* kmalloc(int size) {
-    
+void kfree(void *ptr)
+{
+    if(ptr == NULL) return;
+
+    // get superblock header using bitmask
+    uint32_t base = (uint32_t)ptr & PAGE_MASK;
+    SBHeader *header = (SBHeader*)base;
+    assert(is_aligned(header, PAGE_SIZE));
+
+    // check if large allocation
+    if(header->isLarge) {
+        currentPages -= header->numPages;
+        kvirtual_free(header, header->numPages);
+        return;
+    }
+
+    // get bucket index and step size
+    int step = header->allocSize;
+    int bucketIndex = log2(step) - MIN_ALLOC_POWER;
+
+    // return alloc to free list
+    Alloc *alloc = (Alloc*)ptr;
+    alloc->data = header->free;
+    header->free = alloc;
+    header->freeCount++;
+    allLists[bucketIndex].freeCount++;
+
+    assert(header->freeCount <= (SUPERBLOCKSIZE - sizeof(SBHeader)) / step);
+        
+    // check if superblock is empty
+    if(header->freeCount == (SUPERBLOCKSIZE - sizeof(SBHeader)) / step)
+        header = manageEmptySuperblock(header, bucketIndex);
+    // move superblock to front of list
+    if(header != NULL && !(header == allLists[bucketIndex].list))
+        moveToFront(header, bucketIndex);
 }
 
-void kfree(void *addr) {
-
-}
-
-void* malloc_small(size_t size) {
+void* malloc_small(size_t size)
+{
     totalSmallRequested += size;
 
     // round up to next power of 2
     size = size < MIN_ALLOC ? MIN_ALLOC : nextPowerOfTwo(size);
     assert(size <= SUPERBLOCKSIZE/2);
 
-    int bucketIndex = (int)log2(size) - MIN_ALLOC_POWER;
+    int bucketIndex = log2(size) - MIN_ALLOC_POWER;
     Alloc *alloc = NULL;
     SBHeader *header = NULL;
 
     // check if there is any memory available
     if (allLists[bucketIndex].freeCount == 0) {
         // allocate new superblock
-        void *block = mmap(NULL, SUPERBLOCKSIZE, PROT_READ|PROT_WRITE,
-            MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-        if (block == MAP_FAILED) {
-            perror("mmap failed");
-            return NULL;
-        }
+        void *block = kvirtual_alloc(SUPERBLOCKPAGES);
         assert(block != NULL);
+
         header = (SBHeader*)block;
         // initialize superblock stats and free list
         initSuper(header, size, bucketIndex);
@@ -119,20 +150,16 @@ void* malloc_small(size_t size) {
     else {
         // use existing superblock
         header = (SBHeader*)allLists[bucketIndex].list;
-        while (header->freeCount == 0) {
+        while (header->freeCount == 0)
             header = header->nextSB;
-        }
         // move superblock to front of list if it has room
         // trying to improve locality, I think Hoard does something similar
-        if (header->freeCount > 1 && header != allLists[bucketIndex].list) {
+        if (header->freeCount > 1 && header != allLists[bucketIndex].list)
             moveToFront(header, bucketIndex);
-        }
     }
 
-    if (header->isFree) {
-        allLists[bucketIndex].numFreeSB--;
+    if (header->isFree)
         header->isFree = false;
-    }
     assert(header->freeCount > 0);
     assert(allLists[bucketIndex].allocSize == size);
 
@@ -149,17 +176,45 @@ void* malloc_small(size_t size) {
     return (void*)alloc;
 }
 
+// allocate large memory using mmap
+void* malloc_large(size_t size)
+{
+    Alloc *alloc = NULL;
+    totalLargeRequested += size;
+    int pages = (size + sizeof(SBHeader))/PAGE_SIZE + 1;
+    size = pages * PAGE_SIZE;
+
+    void *block = kvirtual_alloc(pages);
+    assert(block != NULL);
+
+    // set up superblock header
+    SBHeader *header = (SBHeader*)block;
+    header->isLarge = true;
+    header->numPages = pages;
+    header->free = (Alloc*)((byte*)header + sizeof(SBHeader));
+    alloc = header->free;
+
+    // update stats
+    totalPages += pages;
+    currentPages += pages;
+
+    return (void*)alloc;
+}
+
 // Initialize a superblock and its free list
-void initSuper(SBHeader *header, size_t size, int bucketIndex) {
+void initSuper(SBHeader *header, size_t size, int bucketIndex)
+{
     // make superblock header
-    header->free = (Alloc*)((byte*)header + size);
+    if (size > sizeof(SBHeader))
+        header->free = (Alloc*)((byte*)header + size);
+    else
+        header->free = (Alloc*)(header + 1);
     header->allocSize = size;
     header->freeCount = (SUPERBLOCKSIZE - sizeof(SBHeader)) / size;
     header->isFree = true;
     // update bucket info
     allLists[bucketIndex].freeCount += header->freeCount;
     allLists[bucketIndex].numSB++;
-    allLists[bucketIndex].numFreeSB++;
     allLists[bucketIndex].allocSize = size;
 
     // make free list
@@ -172,7 +227,8 @@ void initSuper(SBHeader *header, size_t size, int bucketIndex) {
 }
 
 // Move superblock to front of list
-void moveToFront(SBHeader *header, int bucketIndex) {
+void moveToFront(SBHeader *header, int bucketIndex)
+{
     if (header->prevSB != NULL)
         header->prevSB->nextSB = header->nextSB;
     if (header->nextSB != NULL)
@@ -185,7 +241,8 @@ void moveToFront(SBHeader *header, int bucketIndex) {
 }
 
 // Add superblock to front of list
-void addToFront(SBHeader *header, int bucketIndex) {
+void addToFront(SBHeader *header, int bucketIndex)
+{
     header->nextSB = allLists[bucketIndex].list;
     if (header->nextSB != NULL)
         header->nextSB->prevSB = header;
@@ -195,13 +252,11 @@ void addToFront(SBHeader *header, int bucketIndex) {
 }
 
 // Keeps or frees an empty superblock
-SBHeader* manageEmptySuperblock(SBHeader *header, int bucketIndex) {
+SBHeader* manageEmptySuperblock(SBHeader *header, int bucketIndex)
+{
     if (allLists[bucketIndex].numSB <= RETAIN_FREE_SUPERBLOCK_COUNT) {
         // keep superblock in list
-        allLists[bucketIndex].numFreeSB++;
         header->isFree = true;
-        assert(allLists[bucketIndex].numFreeSB <= allLists[bucketIndex].numSB);
-        assert(allLists[bucketIndex].numFreeSB <= RETAIN_FREE_SUPERBLOCK_COUNT);
     }
     else {
         // remove superblock from list
@@ -220,11 +275,8 @@ SBHeader* manageEmptySuperblock(SBHeader *header, int bucketIndex) {
         allLists[bucketIndex].numSB--;
         allLists[bucketIndex].freeCount -= header->freeCount;
         // free superblock
-        munmap(header, SUPERBLOCKSIZE);
-        if (errno != 0) {
-            perror("munmap failed");
-            return NULL;
-        }
+        kvirtual_free(header, SUPERBLOCKPAGES);
+
         header = NULL;
     }
     return header;
@@ -232,10 +284,11 @@ SBHeader* manageEmptySuperblock(SBHeader *header, int bucketIndex) {
 
 // Get the next power of 2
 // https://stackoverflow.com/questions/466204/rounding-up-to-next-power-of-2
-size_t nextPowerOfTwo(size_t nextPow2){
+size_t nextPowerOfTwo(size_t nextPow2)
+{
     nextPow2--;
     nextPow2 |= nextPow2 >> 1;
-    for (int i = 2; i < sizeof(size_t); i++) {
+    for (unsigned i = 2; i < sizeof(size_t); i++) {
         nextPow2 |= nextPow2 >> i;
     }
     nextPow2++;

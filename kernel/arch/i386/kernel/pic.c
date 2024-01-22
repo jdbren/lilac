@@ -2,12 +2,14 @@
 #include <arch/x86/pic.h>
 #include <arch/x86/io.h>
 
-void pic_initialize(void) {
+void pic_initialize(void)
+{
     pic_disable();
     pic_remap(0x20, 0x28);
 }
  
-void pic_sendEOI(uint8_t irq) {
+void pic_sendEOI(uint8_t irq)
+{
 	if (irq >= 8)
 		outb(PIC2_COMMAND, PIC_EOI);
  
@@ -35,7 +37,8 @@ arguments:
 		vectors on the master become offset1..offset1+7
 	offset2 - same for slave PIC: offset2..offset2+7
 */
-void pic_remap(int offset1, int offset2) {
+void pic_remap(int offset1, int offset2)
+{
 	uint8_t a1, a2;
  
 	a1 = inb(PIC1_DATA);                        // save masks
@@ -63,12 +66,14 @@ void pic_remap(int offset1, int offset2) {
 	outb(PIC2_DATA, a2);
 }
 
-void pic_disable(void) {
+void pic_disable(void)
+{
     outb(PIC1_DATA, 0xff);
     outb(PIC2_DATA, 0xff);
 }
 
-void IRQ_set_mask(uint8_t IRQline) {
+void IRQ_set_mask(uint8_t IRQline)
+{
     uint16_t port;
     uint8_t value;
  
@@ -82,7 +87,8 @@ void IRQ_set_mask(uint8_t IRQline) {
     outb(port, value);        
 }
  
-void IRQ_clear_mask(uint8_t IRQline) {
+void IRQ_clear_mask(uint8_t IRQline)
+{
     uint16_t port;
     uint8_t value;
  
@@ -100,7 +106,8 @@ void IRQ_clear_mask(uint8_t IRQline) {
 #define PIC_READ_ISR                0x0b    /* OCW3 irq service next CMD read */
  
 /* Helper func */
-static uint16_t __pic_get_irq_reg(int ocw3) {
+static uint16_t __pic_get_irq_reg(int ocw3)
+{
     /* OCW3 to PIC CMD to get the register values.  PIC2 is chained, and
      * represents IRQs 8-15.  PIC1 is IRQs 0-7, with 2 being the chain */
     outb(PIC1_COMMAND, ocw3);
@@ -109,11 +116,13 @@ static uint16_t __pic_get_irq_reg(int ocw3) {
 }
  
 /* Returns the combined value of the cascaded PICs irq request register */
-uint16_t pic_get_irr(void) {
+uint16_t pic_get_irr(void)
+{
     return __pic_get_irq_reg(PIC_READ_IRR);
 }
  
 /* Returns the combined value of the cascaded PICs in-service register */
-uint16_t pic_get_isr(void) {
+uint16_t pic_get_isr(void)
+{
     return __pic_get_irq_reg(PIC_READ_ISR);
 }

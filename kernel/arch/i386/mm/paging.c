@@ -25,10 +25,12 @@ void *get_physaddr(void *virtualaddr)
     uint32_t ptindex = (uint32_t)virtualaddr >> 12 & 0x03FF;
  
     uint32_t *pd = (uint32_t *)0xFFFFF000;
-    // Here you need to check whether the PD entry is present.
+    if (!(pd[pdindex] & 0x1))
+        return NULL;
  
     uint32_t *pt = ((uint32_t *)0xFFC00000) + (0x400 * pdindex);
-    // Here you need to check whether the PT entry is present.
+    if (!(pt[ptindex] & 0x1))
+        return NULL;
  
     return (void *)((pt[ptindex] & ~0xFFF) + ((uint32_t)virtualaddr & 0xFFF));
 }
@@ -55,7 +57,6 @@ int map_pages(void *physaddr, void *virtualaddr, uint16_t flags, int num_pages)
         pt[ptindex] = ((uint32_t)physaddr) | (flags & 0xFFF) | 0x01; // Present
     
         __native_flush_tlb_single((uint32_t)virtualaddr);
-        printf("Mapped page %x to %x\n", physaddr, virtualaddr);
     }
 
     return 0;
@@ -100,7 +101,7 @@ static int pde(int index, uint8_t priv, uint8_t rw)
     uint32_t *pt = ((uint32_t*)0xFFC00000) + (0x400 * index);
     memset(pt, 0, PAGE_BYTES);
 
-    printf("Allocated page %x for page table %d\n", addr, index);
+    //printf("Allocated page %x for page table %d\n", addr, index);
 
     return 0;
 }

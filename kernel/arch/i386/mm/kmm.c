@@ -19,7 +19,7 @@ struct memory_desc {
     uint8_t *start;
 } __attribute__((packed));
 
-static void __update_list(memory_desc_t *mem_addr, int num_pages);
+static void __update_list(memory_desc_t *mem_addr, unsigned int num_pages);
 
 extern uint32_t _kernel_end;
 static memory_desc_t *kernel_avail;
@@ -47,7 +47,6 @@ void* kvirtual_alloc(unsigned int num_pages)
     void *ptr = NULL;
 
     while (mem_addr) {
-        printf("mem_addr->start: %x\n", mem_addr->start);
         if (mem_addr->size >= num_pages) {
             ptr = (void*)(mem_addr->start);
             __update_list(mem_addr, num_pages);
@@ -75,8 +74,6 @@ void* kvirtual_alloc(unsigned int num_pages)
 
 void kvirtual_free(void* addr, unsigned int num_pages) 
 {
-    printf("Freeing %x\n", addr);
-
     memory_desc_t *mem_addr = &kernel_avail[get_index((uint32_t)addr)];
     mem_addr->start = (uint8_t*)addr;
     mem_addr->size = num_pages;
@@ -92,13 +89,12 @@ void kvirtual_free(void* addr, unsigned int num_pages)
     unmap_pages(addr, num_pages);
 }
 
-static void __update_list(memory_desc_t *mem_addr, int num_pages) 
+static void __update_list(memory_desc_t *mem_addr, unsigned int num_pages) 
 {
     void *ptr = (void*)(mem_addr->start);
 
     if (mem_addr->size > num_pages) {
         uint32_t tmp = (uint32_t)ptr + num_pages * PAGE_SIZE;
-        printf("tmp: %x\n", tmp);
 
         memory_desc_t *new_desc = &kernel_avail[get_index(tmp)];
         new_desc->start = (uint8_t*)tmp;
