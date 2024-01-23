@@ -23,7 +23,7 @@
 .section .bsstack, "aw", @nobits
 .align 4096
 stack_bottom:
-	.skip 16384
+	.skip 32768
 stack_top:
 
 .section .bss, "aw", @nobits

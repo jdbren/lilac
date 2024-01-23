@@ -84,9 +84,9 @@ static void* __do_frame_alloc(int start, int num_pages)
         pg_frame_bitmap[index] |= (1 << offset);
     }
 
-    // printf("Allocated phys pages %x to %x\n", 
-    //     (void*)(FIRST_PAGE + start * PAGE_SIZE), 
-    //     (void*)(FIRST_PAGE + (start + num_pages) * PAGE_SIZE));
+    printf("Allocated phys pages %x to %x\n", 
+        (void*)(FIRST_PAGE + start * PAGE_SIZE), 
+        (void*)(FIRST_PAGE + (start + num_pages) * PAGE_SIZE));
     
     return (void*)(FIRST_PAGE + start * PAGE_SIZE);
 }

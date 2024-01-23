@@ -29,12 +29,26 @@ double_fault:
 .extern pg_fault_handler
 .globl page_fault
 page_fault:
+    pop eax
     pushad
     cld
+    push eax
     call pg_fault_handler
+    add  esp, 4
     popad
     iretd
 
+.extern gp_fault_handler
+.globl gp_fault
+gp_fault:
+    pop eax
+    pushad
+    cld
+    push eax
+    call gp_fault_handler
+    add  esp, 4
+    popad
+    iretd
 
 
 .extern keyboard_interrupt

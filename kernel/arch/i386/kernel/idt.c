@@ -22,8 +22,9 @@ typedef struct IDT {
 IDT idtptr;
 IDTGate idt_entries[IDT_SIZE];
 
-extern void div0(void);
-extern void page_fault(void);
+void div0(void);
+void gp_fault(void);
+void page_fault(void);
 
 void enable_interrupts(void)
 {
@@ -37,6 +38,7 @@ void idt_initialize(void)
     idtptr.offset = (uint32_t)&idt_entries;
 
     idt_entry(0, (uint32_t)div0, 0x08, TRAP_GATE);
+    idt_entry(13, (uint32_t)gp_fault, 0x08, TRAP_GATE);
     idt_entry(14, (uint32_t)page_fault, 0x08, TRAP_GATE);
 
     // Remap the PIC - all disabled initially

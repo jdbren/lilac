@@ -57,6 +57,8 @@ int map_pages(void *physaddr, void *virtualaddr, uint16_t flags, int num_pages)
         pt[ptindex] = ((uint32_t)physaddr) | (flags & 0xFFF) | 0x01; // Present
     
         __native_flush_tlb_single((uint32_t)virtualaddr);
+
+        printf("Mapped %x to %x\n", physaddr, virtualaddr);
     }
 
     return 0;
