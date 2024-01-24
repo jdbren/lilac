@@ -20,8 +20,7 @@ jump_usermode:
 	iretd
 
 user:
-    1: jmp 1b
-    mov ecx, 0
+    jmp $
     
 target_read:
     .long 0xdeadbeaf

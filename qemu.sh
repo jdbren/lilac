@@ -1,5 +1,5 @@
 #!/bin/sh
-set -ex
-. ./iso.sh
+set -euo pipefail
+. ./image.sh
 
-qemu-system-$(./target-triplet-to-arch.sh $HOST) -cdrom lilac.iso -monitor stdio -m 256M -d int -d guest_errors -no-reboot
+qemu-system-$(./target-triplet-to-arch.sh $HOST) -monitor stdio -m 3G -no-reboot ./disk.img

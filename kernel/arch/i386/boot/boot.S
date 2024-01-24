@@ -41,17 +41,19 @@ boot_page_table768:
 .global _start
 .type _start, @function
 _start:
-	movl pa(stack_top), %ecx
+	movl $pa(stack_top), %ecx
 
 	# Set up the boot segment registers.
 	lgdt pa(boot_gdt_descr)
-	movl $(__BOOT_DS), %eax
-	movl %eax, %ds
-	movl %eax, %es
-	movl %eax, %fs
-	movl %eax, %gs
-	movl %eax, %ss
-	leal -__KERNEL_BASE(%ecx), %esp
+	movl $(__BOOT_DS), %edx
+	movl %edx, %ds
+	movl %edx, %es
+	movl %edx, %fs
+	movl %edx, %gs
+	movl %edx, %ss
+	leal (%ecx), %esp
+
+	mov %eax, %edx
 
 	# Clear the bss.
 	cld
@@ -61,6 +63,10 @@ _start:
 	subl %edi, %ecx
 	shrl $2, %ecx
 	rep ; stosl
+
+	# Get the multiboot information.
+	push %edx
+	push %ebx
 
 	# Identity map the kernel.
 	movl $pa(boot_page_table0), %edi # page table entry
@@ -129,10 +135,10 @@ _start:
 	movl %cr3, %ecx
 	movl %ecx, %cr3
 
-	# Set up the stack.
-	movl $stack_top, %esp
+	# Adjust the stack pointer.
+	addl $__KERNEL_BASE, %esp
 
-	call _init
+	# call _init
 
 	call kernel_main
 

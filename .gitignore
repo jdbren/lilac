@@ -1,4 +1,3 @@
-/.DS_Store
 /.vscode
 /sysroot
 lilac.kernel
@@ -6,3 +5,5 @@ lilac.iso
 *.o
 *.d
 /isodir
+*.img
+*.DS_Store
