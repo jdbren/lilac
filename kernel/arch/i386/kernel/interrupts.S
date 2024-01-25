@@ -18,7 +18,13 @@ debug:
     iretd
 
 .global invalid_opcode
+.extern invalid_opcode_handler
 invalid_opcode:
+    hlt
+    pushad
+    cld
+    call invalid_opcode_handler
+    popad
     hlt
 
 .global double_fault

@@ -7,3 +7,5 @@ lilac.iso
 /isodir
 *.img
 *.DS_Store
+kernel/.DS_Store
+libc/.DS_Store

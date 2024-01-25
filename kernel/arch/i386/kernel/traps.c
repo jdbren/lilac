@@ -22,3 +22,8 @@ void gp_fault_handler(int error_code)
     printf("Error code: %x\n", error_code);
     kerror("General protection fault detected\n");
 }
+
+void invalid_opcode_handler(void) 
+{
+    kerror("Invalid opcode detected\n");
+}
