@@ -1,7 +1,7 @@
 #ifndef KERNEL_IO_H
 #define KERNEL_IO_H
 
-#include <stdint.h>
+#include <kernel/types.h>
 
 static inline void outb(uint16_t port, uint8_t val) {
     asm volatile ( "outb %0, %1" : : "a"(val), "Nd"(port) : "memory");

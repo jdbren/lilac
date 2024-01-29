@@ -1,5 +1,5 @@
-#include <stdio.h>
-#include <stdint.h>
+
+#include <kernel/types.h>
 #include <fs/fat32.h>
 
 void init_fat32(DISK *disk, fat_BS_t *fat) {

@@ -1,60 +1,63 @@
 .intel_syntax noprefix
 
-.extern div0_interrupt
-.global div0
-div0:
-    pushad
-    cld
-    call div0_interrupt
-    popad
-    hlt
-
-.global debug
-debug:
-    pushad
-    cld
-    
-    popad
-    iretd
-
-.global invalid_opcode
-.extern invalid_opcode_handler
-invalid_opcode:
-    hlt
-    pushad
-    cld
-    call invalid_opcode_handler
-    popad
-    hlt
-
-.global double_fault
-double_fault:
-    hlt
-
-# need to implement
-.extern pg_fault_handler
-.globl page_fault
-page_fault:
+.macro isr_err name
+    .extern \name\()_handler
+    .globl \name
+    \name:
     pop eax
     pushad
     cld
     push eax
-    call pg_fault_handler
+	call \name\()_handler
     add  esp, 4
     popad
     iretd
+.endm
 
-.extern gp_fault_handler
-.globl gp_fault
-gp_fault:
-    pop eax
+.macro isr_no_err name
+    .extern \name\()_handler
+    .globl \name
+    \name:
     pushad
     cld
-    push eax
-    call gp_fault_handler
-    add  esp, 4
+	call \name\()_handler
     popad
     iretd
+.endm
+
+isr_no_err div0
+# isr_no_err debug
+# isr_no_err nmi
+# isr_no_err brkp
+# isr_no_err ovfl
+# isr_no_err bound
+isr_no_err invldop
+# isr_no_err dna
+isr_err    dblflt
+# isr_no_err cso
+# isr_err    invldtss
+# isr_err    segnp
+# isr_err    ssflt
+isr_err    gpflt
+isr_err    pgflt
+# isr_no_err res
+# isr_no_err flpexc
+# isr_err    align
+# isr_no_err mchk
+# isr_no_err simd
+
+# isr_no_err 20
+# isr_no_err 21
+# isr_no_err 22
+# isr_no_err 23
+# isr_no_err 24
+# isr_no_err 25
+# isr_no_err 26
+# isr_no_err 27
+# isr_no_err 28
+# isr_no_err 29
+# isr_err    30
+# isr_no_err 31
 
 
 .extern keyboard_interrupt

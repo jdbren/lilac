@@ -1,4 +1,4 @@
-#include <mm/pgframe.h>
+#include <pgframe.h>
 #include <kernel/panic.h>
 
 #define PAGE_SIZE 0x1000
@@ -8,13 +8,13 @@
 #define check_bit(var,pos) ((var) & (1<<(pos)))
 
 typedef struct {
-    uint8_t pg[PAGE_SIZE];
+    u8 pg[PAGE_SIZE];
 } __attribute__((packed)) page_t;
 
-extern const uint32_t _kernel_end;
-static const uint32_t FIRST_PAGE = (uint32_t)&_kernel_end - (uint32_t)0xC0000000;
+extern const u32 _kernel_end;
+static const u32 FIRST_PAGE = (u32)&_kernel_end - (u32)0xC0000000;
 
-static uint32_t pg_frame_bitmap[BITMAP_SIZE];
+static u32 pg_frame_bitmap[BITMAP_SIZE];
 
 static void *__check_bitmap(int i, int num_pages, int *count, int *start);
 static void *__do_frame_alloc(int, int);
@@ -23,7 +23,7 @@ static void __free_frame(page_t *frame);
 // bit #i in byte #n define the status of page #n*8+i
 // 0 = free, 1 = used
 
-void* alloc_frames(uint32_t num_pages) 
+void* alloc_frames(u32 num_pages) 
 {
     if (num_pages == 0) 
         return 0;
@@ -44,7 +44,7 @@ void* alloc_frames(uint32_t num_pages)
     return 0;
 }
 
-void free_frames(void *frame, uint32_t num_pages) 
+void free_frames(void *frame, u32 num_pages) 
 {
     if (num_pages == 0) 
         return;
@@ -93,8 +93,8 @@ static void* __do_frame_alloc(int start, int num_pages)
 
 static void __free_frame(page_t *frame)
 {
-    uint32_t index = ((uint32_t)frame - FIRST_PAGE) / (32 * PAGE_SIZE);
-    uint32_t offset = (((uint32_t)frame - FIRST_PAGE) / PAGE_SIZE) % 32;
+    u32 index = ((u32)frame - FIRST_PAGE) / (32 * PAGE_SIZE);
+    u32 offset = (((u32)frame - FIRST_PAGE) / PAGE_SIZE) % 32;
 
     pg_frame_bitmap[index] &= ~(1 << offset);
 }

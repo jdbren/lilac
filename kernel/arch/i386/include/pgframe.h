@@ -1,10 +1,10 @@
 #ifndef KERNEL_PGFRAME_H
 #define KERNEL_PGFRAME_H
 
-#include <stdint.h>
+#include <kernel/types.h>
 
-void *alloc_frames(uint32_t num_pages);
-void free_frames(void *frame, uint32_t num_pages);
+void *alloc_frames(u32 num_pages);
+void free_frames(void *frame, u32 num_pages);
 
 static inline void *alloc_frame() 
 {

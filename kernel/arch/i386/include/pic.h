@@ -1,7 +1,7 @@
 #ifndef KERNEL_PIC_H
 #define KERNEL_PIC_H
 
-#include <stdint.h>
+#include <kernel/types.h>
 
 #define PIC1	        0x20		/* IO base address for master PIC */
 #define PIC2		    0xA0		/* IO base address for slave PIC */
@@ -14,14 +14,14 @@
 
 void pic_initialize(void);
 
-void pic_sendEOI(uint8_t irq);
+void pic_sendEOI(u8 irq);
 void pic_remap(int offset1, int offset2);
 
 void pic_disable(void);
-void IRQ_set_mask(uint8_t IRQline);
-void IRQ_clear_mask(uint8_t IRQline);
+void IRQ_set_mask(u8 IRQline);
+void IRQ_clear_mask(u8 IRQline);
 
-uint16_t pic_get_irr(void);
-uint16_t pic_get_isr(void);
+u16 pic_get_irr(void);
+u16 pic_get_isr(void);
 
 #endif

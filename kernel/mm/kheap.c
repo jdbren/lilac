@@ -1,14 +1,13 @@
-#include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <math.h>
 
+#include <kernel/types.h>
 #include <kernel/panic.h>
 #include <mm/kheap.h>
 #include <mm/kmm.h>
-#include <mm/paging.h>
-#include <mm/pgframe.h>
 
-#define PAGE_SIZE PAGE_BYTES
+#define PAGE_SIZE 4096
 #define MIN_ALLOC 4
 #define MIN_ALLOC_POWER 2
 #define RETAIN_FREE_SUPERBLOCK_COUNT 4
@@ -27,9 +26,9 @@ typedef unsigned char byte;
 
 struct SBList {
     SBHeader *list;
-    uint32_t allocSize;
-    uint32_t freeCount;
-    uint32_t numSB;
+    u32 allocSize;
+    u32 freeCount;
+    u32 numSB;
 }; // 16 bytes
 
 struct SBHeader {
@@ -90,7 +89,7 @@ void kfree(void *ptr)
     if(ptr == NULL) return;
 
     // get superblock header using bitmask
-    uint32_t base = (uint32_t)ptr & PAGE_MASK;
+    u32 base = (u32)ptr & PAGE_MASK;
     SBHeader *header = (SBHeader*)base;
     assert(is_aligned(header, PAGE_SIZE));
 

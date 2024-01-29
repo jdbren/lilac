@@ -8,6 +8,14 @@ disk_read:
     call ata_lba_read
     ret
 
+.global disk_write
+disk_write:
+    mov eax, [esp+4]
+    mov cx, [esp+8]
+    mov edi, [esp+12]
+    call ata_lba_write
+    ret
+
 # =============================================================================
 #  ATA read sectors (LBA mode) 
 # 
@@ -30,7 +38,7 @@ ata_lba_read:
 
     mov edx, 0x01F6      #  Port to send drive and bit 24 - 27 of LBA
     shr eax, 24          #  Get bit 24 - 27 in al
-    or al, 0xE0     #  Set bit 6 in al for LBA mode
+    or al, 0xE0          #  Set bit 6 in al for LBA mode
     out dx, al
 
     mov edx, 0x01F2      #  Port to send number of sectors
@@ -100,7 +108,7 @@ ata_lba_write:
  
     mov edx, 0x01F6      #  Port to send drive and bit 24 - 27 of LBA
     shr eax, 24          #  Get bit 24 - 27 in al
-    or al, 0xE0     #  Set bit 6 in al for LBA mode
+    or al, 0xE0          #  Set bit 6 in al for LBA mode
     out dx, al
  
     mov edx, 0x01F2      #  Port to send number of sectors

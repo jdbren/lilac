@@ -138,7 +138,7 @@ _start:
 	# Adjust the stack pointer.
 	addl $__KERNEL_BASE, %esp
 
-	# call _init
+	call _init
 
 	call kernel_main
 

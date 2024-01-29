@@ -1,15 +1,15 @@
 #ifndef KERNEL_PAGING_H
 #define KERNEL_PAGING_H
 
-#include <stdint.h>
+#include <kernel/types.h>
 
 #define PAGE_BYTES 4096
 
 void* get_physaddr(void *virtualaddr);
-int map_pages(void *physaddr, void *virtualaddr, uint16_t flags, int num_pages);
+int map_pages(void *physaddr, void *virtualaddr, u16 flags, int num_pages);
 int unmap_pages(void *virtualaddr, int num_pages);
 
-inline int map_page(void *physaddr, void *virtualaddr, uint16_t flags) 
+inline int map_page(void *physaddr, void *virtualaddr, u16 flags) 
 {
     return map_pages(physaddr, virtualaddr, flags, 1);
 }

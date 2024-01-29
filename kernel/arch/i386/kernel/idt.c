@@ -1,31 +1,25 @@
-#include <stdint.h>
-#include <stdio.h>
-
-#include <arch/x86/idt.h>
-#include <arch/x86/pic.h>
+#include <kernel/types.h>
+#include <asm/cpufaults.h>
+#include <idt.h>
+#include <pic.h>
 
 #define IDT_SIZE 256
 
 typedef struct IDTGate {
-    uint16_t offset_low;
-    uint16_t selector;
-    uint8_t zero;
-    uint8_t type_attr;
-    uint16_t offset_high;
-} __attribute__((packed)) IDTGate;
+    u16 offset_low;
+    u16 selector;
+    u8 zero;
+    u8 type_attr;
+    u16 offset_high;
+} __attribute__((packed)) idt_entry_t;
 
 typedef struct IDT {
-    uint16_t size;
-    uint32_t offset;
-} __attribute__((packed)) IDT;
+    u16 size;
+    u32 offset;
+} __attribute__((packed));
 
-IDT idtptr;
-IDTGate idt_entries[IDT_SIZE];
-
-void div0(void);
-void invalid_opcode(void);
-void gp_fault(void);
-void page_fault(void);
+struct IDT idtptr;
+idt_entry_t idt_entries[IDT_SIZE];
 
 void enable_interrupts(void)
 {
@@ -35,13 +29,13 @@ void enable_interrupts(void)
 
 void idt_initialize(void)
 {
-    idtptr.size = (sizeof(IDTGate) * IDT_SIZE) - 1;
-    idtptr.offset = (uint32_t)&idt_entries;
+    idtptr.size = (sizeof(idt_entry_t) * IDT_SIZE) - 1;
+    idtptr.offset = (u32)&idt_entries;
 
-    idt_entry(0, (uint32_t)div0, 0x08, TRAP_GATE);
-    idt_entry(6, (uint32_t)invalid_opcode, 0x08, TRAP_GATE);
-    idt_entry(13, (uint32_t)gp_fault, 0x08, TRAP_GATE);
-    idt_entry(14, (uint32_t)page_fault, 0x08, TRAP_GATE);
+    idt_entry(0, (u32)div0, 0x08, TRAP_GATE);
+    idt_entry(6, (u32)invldop, 0x08, TRAP_GATE);
+    idt_entry(13, (u32)gpflt, 0x08, TRAP_GATE);
+    idt_entry(14, (u32)pgflt, 0x08, TRAP_GATE);
 
     // Remap the PIC - all disabled initially
     pic_initialize();
@@ -51,9 +45,9 @@ void idt_initialize(void)
     printf("Loaded IDT\n");
 }
 
-void idt_entry(int num, uint32_t offset, uint16_t selector, uint8_t attr)
+void idt_entry(int num, u32 offset, u16 selector, u8 attr)
 {
-    IDTGate *target = idt_entries + num;
+    idt_entry_t *target = idt_entries + num;
     target->offset_low = offset & 0xFFFF;
     target->offset_high = (offset >> 16) & 0xFFFF;
     target->selector = selector;

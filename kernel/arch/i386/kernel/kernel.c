@@ -1,19 +1,19 @@
-#include <stdio.h>
+
 #include <string.h>
 
 #include <kernel/tty.h>
 #include <kernel/panic.h>
 #include <kernel/keyboard.h>
-#include <arch/x86/gdt.h>
-#include <arch/x86/idt.h>
-#include <arch/x86/multiboot.h>
-#include <mm/pgframe.h>
-#include <mm/paging.h>
+#include <gdt.h>
+#include <idt.h>
+#include <utility/multiboot.h>
+#include <pgframe.h>
+#include <paging.h>
 #include <mm/kmm.h>
 #include <mm/kheap.h>
 #include <fs/mbr.h>
 #include <fs/fat32.h>
-#include <arch/x86/asm/diskio.h>
+#include <asm/diskio.h>
 
 #define BOOT_LOCATION 0x7C00
 
@@ -33,7 +33,7 @@ void kernel_main(multiboot_info_t* mbd, unsigned int magic)
 
 	struct PartitionEntry *partition = &mbr->partition_table[boot_partition];
 
-	uint32_t fat32_lba;
+	u32 fat32_lba;
 	if(partition->type == 0xB) {
 		fat32_lba = partition->lba_first_sector;
 		printf("fat32_lba: %x\n", fat32_lba);
@@ -47,8 +47,7 @@ void kernel_main(multiboot_info_t* mbd, unsigned int magic)
 	fat_BS_t *ptr = (void*)0x7c00;
 	print_fat32_data(ptr);
 	
-	asm volatile("hlt");
-    /* Loop through the memory map and display the values */
+	//asm volatile("hlt");
 
 	idt_initialize();
 	keyboard_initialize();

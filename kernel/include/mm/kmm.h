@@ -1,7 +1,7 @@
 #ifndef KERNEL_MM_H
 #define KERNEL_MM_H
 
-#include <stdint.h>
+#include <kernel/types.h>
 
 void mm_init(void);
 void* kvirtual_alloc(unsigned int num_pages);
