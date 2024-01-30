@@ -44,7 +44,7 @@ typedef struct fat_BS {
  
 } __attribute__((packed)) fat_BS_t;
 
-typedef struct {
+typedef struct disk {
     u32 fat_begin_lba;
     u32 cluster_begin_lba;
     u8 sectors_per_cluster;
@@ -53,7 +53,6 @@ typedef struct {
 
 
 void print_fat32_data(fat_BS_t *);
-
-void init_fat32(DISK *disk, fat_BS_t *fat);
+void init_fat32(int disknum, fat_BS_t *fat);
 
 #endif

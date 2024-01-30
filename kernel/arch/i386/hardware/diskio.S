@@ -1,19 +1,37 @@
 .intel_syntax noprefix
 
 .global disk_read
+.type disk_read, @function
 disk_read:
-    mov eax, [esp+4]
-    mov cx, [esp+8]
-    mov edi, [esp+12]
+    pushf
+    push eax
+    push ecx
+    push edi
+    mov eax, [esp+20]
+    mov ecx, [esp+24]
+    mov edi, [esp+28]
     call ata_lba_read
+    pop edi
+    pop ecx
+    pop eax
+    popf
     ret
 
 .global disk_write
+.type disk_write, @function
 disk_write:
-    mov eax, [esp+4]
-    mov cx, [esp+8]
-    mov edi, [esp+12]
+    pushf
+    push eax
+    push ecx
+    push edi
+    mov eax, [esp+20]
+    mov ecx, [esp+24]
+    mov edi, [esp+28]
     call ata_lba_write
+    pop edi
+    pop ecx
+    pop eax
+    popf
     ret
 
 # =============================================================================
@@ -34,6 +52,12 @@ ata_lba_read:
     push edx
     push edi
 
+    cmp cx, 256          #  Maximum number of sectors to read is 256
+    jg .error            #  If CX > 256, error
+    jl .ok
+    xor ecx, ecx         #  If CX = 0, read 256 sectors
+
+.ok: 
     mov ebx, eax         #  Save LBA in RBX
 
     mov edx, 0x01F6      #  Port to send drive and bit 24 - 27 of LBA
@@ -64,18 +88,27 @@ ata_lba_read:
     mov al, 0x20         #  Read with retry.
     out dx, al
 
-.still_going:  in al, dx
+    cmp cl, 0            #  If CL = 0, read 256 sectors
+    jne .still_going
+    mov cx, 256
+
+.still_going:  
+    in al, dx
     test al, 8           #  the sector buffer requires servicing.
     jz .still_going      #  until the sector buffer is ready.
 
     mov eax, 256         #  to read 256 words = 1 sector
     xor bx, bx
-    mov bl, cl           #  read CL sectors
-    mul bx
+    mov bx, cx           #  CX sectors left
     mov ecx, eax         #  RCX is counter for INSW
     mov edx, 0x1F0       #  Data port, in and out
     rep insw             #  in to [RDI]
+    mov cx, bx
+    dec cx
+    mov dx, 0x1F7        #  Command port
+    jnz .still_going     #  read next sector
 
+.error:
     pop edi
     pop edx
     pop ecx

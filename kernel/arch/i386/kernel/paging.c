@@ -8,7 +8,8 @@
 #define PAGE_DIR_SIZE 1024
 #define PAGE_TABLE_SIZE 1024
 
-#define is_aligned(x, align) (((uintptr_t)x) % (align) == 0)
+#define is_aligned(POINTER, BYTE_COUNT) \
+    (((uintptr_t)(POINTER)) % (BYTE_COUNT) == 0)
 
 typedef u32 pde_t;
 static u32* const pd = (u32*)0xFFFFF000;

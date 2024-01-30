@@ -42,10 +42,9 @@ void kernel_main(multiboot_info_t* mbd, unsigned int magic)
 		kerror("Boot partition is not FAT32\n");
 	}
 
-	disk_read(fat32_lba, 1, 0x7c00);
+	
 
-	fat_BS_t *ptr = (void*)0x7c00;
-	print_fat32_data(ptr);
+	disk_read(fat32_lba, 1, 0x7c00);
 	
 	//asm volatile("hlt");
 
@@ -53,6 +52,8 @@ void kernel_main(multiboot_info_t* mbd, unsigned int magic)
 	keyboard_initialize();
 	enable_interrupts();
 	mm_init();
+	print_fat32_data((fat_BS_t*)0x7c00);
+	init_fat32(0, (fat_BS_t*)0x7c00);
 	// jump_usermode();
 
 	while (1) {

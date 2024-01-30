@@ -80,6 +80,7 @@ void* kmalloc(int size)
         alloc = malloc_small(size);
 
     assert(is_aligned(alloc, MIN_ALLOC));
+    assert(alloc != NULL);
 
     return alloc;
 }
