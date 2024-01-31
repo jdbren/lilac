@@ -82,16 +82,26 @@ _start:
 
 	# Set up the kernel page mapping (higher half).
 	xorl %eax, %eax
-	movl $pa(boot_page_table768), %edi # addresses 0xC0000000...kernel end
-	movl $pa(_kernel_end), %ecx
+	movl $pa(boot_page_table768), %edi
+	movl $pa(_bss_start), %ecx
 
 2:	movl %eax, %esi
-	orl	 $3, %esi
+	orl	 $1, %esi  		# set present bit
 	movl %esi, (%edi)
 	addl $4, %edi
 	addl $4096, %eax
 	cmpl %eax, %ecx
 	jne  2b
+
+	movl $pa(_kernel_end), %ecx
+
+3:	movl %eax, %esi
+	orl	 $3, %esi 		# set present bit and r/w (data)
+	movl %esi, (%edi)
+	addl $4, %edi
+	addl $4096, %eax
+	cmpl %eax, %ecx
+	jne  3b
 
 	# Set up the page directory.
 	movl $pa(page_directory), %edi
@@ -119,17 +129,16 @@ _start:
 	movl %eax, %cr0
 
 	# Switch to the higher half.
-	ljmp $__BOOT_CS,$3f
+	ljmp $__BOOT_CS,$4f
 	
 
 .section .text
-3: 	movl $(boot_page_table0 + 1024), %edi
-
-	# Unmap the kernel identity mapping as it is now unnecessary.
-4:	movl $0, (%edi)
-	addl $4, %edi
-	cmpl $(boot_page_table0 + 4096), %edi
-	jne  4b
+# Unmap the kernel identity mapping as it is now unnecessary.
+4: 	movl $(boot_page_table0 + 1024), %edi
+	movl $(0xc00), %ecx
+	xor %eax, %eax
+	shrl $2, %ecx
+	rep ; stosl
 
 	# Reload cr3 to force a TLB flush so the changes take effect.
 	movl %cr3, %ecx
@@ -144,10 +153,10 @@ _start:
 
 	# Infinite loop if the system has nothing more to do.
 	cli
-1:	hlt
-	jmp 1b
+6:	hlt
+	jmp 6b
 
-.section .data
+.section .rodata
 .align 4
 .word 0
 boot_gdt_descr:

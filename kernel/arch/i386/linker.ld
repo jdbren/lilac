@@ -18,7 +18,10 @@ SECTIONS
 
 	.rodata ALIGN (4K) : AT (ADDR (.rodata) - 0xC0000000) { *(.rodata) }
 
-	.data ALIGN (4K) : AT (ADDR (.data) - 0xC0000000) { *(.data) }
+	.data ALIGN (4K) : AT (ADDR (.data) - 0xC0000000) { 
+		_data_start = .;
+		*(.data) 
+	}
 
 	.bss ALIGN (4K) : AT (ADDR (.bss) - 0xC0000000) {
 		_bss_start = .;

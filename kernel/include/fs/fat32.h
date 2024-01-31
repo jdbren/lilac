@@ -39,7 +39,7 @@ typedef struct fat_BS {
     u32 total_sectors_32;
  
     union {
-	    fat_extBS_32_t extended_section[54];
+	    fat_extBS_32_t extended_section;
     };
  
 } __attribute__((packed)) fat_BS_t;
@@ -53,6 +53,6 @@ typedef struct disk {
 
 
 void print_fat32_data(fat_BS_t *);
-void init_fat32(int disknum, fat_BS_t *fat);
+void fat32_init(int disknum, u32 boot_sector);
 
 #endif

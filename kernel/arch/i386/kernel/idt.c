@@ -43,6 +43,7 @@ void idt_initialize(void)
 
     asm volatile("lidt %0" : : "m"(idtptr));
     printf("Loaded IDT\n");
+    enable_interrupts();
 }
 
 void idt_entry(int num, u32 offset, u16 selector, u8 attr)
