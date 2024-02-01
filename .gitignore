@@ -10,4 +10,3 @@ lilac.iso
 kernel/.DS_Store
 libc/.DS_Store
 user_code/*
-user_code/code.S
