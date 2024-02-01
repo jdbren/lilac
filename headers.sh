@@ -9,4 +9,4 @@ for PROJECT in $SYSTEM_HEADER_PROJECTS; do
 done
 
 mkdir -p "$SYSROOT/bin"
-cp -r "$PWD/user_code/code.o" "$SYSROOT/bin"
+cp -r "$PWD/user_code/code" "$SYSROOT/bin"

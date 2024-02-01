@@ -12,8 +12,9 @@
 #include <mm/kheap.h>
 #include <fs/mbr.h>
 #include <fs/fat32.h>
+#include <kernel/elf.h>
 
-void jump_usermode(void);
+void jump_usermode(u32 addr);
 
 void kernel_main(multiboot_info_t* mbd, unsigned int magic)
 {
@@ -27,7 +28,15 @@ void kernel_main(multiboot_info_t* mbd, unsigned int magic)
 	keyboard_initialize();
 	mm_init();
 	fs_init(mbd);
-	// jump_usermode();
+	void *ptr;
+	ptr = fat32_read_file("/bin/code", ptr);
+	ptr = elf32_load(ptr);
+	printf("ELF entry: %x\n", (u32)ptr);
+	void *phys = alloc_frame();
+	void *vaddr = (void*)0x8048000;
+	map_page(phys, vaddr, 0x7);
+	memcpy(vaddr, ptr, 64);
+	jump_usermode((u32)ptr);
 
 	while (1) {
 		asm("hlt");

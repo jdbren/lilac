@@ -26,22 +26,6 @@ enum segment_flags {
     READ = 4,
 };
 
-struct elf32_header;
-struct elf64_header;
-
-struct elf_header {
-    u32 sig;
-    u8 class;
-    u8 endian;
-    u8 headv;
-    u8 abi;
-    u8 padding[8];
-    union {
-        struct elf32_header elf32;
-        struct elf64_header elf64;
-    };
-} __attribute__((packed));
-
 struct elf32_header {
     u16 type;
     u16 mach;
@@ -74,6 +58,19 @@ struct elf64_header {
     u16 nms_idx;
 } __attribute__((packed));
 
+struct elf_header {
+    u32 sig;
+    u8 class;
+    u8 endian;
+    u8 headv;
+    u8 abi;
+    u8 padding[8];
+    union {
+        struct elf32_header elf32;
+        struct elf64_header elf64;
+    };
+} __attribute__((packed));
+
 struct elf32_pheader {
     u32 type;
     u32 p_offset;
@@ -96,6 +93,6 @@ struct elf64_pheader {
     uint64_t align;
 } __attribute__((packed));
 
-int elf32_load(void *elf, void *dest);
+void* elf32_load(void *elf);
 
 #endif

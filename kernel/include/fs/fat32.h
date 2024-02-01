@@ -48,11 +48,12 @@ typedef struct disk {
     u32 fat_begin_lba;
     u32 cluster_begin_lba;
     u8 sectors_per_cluster;
-    u32 root_dir_first_cluster;
+    u32 root_start;
 } __attribute__((packed)) DISK;
 
 
 void print_fat32_data(fat_BS_t *);
 void fat32_init(int disknum, u32 boot_sector);
+void* fat32_read_file(const char *path, void *buffer);
 
 #endif

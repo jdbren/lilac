@@ -1,8 +1,10 @@
 .intel_syntax noprefix
 
 .global jump_usermode
+.type jump_usermode, @function
 jump_usermode:
     cli
+	mov ebx, [esp+4] # get the return address
 	mov ax, (4 * 8) | 3 # ring 3 data with bottom 2 bits set for ring 3
 	mov ds, ax
 	mov es, ax 
@@ -20,7 +22,7 @@ jump_usermode:
 	iretd
 
 user:
-    jmp $
+    hlt
     
 target_read:
     .long 0xdeadbeaf

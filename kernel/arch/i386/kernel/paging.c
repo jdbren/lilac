@@ -14,7 +14,7 @@
 typedef u32 pde_t;
 static u32* const pd = (u32*)0xFFFFF000;
 
-static int pde(int index, u8 priv, u8 rw);
+static int pde(int index, u16 flags);
 static inline void __native_flush_tlb_single(u32 addr) 
 {
    asm volatile("invlpg (%0)" : : "r"(addr) : "memory");
@@ -47,7 +47,7 @@ int map_pages(void *physaddr, void *virtualaddr, u16 flags, int num_pages)
         u32 ptindex = (u32)virtualaddr >> 12 & 0x03FF;
 
         if (!(pd[pdindex] & 0x1))
-            pde(pdindex, 0, 1);
+            pde(pdindex, flags);
     
         u32 *pt = ((u32*)0xFFC00000) + (0x400 * pdindex);
         if (pt[ptindex] & 0x1) {
@@ -88,12 +88,11 @@ int unmap_pages(void *virtualaddr, int num_pages)
     return 0;
 }
 
-static int pde(int index, u8 priv, u8 rw) 
+static int pde(int index, u16 flags) 
 {
     static const u8 default_flags = 0x1; // present 
 
     // 3...0: cache enabled, write-through disabled, u/s mode
-    u8 flags = default_flags | (priv << 2) | (rw << 1);
 
     void *addr = alloc_frame();
     assert(is_aligned(addr, PAGE_BYTES));
