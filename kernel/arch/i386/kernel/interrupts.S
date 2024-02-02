@@ -2,7 +2,7 @@
 
 .macro isr_err name
     .extern \name\()_handler
-    .globl \name
+    .global \name
     \name:
     pop eax
     pushad
@@ -16,7 +16,7 @@
 
 .macro isr_no_err name
     .extern \name\()_handler
-    .globl \name
+    .global \name
     \name:
     pushad
     cld

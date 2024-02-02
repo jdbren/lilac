@@ -10,10 +10,10 @@ gdt_set:
 
 reload_segments:
    # Reload CS register containing code selector:
-   jmp   0x08:.reload_CS # 0x08 is a stand-in for your code segment
+   jmp   0x08:.reload_CS
 .reload_CS:
    # Reload data segment registers:
-   mov   ax, 0x10 # 0x10 is a stand-in for your data segment
+   mov   ax, 0x10
    mov   ds, ax
    mov   es, ax
    mov   fs, ax
@@ -22,6 +22,6 @@ reload_segments:
    ret
 
 flush_tss:
-   mov ax, (5 * 8) | 0 # fifth 8-byte selector, symbolically OR-ed with 0 to set the RPL (requested privilege level).
+   mov ax, (5 * 8) | 0  # RPL 0
 	ltr ax
 	ret

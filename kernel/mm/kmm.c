@@ -1,5 +1,4 @@
 #include <string.h>
-
 #include <mm/kmm.h>
 #include <pgframe.h>
 #include <paging.h>
@@ -41,7 +40,7 @@ void mm_init(void)
     printf("Kernel virtual address allocation enabled\n");
 }
 
-void* kvirtual_alloc(unsigned int num_pages) 
+void* kvirtual_alloc(unsigned int num_pages, int flags) 
 {
     memory_desc_t *mem_addr = list;
     void *ptr = NULL;
@@ -52,7 +51,7 @@ void* kvirtual_alloc(unsigned int num_pages)
             __update_list(mem_addr, num_pages);
 
             void *phys = alloc_frames(num_pages);
-            map_pages(phys, ptr, 0x3, num_pages);
+            map_pages(phys, ptr, flags, num_pages);
 
             return ptr;
         }
@@ -67,7 +66,7 @@ void* kvirtual_alloc(unsigned int num_pages)
 
     unused_heap_addr = (u32)unused_heap_addr - num_pages * PAGE_SIZE;
     void *phys = alloc_frames(num_pages);
-    map_pages(phys, ptr, 0x3, num_pages);
+    map_pages(phys, ptr, flags, num_pages);
 
     return ptr;
 }
@@ -117,5 +116,5 @@ static void __update_list(memory_desc_t *mem_addr, unsigned int num_pages)
     if (list == mem_addr)
         list = mem_addr->next;
 
-    memset(mem_addr, 0, sizeof(memory_desc_t));
+    memset(mem_addr, 0, sizeof(*mem_addr));
 }

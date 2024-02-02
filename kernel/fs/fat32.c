@@ -132,8 +132,9 @@ u32 check_dir(fat_file_t **entry, void *sec_buf, DISK *disk, const char *cur,
     return 0;
 }
 
-void* fat32_read_file(const char *path, void *file_buf)
+void* fat32_read_file(const char *path)
 {
+    void *file_buf = NULL;
     DISK *disk = &disks[0];
     u8 *sec_buf = kmalloc(disk->sectors_per_cluster * 512);
     fat_file_t *entry = NULL;

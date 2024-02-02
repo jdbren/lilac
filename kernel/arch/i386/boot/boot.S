@@ -28,7 +28,7 @@ stack_top:
 
 .section .bss, "aw", @nobits
 .align __PAGE_OFFSET
-.globl page_directory
+.global page_directory
 page_directory:
 	.fill 1024,4,0
 boot_page_table0:
@@ -69,16 +69,16 @@ _start:
 	push %ebx
 
 	# Identity map the kernel.
-	movl $pa(boot_page_table0), %edi # page table entry
-	xorl %eax, %eax				 # start addr = 0
+	movl $pa(boot_page_table0), %edi 	# page table entry
+	xorl %eax, %eax				 		# start addr = 0
 
 1:	movl %eax, %esi
-	orl	 $3, %esi				# set present bit and r/w
-	movl %esi, (%edi)			# set page table entry
-	addl $4, %edi				# next page table entry
-	addl $4096, %eax			# next page address
-	cmpl $pa(_kernel_end), %eax	# check if we are done
-	jne  1b 					# if not, continue
+	orl	 $3, %esi					# set present bit and r/w
+	movl %esi, (%edi)				# set page table entry
+	addl $4, %edi					# next page table entry
+	addl $4096, %eax				# next page address
+	cmpl $pa(_kernel_end), %eax		# check if we are done
+	jne  1b
 
 	# Set up the kernel page mapping (higher half).
 	xorl %eax, %eax
@@ -86,7 +86,7 @@ _start:
 	movl $pa(_bss_start), %ecx
 
 2:	movl %eax, %esi
-	orl	 $1, %esi  		# set present bit
+	orl	 $1, %esi  		# set present bit, read-only (code)
 	movl %esi, (%edi)
 	addl $4, %edi
 	addl $4096, %eax
@@ -125,7 +125,7 @@ _start:
 	movl $pa(page_directory), %eax
 	movl %eax, %cr3
 	movl %cr0, %eax
-	orl  $(0x80010000), %eax # pg enable, write-protect enable
+	orl  $(0x80010000), %eax # pg enable, wp enable
 	movl %eax, %cr0
 
 	# Switch to the higher half.
@@ -134,9 +134,9 @@ _start:
 
 .section .text
 # Unmap the kernel identity mapping as it is now unnecessary.
-4: 	movl $(boot_page_table0 + 1024), %edi
+4: 	movl $(boot_page_table0 + 1024), %edi 
 	movl $(0xc00), %ecx
-	xor %eax, %eax
+	xorl %eax, %eax
 	shrl $2, %ecx
 	rep ; stosl
 
@@ -151,7 +151,7 @@ _start:
 
 	call kernel_main
 
-	# Infinite loop if the system has nothing more to do.
+	# Hang if kernel_main returns.
 	cli
 6:	hlt
 	jmp 6b

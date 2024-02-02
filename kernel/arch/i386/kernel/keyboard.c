@@ -1,4 +1,5 @@
 #include <kernel/keyboard.h>
+#include <kernel/tty.h>
 #include <utility/keymap.h>
 #include <idt.h>
 #include <io.h>
@@ -8,7 +9,7 @@
 
 extern void keyboard_handler(void);
 
-u8 keyboard_read(void)
+inline u8 keyboard_read(void)
 {
     return inb(KEYBOARD_DATA_PORT);
 }
@@ -25,11 +26,9 @@ void keyboard_interrupt(void)
     s8 keycode;
 
     keycode = inb(KEYBOARD_DATA_PORT);
-    /* Only print characters on keydown event that have
-     * a non-zero mapping */
-    if (keycode >= 0 && keyboard_map[keycode]) {
-        printf("%c", keyboard_map[keycode]);
-    }
+
+    if (keycode >= 0 && keyboard_map[keycode])
+        terminal_putchar(keyboard_map[keycode]);
 
     /* Send End of Interrupt (EOI) to master PIC */
     pic_sendEOI(1);

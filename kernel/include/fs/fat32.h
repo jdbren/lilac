@@ -54,6 +54,6 @@ typedef struct disk {
 
 void print_fat32_data(fat_BS_t *);
 void fat32_init(int disknum, u32 boot_sector);
-void* fat32_read_file(const char *path, void *buffer);
+void* fat32_read_file(const char *path);
 
 #endif

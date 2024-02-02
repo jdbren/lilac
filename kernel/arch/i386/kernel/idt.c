@@ -13,13 +13,14 @@ typedef struct IDTGate {
     u16 offset_high;
 } __attribute__((packed)) idt_entry_t;
 
-typedef struct IDT {
+struct IDT {
     u16 size;
     u32 offset;
 } __attribute__((packed));
 
-struct IDT idtptr;
+
 idt_entry_t idt_entries[IDT_SIZE];
+struct IDT idtptr = {sizeof(idt_entry_t) * IDT_SIZE - 1, (u32)&idt_entries};
 
 void enable_interrupts(void)
 {
@@ -29,21 +30,17 @@ void enable_interrupts(void)
 
 void idt_initialize(void)
 {
-    idtptr.size = (sizeof(idt_entry_t) * IDT_SIZE) - 1;
-    idtptr.offset = (u32)&idt_entries;
-
     idt_entry(0, (u32)div0, 0x08, TRAP_GATE);
     idt_entry(6, (u32)invldop, 0x08, TRAP_GATE);
     idt_entry(13, (u32)gpflt, 0x08, TRAP_GATE);
     idt_entry(14, (u32)pgflt, 0x08, TRAP_GATE);
 
-    // Remap the PIC - all disabled initially
+    // Remap the PIC
     pic_initialize();
     printf("Remapped PIC\n");
 
     asm volatile("lidt %0" : : "m"(idtptr));
     printf("Loaded IDT\n");
-    enable_interrupts();
 }
 
 void idt_entry(int num, u32 offset, u16 selector, u8 attr)
@@ -71,5 +68,3 @@ struct stack_state {
     unsigned int cs;
     unsigned int eflags;
 } __attribute__((packed));
-
-void interrupt_handler(struct cpu_state cpu, struct stack_state stack, unsigned int interrupt);

@@ -17,7 +17,7 @@ jump_usermode:
 	push eax # current esp
 	push 0x200 # eflags
 	push (3 * 8) | 3 # code selector (ring 3 code with bottom 2 bits set for ring 3)
-    lea eax, [user]
+    mov eax, ebx
 	push eax # instruction address to return to
 	iretd
 

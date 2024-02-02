@@ -49,12 +49,11 @@ struct tss_entry {
     u32 ssp;
 } __attribute__((packed));
 
-
+static u32 segment_desc[GDT_SIZE*2];
+static struct GDT gdt = {(64 * GDT_SIZE) - 1, (u32)&segment_desc};
 struct tss_entry tss;
-struct GDT gdt;
-u32 segment_desc[GDT_SIZE*2];
 
-struct gdt_entry gdt_entries[GDT_SIZE] = {
+static struct gdt_entry gdt_entries[GDT_SIZE] = {
     {0, 0, 0, 0},
     {0, 0xFFFFF, 0x9A, 0xC},
     {0, 0xFFFFF, 0x92, 0xC},
@@ -63,23 +62,17 @@ struct gdt_entry gdt_entries[GDT_SIZE] = {
     {(u32)&tss, sizeof(tss), 0x89, 0x0}
 };
 
-void gdt_entry(u8 *target, struct gdt_entry *source);
-void gdt_set(struct GDT *gdt_ptr);
-void reload_segments(void);
-void flush_tss(void);
+static void gdt_entry(u8 *target, struct gdt_entry *source);
+extern void gdt_set(struct GDT *gdt_ptr);
+extern void reload_segments(void);
+extern void flush_tss(void);
 
 void gdt_initialize(void)
 {
-    gdt.size = (64 * GDT_SIZE) - 1;
-    gdt.offset = (u32)&segment_desc;
-
     for (int i = 0; i < GDT_SIZE; i++)
         gdt_entry((u8*)segment_desc + i*8, &gdt_entries[i]);
-    
-    // Ensure the TSS is initially zero'd.
-	memset(&tss, 0, sizeof(tss));
- 
-	tss.ss0 = 0x10;                         // Set the kernel stack segment.
+
+    tss.ss0 = 0x10;                         // Set the kernel stack segment.
 	asm("\t movl %%esp,%0" : "=r"(tss.esp0)); // Set the kernel stack pointer.
 	//note that CS is loaded from the IDT entry and should be the regular kernel code segment
 
@@ -90,7 +83,7 @@ void gdt_initialize(void)
     printf("GDT initialized\n");
 }
 
-void gdt_entry(u8 *target, struct gdt_entry *source)
+static void gdt_entry(u8 *target, struct gdt_entry *source)
 {
     // Check the limit to make sure that it can be encoded
     if (source->limit > 0xFFFFF) {
@@ -115,7 +108,7 @@ void gdt_entry(u8 *target, struct gdt_entry *source)
     target[6] |= (source->flags << 4);
 }
 
-inline void set_kernel_stack(u32 stack) 
+void set_kernel_stack(u32 stack) 
 {
 	tss.esp0 = stack;
 }

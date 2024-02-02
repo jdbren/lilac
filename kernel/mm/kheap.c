@@ -137,7 +137,7 @@ void* malloc_small(size_t size)
     // check if there is any memory available
     if (allLists[bucketIndex].freeCount == 0) {
         // allocate new superblock
-        void *block = kvirtual_alloc(SUPERBLOCKPAGES);
+        void *block = kvirtual_alloc(SUPERBLOCKPAGES, K_WRITE);
         assert(block != NULL);
 
         header = (SBHeader*)block;
@@ -184,7 +184,7 @@ void* malloc_large(size_t size)
     int pages = (size + sizeof(SBHeader))/PAGE_SIZE + 1;
     size = pages * PAGE_SIZE;
 
-    void *block = kvirtual_alloc(pages);
+    void *block = kvirtual_alloc(pages, K_WRITE);
     assert(block != NULL);
 
     // set up superblock header
