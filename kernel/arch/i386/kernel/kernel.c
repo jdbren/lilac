@@ -1,5 +1,6 @@
 #include <string.h>
 #include <utility/multiboot2.h>
+#include <utility/acpi.h>
 #include <kernel/tty.h>
 #include <kernel/panic.h>
 #include <kernel/keyboard.h>
@@ -36,7 +37,6 @@ void kernel_main(unsigned int addr)
 	keyboard_initialize();
 	enable_interrupts();
 	mm_init();
-	//map_page((void*)(addr & 0xfffff000), (void*)(addr & 0xfffff000), 0x1);
 
 	if (addr & 7) {
 		kerror("Unaligned mbi:\n");
@@ -48,8 +48,13 @@ void kernel_main(unsigned int addr)
 	printf("addr: %x\n", tag);
 	printf("Size: %x\n", tag->type);
 
-	//asm volatile("cli\t\nhlt");
-	
+	int *i = kmalloc(200);
+	*i = 5;
+	printf("i: %d\n", *i);
+	map_page((void*)0xBFFED000, (void*)0xBFFED000, 0x3);
+	*(int*)0xBFFED000 = 5;
+	printf("i: %d\n", *(int*)0xBFFED000);
+
 	for (tag = (struct multiboot_tag *) (addr + 8);
 		tag->type != MULTIBOOT_TAG_TYPE_END;
 		tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag 
@@ -108,18 +113,39 @@ void kernel_main(unsigned int addr)
 					((struct multiboot_tag_old_acpi *)tag)->type, 
 					((struct multiboot_tag_old_acpi *)tag)->size,
 					((struct multiboot_tag_old_acpi *)tag)->rsdp);
-				printf("rsdp: %c\n", *((struct multiboot_tag_old_acpi *)tag)->rsdp);
-				printf("rsdp: %c\n", *((struct multiboot_tag_old_acpi *)tag)->rsdp+1);
+				struct RSDP *rsdp = (struct RSDP *)(((struct multiboot_tag_old_acpi *)tag)->rsdp);
+				printf("Signature: %s\n", rsdp->Signature);
+				printf("Checksum: %x\n", rsdp->Checksum);
+				printf("OEMID: %s\n", rsdp->OEMID);
+				printf("Revision: %x\n", rsdp->Revision);
+				printf("RsdtAddress: %x\n", rsdp->RsdtAddress);
+				u8 check;
+				for (int i = 0; i < sizeof(*rsdp); i++) {
+					check += ((char *)rsdp)[i];
+				}
+				check -= rsdp->Checksum;
+				printf("Checksum: %x\n", check);
+				if((u8)(check + rsdp->Checksum) == 0) {
+					printf("Checksum is correct\n");
+				} else {
+					printf("Checksum is incorrect\n");
+				}
+
+				map_page((void*)(rsdp->RsdtAddress & 0xfffff000), (void*)(rsdp->RsdtAddress & 0xfffff000), 0x1);
+				struct SDTHeader *rsdt = (struct SDTHeader *)rsdp->RsdtAddress;
+				printf("Signature: %s\n", rsdt->Signature);
+				
+
 			break;
 		}
 	}
-	asm ("cli\t\nhlt");
-	
-	
-	//fs_init(mbd);
+
+
+
+
+	// fs_init(mbd);
 	// void *ptr = fat32_read_file("/bin/code");
 	// void *jmp = elf32_load(ptr);
-
 	// jump_usermode((u32)jmp);
 
 	while (1) {

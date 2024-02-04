@@ -11,4 +11,16 @@ struct RSDP {
     u32 RsdtAddress;
 } __attribute__((packed));
 
+struct SDTHeader {
+    char Signature[4];
+    u32 Length;
+    u8 Revision;
+    u8 Checksum;
+    char OEMID[6];
+    char OEMTableID[8];
+    u32 OEMRevision;
+    u32 CreatorID;
+    u32 CreatorRevision;
+} __attribute__((packed));
+
 #endif

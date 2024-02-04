@@ -42,9 +42,9 @@ page_directory:
 boot_page_table0:
 	.skip 4096
 boot_page_table768:
-	.skip 4096
+	.fill 1024,4,0
 mbinfo:
-	.skip 4096
+	.fill 1024,4,0
 
 .section .data
 .align 4
@@ -80,10 +80,11 @@ _start:
 bad:
 	hlt
 	# Get the multiboot information.
-ok:	movl %ebx, pa(_mbd_addr)
-	leal pa(_mbd_size), %ecx
-	movl (%ebx), %eax
-	movl %eax, (%ecx)
+ok:
+ 	movl %ebx, pa(_mbd_addr)
+ 	leal pa(_mbd_size), %ecx
+ 	movl (%ebx), %eax
+ 	movl %eax, (%ecx)
 
 	# Clear the bss.
 	cld
@@ -115,7 +116,7 @@ ok:	movl %ebx, pa(_mbd_addr)
 	# Set up the kernel page mapping (higher half).
 	xorl %eax, %eax
 	leal pa(boot_page_table768), %edi
-	leal pa(_bss_start), %ecx
+	leal pa(_data_start), %ecx
 
 2:	movl %eax, %esi
 	orl	 $1, %esi  		# set present bit, read-only (code)
@@ -166,7 +167,7 @@ ok:	movl %ebx, pa(_mbd_addr)
 
 .section .text
 # Unmap the kernel identity mapping as it is now unnecessary.
-4: 	leal boot_page_table0 + 1024, %edi
+4: 	leal boot_page_table0+1024, %edi 
 	movl $(0xc00), %ecx
 	xorl %eax, %eax
 	shrl $2, %ecx
@@ -178,6 +179,9 @@ ok:	movl %ebx, pa(_mbd_addr)
 
 	# Adjust the stack pointer.
 	addl $__KERNEL_BASE, %esp
+
+	leal mbinfo, %ebx
+	pushl %ebx
 
 	call _init
 
