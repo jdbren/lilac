@@ -29,7 +29,7 @@ static struct multiboot_info {
 
 void jump_usermode(u32 addr);
 
-void kernel_main(u32 addr)
+void kernel_main(unsigned int addr)
 {
 	terminal_initialize();
 	gdt_initialize();
@@ -146,7 +146,6 @@ void kernel_main(u32 addr)
 	// fs_init(mbd);
 	// void *ptr = fat32_read_file("/bin/code");
 	// void *jmp = elf32_load(ptr);
-
 	// jump_usermode((u32)jmp);
 
 	while (1) {

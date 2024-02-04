@@ -36,10 +36,11 @@ stack_top:
 .section .bss, "aw", @nobits
 .align __PAGE_OFFSET
 .global page_directory
+.global mbinfo
 page_directory:
-	.fill 1024,4,0
+	.skip 4096
 boot_page_table0:
-	.fill 1024,4,0
+	.skip 4096
 boot_page_table768:
 	.fill 1024,4,0
 mbinfo:
@@ -61,7 +62,7 @@ _start:
 
 	# Set up the boot segment registers.
 	lgdt pa(boot_gdt_descr)
-	movl $(__BOOT_DS), %edx
+	leal (__BOOT_DS), %edx
 	movl %edx, %ds
 	movl %edx, %es
 	movl %edx, %fs
@@ -85,12 +86,11 @@ ok:
  	movl (%ebx), %eax
  	movl %eax, (%ecx)
 
-
 	# Clear the bss.
 	cld
 	xorl %eax, %eax
-	movl $pa(_bss_start), %edi
-	movl $pa(_bss_end), %ecx
+	leal pa(_bss_start), %edi
+	leal pa(_bss_end), %ecx
 	subl %edi, %ecx
 	shrl $2, %ecx
 	rep ; stosl
@@ -102,7 +102,7 @@ ok:
 	rep ; movsb
 
 	# Identity map the kernel.
-	movl $pa(boot_page_table0), %edi 	# page table entry
+	leal pa(boot_page_table0), %edi 	# page table entry
 	xorl %eax, %eax				 		# start addr = 0
 
 1:	movl %eax, %esi
@@ -185,6 +185,8 @@ ok:
 
 	call _init
 
+	leal mbinfo, %ebx
+	pushl %ebx
 	call kernel_main
 
 	# Hang if kernel_main returns.
