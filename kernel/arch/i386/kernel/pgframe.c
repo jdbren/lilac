@@ -2,7 +2,8 @@
 #include <kernel/panic.h>
 
 #define PAGE_SIZE 0x1000
-#define MEMORY_SPACE 0x100000000 // 4GB
+#define SEPARATOR PAGE_SIZE * 64
+#define MEMORY_SPACE 0x100000000ULL // 4GB
 #define BITMAP_SIZE (MEMORY_SPACE / PAGE_SIZE / 8 / 4)
 
 #define check_bit(var,pos) ((var) & (1<<(pos)))

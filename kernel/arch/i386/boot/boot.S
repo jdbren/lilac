@@ -1,3 +1,4 @@
+#define MB_MAGIC 0x36d76289
 #define __PAGE_OFFSET 4096
 #define __KERNEL_BASE 0xC0000000
 #define pa(X) ((X) - __KERNEL_BASE)
@@ -5,19 +6,25 @@
 #define __BOOT_CS 0x08
 #define __BOOT_DS 0x10
 
-# Declare constants for the multiboot header.
+# Declare constants for the multiboot2 header.
 .set ALIGN,    1<<0             # align loaded modules on page boundaries
 .set MEMINFO,  1<<1             # provide memory map
+.set ARCH,     0x0           
+.set HEADLEN,  24
 .set FLAGS,    ALIGN | MEMINFO  # this is the Multiboot 'flag' field
-.set MAGIC,    0x1BADB002       # 'magic number' lets bootloader find the header
-.set CHECKSUM, -(MAGIC + FLAGS) # checksum of above, to prove we are multiboot
+.set MAGIC,    0xE85250D6       # 'magic number' lets bootloader find the header
+.set CHECKSUM, -(MAGIC + ARCH + HEADLEN) # checksum of above, to prove we are multiboot
 
-# Declare a multiboot header that marks the program as a kernel.
+# Declare a multiboot2 header.
 .section .multiboot.data, "aw"
-.align 4
+.align 64
 .long MAGIC
-.long FLAGS
+.long ARCH
+.long HEADLEN
 .long CHECKSUM
+.int 0
+.int 0
+.long 8
 
 # Allocate the initial stack and page tables.
 .section .bsstack, "aw", @nobits
@@ -29,23 +36,33 @@ stack_top:
 .section .bss, "aw", @nobits
 .align __PAGE_OFFSET
 .global page_directory
+.global mbinfo
 page_directory:
-	.fill 1024,4,0
+	.skip 4096
 boot_page_table0:
-	.fill 1024,4,0
+	.skip 4096
 boot_page_table768:
-	.fill 1024,4,0
+	.skip 4096
+mbinfo:
+	.skip 4096
+
+.section .data
+.align 4
+_mbd_addr:
+	.long 0
+_mbd_size:
+	.long 0
 
 # The kernel entry point.
 .section .multiboot.text, "a"
 .global _start
 .type _start, @function
 _start:
-	movl $pa(stack_top), %ecx
+	leal pa(stack_top), %ecx
 
 	# Set up the boot segment registers.
 	lgdt pa(boot_gdt_descr)
-	movl $(__BOOT_DS), %edx
+	leal (__BOOT_DS), %edx
 	movl %edx, %ds
 	movl %edx, %es
 	movl %edx, %fs
@@ -53,23 +70,38 @@ _start:
 	movl %edx, %ss
 	leal (%ecx), %esp
 
-	mov %eax, %edx
+	cmpl $MB_MAGIC, %eax
+	jne bad
+	movl %ebx, %edx
+	andl $7, %edx
+	jne bad
+	jmp ok
+	
+bad:
+	hlt
+	# Get the multiboot information.
+ok:	movl %ebx, pa(_mbd_addr)
+	leal pa(_mbd_size), %ecx
+	movl (%ebx), %eax
+	movl %eax, (%ecx)
 
 	# Clear the bss.
 	cld
 	xorl %eax, %eax
-	movl $pa(_bss_start), %edi
-	movl $pa(_bss_end), %ecx
+	leal pa(_bss_start), %edi
+	leal pa(_bss_end), %ecx
 	subl %edi, %ecx
 	shrl $2, %ecx
 	rep ; stosl
 
-	# Get the multiboot information.
-	push %edx
-	push %ebx
+	# Copy the multiboot information.
+	leal pa(mbinfo), %edi
+	movl pa(_mbd_addr), %esi
+	movl pa(_mbd_size), %ecx
+	rep ; movsb
 
 	# Identity map the kernel.
-	movl $pa(boot_page_table0), %edi 	# page table entry
+	leal pa(boot_page_table0), %edi 	# page table entry
 	xorl %eax, %eax				 		# start addr = 0
 
 1:	movl %eax, %esi
@@ -82,8 +114,8 @@ _start:
 
 	# Set up the kernel page mapping (higher half).
 	xorl %eax, %eax
-	movl $pa(boot_page_table768), %edi
-	movl $pa(_bss_start), %ecx
+	leal pa(boot_page_table768), %edi
+	leal pa(_bss_start), %ecx
 
 2:	movl %eax, %esi
 	orl	 $1, %esi  		# set present bit, read-only (code)
@@ -93,7 +125,7 @@ _start:
 	cmpl %eax, %ecx
 	jne  2b
 
-	movl $pa(_kernel_end), %ecx
+	leal pa(_kernel_end), %ecx
 
 3:	movl %eax, %esi
 	orl	 $3, %esi 		# set present bit and r/w (data)
@@ -104,25 +136,25 @@ _start:
 	jne  3b
 
 	# Set up the page directory.
-	movl $pa(page_directory), %edi
-	movl $pa(boot_page_table0), %esi
+	leal pa(page_directory), %edi
+	leal pa(boot_page_table0), %esi
 	orl  $3, %esi
 	movl %esi, (%edi)
 
-	movl $pa(boot_page_table768), %esi
+	leal pa(boot_page_table768), %esi
 	orl  $3, %esi
 	addl $(4*768), %edi
 	movl %esi, (%edi)
 
 	# Recursive map
-	movl $pa(page_directory), %eax
+	leal pa(page_directory), %eax
 	movl %eax, %edi
 	addl $(4*1023), %edi
 	orl  $3, %eax
 	movl %eax, (%edi)
 
 	# Enable paging.
-	movl $pa(page_directory), %eax
+	leal pa(page_directory), %eax
 	movl %eax, %cr3
 	movl %cr0, %eax
 	orl  $(0x80010000), %eax # pg enable, wp enable
@@ -134,7 +166,7 @@ _start:
 
 .section .text
 # Unmap the kernel identity mapping as it is now unnecessary.
-4: 	movl $(boot_page_table0 + 1024), %edi 
+4: 	leal boot_page_table0 + 1024, %edi
 	movl $(0xc00), %ecx
 	xorl %eax, %eax
 	shrl $2, %ecx
@@ -149,6 +181,8 @@ _start:
 
 	call _init
 
+	leal mbinfo, %ebx
+	pushl %ebx
 	call kernel_main
 
 	# Hang if kernel_main returns.
