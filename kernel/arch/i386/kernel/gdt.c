@@ -67,7 +67,7 @@ extern void gdt_set(struct GDT *gdt_ptr);
 extern void reload_segments(void);
 extern void flush_tss(void);
 
-void gdt_initialize(void)
+void gdt_init(void)
 {
     for (int i = 0; i < GDT_SIZE; i++)
         gdt_entry((u8*)segment_desc + i*8, &gdt_entries[i]);

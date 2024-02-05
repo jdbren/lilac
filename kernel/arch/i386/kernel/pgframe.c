@@ -1,21 +1,26 @@
+#include <string.h>
+#include <math.h>
 #include <pgframe.h>
+#include <paging.h>
 #include <kernel/panic.h>
 
 #define PAGE_SIZE 0x1000
-#define SEPARATOR PAGE_SIZE * 64
 #define MEMORY_SPACE 0x100000000ULL // 4GB
-#define BITMAP_SIZE (MEMORY_SPACE / PAGE_SIZE / 8 / 4)
 
+#define phys_addr(virt_addr) ((u32)(virt_addr) - 0xC0000000UL)
 #define check_bit(var,pos) ((var) & (1<<(pos)))
 
 typedef struct {
     u8 pg[PAGE_SIZE];
 } __attribute__((packed)) page_t;
 
+extern const u32 _kernel_start;
 extern const u32 _kernel_end;
-static const u32 FIRST_PAGE = (u32)&_kernel_end - (u32)0xC0000000;
+static u32 KERNEL_SIZE;
+static u32 FIRST_PAGE;
 
-static u32 pg_frame_bitmap[BITMAP_SIZE];
+static u32 BITMAP_SIZE;
+static u32 *const pg_frame_bitmap = (u32*)&_kernel_end;
 
 static void *__check_bitmap(int i, int num_pages, int *count, int *start);
 static void *__do_frame_alloc(int, int);
@@ -23,6 +28,21 @@ static void __free_frame(page_t *frame);
 
 // bit #i in byte #n define the status of page #n*8+i
 // 0 = free, 1 = used
+
+int phys_mem_init(u32 mem_end) 
+{
+    KERNEL_SIZE = phys_addr(&_kernel_end) - (u32)&_kernel_start;
+    BITMAP_SIZE = (mem_end - KERNEL_SIZE) / PAGE_SIZE / 32;
+    FIRST_PAGE = (phys_addr((u32)pg_frame_bitmap + BITMAP_SIZE) & 0xFFFFF000) + PAGE_SIZE;
+
+    map_pages((void*)phys_addr(&_kernel_end), 
+            (void*)pg_frame_bitmap, 
+            0x3,
+            BITMAP_SIZE / PAGE_SIZE + 1);
+    memset(pg_frame_bitmap, 0, BITMAP_SIZE);
+
+    return (BITMAP_SIZE & 0xfffff000) + PAGE_SIZE;
+}
 
 void* alloc_frames(u32 num_pages) 
 {

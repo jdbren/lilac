@@ -13,7 +13,7 @@ static size_t terminal_column;
 static u8 terminal_color;
 static u16* terminal_buffer;
 
-void terminal_initialize(void)
+void terminal_init(void)
 {
 	terminal_row = 2;
 	terminal_column = 0;

@@ -42,9 +42,9 @@ page_directory:
 boot_page_table0:
 	.skip 4096
 boot_page_table768:
-	.fill 1024,4,0
+	.skip 4096
 mbinfo:
-	.fill 1024,4,0
+	.skip 4096
 
 .section .data
 .align 4
@@ -70,17 +70,18 @@ _start:
 	movl %edx, %ss
 	leal (%ecx), %esp
 
+	# Check the magic number.
 	cmpl $MB_MAGIC, %eax
-	jne bad
+	jne invlboot
 	movl %ebx, %edx
 	andl $7, %edx
-	jne bad
+	jne invlboot
 	jmp ok
 	
-bad:
+invlboot:
 	hlt
-	# Get the multiboot information.
 ok:
+	# Save the multiboot information.
  	movl %ebx, pa(_mbd_addr)
  	leal pa(_mbd_size), %ecx
  	movl (%ebx), %eax
@@ -185,8 +186,7 @@ ok:
 
 	call _init
 
-	leal mbinfo, %ebx
-	pushl %ebx
+	pushl $mbinfo
 	call kernel_main
 
 	# Hang if kernel_main returns.

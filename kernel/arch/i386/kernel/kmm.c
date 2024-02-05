@@ -1,4 +1,5 @@
 #include <string.h>
+#include <utility/multiboot2.h>
 #include <mm/kmm.h>
 #include <pgframe.h>
 #include <paging.h>
@@ -7,6 +8,7 @@
 #define PAGE_SIZE PAGE_BYTES
 #define KHEAP_START_ADDR 0xC1000000
 #define KHEAP_MAX_ADDR 0xFEFFF000
+#define MEMORY_SPACE 0x100000000ULL // 4GB
 #define KHEAP_PAGES ((KHEAP_MAX_ADDR - KHEAP_START_ADDR) / PAGE_SIZE)
 #define get_index(VIRT_ADDR) (KHEAP_MAX_ADDR - VIRT_ADDR)
 
@@ -27,9 +29,26 @@ static u32 unused_heap_addr;
 
 static const int HEAP_MANAGE_PAGES = KHEAP_PAGES * sizeof(memory_desc_t) / PAGE_SIZE;
 
-void mm_init(void) 
+// TODO: Add support for greater than 4GB memory
+void mm_init(struct multiboot_tag_mmap *mmap, u32 mem_upper) 
 {
-    kernel_avail = (memory_desc_t*)&_kernel_end;
+    int phys_map_sz;
+    if (mem_upper > MEMORY_SPACE)
+        kerror("Memory size greater than 4GB not supported");
+    struct multiboot_mmap_entry *entry = mmap->entries;
+    for (int i = 0; i < mmap->size; i += mmap->entry_size) {
+        if (entry->type == MULTIBOOT_MEMORY_AVAILABLE) {
+            u32 addr = entry->addr;
+            u32 len = entry->len;
+            if (addr + len >= (u32)&_kernel_end - 0xC0000000UL) {
+                phys_map_sz = phys_mem_init(addr + len);
+                break;
+            }
+        }
+        entry = (struct multiboot_mmap_entry*)((u32)entry + mmap->entry_size);
+    }
+
+    kernel_avail = (memory_desc_t*)((u32)&_kernel_end + (u32)phys_map_sz);
     list = 0;
     unused_heap_addr = KHEAP_MAX_ADDR;
 

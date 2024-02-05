@@ -28,7 +28,7 @@ void enable_interrupts(void)
     printf("Interrupts enabled\n");
 }
 
-void idt_initialize(void)
+void idt_init(void)
 {
     idt_entry(0, (u32)div0, 0x08, TRAP_GATE);
     idt_entry(6, (u32)invldop, 0x08, TRAP_GATE);

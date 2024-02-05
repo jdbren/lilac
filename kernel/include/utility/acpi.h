@@ -23,4 +23,17 @@ struct SDTHeader {
     u32 CreatorRevision;
 } __attribute__((packed));
 
+struct MADT {
+    struct SDTHeader header;
+    u32 LocalApicAddress;
+    u32 Flags;
+} __attribute__((packed));
+
+struct MADTEntry {
+    u8 Type;
+    u8 Length;
+} __attribute__((packed));
+
+void read_rsdp(struct RSDP *rsdp);
+
 #endif

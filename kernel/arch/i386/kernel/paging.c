@@ -52,6 +52,7 @@ int map_pages(void *physaddr, void *virtualaddr, u16 flags, int num_pages)
         u32 *pt = ((u32*)0xFFC00000) + (0x400 * pdindex);
         if (pt[ptindex] & 0x1) {
             printf("mapping already present\n");
+            printf("physaddr: %x, virtualaddr: %x\n", physaddr, virtualaddr);
             return 1;
         }
 
@@ -90,17 +91,19 @@ int unmap_pages(void *virtualaddr, int num_pages)
 
 static int pde(int index, u16 flags) 
 {
-    static const u8 default_flags = 0x1; // present 
+    //printf("Allocating page table %d\n", index);
+    static const u8 default_flags = 0x3; // present 
 
     // 3...0: cache enabled, write-through disabled, u/s mode
 
     void *addr = alloc_frame();
     assert(is_aligned(addr, PAGE_BYTES));
 
-    pde_t entry = (u32)addr | flags;
+    pde_t entry = (u32)addr | default_flags;
     pd[index] = entry;
 
     u32 *pt = ((u32*)0xFFC00000) + (0x400 * index);
+    //printf("Page table %d at %x\n", index, pt);
     memset(pt, 0, PAGE_BYTES);
 
     //printf("Allocated page %x for page table %d\n", addr, index);
