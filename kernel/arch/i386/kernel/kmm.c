@@ -32,7 +32,7 @@ static const int HEAP_MANAGE_PAGES = KHEAP_PAGES * sizeof(memory_desc_t) / PAGE_
 // TODO: Add support for greater than 4GB memory
 void mm_init(struct multiboot_tag_mmap *mmap, u32 mem_upper) 
 {
-    int phys_map_sz;
+    int phys_map_sz = 0;
     if (mem_upper > MEMORY_SPACE)
         kerror("Memory size greater than 4GB not supported");
     struct multiboot_mmap_entry *entry = mmap->entries;
@@ -47,6 +47,9 @@ void mm_init(struct multiboot_tag_mmap *mmap, u32 mem_upper)
         }
         entry = (struct multiboot_mmap_entry*)((u32)entry + mmap->entry_size);
     }
+
+    if (phys_map_sz == 0)
+        kerror("Not enough memory");
 
     kernel_avail = (memory_desc_t*)((u32)&_kernel_end + (u32)phys_map_sz);
     list = 0;

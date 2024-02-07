@@ -27,11 +27,12 @@ void parse_madt(struct SDTHeader *addr) {
     struct MADTEntry *entry = (struct MADTEntry*)(madt + 1);
     for (; (u32)entry < (u32)madt + madt->header.Length; entry = (struct MADTEntry*)((u32)entry + entry->Length)) {
         switch (entry->Type) {
-            // case 0:
-            //     printf("Processor Local APIC\n");
-            //     printf("APIC ID: %d", ((u8*)entry)[3]);
-            //     printf("Flags: %x\n", ((u32*)entry)[1]);
-            //     break;
+            case 0:
+                printf("Processor Local APIC\n");
+                printf("ACPI Processor ID: %d\n", ((u8*)entry)[2]);
+                printf("APIC ID: %d\n", ((u8*)entry)[3]);
+                printf("Flags: %x\n", ((u32*)entry)[1]);
+                break;
             case 1:
                 printf("I/O APIC\n");
                 printf("I/O APIC ID: %d\n", ((u8*)entry)[2]);
@@ -39,29 +40,28 @@ void parse_madt(struct SDTHeader *addr) {
                 printf("Global System Interrupt Base: %d\n", ((u32*)entry)[2]);
                 break;
             case 2:
-                //printf("Interrupt Source Override\n");
-                printf("Bus Source: %d\n", ((u8*)entry)[3]);
-                printf("IRQ Source: %d\n", ((u8*)entry)[4]);
+                printf("Interrupt Source Override\n");
+                printf("Bus Source: %d\n", ((u8*)entry)[2]);
+                printf("IRQ Source: %d\n", ((u8*)entry)[3]);
                 printf("Global System Interrupt: %d\n", ((u32*)entry)[1]);
-                printf("Flags: %x\n", ((u32*)entry)[2]);
+                printf("Flags: %x\n", ((u16*)entry)[4]);
                 break;
-            // case 3:
-            //     printf("I/O Non-maskable Interrupt Source\n");
-            //     printf("Global System Interrupt: %d\n", ((u32*)entry)[1]);
-            //     printf("Flags: %x\n", ((u32*)entry)[2]);
-            //     break;
-            // case 4:
-            //     printf("APIC Non-maskable Interrupt Source\n");
-            //     printf("APIC ID: %x\n", ((u8*)entry)[2]);
-            //     printf("Flags: %x\n", *(u16*)((u8*)entry+3));
-            //     printf("Local APIC LINT: %x\n", ((u8*)entry)[5]);
-            //     break;
-            // default:
-            //     printf("Unknown\n");
+            case 3:
+                printf("I/O Non-maskable Interrupt Source\n");
+                printf("NMI Source: %d\n", ((u8*)entry)[2]);
+                printf("Flags: %x\n", ((u16*)entry)[2]);
+                printf("Global System Interrupt: %d\n", *((u32*)((u8*)entry+6)));
+                break;
+            case 4:
+                printf("APIC Non-maskable Interrupt Source\n");
+                printf("APIC ID: %x\n", ((u8*)entry)[2]);
+                printf("Flags: %x\n", *(u16*)((u8*)entry+3));
+                printf("Local APIC LINT: %x\n", ((u8*)entry)[5]);
+                break;
+            default:
+                printf("Unknown\n");
         }
     }
-
-
 }
 
 void read_rsdt(struct SDTHeader *rsdt) {
