@@ -58,6 +58,7 @@ void io_apic_entry(const u8 irq, const u8 vector, const u8 flags, const u8 dest)
     entry.mask = 0;
     entry.dest = dest;
 
+    printf("IO APIC Entry: %x %x %x %x\n", *(u32*)&entry, *((u32*)&entry + 1), irq, IOAPIC_REDTBL(irq));
     write_reg(IOAPIC_REDTBL(irq), *(u32*)&entry);
     write_reg(IOAPIC_REDTBL(irq) + 1, *((u32*)&entry + 1));
 }

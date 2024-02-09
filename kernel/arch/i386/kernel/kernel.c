@@ -13,6 +13,7 @@
 #include <fs_init.h>
 #include <pgframe.h>
 #include <paging.h>
+#include <timer.h>
 #include <mm/kmm.h>
 #include <mm/kheap.h>
 #include <fs/mbr.h>
@@ -54,7 +55,9 @@ void kernel_main(unsigned int addr)
 	printf("APIC_BASE: %x\n", eax);
 	io_apic(0xfec00000);
 	keyboard_init();
+	timer_init();
 	enable_interrupts();
+	//ap_init(2);
 	
 	// fs_init(mbd);
 	// void *ptr = fat32_read_file("/bin/code");

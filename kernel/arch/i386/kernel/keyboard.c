@@ -18,7 +18,6 @@ inline u8 keyboard_read(void)
 void keyboard_init(void)
 {
     idt_entry(0x20 + 1, (u32)keyboard_handler, 0x08, INT_GATE);
-    //IRQ_clear_mask(1);
     io_apic_entry(1, 0x20 + 1, 0, 0);
     printf("Keyboard initialized\n");
 }

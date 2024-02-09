@@ -1,15 +1,17 @@
 #include <stdbool.h>
+#include <string.h>
 #include <kernel/types.h>
 #include <kernel/panic.h>
 #include <asm/cpuid.h>
 #include <asm/msr.h>
 #include <paging.h>
+#include <timer.h>
 
 #define IA32_APIC_BASE_MSR 0x1B
 #define IA32_APIC_BASE_MSR_BSP 0x100 // Processor is a BSP
 #define IA32_APIC_BASE_MSR_ENABLE 0x800
 
-static u32 local_apic_base;
+u32 local_apic_base;
 
 static inline void write_reg(u32 reg, u32 value)
 {
@@ -83,4 +85,51 @@ void enable_apic(void) {
 void apic_eoi(void)
 {
     write_reg(0xB0, 0);
+}
+
+extern void ap_trampoline(void);
+static u8 lapic_ids[256] = {0, 1, 2, 3}; 
+void ap_init(u8 numcores)
+{
+    int i, j;
+    volatile uint8_t aprunning = 0;  // count how many APs have started
+    uint8_t bspid, bspdone = 0;      // BSP id and spinlock flag
+    // get the BSP's Local APIC ID
+    asm volatile ("mov $1, %%eax; cpuid; shrl $24, %%ebx;": "=b"(bspid) : : );
+    
+    // copy the AP trampoline code to a fixed address in low conventional memory (to address 0x0800:0x0000)
+    memcpy((void*)0x8000, (void*)&ap_trampoline, 4096);
+    
+    // for each Local APIC ID we do...
+    for(i = 0; i < numcores; i++) {
+        // do not start BSP, that's already running this code
+        if(lapic_ids[i] == bspid) continue;
+        // send INIT IPI
+        *((volatile uint32_t*)(local_apic_base + 0x280)) = 0;                                                                             // clear APIC errors
+        *((volatile uint32_t*)(local_apic_base + 0x310)) = (*((volatile uint32_t*)(local_apic_base + 0x310)) & 0x00ffffff) | (i << 24);         // select AP
+        *((volatile uint32_t*)(local_apic_base + 0x300)) = (*((volatile uint32_t*)(local_apic_base + 0x300)) & 0xfff00000) | 0x00C500;          // trigger INIT IPI
+        do { 
+            asm volatile ("pause" : : : "memory"); 
+        } while (*((volatile uint32_t*)(local_apic_base + 0x300)) & (1 << 12));         // wait for delivery
+        *((volatile uint32_t*)(local_apic_base + 0x310)) = (*((volatile uint32_t*)(local_apic_base + 0x310)) & 0x00ffffff) | (i << 24);         // select AP
+        *((volatile uint32_t*)(local_apic_base + 0x300)) = (*((volatile uint32_t*)(local_apic_base + 0x300)) & 0xfff00000) | 0x008500;          // deassert
+        do { 
+            asm volatile ("pause" : : : "memory"); 
+        } while (*((volatile uint32_t*)(local_apic_base + 0x300)) & (1 << 12));         // wait for delivery
+        sleep(10);                                                                                                                 // wait 10 msec
+        // send STARTUP IPI (twice)
+        for (j = 0; j < 2; j++) {
+            *((volatile uint32_t*)(local_apic_base + 0x280)) = 0;                                                                     // clear APIC errors
+            *((volatile uint32_t*)(local_apic_base + 0x310)) = (*((volatile uint32_t*)(local_apic_base + 0x310)) & 0x00ffffff) | (i << 24); // select AP
+            *((volatile uint32_t*)(local_apic_base + 0x300)) = (*((volatile uint32_t*)(local_apic_base + 0x300)) & 0xfff0f800) | 0x000608;  // trigger STARTUP IPI for 0800:0000
+            //udelay(200);                                                                                                        // wait 200 usec
+            do { 
+                asm volatile ("pause" : : : "memory"); 
+            } while (*((volatile uint32_t*)(local_apic_base + 0x300)) & (1 << 12)); // wait for delivery
+        }
+    }
+    // release the AP spinlocks
+    bspdone = 1;
+    // now you'll have the number of running APs in 'aprunning'
+    printf("APs running: %d\n", aprunning);
 }

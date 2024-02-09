@@ -79,6 +79,7 @@ _start:
 	jmp ok
 	
 invlboot:
+	cli
 	hlt
 ok:
 	# Save the multiboot information.
@@ -181,8 +182,10 @@ ok:
 	# Adjust the stack pointer.
 	addl $__KERNEL_BASE, %esp
 
-	leal mbinfo, %ebx
-	pushl %ebx
+	push %ebx
+	mov $20, %ebx
+	call init_PIT
+	pop %ebx
 
 	call _init
 

@@ -15,7 +15,7 @@ static u16* terminal_buffer;
 
 void terminal_init(void)
 {
-	terminal_row = 2;
+	terminal_row = 0;
 	terminal_column = 0;
 	terminal_color = vga_entry_color(VGA_COLOR_CYAN, VGA_COLOR_BLACK);
 	terminal_buffer = VGA_MEMORY;
@@ -42,7 +42,7 @@ void terminal_putentryat(unsigned char c, u8 color, size_t x, size_t y)
 void terminal_scroll()
 {
 	size_t i, k, j;
-	for (k = 2, j = 1; k < VGA_HEIGHT; k++, j++) {
+	for (k = 1, j = 0; k < VGA_HEIGHT; k++, j++) {
 		for (i = 0; i < VGA_WIDTH; i++) {
 			terminal_putentryat(terminal_buffer[k * VGA_WIDTH + i], 
 				terminal_color, i, j);
