@@ -23,36 +23,25 @@ timer_handler:
 	add [system_timer_fractions], eax     # Update system timer tick fractions
 	adc [system_timer_ms], ebx            # Update system timer tick milli-seconds
     
-    pushad
-    lea eax, str
-    push [system_timer_ms]
-    push eax
-    call printf
-    add esp, 8
-    popad
-
-	xor eax, eax
-    mov ebx, [local_apic_base]
-	mov [ebx+0x0b0], eax                  # Send the EOI to the APIC
- 
-	pop ebx
-	pop eax
-	iretd
-
-TimerIRQ:
-    push eax
     mov eax, [timer_cnt]
     test eax, eax
     jz TimerDone
     dec eax
     mov [timer_cnt], eax
 TimerDone:
-    pop eax
-    ret
+
+	xor eax, eax
+    mov ebx, [local_apic_base]
+    mov [ebx+0x0b0], eax                  # Send the EOI to the APIC
+ 
+	pop ebx
+	pop eax
+	iretd
 
 # Input
 # ebx   Desired PIT frequency in Hz
 .global init_PIT
+.type init_PIT, @function
 init_PIT:
     pushad
 

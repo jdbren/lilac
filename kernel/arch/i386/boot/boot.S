@@ -28,8 +28,10 @@
 
 # Allocate the initial stack and page tables.
 .section .bsstack, "aw", @nobits
+.globl stack_top
 .align 4096
 stack_bottom:
+	.skip 32768
 	.skip 32768
 stack_top:
 
@@ -183,7 +185,7 @@ ok:
 	addl $__KERNEL_BASE, %esp
 
 	push %ebx
-	mov $20, %ebx
+	mov $1193, %ebx
 	call init_PIT
 	pop %ebx
 

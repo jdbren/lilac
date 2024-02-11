@@ -57,7 +57,11 @@ void kernel_main(unsigned int addr)
 	keyboard_init();
 	timer_init();
 	enable_interrupts();
-	//ap_init(2);
+
+	printf("Sleeping for 1 second\n");
+	sleep(1000);
+	printf("Awake\n");
+	ap_init(2);
 	
 	// fs_init(mbd);
 	// void *ptr = fat32_read_file("/bin/code");
