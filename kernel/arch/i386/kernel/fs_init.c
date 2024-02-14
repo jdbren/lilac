@@ -2,23 +2,25 @@
 #include <kernel/panic.h>
 #include <fs/mbr.h>
 #include <fs/fat32.h>
+#include <utility/multiboot2.h>
+#include <fs_init.h>
 
 #define BOOT_LOCATION 0x7C00
 
 void mbr_read(int boot_partition);
 
-// void fs_init(void* mbd)
-// {
-//     int boot_device = mbd->boot_device >> 24;
-//     int boot_partition = (mbd->boot_device >> 16) & 0xFF;
-//     printf("Boot device: %x\n", boot_device);
-//     printf("Boot partition: %x\n", boot_partition);
+void fs_init(struct multiboot_info *mbd)
+{
+    int boot_device = mbd->boot_dev->biosdev;
+    int boot_partition = (mbd->boot_dev->slice) & 0xFF;
+    printf("Boot device: %x\n", boot_device);
+    printf("Boot partition: %x\n", boot_partition);
 
-//     if (boot_device == 0x80)
-//         mbr_read(boot_partition);
-//     else
-//         kerror("Boot device is not the first hard disk\n");
-// }
+    if (boot_device == 0x80)
+        mbr_read(boot_partition);
+    else
+        kerror("Boot device is not the first hard disk\n");
+}
 
 void mbr_read(int boot_partition)
 {

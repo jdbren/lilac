@@ -81,7 +81,7 @@ void enable_apic(void) {
     printf("Spurious Int Vec: %x\n", read_reg(0xf0));
     
     /* Set the Spurious Interrupt Vector Register bit 8 to start receiving interrupts */
-    //write_reg(0xF0, read_reg(0xF0) | 0x100);
+    write_reg(0xF0, read_reg(0xF0) | 0x100);
 }
 
 void apic_eoi(void)
@@ -91,9 +91,9 @@ void apic_eoi(void)
 
 volatile uint8_t aprunning = 0;  // count how many APs have started
 uint8_t bspid, bspdone = 0;      // BSP id and spinlock flag
-
 extern void ap_trampoline(void);
 static u8 lapic_ids[256] = {0, 1, 2, 3}; 
+
 void ap_init(u8 numcores)
 {
     int i, j;

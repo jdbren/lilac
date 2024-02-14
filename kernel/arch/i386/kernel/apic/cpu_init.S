@@ -9,9 +9,9 @@ ap_trampoline:
     ljmp    $0, $0x8040
     .align 16
 _L8010_GDT_table:
-    .quad 0x0000000000000000	# null descriptor
-	.quad 0x00CF9A000000FFFF	# code descriptor
-	.quad 0x00CF92000000FFFF	# data descriptor
+    .quad 0x0000000000000000	    # null descriptor
+	.quad 0x00CF9A000000FFFF	    # code descriptor
+	.quad 0x00CF92000000FFFF	    # data descriptor
     .long 0x00000068, 0x00CF8900    # tss
 _L8030_GDT_value:
     .word _L8030_GDT_value - _L8010_GDT_table - 1
@@ -26,8 +26,8 @@ _L8040:
     orl     $1, %eax
     movl    %eax, %cr0
     ljmp    $8, $0x8060
-    .align 32
-    .code32
+.align 32
+.code32
 _L8060:
     movw    $0x10, %ax
     movw    %ax, %ds
@@ -39,7 +39,7 @@ _L8060:
     movl    %ebx, %edi
     # set up 32k stack, one for each core. It is important that all core must have its own stack
     shll    $15, %ebx
-    movl    $pa(stack_top+32768), %esp
+    movl    $pa(stack_top), %esp
     subl    %ebx, %esp
     pushl   %edi
     # spinlock, wait for the BSP to finish
@@ -48,8 +48,12 @@ _L8060:
     jz      1b
     lock    incb pa(aprunning)
     # jump into C code (should never return)
-    hlt
     ljmp    $8, $ap_startup
 
 ap_startup:
 2:  jmp 2b
+
+stack_top:
+    .align 32
+    .fill 512, 1, 0
+    

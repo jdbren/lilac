@@ -4,12 +4,8 @@
 #include <paging.h>
 #include <io.h>
 
-void log(char *msg) {
-    for (int i = 0; msg[i] != 0; i++)
-        outb(0xe9, msg[i]);
-}
-
-void parse_madt(struct SDTHeader *addr) {
+void parse_madt(struct SDTHeader *addr)
+{
     u8 check = 0;
     for (int i = 0; i < addr->Length; i++)
         check += ((char *)addr)[i];
@@ -64,7 +60,8 @@ void parse_madt(struct SDTHeader *addr) {
     }
 }
 
-void read_rsdt(struct SDTHeader *rsdt) {
+void read_rsdt(struct SDTHeader *rsdt)
+{
     u8 check = 0;
     for (int i = 0; i < rsdt->Length; i++)
         check += ((char *)rsdt)[i];
@@ -84,7 +81,8 @@ void read_rsdt(struct SDTHeader *rsdt) {
 
 }
 
-void read_rsdp(struct RSDP *rsdp) {
+void read_rsdp(struct RSDP *rsdp)
+{
     u8 check = 0;
     for (int i = 0; i < sizeof(*rsdp); i++)
         check += ((char *)rsdp)[i];

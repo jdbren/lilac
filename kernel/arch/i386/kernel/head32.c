@@ -18,27 +18,22 @@
 #include <mm/kheap.h>
 #include <fs/mbr.h>
 #include <fs/fat32.h>
+#include <kernel/kmain.h>
 
 
-static struct multiboot_info {
-	char *bootloader;
-	struct multiboot_tag_basic_meminfo *meminfo;
-	struct multiboot_tag_bootdev *boot_dev;
-	struct multiboot_tag_mmap *mmap;
-	struct multiboot_tag_old_acpi *acpi;
-} mbd;
+static struct multiboot_info mbd;
 
 void jump_usermode(u32 addr);
 void parse_multiboot(u32, struct multiboot_info*);
 
-void kernel_main(unsigned int addr)
+void kernel_early(unsigned int addr)
 {
 	terminal_init();
 	gdt_init();
 	idt_init();
 	parse_multiboot(addr, &mbd);
 	mm_init(mbd.mmap, mbd.meminfo->mem_upper);
-
+	
 	int data[4];
 	u32 eax = 0, ebx = 0, ecx = 0, edx = 0;
 	cpuid_string(0, (uint32_t*)data);
@@ -57,20 +52,14 @@ void kernel_main(unsigned int addr)
 	keyboard_init();
 	timer_init();
 	enable_interrupts();
-
-	printf("Sleeping for 1 second\n");
-	sleep(1000);
-	printf("Awake\n");
-	ap_init(2);
+	ap_init(4);
 	
-	// fs_init(mbd);
-	// void *ptr = fat32_read_file("/bin/code");
+	fs_init(&mbd);
+	void *ptr = fat32_read_file("/bin/code");
 	// void *jmp = elf32_load(ptr);
-	// jump_usermode((u32)jmp);
+	//jump_usermode((u32)jmp);
 
-	while (1) {
-		asm("hlt");
-	}
+	kmain();
 }
 
 void parse_multiboot(u32 addr, struct multiboot_info *mbd)
