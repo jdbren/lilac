@@ -23,29 +23,29 @@
 
 
 static struct multiboot_info mbd;
+static struct acpi_info acpi;
 
 void jump_usermode(u32 addr);
 void parse_multiboot(u32, struct multiboot_info*);
 
-void kernel_early(unsigned int addr)
+void kernel_early(unsigned int multiboot)
 {
 	terminal_init();
 	gdt_init();
 	idt_init();
-	parse_multiboot(addr, &mbd);
+	parse_multiboot(multiboot, &mbd);
 	mm_init(mbd.mmap, mbd.meminfo->mem_upper);
 
-	struct acpi_info *acpi = parse_acpi((void*)mbd.acpi->rsdp);
-	struct madt_info *madt = acpi->madt;
-	lapic_enable(madt->lapic_addr);
-	io_apic_init(madt->ioapics, madt->int_overrides, madt->override_cnt);
+	parse_acpi((void*)mbd.acpi->rsdp, &acpi);
+	apic_init(acpi.madt);
 	keyboard_init();
 	timer_init();
 	enable_interrupts();
-	ap_init(madt->core_cnt);
-	dealloc_madt(madt);
-	
+
 	fs_init(&mbd);
+
+	// ap_init(acpi.madt->core_cnt);
+	
 	void *ptr = fat32_read_file("/bin/code");
 	// void *jmp = elf32_load(ptr);
 	//jump_usermode((u32)jmp);

@@ -9,12 +9,10 @@
 
 void mbr_read(int boot_partition);
 
-void fs_init(struct multiboot_info *mbd)
+void fs_init(struct multiboot_tag_bootdev* boot_dev)
 {
-    int boot_device = mbd->boot_dev->biosdev;
-    int boot_partition = (mbd->boot_dev->slice) & 0xFF;
-    printf("Boot device: %x\n", boot_device);
-    printf("Boot partition: %x\n", boot_partition);
+    int boot_device = boot_dev->biosdev;
+    int boot_partition = (boot_dev->slice) & 0xFF;
 
     if (boot_device == 0x80)
         mbr_read(boot_partition);

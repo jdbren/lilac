@@ -1,6 +1,6 @@
 .intel_syntax noprefix
 
-.section .bss
+.bss
 .align 32
 system_timer_fractions:  .skip 32   # Fractions of 1 ms since timer initialized
 system_timer_ms:         .skip 32   # Number of whole ms since timer initialized
@@ -9,10 +9,10 @@ IRQ0_ms:                 .skip 32   # Number of whole ms between IRQs
 IRQ0_frequency:          .skip 32   # Actual frequency of PIT
 PIT_reload_value:        .skip 16   # Current PIT reload value
 
-.section .data
+.data
 str: .ascii "System time %d ms\n\0"
 
-.section .text
+.text
 .global timer_handler
 timer_handler:
 	push eax
@@ -28,8 +28,8 @@ timer_handler:
     jz TimerDone
     dec eax
     mov [timer_cnt], eax
+    
 TimerDone:
-
 	xor eax, eax
     mov ebx, [local_apic_base]
     mov [ebx+0x0b0], eax                  # Send the EOI to the APIC
@@ -118,7 +118,6 @@ init_PIT:
 
     # Program the PIT channel
     pushfd
-    cli                                # Disabled interrupts (just in case)
 
     mov al, 0x34                       # channel 0, lobyte/hibyte, rate generator
     out 0x43, al

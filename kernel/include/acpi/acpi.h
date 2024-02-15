@@ -28,6 +28,6 @@ struct acpi_info {
     // struct facp_info *facp;
 };
 
-struct acpi_info* parse_acpi(struct RSDP *rsdp);
+void parse_acpi(struct RSDP *rsdp, struct acpi_info *info);
 
 #endif

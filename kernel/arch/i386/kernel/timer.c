@@ -13,6 +13,7 @@ void timer_init(void)
 	init_PIT(1000);
     idt_entry(0x20, (u32)timer_handler, 0x08, INT_GATE);
     io_apic_entry(0, 0x20, 0, 0);
+	printf("Timer initialized\n");
 }
 
 void sleep(u32 millis)

@@ -30,15 +30,14 @@ typedef struct fat_file {
 } __attribute__((packed)) fat_file_t;
 
 
-DISK disks[4];
-fat_BS_t volID;
-u32 fat_buffer[FAT_BUFFER_SIZE / 4];
+static DISK disks[4];
+static fat_BS_t volID;
+static u32 fat_buffer[FAT_BUFFER_SIZE / 4];
 
 static inline u32 LBA_ADDR(u32 cluster_num, DISK *disk)
 {
     return disk->cluster_begin_lba + 
-        ((cluster_num - disk->root_start) 
-        * disk->sectors_per_cluster);
+        ((cluster_num - disk->root_start) * disk->sectors_per_cluster);
 }
 
 void disk_init(DISK *disk, fat_BS_t *id)
@@ -51,25 +50,13 @@ void disk_init(DISK *disk, fat_BS_t *id)
 }
 
 
-int name_length(const char* name, char delim)
+static inline int name_length(const char* name, char delim)
 {
     int i = 0;
-    
     while (name[i] != delim && name[i] != 0)
         i++;
     
     return i;
-}
-
-void memdump(void *ptr, int len)
-{
-    unsigned char *buf = (unsigned char*)ptr;
-    for (int i = 0; i < len; i++) {
-        if (i % 16 == 0)
-            printf("\n");
-        printf("%x ", buf[i]);
-    }
-    printf("\n");
 }
 
 void fat32_init(int disknum, u32 boot_sector)

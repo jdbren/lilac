@@ -72,7 +72,6 @@ struct madt_info* parse_madt(struct SDTHeader *addr)
         switch (entry->Type) {
             case 0:
                 info->core_cnt++;
-                printf("Core count: %d\n", info->core_cnt);
                 break;
             case 1:
                 info->ioapic_cnt++;

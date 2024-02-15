@@ -34,7 +34,7 @@ void read_rsdt(struct SDTHeader *rsdt, struct acpi_info *info)
     }
 }
 
-struct acpi_info* parse_acpi(struct RSDP *rsdp)
+void parse_acpi(struct RSDP *rsdp, struct acpi_info *info)
 {
     u8 check = 0;
     for (int i = 0; i < sizeof(*rsdp); i++)
@@ -45,7 +45,5 @@ struct acpi_info* parse_acpi(struct RSDP *rsdp)
     map_page((void*)(rsdp->RsdtAddress & 0xfffff000), 
             (void*)(rsdp->RsdtAddress & 0xfffff000), 0x1);
 
-    struct acpi_info *info = kzmalloc(sizeof(struct acpi_info));
     read_rsdt((struct SDTHeader*)rsdp->RsdtAddress, info);
-    return info;
 }
