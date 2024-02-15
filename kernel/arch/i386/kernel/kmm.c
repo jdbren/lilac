@@ -4,12 +4,10 @@
 #include <pgframe.h>
 #include <paging.h>
 #include <kernel/panic.h>
+#include <kernel/config.h>
 
-#define PAGE_SIZE PAGE_BYTES
-#define KHEAP_START_ADDR 0xC1000000
-#define KHEAP_MAX_ADDR 0xFEFFF000
-#define MEMORY_SPACE 0x100000000ULL // 4GB
-#define KHEAP_PAGES ((KHEAP_MAX_ADDR - KHEAP_START_ADDR) / PAGE_SIZE)
+#define KHEAP_START_ADDR    0x80000000
+#define KHEAP_MAX_ADDR      0xAFFFF000
 #define get_index(VIRT_ADDR) (KHEAP_MAX_ADDR - VIRT_ADDR)
 
 typedef struct memory_desc memory_desc_t;
@@ -23,24 +21,25 @@ struct memory_desc {
 static void __update_list(memory_desc_t *mem_addr, unsigned int num_pages);
 
 extern u32 _kernel_end;
+extern u32 _kernel_start;
+
 static memory_desc_t *kernel_avail;
 static memory_desc_t *list;
 static u32 unused_heap_addr;
 
-static const int HEAP_MANAGE_PAGES = KHEAP_PAGES * sizeof(memory_desc_t) / PAGE_SIZE;
+static const int KHEAP_PAGES = (KHEAP_MAX_ADDR - KHEAP_START_ADDR) / PAGE_SIZE;
+static const int HEAP_MANAGE_PAGES = KHEAP_PAGES * sizeof(struct memory_desc) / PAGE_SIZE;
 
 // TODO: Add support for greater than 4GB memory
 void mm_init(struct multiboot_tag_mmap *mmap, u32 mem_upper) 
 {
     int phys_map_sz = 0;
-    if (mem_upper > MEMORY_SPACE)
-        kerror("Memory size greater than 4GB not supported");
     struct multiboot_mmap_entry *entry = mmap->entries;
     for (int i = 0; i < mmap->size; i += mmap->entry_size) {
         if (entry->type == MULTIBOOT_MEMORY_AVAILABLE) {
             u32 addr = entry->addr;
             u32 len = entry->len;
-            if (addr + len >= (u32)&_kernel_end - 0xC0000000UL) {
+            if (addr + len > (u32)&_kernel_start) {
                 phys_map_sz = phys_mem_init(addr + len);
                 break;
             }
@@ -57,13 +56,14 @@ void mm_init(struct multiboot_tag_mmap *mmap, u32 mem_upper)
 
     void *phys = alloc_frames(HEAP_MANAGE_PAGES);
     map_pages(phys, (void*)kernel_avail, 0x3, HEAP_MANAGE_PAGES);
-    memset(kernel_avail, 0, HEAP_MANAGE_PAGES * sizeof(memory_desc_t));
+    memset(kernel_avail, 0, HEAP_MANAGE_PAGES * sizeof(struct memory_desc));
 
     printf("Kernel virtual address allocation enabled\n");
 }
 
-void* kvirtual_alloc(unsigned int num_pages, int flags) 
+void* kvirtual_alloc(int size, int flags) 
 {
+    u32 num_pages = size / PAGE_SIZE + 1;
     memory_desc_t *mem_addr = list;
     void *ptr = NULL;
 
@@ -74,6 +74,7 @@ void* kvirtual_alloc(unsigned int num_pages, int flags)
 
             void *phys = alloc_frames(num_pages);
             map_pages(phys, ptr, flags, num_pages);
+            memset(ptr, 0, num_pages * PAGE_SIZE);
 
             return ptr;
         }
@@ -89,12 +90,14 @@ void* kvirtual_alloc(unsigned int num_pages, int flags)
     unused_heap_addr = (u32)unused_heap_addr - num_pages * PAGE_SIZE;
     void *phys = alloc_frames(num_pages);
     map_pages(phys, ptr, flags, num_pages);
+    memset(ptr, 0, num_pages * PAGE_SIZE);
 
     return ptr;
 }
 
-void kvirtual_free(void* addr, unsigned int num_pages) 
+void kvirtual_free(void* addr, int size) 
 {
+    u32 num_pages = size / PAGE_SIZE + 1;
     memory_desc_t *mem_addr = &kernel_avail[get_index((u32)addr)];
     mem_addr->start = (u8*)addr;
     mem_addr->size = num_pages;

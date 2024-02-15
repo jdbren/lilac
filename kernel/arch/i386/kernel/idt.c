@@ -19,8 +19,11 @@ struct IDT {
 } __attribute__((packed));
 
 
-idt_entry_t idt_entries[IDT_SIZE];
-struct IDT idtptr = {sizeof(idt_entry_t) * IDT_SIZE - 1, (u32)&idt_entries};
+static idt_entry_t idt_entries[IDT_SIZE];
+static struct IDT idtptr = {
+    sizeof(idt_entry_t) * IDT_SIZE - 1, 
+    (u32)&idt_entries
+};
 
 void enable_interrupts(void)
 {

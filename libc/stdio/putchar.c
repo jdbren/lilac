@@ -8,7 +8,7 @@
 int putchar(int ic) {
 #if defined(__is_libk)
 	char c = (char) ic;
-	// outb(0xe9, c);
+	outb(0xe9, c);
 	terminal_write(&c, sizeof(c));
 #else
 	// TODO: Implement stdio and the write system call.

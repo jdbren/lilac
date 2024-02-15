@@ -10,7 +10,7 @@
 #define U_RO    0x5
 
 void mm_init(struct multiboot_tag_mmap *mmap, u32 mem_upper);
-void* kvirtual_alloc(unsigned int num_pages, int flags);
-void kvirtual_free(void* addr, unsigned int num_pages);
+void* kvirtual_alloc(int size, int flags);
+void kvirtual_free(void* addr, int size);
 
 #endif

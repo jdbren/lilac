@@ -1,6 +1,5 @@
-#define __PAGE_OFFSET 4096
-#define __KERNEL_BASE 0xC0000000
-#define pa(X) ((X) - __KERNEL_BASE)
+#include "kernel/config.h"
+#define __PAGE_OFFSET PAGE_SIZE
 
 #define __BOOT_CS 0x08
 #define __BOOT_DS 0x10
@@ -118,11 +117,6 @@ startup_32:
 
 	# Adjust the stack pointer.
 	addl $__KERNEL_BASE, %esp
-
-	push %ebx
-	mov $1193, %ebx
-	call init_PIT
-	pop %ebx
 
 	call _init
 

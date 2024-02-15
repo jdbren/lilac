@@ -1,7 +1,6 @@
+#include "kernel/config.h"
 #define MB_MAGIC 0x36d76289
 #define __PAGE_OFFSET 4096
-#define __KERNEL_BASE 0xC0000000
-#define pa(X) ((X) - __KERNEL_BASE)
 
 # Declare constants for the multiboot2 header.
 .set ALIGN,    1<<0             # align loaded modules on page boundaries
@@ -19,8 +18,8 @@
 .long ARCH
 .long HEADLEN
 .long CHECKSUM
-.int 0
-.int 0
+.word 0
+.word 0
 .long 8
 
 # The kernel entry point.
@@ -39,5 +38,4 @@ _start:
 	
 invlboot:
 	cli
-1:	hlt
-	jmp 1b
+	hlt

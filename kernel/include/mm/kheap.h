@@ -1,9 +1,12 @@
 #ifndef KERNEL_HEAP_H
 #define KERNEL_HEAP_H
 
-void heap_initialize(void);
-void* kmalloc(int size);
-void* kcalloc(int size);
+#include <kernel/types.h>
+
+void* kmalloc(size_t size);
+void* kzmalloc(size_t size);
+void* krealloc(void *addr, size_t size);
+void* kcalloc(size_t num, size_t size);
 void kfree(void *addr);
 
 #endif

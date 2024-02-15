@@ -1,0 +1,63 @@
+#ifndef ACPI_MADT_H
+#define ACPI_MADT_H
+
+#include <acpi/acpi.h>
+
+struct MADT {
+    struct SDTHeader header;
+    u32 LocalApicAddress;
+    u32 Flags;
+} __attribute__((packed));
+
+struct MADTEntry {
+    u8 Type;
+    u8 Length;
+} __attribute__((packed));
+
+struct ioapic {
+    struct ioapic *next;
+    u32 address;
+    u8 id;
+    u8 reserved;
+    u8 gsi_base;
+};
+
+struct int_override {
+    struct int_override *next;
+    u16 flags;
+    u8 global_system_interrupt;
+    u8 bus;
+    u8 source;
+};
+
+struct ioapic_nmi {
+    struct ioapic_nmi *next;
+    u32 global_system_interrupt;
+    u16 flags;
+    u8 source;
+};
+
+struct lapic_nmi {
+    struct lapic_nmi *next;
+    u16 flags;
+    u8 processor;
+    u8 lint;
+};
+
+struct madt_info {
+    u32 lapic_addr;
+    struct ioapic *ioapics;
+    struct int_override *int_overrides;
+    struct ioapic_nmi *ioapic_nmis;
+    struct lapic_nmi *lapic_nmis;
+    u8 core_cnt;
+    u8 ioapic_cnt;
+    u8 override_cnt;
+    u8 ionmi_cnt;
+    u8 lnmi_cnt;
+};
+
+struct madt_info* parse_madt(struct SDTHeader *addr);
+void dealloc_madt(struct madt_info *info);
+
+#endif

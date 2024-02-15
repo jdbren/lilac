@@ -64,7 +64,7 @@ static uintptr_t cpu_get_apic_base(void)
 #endif
 }
  
-void enable_apic(void) {
+void lapic_enable(uintptr_t addr) {
     if (!cpuHasMSR())
         kerror("CPU does not support MSRs\n");
     if (!check_apic())
@@ -72,13 +72,9 @@ void enable_apic(void) {
     /* Section 11.4.1 of 3rd volume of Intel SDM recommends mapping the base address page as strong uncacheable for correct APIC operation. */
  
     /* Hardware enable the Local APIC if it wasn't enabled */
-    cpu_set_apic_base(cpu_get_apic_base());
+    cpu_set_apic_base(addr);
 
     map_page((void*)local_apic_base, (void*)local_apic_base, 0x13);
- 
-    printf("Local APIC Base: %x\n", local_apic_base);
-    printf("Local APIC Version: %x\n", read_reg(0x30));
-    printf("Spurious Int Vec: %x\n", read_reg(0xf0));
     
     /* Set the Spurious Interrupt Vector Register bit 8 to start receiving interrupts */
     write_reg(0xF0, read_reg(0xF0) | 0x100);
@@ -89,10 +85,9 @@ void apic_eoi(void)
     write_reg(0xB0, 0);
 }
 
-volatile uint8_t aprunning = 0;  // count how many APs have started
-uint8_t bspid, bspdone = 0;      // BSP id and spinlock flag
+volatile u8 aprunning = 0;  // count how many APs have started
+u8 bspid, bspdone = 0;      // BSP id and spinlock flag
 extern void ap_trampoline(void);
-static u8 lapic_ids[256] = {0, 1, 2, 3}; 
 
 void ap_init(u8 numcores)
 {
@@ -105,7 +100,7 @@ void ap_init(u8 numcores)
     // for each Local APIC ID we do...
     for(i = 0; i < numcores; i++) {
         // do not start BSP, that's already running this code
-        if(lapic_ids[i] == bspid) continue;
+        if(i == bspid) continue;
         // send INIT IPI
         *((volatile uint32_t*)(local_apic_base + 0x280)) = 0;                                                                             // clear APIC errors
         *((volatile uint32_t*)(local_apic_base + 0x310)) = (*((volatile uint32_t*)(local_apic_base + 0x310)) & 0x00ffffff) | (i << 24);         // select AP
@@ -119,22 +114,19 @@ void ap_init(u8 numcores)
             asm volatile ("pause" : : : "memory"); 
         } while (*((volatile uint32_t*)(local_apic_base + 0x300)) & (1 << 12));         // wait for delivery
         sleep(10);                                                                                                                 // wait 10 msec
-        // send STARTUP IPI (twice)
-            *((volatile uint32_t*)(local_apic_base + 0x280)) = 0;                                                                     // clear APIC errors
-            *((volatile uint32_t*)(local_apic_base + 0x310)) = (*((volatile uint32_t*)(local_apic_base + 0x310)) & 0x00ffffff) | (i << 24); // select AP
-            *((volatile uint32_t*)(local_apic_base + 0x300)) = (*((volatile uint32_t*)(local_apic_base + 0x300)) & 0xfff0f800) | 0x000608;  // trigger STARTUP IPI for 0800:0000
-            sleep(1);                                                                                                        // wait 200 usec
-            do { 
-                asm volatile ("pause" : : : "memory"); 
-            } while (*((volatile uint32_t*)(local_apic_base + 0x300)) & (1 << 12)); // wait for delivery
+        // send STARTUP IPI
+        *((volatile uint32_t*)(local_apic_base + 0x280)) = 0;                                                                     // clear APIC errors
+        *((volatile uint32_t*)(local_apic_base + 0x310)) = (*((volatile uint32_t*)(local_apic_base + 0x310)) & 0x00ffffff) | (i << 24); // select AP
+        *((volatile uint32_t*)(local_apic_base + 0x300)) = (*((volatile uint32_t*)(local_apic_base + 0x300)) & 0xfff0f800) | 0x000608;  // trigger STARTUP IPI for 0800:0000
+        sleep(1);                                                                                                        // wait 200 usec
+        do { 
+            asm volatile ("pause" : : : "memory"); 
+        } while (*((volatile uint32_t*)(local_apic_base + 0x300)) & (1 << 12)); // wait for delivery
     }
-
-    //write_reg(local_apic_base+0x300, 1 << 24);
-    //write_reg(local_apic_base+0x310, 0x0800);
 
     // release the AP spinlocks
     bspdone = 1;
     // now you'll have the number of running APs in 'aprunning'
-    sleep(5);
+    sleep(10);
     printf("APs running: %d\n", aprunning);
 }

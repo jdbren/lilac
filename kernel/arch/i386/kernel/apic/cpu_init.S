@@ -1,4 +1,4 @@
-#define pa(x)   ((x) - 0xC0000000)
+#include "kernel/config.h"
 
 # this code will be relocated to 0x8000, sets up environment for calling a C function
 .globl  ap_trampoline

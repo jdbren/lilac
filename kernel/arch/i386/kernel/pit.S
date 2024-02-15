@@ -39,11 +39,14 @@ TimerDone:
 	iretd
 
 # Input
-# ebx   Desired PIT frequency in Hz
+# param 1: desired frequency in Hz
 .global init_PIT
 .type init_PIT, @function
 init_PIT:
-    pushad
+    push ebp
+    mov ebp, esp
+    push ebx
+    mov ebx, [ebp+8]                  # ebx = desired frequency in Hz
 
     #  Do some checking
     mov eax, 0x10000                   # eax = reload value for slowest possible frequency (65536)
@@ -127,5 +130,6 @@ init_PIT:
 
     popfd
 
-    popad
+    pop ebx
+    pop ebp
     ret

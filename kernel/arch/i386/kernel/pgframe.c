@@ -3,11 +3,11 @@
 #include <pgframe.h>
 #include <paging.h>
 #include <kernel/panic.h>
+#include <kernel/config.h>
 
-#define PAGE_SIZE 0x1000
 #define MEMORY_SPACE 0x100000000ULL // 4GB
 
-#define phys_addr(virt_addr) ((u32)(virt_addr) - 0xC0000000UL)
+#define phys_addr(virt_addr) ((u32)(virt_addr) - __KERNEL_BASE)
 #define check_bit(var,pos) ((var) & (1<<(pos)))
 
 typedef struct {
@@ -18,7 +18,6 @@ extern const u32 _kernel_start;
 extern const u32 _kernel_end;
 static u32 KERNEL_SIZE;
 static u32 FIRST_PAGE;
-
 static u32 BITMAP_SIZE;
 static u32 *const pg_frame_bitmap = (u32*)&_kernel_end;
 

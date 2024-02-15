@@ -2,7 +2,8 @@
 #include <asm/cpuid.h>
 #include <asm/msr.h>
 #include <utility/multiboot2.h>
-#include <utility/acpi.h>
+#include <acpi/acpi.h>
+#include <acpi/madt.h>
 #include <kernel/tty.h>
 #include <kernel/panic.h>
 #include <kernel/keyboard.h>
@@ -33,26 +34,16 @@ void kernel_early(unsigned int addr)
 	idt_init();
 	parse_multiboot(addr, &mbd);
 	mm_init(mbd.mmap, mbd.meminfo->mem_upper);
-	
-	int data[4];
-	u32 eax = 0, ebx = 0, ecx = 0, edx = 0;
-	cpuid_string(0, (uint32_t*)data);
-	printf("CPU Vendor: %s\n", (char*)(data+1));
-	cpuid(1, &eax, &ebx, &ecx, &edx);
-	printf("CPU Features: %x %x %x %x\n", eax, ebx, ecx, edx);
-	cpuid(0x80000001, &eax, &ebx, &ecx, &edx);
-	printf("Extended CPU Features: %x %x %x %x\n", eax, ebx, ecx, edx);
-	read_rsdp((void*)mbd.acpi->rsdp);
-	cpuGetMSR(0x1b, &eax, &edx);
-	printf("APIC_BASE: %x\n", eax);
-	enable_apic();
-	cpuGetMSR(0x1b, &eax, &edx);
-	printf("APIC_BASE: %x\n", eax);
-	io_apic(0xfec00000);
+
+	struct acpi_info *acpi = parse_acpi((void*)mbd.acpi->rsdp);
+	struct madt_info *madt = acpi->madt;
+	lapic_enable(madt->lapic_addr);
+	io_apic_init(madt->ioapics, madt->int_overrides, madt->override_cnt);
 	keyboard_init();
 	timer_init();
 	enable_interrupts();
-	ap_init(4);
+	ap_init(madt->core_cnt);
+	dealloc_madt(madt);
 	
 	fs_init(&mbd);
 	void *ptr = fat32_read_file("/bin/code");
