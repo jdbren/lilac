@@ -1,5 +1,5 @@
-#ifndef FS_INIT_H
-#define FS_INIT_H
+#ifndef x86_FS_INIT_H
+#define x86_FS_INIT_H
 
 #include <utility/multiboot2.h>
 
@@ -11,6 +11,6 @@ struct multiboot_info {
 	struct multiboot_tag_old_acpi *acpi;
 };
 
-void fs_init(struct multiboot_info* mbd);
+void fs_init(struct multiboot_tag_bootdev* boot_dev);
 
 #endif // FS_INIT_H

@@ -1,5 +1,5 @@
-#ifndef KERNEL_IDT_H
-#define KERNEL_IDT_H
+#ifndef x86_IDT_H
+#define x86_IDT_H
 
 #include <kernel/types.h>
 

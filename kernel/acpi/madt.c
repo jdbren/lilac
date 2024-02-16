@@ -10,7 +10,7 @@ static bool is_valid(struct SDTHeader *addr)
     u8 check = 0;
     for (int i = 0; i < addr->Length; i++)
         check += ((char *)addr)[i];
-    if((u8)(check) != 0)
+    if ((u8)(check) != 0)
         return false;
     if (memcmp(addr->Signature, "APIC", 4))
         return false;

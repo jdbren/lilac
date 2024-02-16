@@ -89,18 +89,18 @@ volatile u8 aprunning = 0;  // count how many APs have started
 u8 bspid, bspdone = 0;      // BSP id and spinlock flag
 extern void ap_trampoline(void);
 
-void ap_init(u8 numcores)
+int ap_init(u8 numcores)
 {
     int i, j;
     // get the BSP's Local APIC ID
     asm volatile ("mov $1, %%eax; cpuid; shrl $24, %%ebx;": "=b"(bspid) : : );
     // copy the AP trampoline code to a fixed address in low conventional memory (to address 0x0800:0x0000)
-    memcpy((void*)0x8000, (void*)&ap_trampoline, 4096);
+    memcpy((void*)0x8000, (void*)ap_trampoline, 4096);
     //idt_entry(0x40, (u32)ap_trampoline, 0x08, INT_GATE);
     // for each Local APIC ID we do...
-    for(i = 0; i < numcores; i++) {
+    for (i = 0; i < numcores; i++) {
         // do not start BSP, that's already running this code
-        if(i == bspid) continue;
+        if (i == bspid) continue;
         // send INIT IPI
         *((volatile uint32_t*)(local_apic_base + 0x280)) = 0;                                                                             // clear APIC errors
         *((volatile uint32_t*)(local_apic_base + 0x310)) = (*((volatile uint32_t*)(local_apic_base + 0x310)) & 0x00ffffff) | (i << 24);         // select AP
@@ -129,4 +129,8 @@ void ap_init(u8 numcores)
     // now you'll have the number of running APs in 'aprunning'
     sleep(10);
     printf("APs running: %d\n", aprunning);
+    if (aprunning == numcores - 1)
+        return 0;
+    else
+        return 1;
 }

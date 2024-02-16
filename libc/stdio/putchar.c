@@ -2,7 +2,7 @@
 
 #if defined(__is_libk)
 #include <kernel/tty.h>
-#include "/Users/jbrennem/Classes/Personal/lilac/kernel/arch/i386/include/io.h"
+#include "/Users/jbrennem/Classes/Personal/lilac/kernel/arch/i386/include/asm/io.h"
 #endif
 
 int putchar(int ic) {

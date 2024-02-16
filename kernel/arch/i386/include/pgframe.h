@@ -1,5 +1,5 @@
-#ifndef KERNEL_PGFRAME_H
-#define KERNEL_PGFRAME_H
+#ifndef x86_PGFRAME_H
+#define x86_PGFRAME_H
 
 #include <kernel/types.h>
 

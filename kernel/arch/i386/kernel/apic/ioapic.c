@@ -53,7 +53,7 @@ static inline u32 read_reg(const u8 offset)
     return *(volatile u32*)(ioapic_base + IOAPIC_DATA);
 }
 
-void io_apic_init(struct ioapic *ioapic, struct int_override *over, u8 num_over)
+void ioapic_init(struct ioapic *ioapic, struct int_override *over, u8 num_over)
 {
     ioapic_base = ioapic->address;
     ioapic_gsi_base = ioapic->gsi_base;
@@ -66,7 +66,7 @@ void io_apic_init(struct ioapic *ioapic, struct int_override *over, u8 num_over)
     map_page((void*)ioapic_base, (void*)ioapic_base, 0x13);
 }
 
-void io_apic_entry(u8 irq, u8 vector, u8 flags, u8 dest)
+void ioapic_entry(u8 irq, u8 vector, u8 flags, u8 dest)
 {
     irq = get_redir_num(irq);
     redir_entry_t entry;

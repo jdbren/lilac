@@ -49,7 +49,6 @@ void disk_init(DISK *disk, fat_BS_t *id)
     disk->root_start = id->extended_section.root_cluster;
 }
 
-
 static inline int name_length(const char* name, char delim)
 {
     int i = 0;
@@ -97,8 +96,7 @@ void fat32_init(int disknum, u32 boot_sector)
     //the variable "table_value" now has the information you need about the next cluster in the chain.
 }
 
-bool check_entry(fat_file_t *entry, DISK *disk, const char *cur, 
-              int dname_len)
+bool check_entry(fat_file_t *entry, DISK *disk, const char *cur, int dname_len)
 {
     if (entry->attributes != LONG_FNAME && entry->name[0] != (char)UNUSED) { 
         if (!memcmp(entry->name, cur, dname_len)) {
@@ -113,7 +111,7 @@ u32 check_dir(fat_file_t **entry, void *sec_buf, DISK *disk, const char *cur,
               int dname_len)
 {
     for (; *entry < sec_buf + 512 && (*entry)->name[0] != 0; (*entry)++) {
-        if(check_entry(*entry, disk, cur, dname_len))
+        if (check_entry(*entry, disk, cur, dname_len))
             return (*entry)->cl_low + (*entry)->cl_high;
     }
     return 0;
@@ -166,7 +164,7 @@ void* fat32_read_file(const char *path)
     void *tmp = file_buf;
     while (fat_value < 0x0FFFFFF8) {
         disk_read(LBA_ADDR(clst, disk), disk->sectors_per_cluster, (u32)tmp);
-        if(clst >= 32768)
+        if (clst >= 32768)
             kerror("clst out of bounds\n");
         fat_value = fat_buffer[clst];
         fat_value &= 0x0FFFFFFF;

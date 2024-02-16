@@ -1,5 +1,5 @@
-#ifndef KERNEL_PAGING_H
-#define KERNEL_PAGING_H
+#ifndef x86_PAGING_H
+#define x86_PAGING_H
 
 #include <kernel/types.h>
 

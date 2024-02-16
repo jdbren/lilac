@@ -35,14 +35,13 @@ void kernel_early(unsigned int multiboot)
 	idt_init();
 	parse_multiboot(multiboot, &mbd);
 	mm_init(mbd.mmap, mbd.meminfo->mem_upper);
+	fs_init(mbd.boot_dev);
 
 	parse_acpi((void*)mbd.acpi->rsdp, &acpi);
 	apic_init(acpi.madt);
 	keyboard_init();
 	timer_init();
 	enable_interrupts();
-
-	fs_init(&mbd);
 
 	// ap_init(acpi.madt->core_cnt);
 	

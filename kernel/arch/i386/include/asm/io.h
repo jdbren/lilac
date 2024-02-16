@@ -1,26 +1,26 @@
-#ifndef KERNEL_IO_H
-#define KERNEL_IO_H
+#ifndef x86_IO_H
+#define x86_IO_H
 
 #include <kernel/types.h>
 
-static inline void outb(uint16_t port, uint8_t val) 
+static inline void outb(u16 port, u8 val) 
 {
     asm volatile ("outb %0, %1" : : "a"(val), "Nd"(port) : "memory");
 }
 
-static inline void outw(uint16_t port, uint16_t val)
+static inline void outw(u16 port, u16 val)
 {
     asm volatile ("outw %0, %1" : : "a"(val), "Nd"(port) : "memory");
 }
 
-static inline void outl(uint16_t port, uint32_t val)
+static inline void outl(u16 port, u32 val)
 {
     asm volatile ("outl %0, %1" : : "a"(val), "Nd"(port) : "memory");
 }
 
-static inline uint8_t inb(uint16_t port)
+static inline u8 inb(u16 port)
 {
-    uint8_t ret;
+    u8 ret;
     asm volatile ("inb %1, %0"
                    : "=a"(ret)
                    : "Nd"(port)
@@ -28,9 +28,9 @@ static inline uint8_t inb(uint16_t port)
     return ret;
 }
 
-static inline uint16_t inw(uint16_t port)
+static inline u16 inw(u16 port)
 {
-    uint16_t ret;
+    u16 ret;
     asm volatile ("inw %1, %0"
                    : "=a"(ret)
                    : "Nd"(port)
@@ -38,9 +38,9 @@ static inline uint16_t inw(uint16_t port)
     return ret;
 }
 
-static inline uint32_t inl(uint16_t port)
+static inline u32 inl(u16 port)
 {
-    uint32_t ret;
+    u32 ret;
     asm volatile ("inl %1, %0"
                    : "=a"(ret)
                    : "Nd"(port)

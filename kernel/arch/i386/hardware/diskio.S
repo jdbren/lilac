@@ -3,35 +3,29 @@
 .global disk_read
 .type disk_read, @function
 disk_read:
-    pushf
-    push eax
-    push ecx
+    push ebp
+    mov ebp, esp
     push edi
-    mov eax, [esp+20]
-    mov ecx, [esp+24]
-    mov edi, [esp+28]
+    mov eax, [ebp+8]
+    mov ecx, [ebp+12]
+    mov edi, [ebp+16]
     call ata_lba_read
     pop edi
-    pop ecx
-    pop eax
-    popf
+    pop ebp
     ret
 
 .global disk_write
 .type disk_write, @function
 disk_write:
-    pushf
-    push eax
-    push ecx
+    push ebp
+    mov ebp, esp
     push edi
-    mov eax, [esp+20]
-    mov ecx, [esp+24]
-    mov edi, [esp+28]
+    mov eax, [ebp+8]
+    mov ecx, [ebp+12]
+    mov edi, [ebp+16]
     call ata_lba_write
     pop edi
-    pop ecx
-    pop eax
-    popf
+    pop ebp
     ret
 
 # =============================================================================
@@ -46,11 +40,7 @@ disk_write:
 ata_lba_read:
     pushf
     and eax, 0x0FFFFFFF
-    push eax
     push ebx
-    push ecx
-    push edx
-    push edi
 
     cmp cx, 256          #  Maximum number of sectors to read is 256
     jg .error            #  If CX > 256, error
@@ -65,54 +55,48 @@ ata_lba_read:
     or al, 0xE0          #  Set bit 6 in al for LBA mode
     out dx, al
 
-    mov dx, 0x01F2      #  Port to send number of sectors
+    mov dx, 0x01F2       #  Port to send number of sectors
     mov al, cl           #  Get number of sectors from CL
     out dx, al
 
-    inc dx       #  Port to send bit 0 - 7 of LBA
+    inc dx               #  Port to send bit 0 - 7 of LBA
     mov eax, ebx         #  Get LBA from EBX
     out dx, al
 
-    inc dx       #  Port to send bit 8 - 15 of LBA
+    inc dx               #  Port to send bit 8 - 15 of LBA
     mov eax, ebx         #  Get LBA from EBX
     shr eax, 8           #  Get bit 8 - 15 in AL
     out dx, al
 
 
-    inc dx       #  Port to send bit 16 - 23 of LBA
+    inc dx               #  Port to send bit 16 - 23 of LBA
     mov eax, ebx         #  Get LBA from EBX
     shr eax, 16          #  Get bit 16 - 23 in AL
     out dx, al
 
-    mov dx, 0x1F7       #  Command port
+    mov dx, 0x1F7        #  Command port
     mov al, 0x20         #  Read with retry.
     out dx, al
 
-    cmp cl, 0            #  If CL = 0, read 256 sectors
+    mov bx, cx
+    cmp bl, 0            #  If BL = 0, read 256 sectors
     jne .still_going
-    mov cx, 256
+    mov bx, 256
 
 .still_going:  
     in al, dx
     test al, 8           #  the sector buffer requires servicing.
     jz .still_going      #  until the sector buffer is ready.
 
-    mov ax, 256         #  to read 256 words = 1 sector
-    mov bx, cx          #  CX sectors left
-    mov cx, ax          #  RCX is counter for INSW
-    mov dx, 0x1F0       #  Data port, in and out
-    rep insw            #  in to [RDI]
-    mov cx, bx
-    dec cx
+    mov cx, 256          #  RCX is counter for INSW, 256 words = 1 sector
+    mov dx, 0x1F0        #  Data port, in and out
+    rep insw             #  in to [RDI]
+    dec bx      
     mov dx, 0x1F7        #  Command port
     jnz .still_going     #  read next sector
 
 .error:
-    pop edi
-    pop edx
-    pop ecx
     pop ebx
-    pop eax
     popf
     ret
 

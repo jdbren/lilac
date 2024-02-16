@@ -4,5 +4,5 @@
 void apic_init(struct madt_info *madt)
 {
     lapic_enable(madt->lapic_addr);
-	io_apic_init(madt->ioapics, madt->int_overrides, madt->override_cnt);
+	ioapic_init(madt->ioapics, madt->int_overrides, madt->override_cnt);
 }

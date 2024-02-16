@@ -70,12 +70,12 @@ static size_t nextPowerOfTwo(size_t);
 
 void* kmalloc(size_t size)
 {
-    if(size <= 0) return NULL;
+    if (size <= 0) return NULL;
     assert(BUCKETS >= log2(SUPERBLOCKSIZE)-MIN_ALLOC_POWER);
     
     void *alloc = NULL;
 
-    if(size > SUPERBLOCKSIZE/2)
+    if (size > SUPERBLOCKSIZE/2)
         alloc = malloc_large(size);
     else
         alloc = malloc_small(size);
@@ -89,7 +89,7 @@ void* kmalloc(size_t size)
 void *kzmalloc(size_t size)
 {
     void *ptr = kmalloc(size);
-    if(ptr != NULL)
+    if (ptr != NULL)
         memset(ptr, 0, size);
     return ptr;
 }
@@ -101,7 +101,7 @@ void *kcalloc(size_t num, size_t size)
 
 void kfree(void *ptr)
 {
-    if(ptr == NULL) return;
+    if (ptr == NULL) return;
 
     // get superblock header using bitmask
     u32 base = (u32)ptr & PAGE_MASK;
@@ -109,7 +109,7 @@ void kfree(void *ptr)
     assert(is_aligned(header, PAGE_SIZE));
 
     // check if large allocation
-    if(header->isLarge) {
+    if (header->isLarge) {
         currentPages -= header->numPages;
         kvirtual_free(header, header->numPages * PAGE_SIZE);
         return;
@@ -129,10 +129,10 @@ void kfree(void *ptr)
     assert(header->freeCount <= (SUPERBLOCKSIZE - sizeof(SBHeader)) / step);
         
     // check if superblock is empty
-    if(header->freeCount == (SUPERBLOCKSIZE - sizeof(SBHeader)) / step)
+    if (header->freeCount == (SUPERBLOCKSIZE - sizeof(SBHeader)) / step)
         header = manageEmptySuperblock(header, bucketIndex);
     // move superblock to front of list
-    if(header != NULL && !(header == allLists[bucketIndex].list))
+    if (header != NULL && !(header == allLists[bucketIndex].list))
         moveToFront(header, bucketIndex);
 }
 

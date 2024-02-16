@@ -1,5 +1,5 @@
-#ifndef _TIMER_H
-#define _TIMER_H
+#ifndef x86_TIMER_H
+#define x86_TIMER_H
 
 #include <kernel/types.h>
 

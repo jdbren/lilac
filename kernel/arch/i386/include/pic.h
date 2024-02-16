@@ -1,5 +1,5 @@
-#ifndef KERNEL_PIC_H
-#define KERNEL_PIC_H
+#ifndef x86_PIC_H
+#define x86_PIC_H
 
 #include <kernel/types.h>
 

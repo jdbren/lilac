@@ -5,14 +5,14 @@
 #include <acpi/madt.h>
 #include <mm/kheap.h>
 #include <paging.h>
-#include <io.h>
+#include <asm/io.h>
 
 static bool is_valid(struct SDTHeader *addr)
 {
     u8 check = 0;
     for (int i = 0; i < addr->Length; i++)
         check += ((char *)addr)[i];
-    if((u8)(check) != 0)
+    if ((u8)(check) != 0)
         return false;
     if (memcmp(addr->Signature, "RSDT", 4))
         return false;
@@ -29,7 +29,7 @@ void read_rsdt(struct SDTHeader *rsdt, struct acpi_info *info)
     u32 *other_entries = (u32*)((u32)rsdt + sizeof(*rsdt));
     for (int i = 0; i < entries; i++) {
         struct SDTHeader *h = (struct SDTHeader*)other_entries[i];
-        if(!memcmp(h->Signature, "APIC", 4))
+        if (!memcmp(h->Signature, "APIC", 4))
             info->madt = parse_madt(h);
     }
 }
