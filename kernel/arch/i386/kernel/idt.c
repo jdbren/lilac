@@ -1,7 +1,7 @@
 #include <kernel/types.h>
 #include <asm/cpufaults.h>
-#include <idt.h>
-#include <pic.h>
+#include "idt.h"
+#include "pic.h"
 
 #define IDT_SIZE 256
 

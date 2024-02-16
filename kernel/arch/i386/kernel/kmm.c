@@ -1,10 +1,11 @@
 #include <string.h>
 #include <utility/multiboot2.h>
-#include <mm/kmm.h>
-#include <pgframe.h>
-#include <paging.h>
 #include <kernel/panic.h>
 #include <kernel/config.h>
+#include <mm/kmm.h>
+#include "pgframe.h"
+#include "paging.h"
+
 
 #define KHEAP_START_ADDR    0x80000000
 #define KHEAP_MAX_ADDR      0xAFFFF000
@@ -111,6 +112,11 @@ void kvirtual_free(void* addr, int size)
 
     free_frames(get_physaddr(addr), num_pages);
     unmap_pages(addr, num_pages);
+}
+
+int map_to_self(void *addr, int flags) 
+{
+    return map_page(addr, addr, flags);
 }
 
 static void __update_list(memory_desc_t *mem_addr, unsigned int num_pages) 

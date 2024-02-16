@@ -1,7 +1,7 @@
 #include <string.h>
 #include <math.h>
-#include <pgframe.h>
-#include <paging.h>
+#include "pgframe.h"
+#include "paging.h"
 #include <kernel/panic.h>
 #include <kernel/config.h>
 

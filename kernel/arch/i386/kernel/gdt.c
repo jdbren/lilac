@@ -1,7 +1,7 @@
 #include <string.h>
 #include <kernel/types.h>
 #include <kernel/panic.h>
-#include <gdt.h>
+#include "gdt.h"
 
 #define GDT_SIZE 6
 

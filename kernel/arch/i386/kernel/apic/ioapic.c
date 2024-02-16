@@ -1,8 +1,8 @@
 #include <string.h>
 #include <kernel/types.h>
 #include <acpi/madt.h>
-#include <apic.h>
-#include <paging.h>
+#include "apic.h"
+#include "paging.h"
 #include <mm/kheap.h>
 
 #define IOAPIC_REGSEL     0x0

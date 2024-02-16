@@ -1,5 +1,5 @@
 #include <kernel/types.h>
-#include <pic.h>
+#include "pic.h"
 #include <asm/io.h>
 
 void pic_initialize(void)

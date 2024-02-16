@@ -1,11 +1,10 @@
-#include <acpi/acpi.h>
 #include <string.h>
 #include <stdbool.h>
 #include <kernel/panic.h>
+#include <acpi/acpi.h>
 #include <acpi/madt.h>
+#include <mm/kmm.h>
 #include <mm/kheap.h>
-#include <paging.h>
-#include <asm/io.h>
 
 static bool is_valid(struct SDTHeader *addr)
 {
@@ -42,8 +41,7 @@ void parse_acpi(struct RSDP *rsdp, struct acpi_info *info)
     if ((u8)(check) != 0)
         kerror("Checksum is incorrect\n");
 
-    map_page((void*)(rsdp->RsdtAddress & 0xfffff000), 
-            (void*)(rsdp->RsdtAddress & 0xfffff000), 0x1);
+    map_to_self((void*)(rsdp->RsdtAddress & 0xfffff000), 0x1);
 
     read_rsdt((struct SDTHeader*)rsdp->RsdtAddress, info);
 }

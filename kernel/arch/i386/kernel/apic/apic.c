@@ -1,4 +1,4 @@
-#include <apic.h>
+#include "apic.h"
 #include <acpi/madt.h>
 
 void apic_init(struct madt_info *madt)

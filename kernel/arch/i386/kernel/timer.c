@@ -1,6 +1,6 @@
-#include <timer.h>
-#include <apic.h>
-#include <idt.h>
+#include "timer.h"
+#include "apic.h"
+#include "idt.h"
 #include <asm/io.h>
 
 extern void timer_handler(void);

@@ -2,8 +2,8 @@
 #include <string.h>
 
 #include <kernel/panic.h>
-#include <paging.h>
-#include <pgframe.h>
+#include "paging.h"
+#include "pgframe.h"
 
 #define PAGE_DIR_SIZE 1024
 #define PAGE_TABLE_SIZE 1024

@@ -1,8 +1,8 @@
 #include <string.h>
 #include <kernel/panic.h>
 #include <kernel/elf.h>
-#include <paging.h>
-#include <pgframe.h>
+#include "paging.h"
+#include "pgframe.h"
 
 void* elf32_load(void *elf)
 {

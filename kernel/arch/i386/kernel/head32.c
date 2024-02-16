@@ -1,25 +1,19 @@
 #include <string.h>
-#include <asm/cpuid.h>
-#include <asm/msr.h>
 #include <utility/multiboot2.h>
-#include <acpi/acpi.h>
-#include <acpi/madt.h>
+#include <kernel/kmain.h>
 #include <kernel/tty.h>
 #include <kernel/panic.h>
 #include <kernel/keyboard.h>
 #include <kernel/elf.h>
-#include <apic.h>
-#include <gdt.h>
-#include <idt.h>
-#include <fs_init.h>
-#include <pgframe.h>
-#include <paging.h>
-#include <timer.h>
+#include <acpi/acpi.h>
 #include <mm/kmm.h>
 #include <mm/kheap.h>
-#include <fs/mbr.h>
 #include <fs/fat32.h>
-#include <kernel/kmain.h>
+#include "apic.h"
+#include "gdt.h"
+#include "idt.h"
+#include "fs_init.h"
+#include "timer.h"
 
 
 static struct multiboot_info mbd;

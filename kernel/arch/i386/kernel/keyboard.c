@@ -1,10 +1,10 @@
 #include <kernel/keyboard.h>
 #include <kernel/tty.h>
 #include <utility/keymap.h>
-#include <idt.h>
+#include "idt.h"
 #include <asm/io.h>
-#include <pic.h>
-#include <apic.h>
+#include "pic.h"
+#include "apic.h"
 
 #define KEYBOARD_DATA_PORT 0x60
 
