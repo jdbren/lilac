@@ -8,6 +8,7 @@
 #include <acpi/acpi.h>
 #include <mm/kmm.h>
 #include <mm/kheap.h>
+#include <fs/vfs.h>
 #include <fs/fat32.h>
 #include "apic.h"
 #include "gdt.h"
@@ -39,7 +40,10 @@ void kernel_early(unsigned int multiboot)
 
 	// ap_init(acpi.madt->core_cnt);
 	
-	void *ptr = fat32_read_file("/bin/code");
+	int fd = open("A:/bin/code", 0, 0);
+	int *ptr = kmalloc(0x1000);
+	read(fd, ptr, 0x1000);
+	printf("%x\n", *ptr);
 	// void *jmp = elf32_load(ptr);
 	//jump_usermode((u32)jmp);
 

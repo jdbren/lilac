@@ -32,6 +32,7 @@ $(KERNEL_ARCH_OBJS) \
 kernel/kmain.o \
 mm/kheap.o \
 fs/fat32.o \
+fs/vfs.o \
 acpi/acpi.o \
 acpi/madt.o 
 

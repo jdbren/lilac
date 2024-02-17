@@ -19,7 +19,6 @@ typedef struct fat_extBS_32 {
 	char    fat_type_label[8];
     u8      zero[420];
     u16     signature;
- 
 } __attribute__((packed)) fat_extBS_32_t;
 
 typedef struct fat_BS {
@@ -41,19 +40,12 @@ typedef struct fat_BS {
     union {
 	    fat_extBS_32_t extended_section;
     };
- 
 } __attribute__((packed)) fat_BS_t;
 
-typedef struct disk {
-    u32 fat_begin_lba;
-    u32 cluster_begin_lba;
-    u8 sectors_per_cluster;
-    u32 root_start;
-} __attribute__((packed)) DISK;
 
-
-void print_fat32_data(fat_BS_t *);
+void print_fat32_data(fat_BS_t*);
 void fat32_init(int disknum, u32 boot_sector);
-void* fat32_read_file(const char *path);
+int fat32_open(const char *path);
+size_t fat32_read(int fd, void *buf, size_t count);
 
 #endif

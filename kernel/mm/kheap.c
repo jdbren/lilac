@@ -94,6 +94,42 @@ void *kzmalloc(size_t size)
     return ptr;
 }
 
+void* krealloc(void *addr, size_t size)
+{
+    if (addr == NULL)
+        return kmalloc(size);
+    if (size == 0) {
+        kfree(addr);
+        return NULL;
+    }
+
+    // get superblock header using bitmask
+    u32 base = (u32)addr & PAGE_MASK;
+    SBHeader *header = (SBHeader*)base;
+    assert(is_aligned(header, PAGE_SIZE));
+
+    // check if large allocation
+    if (header->isLarge) {
+        void *newAddr = kmalloc(size);
+        memcpy(newAddr, addr, size);
+        kfree(addr);
+        return newAddr;
+    }
+
+    // get bucket index and step size
+    int step = header->allocSize;
+    int bucketIndex = log2(step) - MIN_ALLOC_POWER;
+
+    // check if new size is in same bucket
+    if (size <= step) return addr;
+
+    // allocate new memory
+    void *newAddr = kmalloc(size);
+    memcpy(newAddr, addr, step);
+    kfree(addr);
+    return newAddr;
+}
+
 void *kcalloc(size_t num, size_t size)
 {
     return kzmalloc(num * size);
@@ -151,7 +187,7 @@ static void* malloc_small(size_t size)
     // check if there is any memory available
     if (allLists[bucketIndex].freeCount == 0) {
         // allocate new superblock
-        void *block = kvirtual_alloc(SUPERBLOCKPAGES * PAGE_SIZE, K_WRITE);
+        void *block = kvirtual_alloc(SUPERBLOCKPAGES * PAGE_SIZE, PG_WRITE);
         assert(block != NULL);
 
         header = (SBHeader*)block;
@@ -198,7 +234,7 @@ static void* malloc_large(size_t size)
     int pages = (size + sizeof(SBHeader))/PAGE_SIZE + 1;
     size = pages * PAGE_SIZE;
 
-    void *block = kvirtual_alloc(size, K_WRITE);
+    void *block = kvirtual_alloc(size, PG_WRITE);
     assert(block != NULL);
 
     // set up superblock header

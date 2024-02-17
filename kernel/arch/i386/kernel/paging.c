@@ -38,6 +38,7 @@ void *get_physaddr(void *virtualaddr)
 
 int map_pages(void *physaddr, void *virtualaddr, u16 flags, int num_pages) 
 {
+    flags |= 1;
     for (int i = 0; i < num_pages; i++, physaddr += PAGE_BYTES, 
     virtualaddr += PAGE_BYTES) {
         assert(is_aligned(physaddr, PAGE_BYTES));

@@ -11,7 +11,17 @@
 #define DIR 0x10
 #define UNUSED 0xE5
 #define MAX_SECTOR_READS 256
-#define FAT_BUFFER_SIZE 512 * MAX_SECTOR_READS
+#define BYTES_PER_SECTOR 512
+#define FAT_BUFFER_SIZE (BYTES_PER_SECTOR * MAX_SECTOR_READS)
+
+typedef struct fat_disk {
+    fat_BS_t volID;
+    u32 fat_begin_lba;
+    u32 cluster_begin_lba;
+    u32 root_start;
+    u8 sectors_per_cluster;
+    u32 fat_buffer[FAT_BUFFER_SIZE / 4];
+} fat_disk_t;
 
 typedef struct fat_file {
     char name[8];
@@ -29,19 +39,22 @@ typedef struct fat_file {
     u32 file_size;
 } __attribute__((packed)) fat_file_t;
 
+static fat_disk_t fat_disks[1];
+static fat_file_t fat_nodes[256];
 
-static DISK disks[4];
-static fat_BS_t volID;
-static u32 fat_buffer[FAT_BUFFER_SIZE / 4];
 
-static inline u32 LBA_ADDR(u32 cluster_num, DISK *disk)
+/***
+ *  Utility functions
+*/
+static inline u32 LBA_ADDR(u32 cluster_num, fat_disk_t *disk)
 {
     return disk->cluster_begin_lba + 
         ((cluster_num - disk->root_start) * disk->sectors_per_cluster);
 }
 
-void disk_init(DISK *disk, fat_BS_t *id)
+static void disk_init(fat_disk_t *disk)
 {
+    fat_BS_t *id = &disk->volID;
     disk->fat_begin_lba = id->hidden_sector_count + id->reserved_sector_count;
     disk->cluster_begin_lba = id->hidden_sector_count + id->reserved_sector_count
         + (id->num_FATs * id->extended_section.FAT_size_32);
@@ -58,123 +71,138 @@ static inline int name_length(const char* name, char delim)
     return i;
 }
 
-void fat32_init(int disknum, u32 boot_sector)
+static char *next_dir_name(const char *path, char *const cur)
 {
-    disk_read(boot_sector, 1, (u32)&volID);
-    DISK *disk = &disks[disknum];
-    disk_init(disk, &volID);
+    if (*path == '/') path++;
+    else return 0;
 
-    // u8 *buffer = kmalloc(512);
-    // disk_read(LBA_ADDR(disk->root_start, disk), 1, (u32)buffer);
-    // fat_file_t *root_dir = (fat_file_t*)buffer;
-
-    // for (int i = 0; root_dir[i].name[0] != 0; i++) {
-    //     if (root_dir[i].attributes != LONG_FNAME && root_dir[i].name[0] != (char)UNUSED) {
-    //         printf("Name: ");
-    //         const char *str = "BIN     ";
-    //         if (!memcmp(root_dir[i].name, str, 8))
-    //             for (int j = 0; j < 8; j++)
-    //                 printf("%c", root_dir[i].name[j]);
-    //         printf("\n");
-    //         printf("index: %d\n", i);
-    //     }
-    // }
-
-    disk_read(disk->fat_begin_lba, MAX_SECTOR_READS, (u32)fat_buffer);
-
-    // unsigned char FAT_table[volID->bytes_per_sector];
-    // unsigned int fat_offset = active_cluster * 4;
-    // unsigned int fat_sector = first_fat_sector + (fat_offset / volID->bytes_per_sector);
-    // unsigned int ent_offset = fat_offset % volID->bytes_per_sector;
-    
-    // //at this point you need to read from sector "fat_sector" on the disk into "FAT_table".
-    
-    // //remember to ignore the high 4 bits.
-    // unsigned int table_value = *(unsigned int*)&FAT_table[ent_offset];
-    // if (fat32) table_value &= 0x0FFFFFFF;
- 
-    //the variable "table_value" now has the information you need about the next cluster in the chain.
+    int dname_len = name_length(path, '/');
+    if (dname_len > 8)
+        kerror("Pathname too long\n");
+    for (int i = 0; i < dname_len; i++)
+        cur[i] = toupper(*path++);
+    cur[dname_len] = '\0';
+    return path;
 }
 
-bool check_entry(fat_file_t *entry, DISK *disk, const char *cur, int dname_len)
+static bool check_entry(fat_file_t *entry, fat_disk_t *disk, const char *cur)
 {
     if (entry->attributes != LONG_FNAME && entry->name[0] != (char)UNUSED) { 
-        if (!memcmp(entry->name, cur, dname_len)) {
-            printf("Found directory or file: %s\n", cur);
+        if (!memcmp(entry->name, cur, strlen(cur)))
             return true;
-        }
     }
     return false;
 }
 
-u32 check_dir(fat_file_t **entry, void *sec_buf, DISK *disk, const char *cur, 
-              int dname_len)
+
+/***
+ *  FAT32 functions
+*/
+
+static int get_fd()
 {
-    for (; *entry < sec_buf + 512 && (*entry)->name[0] != 0; (*entry)++) {
-        if (check_entry(*entry, disk, cur, dname_len))
-            return (*entry)->cl_low + (*entry)->cl_high;
+    for (int i = 0; i < 256; i++) {
+        if (fat_nodes[i].name[0] == 0)
+            return i;
     }
-    return 0;
+    return -1;
 }
 
-void* fat32_read_file(const char *path)
+void fat32_init(int disknum, u32 boot_sector)
 {
-    void *file_buf = NULL;
-    DISK *disk = &disks[0];
-    u8 *sec_buf = kmalloc(disk->sectors_per_cluster * 512);
+    fat_disk_t *disk = &fat_disks[disknum];
+    disk_read(boot_sector, 1, (u32)&disk->volID);
+    disk_init(disk);
+    int fat_sectors = disk->volID.extended_section.FAT_size_32;
+    fat_sectors = (fat_sectors > MAX_SECTOR_READS) ? MAX_SECTOR_READS : fat_sectors;
+    disk_read(disk->fat_begin_lba, fat_sectors, (u32)disk->fat_buffer);
+}
+
+static size_t __do_fat32_read(fat_file_t *file, void *file_buf, size_t count)
+{
+    size_t bytes_read = 0;
+    fat_disk_t *disk = &fat_disks[0];
+    const int factor = disk->sectors_per_cluster * BYTES_PER_SECTOR;
+    count = (count / factor) * factor;
+    printf("Reading %d bytes\n", count);
+
+    u32 clst = (u32)file->cl_low + (u32)file->cl_high;
+    u32 fat_value = 0;
+    while (fat_value < 0x0FFFFFF8 && bytes_read < count) {
+        disk_read(LBA_ADDR(clst, disk), disk->sectors_per_cluster, (u32)file_buf);
+        if (clst >= 32768)
+            kerror("clst out of fat bounds\n");
+        fat_value = disk->fat_buffer[clst] & 0x0FFFFFFF;
+        clst = fat_value;
+        file_buf = (void*)((u32)file_buf + disk->sectors_per_cluster * BYTES_PER_SECTOR);
+        bytes_read += disk->sectors_per_cluster * BYTES_PER_SECTOR;
+    }
+    return bytes_read;
+}
+
+// Read a directory and return a buffer containing the directory entries
+static void *fat32_read_dir(fat_file_t *entry, void *buffer, fat_disk_t *disk)
+{
+    size_t bytes_read = 0;
+    u32 clst = (u32)entry->cl_low + (u32)entry->cl_high;
+    u32 fat_value = 0;
+    void *current;
+
+    while (fat_value < 0x0FFFFFF8) {
+        buffer = krealloc(buffer, bytes_read + disk->sectors_per_cluster * BYTES_PER_SECTOR);
+        current = (void*)((u32)buffer + bytes_read);
+        disk_read(LBA_ADDR(clst, disk), disk->sectors_per_cluster, (u32)current);
+        if (clst >= 32768)
+            kerror("clst out of fat bounds\n");
+        fat_value = disk->fat_buffer[clst] & 0x0FFFFFFF;
+        clst = fat_value;
+        bytes_read += disk->sectors_per_cluster * BYTES_PER_SECTOR;
+    }
+    
+    return buffer;
+}
+
+int fat32_open(const char *path)
+{
+    int fd = 0;
+    fat_disk_t *disk = &fat_disks[0];
+    u8 *sec_buf = kmalloc(disk->sectors_per_cluster * BYTES_PER_SECTOR);
     fat_file_t *entry = NULL;
     
     char cur[9];
-    int dname_len;
+    path = next_dir_name(path, cur);
 
-    dname_len = name_length(++path, '/');
-    for (int i = 0; i < dname_len; i++)
-        cur[i] = toupper(path[i]);
-    cur[dname_len] = 0;
-    printf("Looking for: %s\n", cur);
-
-    disk_read(LBA_ADDR(disk->root_start, disk), disk->sectors_per_cluster, 
-            (u32)sec_buf);
+    disk_read(LBA_ADDR(disk->root_start, disk), disk->sectors_per_cluster, (u32)sec_buf);
     entry = (fat_file_t*)sec_buf;
-
-    while (1) {
-        u32 clst = check_dir(&entry, sec_buf, disk, cur, dname_len);
-        if (clst == 0) {
-            printf("File not found\n");
-            goto cleanup;
-        } 
-        else if (entry->attributes == DIR) {
-            disk_read(LBA_ADDR(clst, disk), disk->sectors_per_cluster, (u32)sec_buf);
-            entry = (fat_file_t*)sec_buf;
-            path += dname_len + 1;
-            dname_len = name_length(path, '/');
-            for (int i = 0; i < dname_len; i++)
-                cur[i] = toupper(path[i]);
-            cur[dname_len] = 0;
+    
+    while (entry->name[0] != 0) {
+        if (check_entry(entry, disk, cur)) {
+            if (*path != '\0') {
+                u8 *tmp = kmalloc(disk->sectors_per_cluster * BYTES_PER_SECTOR);
+                tmp = fat32_read_dir(entry, tmp, disk);
+                kfree(sec_buf);
+                sec_buf = tmp;
+                entry = (fat_file_t*)sec_buf;
+                path = next_dir_name(path, cur);
+                continue;
+            }
+            else {
+                int fd = get_fd();
+                fat_nodes[fd] = *entry;
+                kfree(sec_buf);
+                return fd;
+            }
         }
-        else break;
+        entry++;
     }
-
-    printf("Found file: %s\n", entry->name);
-    printf("File size: %d\n", entry->file_size);
-
-    file_buf = kmalloc(entry->file_size);
-    u32 clst = (u32)entry->cl_low + (u32)entry->cl_high;
-    u32 fat_value = 0;
-    void *tmp = file_buf;
-    while (fat_value < 0x0FFFFFF8) {
-        disk_read(LBA_ADDR(clst, disk), disk->sectors_per_cluster, (u32)tmp);
-        if (clst >= 32768)
-            kerror("clst out of bounds\n");
-        fat_value = fat_buffer[clst];
-        fat_value &= 0x0FFFFFFF;
-        clst = fat_value;
-        tmp += disk->sectors_per_cluster * 512;
-    }
-
-cleanup:
     kfree(sec_buf);
-    return file_buf;
+    printf("File not found\n");
+    return -1;
+}
+
+size_t fat32_read(int fd, void *file_buf, size_t count)
+{
+    return __do_fat32_read(&fat_nodes[fd], file_buf, count);
 }
 
 void print_fat32_data(fat_BS_t *ptr)

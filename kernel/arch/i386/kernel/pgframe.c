@@ -36,7 +36,7 @@ int phys_mem_init(u32 mem_end)
 
     map_pages((void*)phys_addr(&_kernel_end), 
             (void*)pg_frame_bitmap, 
-            0x3,
+            PG_WRITE,
             BITMAP_SIZE / PAGE_SIZE + 1);
     memset(pg_frame_bitmap, 0, BITMAP_SIZE);
 

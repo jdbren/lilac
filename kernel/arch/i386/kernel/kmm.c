@@ -56,7 +56,7 @@ void mm_init(struct multiboot_tag_mmap *mmap, u32 mem_upper)
     unused_heap_addr = KHEAP_MAX_ADDR;
 
     void *phys = alloc_frames(HEAP_MANAGE_PAGES);
-    map_pages(phys, (void*)kernel_avail, 0x3, HEAP_MANAGE_PAGES);
+    map_pages(phys, (void*)kernel_avail, PG_WRITE, HEAP_MANAGE_PAGES);
     memset(kernel_avail, 0, HEAP_MANAGE_PAGES * sizeof(struct memory_desc));
 
     printf("Kernel virtual address allocation enabled\n");

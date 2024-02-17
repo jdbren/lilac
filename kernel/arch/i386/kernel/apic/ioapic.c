@@ -63,7 +63,7 @@ void ioapic_init(struct ioapic *ioapic, struct int_override *over, u8 num_over)
         memcpy(overrides + i, over, sizeof(struct int_override));
         overrides[i].next = 0;
     }
-    map_page((void*)ioapic_base, (void*)ioapic_base, 0x13);
+    map_page((void*)ioapic_base, (void*)ioapic_base, PG_CACHE_DISABLE | PG_WRITE);
 }
 
 void ioapic_entry(u8 irq, u8 vector, u8 flags, u8 dest)

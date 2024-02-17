@@ -46,7 +46,7 @@ void* elf32_load(void *elf)
 	    void *vaddr = (void*)phdr[i].p_vaddr;
         assert((u32)vaddr % PAGE_BYTES == 0);
 
-        map_page(phys, vaddr, 0x7);
+        map_page(phys, vaddr, PG_USER | PG_WRITE);
 	    memcpy(vaddr, elf, phdr[i].p_memsz);
         if (phdr[i].p_filesz < phdr[i].p_memsz)
             memset((void*)(phdr[i].p_vaddr + phdr[i].p_filesz), 0, 

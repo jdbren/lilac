@@ -1,7 +1,9 @@
+#include <stdbool.h>
 #include <kernel/types.h>
 #include <kernel/panic.h>
 #include <fs/mbr.h>
 #include <fs/fat32.h>
+#include <fs/vfs.h>
 #include "fs_init.h"
 
 #define BOOT_LOCATION 0x7C00
@@ -32,6 +34,7 @@ void mbr_read(int boot_partition)
 	if (partition->type == 0xB) {
 		fat32_lba = partition->lba_first_sector;
 		fat32_init(boot_partition, fat32_lba);
+        vfs_install_disk(FAT, true);
 	}
 	else {
 		kerror("Boot partition is not FAT32\n");

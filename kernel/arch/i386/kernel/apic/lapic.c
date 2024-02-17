@@ -74,7 +74,7 @@ void lapic_enable(uintptr_t addr) {
     /* Hardware enable the Local APIC if it wasn't enabled */
     cpu_set_apic_base(addr);
 
-    map_page((void*)local_apic_base, (void*)local_apic_base, 0x13);
+    map_page((void*)local_apic_base, (void*)local_apic_base, PG_CACHE_DISABLE | PG_WRITE);
     
     /* Set the Spurious Interrupt Vector Register bit 8 to start receiving interrupts */
     write_reg(0xF0, read_reg(0xF0) | 0x100);
