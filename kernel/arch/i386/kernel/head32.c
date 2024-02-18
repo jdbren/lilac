@@ -20,7 +20,6 @@
 static struct multiboot_info mbd;
 static struct acpi_info acpi;
 
-void jump_usermode(u32 addr);
 void parse_multiboot(u32, struct multiboot_info*);
 
 void kernel_early(unsigned int multiboot)
@@ -35,19 +34,12 @@ void kernel_early(unsigned int multiboot)
 	parse_acpi((void*)mbd.acpi->rsdp, &acpi);
 	apic_init(acpi.madt);
 	keyboard_init();
-	timer_init();
+	//timer_init();
 	enable_interrupts();
 
-	// ap_init(acpi.madt->core_cnt);
-	
-	int fd = open("A:/bin/code", 0, 0);
-	int *ptr = kmalloc(0x1000);
-	read(fd, ptr, 0x1000);
-	printf("%x\n", *ptr);
-	// void *jmp = elf32_load(ptr);
-	//jump_usermode((u32)jmp);
+	//ap_init(acpi.madt->core_cnt);
 
-	kmain();
+	start_kernel();
 }
 
 void parse_multiboot(u32 addr, struct multiboot_info *mbd)

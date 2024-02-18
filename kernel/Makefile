@@ -30,6 +30,7 @@ LIBS:=$(LIBS) $(KERNEL_ARCH_LIBS)
 KERNEL_OBJS=\
 $(KERNEL_ARCH_OBJS) \
 kernel/kmain.o \
+kernel/process.o \
 mm/kheap.o \
 fs/fat32.o \
 fs/vfs.o \

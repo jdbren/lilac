@@ -78,6 +78,8 @@ void lapic_enable(uintptr_t addr) {
     
     /* Set the Spurious Interrupt Vector Register bit 8 to start receiving interrupts */
     write_reg(0xF0, read_reg(0xF0) | 0x100);
+
+    printf("BSP local APIC enabled\n");
 }
 
 void apic_eoi(void)

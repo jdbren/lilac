@@ -50,7 +50,7 @@ static struct vnode* mk_vnode(int dev, int flags, int mode, int data)
     vnode->f_flags = flags;
     vnode->f_mode = mode;
     vnode->inode = data;
-    vnode->f_op = &ops[FAT];
+    vnode->f_op = &ops[disks[dev].type];
     return vnode;
 }
 

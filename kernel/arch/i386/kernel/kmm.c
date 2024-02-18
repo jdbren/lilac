@@ -7,8 +7,8 @@
 #include "paging.h"
 
 
-#define KHEAP_START_ADDR    0x80000000
-#define KHEAP_MAX_ADDR      0xAFFFF000
+#define KHEAP_START_ADDR    0xC1000000
+#define KHEAP_MAX_ADDR      0xEFFFF000
 #define get_index(VIRT_ADDR) (KHEAP_MAX_ADDR - VIRT_ADDR)
 
 typedef struct memory_desc memory_desc_t;
@@ -17,7 +17,7 @@ struct memory_desc {
     memory_desc_t *next, *prev;
     u32 size;
     u8 *start;
-} __attribute__((packed));
+};
 
 static void __update_list(memory_desc_t *mem_addr, unsigned int num_pages);
 
@@ -55,9 +55,12 @@ void mm_init(struct multiboot_tag_mmap *mmap, u32 mem_upper)
     list = 0;
     unused_heap_addr = KHEAP_MAX_ADDR;
 
+    if ((u32)kernel_avail + HEAP_MANAGE_PAGES * PAGE_SIZE > __KERNEL_MAX_ADDR)
+        kerror("Heap management pages exceed kernel space");
+
     void *phys = alloc_frames(HEAP_MANAGE_PAGES);
     map_pages(phys, (void*)kernel_avail, PG_WRITE, HEAP_MANAGE_PAGES);
-    memset(kernel_avail, 0, HEAP_MANAGE_PAGES * sizeof(struct memory_desc));
+    memset(kernel_avail, 0, HEAP_MANAGE_PAGES * PAGE_SIZE);
 
     printf("Kernel virtual address allocation enabled\n");
 }

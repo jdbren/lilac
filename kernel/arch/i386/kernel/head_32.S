@@ -159,7 +159,7 @@ mbinfo:
 	.skip 4096
 
 .section .bsstack, "aw", @nobits
-.align 4096
+.align __PAGE_OFFSET
 stack_bottom:
 	.skip 32768
 stack_top:

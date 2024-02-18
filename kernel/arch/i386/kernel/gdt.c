@@ -72,7 +72,7 @@ void gdt_init(void)
     for (int i = 0; i < GDT_SIZE; i++)
         gdt_entry((u8*)segment_desc + i*8, &gdt_entries[i]);
 
-    tss.ss0 = 0x10;                         // Set the kernel stack segment.
+    tss.ss0 = 0x10;                           // Set the kernel stack segment.
 	asm("\t movl %%esp,%0" : "=r"(tss.esp0)); // Set the kernel stack pointer.
 	//note that CS is loaded from the IDT entry and should be the regular kernel code segment
 
