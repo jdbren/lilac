@@ -81,6 +81,7 @@ void arch_context_switch(struct task *prev, struct task *next)
 	printf("Switching from %s to %s\n", prev->name, next->name);
     asm volatile (
         "pushfl\n\t"
+        "pushl %%ebp\n\t"
         "movl %%esp, %[prev_sp]\n\t"
         "movl %[next_pg], %%eax\n\t"
         "movl %%eax, %%cr3\n\t"
@@ -89,6 +90,7 @@ void arch_context_switch(struct task *prev, struct task *next)
         "pushl %[next_ip]\n\t"
         "ret\n"
         "1:\t"
+        "popl %%ebp\n\t"
         "popfl\n\t"
         : [prev_sp] "=m" (prev->stack),
           [prev_ip] "=m" (prev->pc)
