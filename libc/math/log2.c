@@ -1,4 +1,4 @@
-#include "math.h"
+#include <math.h>
 
 const int tab32[32] = {
      0,  9,  1, 10, 13, 21,  2, 29,

@@ -53,7 +53,7 @@ void parse_multiboot(u32 addr, struct multiboot_info *mbd)
 	for (tag = (struct multiboot_tag *) (addr + 8);
 		tag->type != MULTIBOOT_TAG_TYPE_END;
 		tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag 
-										+ ((tag->size + 7) & ~7)))
+			+ ((tag->size + 7) & ~7)))
 	{
 		switch (tag->type) {
 			case MULTIBOOT_TAG_TYPE_BOOT_LOADER_NAME:
