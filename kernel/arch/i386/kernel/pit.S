@@ -9,9 +9,6 @@ IRQ0_ms:                 .skip 32   # Number of whole ms between IRQs
 IRQ0_frequency:          .skip 32   # Actual frequency of PIT
 PIT_reload_value:        .skip 16   # Current PIT reload value
 
-.data
-str: .ascii "System time %d ms\n\0"
-
 .text
 .global timer_handler
 timer_handler:
@@ -23,6 +20,14 @@ timer_handler:
 	add [system_timer_fractions], eax     # Update system timer tick fractions
 	adc [system_timer_ms], ebx            # Update system timer tick milli-seconds
     
+    mov eax, [sched_timer]
+    cmp eax, -1
+    je .sched_done
+    test eax, eax
+    jz run_scheduler
+    dec eax
+    mov [sched_timer], eax
+.sched_done:
     mov eax, [timer_cnt]
     test eax, eax
     jz TimerDone
@@ -37,6 +42,17 @@ TimerDone:
 	pop ebx
 	pop eax
 	iretd
+
+run_scheduler:
+    xor eax, eax
+    mov ebx, [local_apic_base]
+    mov [ebx+0x0b0], eax    
+    pushad
+    pushfd
+    call sched_tick
+    popfd
+    popad
+    jmp .sched_done
 
 # Input
 # param 1: desired frequency in Hz

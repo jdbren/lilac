@@ -2,7 +2,9 @@
 #include <kernel/types.h>
 #include <kernel/panic.h>
 #include <kernel/process.h>
+#include <kernel/sched.h>
 #include <kernel/elf.h>
+#include "timer.h"
 #include <mm/kheap.h>
 #include <fs/vfs.h>
 
@@ -18,8 +20,18 @@ void start_kernel(void)
 	// printf("Page directory entry 768: %x\n", ((u32*)0xFFFFF000)[768]);
 	//jump_usermode((u32)jmp);
 
-	create_process();
+	init_sched(1000);
+	
+	struct task *task = create_process("2nd process");
+	schedule_task(task);
 
-    while (1)
+	struct task *task2 = create_process("3rd process");
+	schedule_task(task2);
+
+	struct task *task3 = create_process("4th process");
+	schedule_task(task3);
+
+    while (1) {
         asm("hlt");
+	}
 }

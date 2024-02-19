@@ -5,6 +5,7 @@
 #include <kernel/panic.h>
 #include <kernel/keyboard.h>
 #include <kernel/elf.h>
+#include <kernel/process.h>
 #include <acpi/acpi.h>
 #include <mm/kmm.h>
 #include <mm/kheap.h>
@@ -34,7 +35,8 @@ void kernel_early(unsigned int multiboot)
 	parse_acpi((void*)mbd.acpi->rsdp, &acpi);
 	apic_init(acpi.madt);
 	keyboard_init();
-	//timer_init();
+	timer_init();
+
 	enable_interrupts();
 
 	//ap_init(acpi.madt->core_cnt);
@@ -71,4 +73,28 @@ void parse_multiboot(u32 addr, struct multiboot_info *mbd)
 			break;
 		}
 	}
+}
+
+
+void arch_context_switch(struct task *prev, struct task *next)
+{
+	printf("Switching from %s to %s\n", prev->name, next->name);
+    asm volatile (
+        "pushfl\n\t"
+        "movl %%esp, %[prev_sp]\n\t"
+        "movl %[next_pg], %%eax\n\t"
+        "movl %%eax, %%cr3\n\t"
+        "movl %[next_sp], %%esp\n\t"
+        "movl $1f, %[prev_ip]\n\t"
+        "pushl %[next_ip]\n\t"
+        "ret\n"
+        "1:\t"
+        "popfl\n\t"
+        : [prev_sp] "=m" (prev->stack),
+          [prev_ip] "=m" (prev->pc)
+        : [next_sp] "m" (next->stack),
+          [next_ip] "m" (next->pc),
+          [next_pg] "m" (next->pgd)
+        :  "eax", "memory"
+    );
 }

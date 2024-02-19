@@ -1,86 +1,71 @@
 #include <stdatomic.h>
+#include <string.h>
 #include <kernel/process.h>
 #include <kernel/types.h>
+#include <kernel/config.h>
 #include <kernel/panic.h>
 #include <kernel/elf.h>
+#include <kernel/sched.h>
 #include <mm/kheap.h>
+#include <mm/asm.h>
 #include <fs/vfs.h>
+#include "timer.h"
 
 #define MAX_TASKS 1024
-
-struct task {
-    int pid;
-    int ppid;
-    int page_dir;
-    volatile int state;
-    int pc;
-    void *stack;
-    int priority;
-    unsigned int time_slice;
-    struct task *parent;
-    struct fs_info *fs;
-    struct files *files;
-};
+#define INIT_STACK(KSTACK) ((u32)KSTACK + __KERNEL_STACK_SZ - sizeof(size_t))
+#define current get_current_task()
 
 static struct task tasks[MAX_TASKS];
-static int task_queue;
 static int num_tasks;
 
-void start_process()
+void idle(void)
 {
-    printf("Process started\n");
+    printf("Idle process started\n");
     while (1)
         asm("hlt");
-    struct task *task = &tasks[task_queue];
 }
 
-void context_switch(struct task *prev, struct task *next)
+void start_process(void)
 {
-    asm ("movl %0, %%cr3" : : "r"(next->page_dir));
-    asm ("movl $0xC80001FC, %esp");
-    asm ("pushl %0" : : "r"(next->pc));
-    asm ("ret");
-
-    asm volatile (
-        "pushfl\n\t"
-        "pushl %%ebp\n\t"
-        "movl %%esp, %[prev_sp]\n\t"
-        "movl %[next_sp], %%esp\n\t"
-        "movl $1f, %[prev_ip]\n\t"
-        "pushl %[next_ip]\n\t"
-        "jmp __switch_to\n"
-        "1:\t"
-        "popl %%ebp\n\t"
-        "popfl\n\t"
-        : [prev_sp] "=m" (prev->stack),
-          [prev_ip] "=m" (prev->pc)
-        : [next_sp] "m" (next->stack),
-          [next_ip] "m" (next->pc),
-          [prev]    "a" (prev),
-          [next]    "d" (next)
-        : "memory"
-    );
-
+    printf("Process %d started\n", current->pid);
+    asm ("sti");
+    while (1) {
+        asm("hlt");
+    }
 }
 
-void create_process()
+struct task* create_process(const char *path)
 {
-    static int pid = 0;
-    struct task *task = &tasks[++pid];
+    static int pid = 1;
+    struct task *new_task = &tasks[++pid];
     // Allocate new page directory
-    u32 directory = arch_process_mmap();
-    printf("Page directory: %x\n", directory);
+    struct mm_info mem = arch_process_mmap();
 
-    task->pid = pid;
-    task->ppid = 0;
-    task->state = 0;
-    task->page_dir = directory;
-    task->pc = (u32)(start_process);
-    printf("Process entry point: %x\n", task->pc);
-
-    context_switch(NULL, task);
+    memcpy(new_task->name, path, strlen(path) + 1);
+    new_task->pid = pid;
+    new_task->ppid = current->pid;
+    new_task->pgd = mem.pgd;
+    new_task->pc = (u32)(start_process);
+    new_task->stack = (void*)INIT_STACK(mem.kstack);
+    new_task->state = 0;
+    new_task->info = kzmalloc(sizeof(*new_task->info));
+    new_task->info->path = path;
 
     num_tasks++;
-    return;
+    return new_task;
 }
 
+struct task* init_process(void)
+{
+    num_tasks = 1;
+    struct task *this = &tasks[1];
+
+    this->pid = 1;
+    this->pgd = arch_get_pgd();
+    printf("Page directory: %x\n", this->pgd);
+    this->ppid = 0;
+    this->priority = 0;
+    memcpy(this->name, "_init", 6);
+
+    return this;
+}

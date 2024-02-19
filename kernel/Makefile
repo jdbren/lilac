@@ -31,11 +31,12 @@ KERNEL_OBJS=\
 $(KERNEL_ARCH_OBJS) \
 kernel/kmain.o \
 kernel/process.o \
+kernel/sched.o \
 mm/kheap.o \
 fs/fat32.o \
 fs/vfs.o \
 acpi/acpi.o \
-acpi/madt.o 
+acpi/madt.o
 
 OBJS=\
 $(ARCHDIR)/boot/crti.o \
