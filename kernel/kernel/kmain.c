@@ -28,8 +28,8 @@ void start_kernel(void)
 	struct task *task2 = create_process("3rd process");
 	schedule_task(task2);
 
-	struct task *task3 = create_process("4th process");
-	schedule_task(task3);
+	// struct task *task3 = create_process("4th process");
+	// schedule_task(task3);
 
     while (1) {
         asm("hlt");
