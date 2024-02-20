@@ -44,7 +44,7 @@ void terminal_scroll()
 	size_t i, k, j;
 	for (k = 1, j = 0; k < VGA_HEIGHT; k++, j++) {
 		for (i = 0; i < VGA_WIDTH; i++) {
-			terminal_putentryat(terminal_buffer[k * VGA_WIDTH + i], 
+			terminal_putentryat(terminal_buffer[k * VGA_WIDTH + i],
 				terminal_color, i, j);
 		}
 	}

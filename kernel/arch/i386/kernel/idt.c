@@ -21,7 +21,7 @@ struct IDT {
 
 static idt_entry_t idt_entries[IDT_SIZE];
 static struct IDT idtptr = {
-    sizeof(idt_entry_t) * IDT_SIZE - 1, 
+    sizeof(idt_entry_t) * IDT_SIZE - 1,
     (u32)&idt_entries
 };
 

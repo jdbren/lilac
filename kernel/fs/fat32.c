@@ -48,7 +48,7 @@ static fat_file_t fat_nodes[256];
 */
 static inline u32 LBA_ADDR(u32 cluster_num, fat_disk_t *disk)
 {
-    return disk->cluster_begin_lba + 
+    return disk->cluster_begin_lba +
         ((cluster_num - disk->root_start) * disk->sectors_per_cluster);
 }
 
@@ -67,7 +67,7 @@ static inline int name_length(const char* name, char delim)
     int i = 0;
     while (name[i] != delim && name[i] != 0)
         i++;
-    
+
     return i;
 }
 
@@ -87,7 +87,7 @@ static const char *next_dir_name(const char *path, char *const cur)
 
 static bool check_entry(fat_file_t *entry, fat_disk_t *disk, const char *cur)
 {
-    if (entry->attributes != LONG_FNAME && entry->name[0] != (char)UNUSED) { 
+    if (entry->attributes != LONG_FNAME && entry->name[0] != (char)UNUSED) {
         if (!memcmp(entry->name, cur, strlen(cur)))
             return true;
     }
@@ -158,7 +158,7 @@ static void *fat32_read_dir(fat_file_t *entry, void *buffer, fat_disk_t *disk)
         clst = fat_value;
         bytes_read += disk->sectors_per_cluster * BYTES_PER_SECTOR;
     }
-    
+
     return buffer;
 }
 
@@ -168,13 +168,13 @@ int fat32_open(const char *path)
     fat_disk_t *disk = &fat_disks[0];
     u8 *sec_buf = kmalloc(disk->sectors_per_cluster * BYTES_PER_SECTOR);
     fat_file_t *entry = NULL;
-    
+
     char cur[9];
     path = next_dir_name(path, cur);
 
     disk_read(LBA_ADDR(disk->root_start, disk), disk->sectors_per_cluster, (u32)sec_buf);
     entry = (fat_file_t*)sec_buf;
-    
+
     while (entry->name[0] != 0) {
         if (check_entry(entry, disk, cur)) {
             if (*path != '\0') {

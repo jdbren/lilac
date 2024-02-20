@@ -14,12 +14,12 @@ PIT_reload_value:        .skip 16   # Current PIT reload value
 timer_handler:
 	push eax
 	push ebx
- 
+
 	mov eax, [IRQ0_fractions]
 	mov ebx, [IRQ0_ms]                    # eax.ebx = amount of time between IRQs
 	add [system_timer_fractions], eax     # Update system timer tick fractions
 	adc [system_timer_ms], ebx            # Update system timer tick milli-seconds
-    
+
     mov eax, [sched_timer]
     cmp eax, -1
     je .sched_done
@@ -33,12 +33,12 @@ timer_handler:
     jz TimerDone
     dec eax
     mov [timer_cnt], eax
-    
+
 TimerDone:
 	xor eax, eax
     mov ebx, [local_apic_base]
     mov [ebx+0x0b0], eax                  # Send the EOI to the APIC
- 
+
 	pop ebx
 	pop eax
 	iretd
@@ -46,7 +46,7 @@ TimerDone:
 run_scheduler:
     xor eax, eax
     mov ebx, [local_apic_base]
-    mov [ebx+0x0b0], eax    
+    mov [ebx+0x0b0], eax
     pushad
     pushfd
     call sched_tick
@@ -112,7 +112,7 @@ init_PIT:
     mov [IRQ0_frequency],eax          # Store the actual frequency for displaying later
 
     #  Calculate the amount of time between IRQs in 32.32 fixed point
-    # 
+    #
     #  Note: The basic formula is:
     #   time in ms = reload_value / (3579545 / 3) * 1000
     #  This can be rearranged in the following way:

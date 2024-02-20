@@ -7,10 +7,10 @@ jump_usermode:
 	mov ebx, [esp+4] # get the return address
 	mov ax, (4 * 8) | 3 # ring 3 data with bottom 2 bits set for ring 3
 	mov ds, ax
-	mov es, ax 
-	mov fs, ax 
+	mov es, ax
+	mov fs, ax
 	mov gs, ax # SS is handled by iret
- 
+
 	# set up the stack frame iret expects
 	mov eax, esp
 	push (4 * 8) | 3 # data selector
@@ -23,7 +23,7 @@ jump_usermode:
 
 user:
     hlt
-    
+
 target_read:
     .long 0xdeadbeaf
     .long 0xdeadbeaf

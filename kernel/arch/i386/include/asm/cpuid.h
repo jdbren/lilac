@@ -11,8 +11,8 @@ inline void cpuid(int code, u32 *a, u32 *b, u32 *c, u32 *d) {
 
 inline int cpuid_string(int code, u32 where[4]) {
   	asm volatile (
-		"cpuid" : 
-		"=a"(*where), "=b"(*(where+1)), "=d"(*(where+2)),"=c"(*(where+3)) : 
+		"cpuid" :
+		"=a"(*where), "=b"(*(where+1)), "=d"(*(where+2)),"=c"(*(where+3)) :
 		"a"(code)
 	);
   	return (int)where[0];

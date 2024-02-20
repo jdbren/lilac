@@ -28,14 +28,14 @@ static void __free_frame(page_t *frame);
 // bit #i in byte #n define the status of page #n*8+i
 // 0 = free, 1 = used
 
-int phys_mem_init(u32 mem_end) 
+int phys_mem_init(u32 mem_end)
 {
     KERNEL_SIZE = phys_addr(&_kernel_end) - (u32)&_kernel_start;
     BITMAP_SIZE = (mem_end - KERNEL_SIZE) / PAGE_SIZE / 32;
     FIRST_PAGE = (phys_addr((u32)pg_frame_bitmap + BITMAP_SIZE) & 0xFFFFF000) + PAGE_SIZE;
 
-    map_pages((void*)phys_addr(&_kernel_end), 
-            (void*)pg_frame_bitmap, 
+    map_pages((void*)phys_addr(&_kernel_end),
+            (void*)pg_frame_bitmap,
             PG_WRITE,
             BITMAP_SIZE / PAGE_SIZE + 1);
     memset(pg_frame_bitmap, 0, BITMAP_SIZE);
@@ -43,9 +43,9 @@ int phys_mem_init(u32 mem_end)
     return (BITMAP_SIZE & 0xfffff000) + PAGE_SIZE;
 }
 
-void* alloc_frames(u32 num_pages) 
+void* alloc_frames(u32 num_pages)
 {
-    if (num_pages == 0) 
+    if (num_pages == 0)
         return 0;
 
     int start = 0;
@@ -55,7 +55,7 @@ void* alloc_frames(u32 num_pages)
             void *ptr = __check_bitmap(i, num_pages, &count, &start);
             if (ptr)
                 return ptr;
-        } 
+        }
         else
             count = 0;
     }
@@ -64,18 +64,18 @@ void* alloc_frames(u32 num_pages)
     return 0;
 }
 
-void free_frames(void *frame, u32 num_pages) 
+void free_frames(void *frame, u32 num_pages)
 {
-    if (num_pages == 0) 
+    if (num_pages == 0)
         return;
 
-    for (page_t *pg = (page_t*)frame, *end = (page_t*)frame + num_pages; 
+    for (page_t *pg = (page_t*)frame, *end = (page_t*)frame + num_pages;
     pg < end; pg++) {
         __free_frame(pg);
     }
 }
 
-static void* __check_bitmap(int i, int num_pages, int *count, int *start) 
+static void* __check_bitmap(int i, int num_pages, int *count, int *start)
 {
     for (int j = 0; j < 32; j++) {
         if (!check_bit(pg_frame_bitmap[i], j)) {
@@ -86,7 +86,7 @@ static void* __check_bitmap(int i, int num_pages, int *count, int *start)
 
             if (*count == num_pages)
                 return __do_frame_alloc(*start, num_pages);
-        } 
+        }
         else {
             *count = 0;
         }
@@ -95,7 +95,7 @@ static void* __check_bitmap(int i, int num_pages, int *count, int *start)
     return 0;
 }
 
-static void* __do_frame_alloc(int start, int num_pages) 
+static void* __do_frame_alloc(int start, int num_pages)
 {
     for (int k = start; k < start + num_pages; k++) {
         int index = k / 32;
@@ -104,10 +104,10 @@ static void* __do_frame_alloc(int start, int num_pages)
         pg_frame_bitmap[index] |= (1 << offset);
     }
 
-    // printf("Allocated phys pages %x to %x\n", 
-    //     (void*)(FIRST_PAGE + start * PAGE_SIZE), 
+    // printf("Allocated phys pages %x to %x\n",
+    //     (void*)(FIRST_PAGE + start * PAGE_SIZE),
     //     (void*)(FIRST_PAGE + (start + num_pages) * PAGE_SIZE));
-    
+
     return (void*)(FIRST_PAGE + start * PAGE_SIZE);
 }
 

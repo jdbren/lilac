@@ -106,8 +106,8 @@ struct madt_info* parse_madt(struct SDTHeader *addr)
                 kerror("Unknown madt entry\n");
         }
     }
-    printf("MADT: %d cores, %d ioapics, %d overrides, %d ioapic nmis, %d lapic nmis\n", 
-        info->core_cnt, info->ioapic_cnt, info->override_cnt, 
+    printf("MADT: %d cores, %d ioapics, %d overrides, %d ioapic nmis, %d lapic nmis\n",
+        info->core_cnt, info->ioapic_cnt, info->override_cnt,
         info->ionmi_cnt, info->lnmi_cnt);
     return info;
 }

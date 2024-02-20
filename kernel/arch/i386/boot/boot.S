@@ -5,7 +5,7 @@
 # Declare constants for the multiboot2 header.
 .set ALIGN,    1<<0             # align loaded modules on page boundaries
 .set MEMINFO,  1<<1             # provide memory map
-.set ARCH,     0x0           
+.set ARCH,     0x0
 .set HEADLEN,  24
 .set FLAGS,    ALIGN | MEMINFO  # this is the Multiboot 'flag' field
 .set MAGIC,    0xE85250D6       # 'magic number' lets bootloader find the header
@@ -35,7 +35,7 @@ _start:
 	jne invlboot
 
 	jmp pa(startup_32)
-	
+
 invlboot:
 	cli
 	hlt

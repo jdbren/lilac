@@ -36,7 +36,7 @@ typedef struct fat_BS {
     u16	num_heads;
     u32	hidden_sector_count;
     u32 total_sectors_32;
- 
+
     union {
 	    fat_extBS_32_t extended_section;
     };

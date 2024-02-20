@@ -52,7 +52,7 @@ void parse_multiboot(u32 addr, struct multiboot_info *mbd)
 	struct multiboot_tag *tag;
 	for (tag = (struct multiboot_tag *) (addr + 8);
 		tag->type != MULTIBOOT_TAG_TYPE_END;
-		tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag 
+		tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag
 			+ ((tag->size + 7) & ~7)))
 	{
 		switch (tag->type) {
@@ -65,7 +65,7 @@ void parse_multiboot(u32 addr, struct multiboot_info *mbd)
 			case MULTIBOOT_TAG_TYPE_BOOTDEV:
 				mbd->boot_dev = (struct multiboot_tag_bootdev*)tag;
 			break;
-			case MULTIBOOT_TAG_TYPE_MMAP: 
+			case MULTIBOOT_TAG_TYPE_MMAP:
 				mbd->mmap = (struct multiboot_tag_mmap*)tag;
 			break;
 			case MULTIBOOT_TAG_TYPE_ACPI_OLD:

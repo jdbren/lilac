@@ -56,4 +56,3 @@ ap_startup:
 stack_top:
     .align 32
     .fill 512, 1, 0
-    

@@ -12,7 +12,7 @@ void* elf32_load(void *elf)
         printf("Invalid ELF signature\n");
         return 0;
     }
-    
+
     printf("ELF sig: %x\n", hdr->sig);
     printf("Class: %x\n", hdr->class);
     printf("Endian: %x\n", hdr->endian);
@@ -38,7 +38,7 @@ void* elf32_load(void *elf)
         printf("Align: %x\n", phdr[i].align);
     }
 
-	
+
     for (int i = 0; i < hdr->elf32.p_tbl_sz; i++) {
         if (phdr[i].align > PAGE_BYTES)
             kerror("Alignment greater than page size\n");
@@ -49,10 +49,10 @@ void* elf32_load(void *elf)
         map_page(phys, vaddr, PG_USER | PG_WRITE);
 	    memcpy(vaddr, elf, phdr[i].p_memsz);
         if (phdr[i].p_filesz < phdr[i].p_memsz)
-            memset((void*)(phdr[i].p_vaddr + phdr[i].p_filesz), 0, 
+            memset((void*)(phdr[i].p_vaddr + phdr[i].p_filesz), 0,
                     phdr[i].p_memsz - phdr[i].p_filesz);
     }
-	
 
-    return (void*)hdr->elf32.entry;   
+
+    return (void*)hdr->elf32.entry;
 }

@@ -40,7 +40,7 @@ struct SBHeader {
     };
     u16 freeCount;
     bool isLarge;
-} __attribute__((aligned(32))); 
+} __attribute__((aligned(32)));
 
 union Alloc {
     void *next;
@@ -49,20 +49,20 @@ union Alloc {
 
 static struct SBList allLists[BUCKETS];
 
-static void* malloc_small(size_t);
-static void* malloc_large(size_t);
-static void initSuper(struct SBHeader*, size_t, int);
+static void*            malloc_small(size_t);
+static void*            malloc_large(size_t);
+static void             initSuper(struct SBHeader*, size_t, int);
 static struct SBHeader* manageEmptySuperblock(struct SBHeader*, int);
-static void moveToFront(struct SBHeader*, int);
-static void addToFront(struct SBHeader*, int);
-static size_t nextPowerOfTwo(size_t);
+static void             moveToFront(struct SBHeader*, int);
+static void             addToFront(struct SBHeader*, int);
+static size_t           nextPowerOfTwo(size_t);
 
 
 void* kmalloc(size_t size)
 {
     if (size <= 0) return NULL;
     assert(BUCKETS >= log2(SUPERBLOCKSIZE)-MIN_ALLOC_POWER);
-    
+
     void *alloc = NULL;
 
     if (size > SUPERBLOCKSIZE/2)
@@ -110,7 +110,7 @@ void* krealloc(void *addr, size_t size)
     u32 step = header->allocSize;
 
     // check if new size is in same bucket
-    if (size <= header->allocSize) 
+    if (size <= header->allocSize)
         return addr;
 
     // allocate new memory
@@ -152,7 +152,7 @@ void kfree(void *ptr)
     allLists[bucketIndex].freeCount++;
 
     assert(header->freeCount <= (SUPERBLOCKSIZE - sizeof(struct SBHeader)) / step);
-        
+
     // check if superblock is empty
     if (header->freeCount == (SUPERBLOCKSIZE - sizeof(struct SBHeader)) / step)
         header = manageEmptySuperblock(header, bucketIndex);
@@ -205,7 +205,7 @@ static void* malloc_small(size_t size)
     header->free = alloc->next;
     header->freeCount--;
     allLists[bucketIndex].freeCount--;
-    
+
     assert(is_aligned(alloc, size));
     return (void*)alloc;
 }
@@ -292,7 +292,7 @@ static struct SBHeader* manageEmptySuperblock(struct SBHeader *header, int bucke
         else {
             // remove superblock from list
             if (header->prevSB != NULL)
-                header->prevSB->nextSB = header->nextSB;   
+                header->prevSB->nextSB = header->nextSB;
             if (header->nextSB != NULL)
                 header->nextSB->prevSB = header->prevSB;
         }

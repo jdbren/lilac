@@ -12,7 +12,7 @@ struct task_info {
 struct task {
     u16 pid;
     u16 ppid;
-    u32 pgd; 
+    u32 pgd;
     u32 pc;
     void *stack;
     u32 time_slice;

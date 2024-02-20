@@ -52,7 +52,7 @@ int printf(const char* restrict format, ...) {
 			if (!print(&c, sizeof(c)))
 				return -1;
 			written++;
-		} 
+		}
 		else if (*format == 's') {
 			format++;
 			const char* str = va_arg(parameters, const char*);
@@ -64,14 +64,14 @@ int printf(const char* restrict format, ...) {
 			if (!print(str, len))
 				return -1;
 			written += len;
-		} 
+		}
 		else if (*format == 'd') {
 			format++;
 			int i = va_arg(parameters, int);
-			if (i<0) { 
+			if (i<0) {
 				i = -i;
-				putchar('-'); 
-			} 
+				putchar('-');
+			}
 			char *s = convert(i, 10);
 			int len = strlen(s);
 			if (!print(s, len))
@@ -80,7 +80,7 @@ int printf(const char* restrict format, ...) {
 		}
 		else if (*format == 'x') {
 			format++;
-			int i = va_arg(parameters, int); 
+			int i = va_arg(parameters, int);
 			char *s = convert(i, 16);
 			*--s = 'x';
 			*--s = '0';
@@ -107,18 +107,18 @@ int printf(const char* restrict format, ...) {
 	return written;
 }
 
-char *convert(unsigned int num, int base) { 
+char *convert(unsigned int num, int base) {
     static char Representation[]= "0123456789ABCDEF";
-    static char buffer[50]; 
-    char *ptr; 
+    static char buffer[50];
+    char *ptr;
 
-    ptr = &buffer[49]; 
-    *ptr = '\0'; 
+    ptr = &buffer[49];
+    *ptr = '\0';
 
-    do { 
-        *--ptr = Representation[num%base]; 
-        num /= base; 
-    } while (num != 0); 
+    do {
+        *--ptr = Representation[num%base];
+        num /= base;
+    } while (num != 0);
 
-    return(ptr); 
+    return(ptr);
 }

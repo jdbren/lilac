@@ -27,7 +27,7 @@ void mbr_read(int boot_partition)
 	const MBR_t *mbr = (const MBR_t*)BOOT_LOCATION;
     if (mbr->signature != 0xAA55)
         kerror("Invalid MBR signature\n");
- 
+
     const struct PartitionEntry *partition = &mbr->partition_table[boot_partition];
 
 	u32 fat32_lba;

@@ -76,7 +76,7 @@ void gdt_init(void)
 	asm("\t movl %%esp,%0" : "=r"(tss.esp0)); // Set the kernel stack pointer.
 	//note that CS is loaded from the IDT entry and should be the regular kernel code segment
 
-    gdt_set(&gdt);	
+    gdt_set(&gdt);
     reload_segments();
     flush_tss();
 
@@ -108,7 +108,7 @@ static void gdt_entry(u8 *target, struct gdt_entry *source)
     target[6] |= (source->flags << 4);
 }
 
-void set_kernel_stack(u32 stack) 
+void set_kernel_stack(u32 stack)
 {
 	tss.esp0 = stack;
 }

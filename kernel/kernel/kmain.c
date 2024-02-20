@@ -21,7 +21,7 @@ void start_kernel(void)
 	//jump_usermode((u32)jmp);
 
 	init_sched(1000);
-	
+
 	struct task *task = create_process("2nd process");
 	schedule_task(task);
 
