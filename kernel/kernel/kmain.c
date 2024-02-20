@@ -4,7 +4,6 @@
 #include <kernel/process.h>
 #include <kernel/sched.h>
 #include <kernel/elf.h>
-#include "timer.h"
 #include <mm/kheap.h>
 #include <fs/vfs.h>
 

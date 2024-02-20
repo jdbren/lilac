@@ -1,5 +1,7 @@
 #include "kernel/config.h"
 
+# TODO: Set up acutal stack and code to jump to
+
 # this code will be relocated to 0x8000, sets up environment for calling a C function
 .globl  ap_trampoline
 .code16
@@ -32,12 +34,12 @@ _L8060:
     movw    $0x10, %ax
     movw    %ax, %ds
     movw    %ax, %ss
-    # get our Local APIC ID
+    # get Local APIC ID
     mov     $1, %eax
     cpuid
     shrl    $24, %ebx
     movl    %ebx, %edi
-    # set up 32k stack, one for each core. It is important that all core must have its own stack
+    # set up a stack
     shll    $15, %ebx
     movl    $pa(stack_top), %esp
     subl    %ebx, %esp
