@@ -1,7 +1,6 @@
 include kbuild.config
 export DESTDIR=$(SYSROOT)
 
-targets=libk.a kernel.lilac
 
 .PHONY: all clean lilac.kernel install-headers install-kernel
 
