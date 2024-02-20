@@ -9,7 +9,7 @@
 static bool is_valid(struct SDTHeader *addr)
 {
     u8 check = 0;
-    for (int i = 0; i < addr->Length; i++)
+    for (u32 i = 0; i < addr->Length; i++)
         check += ((char *)addr)[i];
     if ((u8)(check) != 0)
         return false;
@@ -36,7 +36,7 @@ void read_rsdt(struct SDTHeader *rsdt, struct acpi_info *info)
 void parse_acpi(struct RSDP *rsdp, struct acpi_info *info)
 {
     u8 check = 0;
-    for (int i = 0; i < sizeof(*rsdp); i++)
+    for (u32 i = 0; i < sizeof(*rsdp); i++)
         check += ((char *)rsdp)[i];
     if ((u8)(check) != 0)
         kerror("Checksum is incorrect\n");

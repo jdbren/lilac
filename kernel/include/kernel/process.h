@@ -4,7 +4,7 @@
 #include <kernel/types.h>
 
 struct task_info {
-    char *path;
+    const char *path;
     char **argv;
     char **envp;
 };

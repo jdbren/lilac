@@ -36,7 +36,7 @@ void mm_init(struct multiboot_tag_mmap *mmap, u32 mem_upper)
 {
     int phys_map_sz = 0;
     struct multiboot_mmap_entry *entry = mmap->entries;
-    for (int i = 0; i < mmap->size; i += mmap->entry_size) {
+    for (u32 i = 0; i < mmap->size; i += mmap->entry_size) {
         if (entry->type == MULTIBOOT_MEMORY_AVAILABLE) {
             u32 addr = entry->addr;
             u32 len = entry->len;
@@ -87,7 +87,7 @@ void* kvirtual_alloc(int size, int flags)
     }
 
     if (unused_heap_addr >= KHEAP_START_ADDR)
-        ptr = (void*)unused_heap_addr - (num_pages - 1) * PAGE_SIZE;
+        ptr = (u8*)unused_heap_addr - (num_pages - 1) * PAGE_SIZE;
     else 
         kerror("KERNEL OUT OF VIRTUAL MEMORY");
 

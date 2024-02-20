@@ -93,7 +93,7 @@ extern void ap_trampoline(void);
 
 int ap_init(u8 numcores)
 {
-    int i, j;
+    int i;
     // get the BSP's Local APIC ID
     asm volatile ("mov $1, %%eax; cpuid; shrl $24, %%ebx;": "=b"(bspid) : : );
     // copy the AP trampoline code to a fixed address in low conventional memory (to address 0x0800:0x0000)

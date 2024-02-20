@@ -45,8 +45,8 @@ void *get_physaddr(void *virtualaddr)
 int map_pages(void *physaddr, void *virtualaddr, u16 flags, int num_pages) 
 {
     flags |= 1;
-    for (int i = 0; i < num_pages; i++, physaddr += PAGE_BYTES, 
-    virtualaddr += PAGE_BYTES) {
+    for (int i = 0; i < num_pages; i++, physaddr = (u8*)physaddr + PAGE_BYTES, 
+    virtualaddr = (u8*)virtualaddr + PAGE_BYTES) {
         assert(is_aligned(physaddr, PAGE_BYTES));
         assert(is_aligned(virtualaddr, PAGE_BYTES));
     
@@ -75,7 +75,7 @@ int map_pages(void *physaddr, void *virtualaddr, u16 flags, int num_pages)
 
 int unmap_pages(void *virtualaddr, int num_pages) 
 {
-    for (int i = 0; i < num_pages; i++, virtualaddr += PAGE_BYTES) {
+    for (int i = 0; i < num_pages; i++, virtualaddr = (u8*)virtualaddr + PAGE_BYTES) {
         assert(is_aligned(virtualaddr, PAGE_BYTES));
     
         u32 pdindex = (u32)virtualaddr >> 22;
@@ -99,7 +99,7 @@ int unmap_pages(void *virtualaddr, int num_pages)
 static int pde(int index, u16 flags) 
 {
     //printf("Allocating page table %d\n", index);
-    static const u8 default_flags = 0x3; // present 
+    static const u8 default_flags = 0x3; 
 
     // 3...0: cache enabled, write-through disabled, u/s mode
 

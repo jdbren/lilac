@@ -71,7 +71,7 @@ static inline int name_length(const char* name, char delim)
     return i;
 }
 
-static char *next_dir_name(const char *path, char *const cur)
+static const char *next_dir_name(const char *path, char *const cur)
 {
     if (*path == '/') path++;
     else return 0;
@@ -164,7 +164,7 @@ static void *fat32_read_dir(fat_file_t *entry, void *buffer, fat_disk_t *disk)
 
 int fat32_open(const char *path)
 {
-    int fd = 0;
+    int fd = -1;
     fat_disk_t *disk = &fat_disks[0];
     u8 *sec_buf = kmalloc(disk->sectors_per_cluster * BYTES_PER_SECTOR);
     fat_file_t *entry = NULL;
@@ -187,7 +187,7 @@ int fat32_open(const char *path)
                 continue;
             }
             else {
-                int fd = get_fd();
+                fd = get_fd();
                 fat_nodes[fd] = *entry;
                 kfree(sec_buf);
                 return fd;

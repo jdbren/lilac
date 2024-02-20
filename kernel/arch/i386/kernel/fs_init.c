@@ -24,11 +24,11 @@ void fs_init(struct multiboot_tag_bootdev* boot_dev)
 
 void mbr_read(int boot_partition)
 {
-	MBR_t const *mbr = (MBR_t const*)BOOT_LOCATION;
+	const MBR_t *mbr = (const MBR_t*)BOOT_LOCATION;
     if (mbr->signature != 0xAA55)
         kerror("Invalid MBR signature\n");
  
-    struct PartitionEntry *partition = &mbr->partition_table[boot_partition];
+    const struct PartitionEntry *partition = &mbr->partition_table[boot_partition];
 
 	u32 fat32_lba;
 	if (partition->type == 0xB) {

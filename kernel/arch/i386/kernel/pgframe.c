@@ -50,7 +50,7 @@ void* alloc_frames(u32 num_pages)
 
     int start = 0;
     int count = 0;
-    for (int i = 0; i < BITMAP_SIZE; i++) {
+    for (size_t i = 0; i < BITMAP_SIZE; i++) {
         if (pg_frame_bitmap[i] != ~0UL) {
             void *ptr = __check_bitmap(i, num_pages, &count, &start);
             if (ptr)
