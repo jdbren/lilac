@@ -3,9 +3,9 @@
 # TODO: Set up acutal stack and code to jump to
 
 # this code will be relocated to 0x8000, sets up environment for calling a C function
-.globl  ap_trampoline
+.globl  ap_tramp
 .code16
-ap_trampoline:
+ap_tramp:
     cli
     cld
     ljmp    $0, $0x8040

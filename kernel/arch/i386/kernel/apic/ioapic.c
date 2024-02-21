@@ -1,9 +1,9 @@
 #include <string.h>
 #include <kernel/types.h>
 #include <acpi/madt.h>
+#include <mm/kheap.h>
 #include "apic.h"
 #include "paging.h"
-#include <mm/kheap.h>
 
 #define IOAPIC_REGSEL     0x0
 #define IOAPIC_DATA       0x10
@@ -39,17 +39,13 @@ static u8 get_redir_num(u8 irq)
 
 static inline void write_reg(const u8 offset, const u32 val)
 {
-    /* tell IOREGSEL where we want to write to */
     *(volatile u32*)ioapic_base = offset;
-    /* write the value to IOWIN */
     *(volatile u32*)(ioapic_base + IOAPIC_DATA) = val;
 }
 
 static inline u32 read_reg(const u8 offset)
 {
-    /* tell IOREGSEL where we want to read from */
     *(volatile u32*)ioapic_base = offset;
-    /* return the data from IOWIN */
     return *(volatile u32*)(ioapic_base + IOAPIC_DATA);
 }
 
