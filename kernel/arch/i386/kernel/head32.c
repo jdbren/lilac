@@ -97,6 +97,6 @@ void arch_context_switch(struct task *prev, struct task *next)
         : [next_sp] "m" (next->stack),
           [next_ip] "m" (next->pc),
           [next_pg] "m" (next->pgd)
-        :  "eax", "memory"
+        :  "memory"
     );
 }

@@ -38,6 +38,7 @@ static inline u8 get_lapic_id(void)
         "cpuid\n\t"
         "shrl $24, %%ebx\n\t"
         : "=b"(bspid)
+        : : "eax", "ecx", "edx"
     );
 }
 

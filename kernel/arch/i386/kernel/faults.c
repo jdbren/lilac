@@ -8,7 +8,7 @@ void div0_handler(void)
 void pgflt_handler(int error_code)
 {
     int addr = 0;
-	asm volatile("mov %%cr2, %0 \n\t" : "=r"(addr));
+	asm volatile("mov %%cr2,%0\n\t" : "=r"(addr));
 
 	printf("Fault address: %x\n", addr);
     printf("Error code: %x\n", error_code);

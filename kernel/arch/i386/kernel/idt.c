@@ -27,7 +27,7 @@ static struct IDT idtptr = {
 
 void enable_interrupts(void)
 {
-    asm volatile("sti");
+    asm("sti");
     printf("Interrupts enabled\n");
 }
 
