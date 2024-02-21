@@ -55,6 +55,6 @@ _L8060:
 ap_startup:
 2:  jmp 2b
 
+.align 32
 stack_top:
-    .align 32
     .fill 512, 1, 0

@@ -36,7 +36,7 @@ timer_handler:
 
 TimerDone:
 	xor eax, eax
-    mov ebx, [local_apic_base]
+    mov ebx, [lapic_base]
     mov [ebx+0x0b0], eax                  # Send the EOI to the APIC
 
 	pop ebx
@@ -45,7 +45,7 @@ TimerDone:
 
 run_scheduler:
     xor eax, eax
-    mov ebx, [local_apic_base]
+    mov ebx, [lapic_base]
     mov [ebx+0x0b0], eax
     pushad
     pushfd

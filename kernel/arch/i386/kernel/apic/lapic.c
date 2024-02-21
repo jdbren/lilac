@@ -25,7 +25,7 @@ static inline u32 read_reg(u32 reg)
     return *(u32*)(lapic_base + reg);
 }
 
-static inline void apic_eoi(void)
+inline void apic_eoi(void)
 {
     write_reg(0xB0, 0);
 }
@@ -80,11 +80,13 @@ void lapic_enable(uintptr_t addr) {
     printf("BSP local APIC enabled\n");
 }
 
+volatile u8 aprunning;
+u8 bspdone;
+
 int ap_init(u8 numcores)
 {
     int i;
-    volatile u8 aprunning;
-    u8 bspid, bspdone = 0;
+    u8 bspid;
     extern void ap_tramp(void);
 
     bspid = get_lapic_id();
