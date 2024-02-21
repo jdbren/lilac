@@ -15,3 +15,4 @@ docs/acpica-reference-19.pdf
 debug.txt
 log.txt
 kbuild.config
+libc/libk.a
