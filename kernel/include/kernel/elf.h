@@ -1,3 +1,5 @@
+// Copyright (C) 2024 Jackson Brenneman
+// GPL-3.0-or-later (see LICENSE.txt)
 #ifndef KERNEL_ELF_H
 #define KERNEL_ELF_H
 

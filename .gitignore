@@ -16,3 +16,4 @@ debug.txt
 log.txt
 kbuild.config
 libc/libk.a
+kernel/l.sh

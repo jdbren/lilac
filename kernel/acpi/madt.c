@@ -1,3 +1,5 @@
+// Copyright (C) 2024 Jackson Brenneman
+// GPL-3.0-or-later (see LICENSE.txt)
 #include <acpi/madt.h>
 #include <string.h>
 #include <stdbool.h>

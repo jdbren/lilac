@@ -1,3 +1,5 @@
+// Copyright (C) 2024 Jackson Brenneman
+// GPL-3.0-or-later (see LICENSE.txt)
 #ifndef _ACPI_H
 #define _ACPI_H
 
