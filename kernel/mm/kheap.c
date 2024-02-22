@@ -51,13 +51,13 @@ union Alloc {
 
 static struct SBList allLists[BUCKETS];
 
-static void*            malloc_small(size_t);
-static void*            malloc_large(size_t);
-static void             initSuper(struct SBHeader*, size_t, int);
+static void* malloc_small(size_t);
+static void* malloc_large(size_t);
+static void initSuper(struct SBHeader*, size_t, int);
 static struct SBHeader* manageEmptySuperblock(struct SBHeader*, int);
-static void             moveToFront(struct SBHeader*, int);
-static void             addToFront(struct SBHeader*, int);
-static size_t           nextPowerOfTwo(size_t);
+static void moveToFront(struct SBHeader*, int);
+static void addToFront(struct SBHeader*, int);
+static size_t nextPowerOfTwo(size_t);
 
 
 void* kmalloc(size_t size)
@@ -308,8 +308,6 @@ static struct SBHeader* manageEmptySuperblock(struct SBHeader *header, int bucke
     return header;
 }
 
-// Get the next power of 2
-// https://stackoverflow.com/questions/466204/rounding-up-to-next-power-of-2
 static size_t nextPowerOfTwo(size_t nextPow2)
 {
     nextPow2--;
