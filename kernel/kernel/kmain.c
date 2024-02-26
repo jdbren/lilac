@@ -9,8 +9,6 @@
 #include <mm/kheap.h>
 #include <fs/vfs.h>
 
-void jump_usermode(u32 addr);
-
 void start_kernel(void)
 {
     // int fd = open("A:/bin/code", 0, 0);
@@ -21,13 +19,14 @@ void start_kernel(void)
 	// printf("Page directory entry 768: %x\n", ((u32*)0xFFFFF000)[768]);
 	//jump_usermode((u32)jmp);
 
-	init_sched(1000);
+	init_sched(2000);
 
-	struct task *task = create_process("2nd process");
+	struct task *task = create_process("A:/bin/code");
 	schedule_task(task);
+	schedule();
 
-	struct task *task2 = create_process("3rd process");
-	schedule_task(task2);
+	// struct task *task2 = create_process("3rd process");
+	// schedule_task(task2);
 
 	// struct task *task3 = create_process("4th process");
 	// schedule_task(task3);

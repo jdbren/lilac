@@ -28,8 +28,8 @@ void init_sched(int timer)
     back = 0;
     current_task = 0;
     schedule_task(pid1);
-    timer_reset = timer;
-    sched_timer = timer;
+    // timer_reset = timer;
+    // sched_timer = timer;
 }
 
 static void context_switch(struct task *prev, struct task *next)

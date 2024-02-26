@@ -29,9 +29,34 @@ void idle(void)
 
 void start_process(void)
 {
+    int i = 1;
     printf("Process %d started\n", current->pid);
-    asm ("sti");
+
+    char *path = current->info->path;
+    int fd = open(path, 0, 0);
+    if (fd < 0) {
+        printf("Failed to open file %s\n", path);
+        return;
+    }
+
+    struct elf_header *hdr = kzmalloc(0x1000);
+    int bytes = read(fd, hdr, 0x1000);
+    if (hdr->sig != ELF_MAGIC) {
+        printf("Invalid ELF signature\n");
+        return;
+    }
+    else {
+        printf("Read %d bytes from %s\n", bytes, path);
+    }
+    void *jmp = elf32_load(hdr);
+    arch_user_stack();
+    asm("cli");
+    jump_usermode((u32)jmp, __USER_STACK - 4);
+
+
     while (1) {
+        //printf("Process %d running for %d time\n", current->pid, i++);
+        //sleep(500);
         asm("hlt");
     }
 }

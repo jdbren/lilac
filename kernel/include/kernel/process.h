@@ -35,5 +35,7 @@ struct mm_info {
 struct task *init_process(void);
 struct task *create_process(const char *path);
 struct mm_info arch_process_mmap();
+void arch_user_stack();
+void jump_usermode(u32 addr, u32 stack);
 
 #endif

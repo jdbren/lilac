@@ -65,7 +65,7 @@ int map_pages(void *physaddr, void *virtualaddr, u16 flags, int num_pages)
             return 1;
         }
 
-        pt[ptindex] = ((u32)physaddr) | (flags & 0xFFF) | 0x01; // Present
+        pt[ptindex] = ((u32)physaddr) | (flags & 0xFFF);
 
         __native_flush_tlb_single((u32)virtualaddr);
 
@@ -102,13 +102,14 @@ static int pde(int index, u16 flags)
 {
     //printf("Allocating page table %d\n", index);
     static const u8 default_flags = 0x3;
+    flags |= default_flags;
 
     // 3...0: cache enabled, write-through disabled, u/s mode
 
     void *addr = alloc_frame();
     assert(is_aligned(addr, PAGE_BYTES));
 
-    pde_t entry = (u32)addr | default_flags;
+    pde_t entry = (u32)addr | flags;
     pd[index] = entry;
 
     u32 *pt = ((u32*)0xFFC00000) + (0x400 * index);

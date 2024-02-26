@@ -9,7 +9,7 @@ int phys_mem_init(u32 mem_end);
 void *alloc_frames(u32 num_pages);
 void free_frames(void *frame, u32 num_pages);
 
-static inline void *alloc_frame()
+static inline void *alloc_frame(void)
 {
     return alloc_frames(1);
 }

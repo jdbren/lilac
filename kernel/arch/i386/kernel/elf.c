@@ -9,6 +9,7 @@
 void* elf32_load(void *elf)
 {
     struct elf_header *hdr = (struct elf_header*)elf;
+    printf("ELF header at %x\n", hdr);
 
     if (hdr->sig != 0x464c457f) {
         printf("Invalid ELF signature\n");
@@ -44,11 +45,12 @@ void* elf32_load(void *elf)
     for (int i = 0; i < hdr->elf32.p_tbl_sz; i++) {
         if (phdr[i].align > PAGE_BYTES)
             kerror("Alignment greater than page size\n");
-        void *phys = alloc_frame(phdr[i].p_memsz / PAGE_BYTES + 1);
+        void *phys = alloc_frames(phdr[i].p_memsz / PAGE_BYTES + 1);
 	    void *vaddr = (void*)phdr[i].p_vaddr;
         assert((u32)vaddr % PAGE_BYTES == 0);
 
         map_page(phys, vaddr, PG_USER | PG_WRITE);
+        printf("Mapped %x to %x\n", phys, vaddr);
 	    memcpy(vaddr, elf, phdr[i].p_memsz);
         if (phdr[i].p_filesz < phdr[i].p_memsz)
             memset((void*)(phdr[i].p_vaddr + phdr[i].p_filesz), 0,

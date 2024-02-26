@@ -30,4 +30,3 @@ clean:
   		(cd $$PROJECT && $(MAKE) clean) \
 	done
 	rm -rf sysroot
-	rm debug.txt

@@ -37,7 +37,7 @@ void kernel_early(unsigned int multiboot)
 	parse_acpi((void*)mbd.acpi->rsdp, &acpi);
 	apic_init(acpi.madt);
 	keyboard_init();
-	timer_init();
+	//timer_init();
 
 	enable_interrupts();
 
