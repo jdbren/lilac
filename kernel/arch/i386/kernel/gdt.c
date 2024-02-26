@@ -110,7 +110,7 @@ static void gdt_entry(u8 *target, struct gdt_entry *source)
     target[6] |= (source->flags << 4);
 }
 
-void set_kernel_stack(u32 stack)
+void set_tss_esp0(u32 esp)
 {
-	tss.esp0 = stack;
+	tss.esp0 = esp;
 }

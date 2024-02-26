@@ -8,6 +8,7 @@
 #include <kernel/elf.h>
 #include <mm/kheap.h>
 #include <fs/vfs.h>
+#include "timer.h"
 
 void start_kernel(void)
 {
@@ -23,7 +24,7 @@ void start_kernel(void)
 
 	struct task *task = create_process("A:/bin/code");
 	schedule_task(task);
-	schedule();
+
 
 	// struct task *task2 = create_process("3rd process");
 	// schedule_task(task2);
@@ -32,6 +33,9 @@ void start_kernel(void)
 	// schedule_task(task3);
 
     while (1) {
+		sleep(4000);
+		printf("Kernel task running\n");
         asm("hlt");
+		asm("cli");
 	}
 }

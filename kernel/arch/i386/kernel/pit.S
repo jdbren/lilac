@@ -14,8 +14,8 @@ PIT_reload_value:        .skip 16   # Current PIT reload value
 .text
 .global timer_handler
 timer_handler:
-	push eax
-	push ebx
+    pushfd
+	pushad
 
 	mov eax, [IRQ0_fractions]
 	mov ebx, [IRQ0_ms]                    # eax.ebx = amount of time between IRQs
@@ -41,8 +41,8 @@ TimerDone:
     mov ebx, [lapic_base]
     mov [ebx+0x0b0], eax                  # Send the EOI to the APIC
 
-	pop ebx
-	pop eax
+	popad
+	popfd
 	iretd
 
 run_scheduler:

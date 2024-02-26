@@ -53,12 +53,6 @@ void start_process(void)
     asm("cli");
     jump_usermode((u32)jmp, __USER_STACK - 4);
 
-
-    while (1) {
-        //printf("Process %d running for %d time\n", current->pid, i++);
-        //sleep(500);
-        asm("hlt");
-    }
 }
 
 struct task* create_process(const char *path)

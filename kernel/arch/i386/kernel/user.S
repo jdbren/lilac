@@ -8,19 +8,22 @@ jump_usermode:
 	push ebx
 	push esi
 	push edi
-	mov ebx, [ebp+8] # get the return address
-	mov edx, [ebp+12] # get the stack address
-	mov ax, (4 * 8) | 3 # ring 3 data with bottom 2 bits set for ring 3
+	mov ebx, [ebp+8] 	# get the return address
+	mov edx, [ebp+12] 	# get the stack address
+	mov eax, 0x20 | 0x3 # ring 3 data
 	mov ds, ax
 	mov es, ax
 	mov fs, ax
 	mov gs, ax # SS is handled by iret
 
-	# set up the stack frame iret expects
-	push (4 * 8) | 3 	# data selector
+	# set up iret stack frame
+	push eax 			# data selector
 	push edx 			# current esp
-	pushf 			# eflags
-	push (3 * 8) | 3 	# code selector (ring 3 code with bottom 2 bits set for ring 3)
+	pushf
+	mov eax, [esp]
+	or eax, 0x200
+	mov [esp], eax
+	push 0x18 | 0x3 	# code selector (ring 3)
 	push ebx			# instruction address to return to
 	iretd
 
