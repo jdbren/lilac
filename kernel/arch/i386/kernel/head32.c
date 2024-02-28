@@ -6,13 +6,9 @@
 #include <kernel/tty.h>
 #include <kernel/panic.h>
 #include <kernel/keyboard.h>
-#include <kernel/elf.h>
-#include <kernel/process.h>
 #include <acpi/acpi.h>
 #include <mm/kmm.h>
 #include <mm/kheap.h>
-#include <fs/vfs.h>
-#include <fs/fat32.h>
 #include "apic.h"
 #include "gdt.h"
 #include "idt.h"
@@ -38,7 +34,6 @@ void kernel_early(unsigned int multiboot)
 	apic_init(acpi.madt);
 	keyboard_init();
 	timer_init();
-
 	enable_interrupts();
 
 	//ap_init(acpi.madt->core_cnt);
@@ -75,39 +70,4 @@ void parse_multiboot(u32 addr, struct multiboot_info *mbd)
 			break;
 		}
 	}
-}
-
-
-void arch_context_switch(struct task *prev, struct task *next)
-{
-	set_tss_esp0((u32)next->stack);
-	printf("Switching from %s to %s\n", prev->name, next->name);
-    asm volatile (
-        "pushfl\n\t"
-		"pushl %%ds\n\t"
-		"pushl %%es\n\t"
-		"pushl %%fs\n\t"
-		"pushl %%gs\n\t"
-        "pushl %%ebp\n\t"
-        "movl %%esp, %[prev_sp]\n\t"
-        "movl %[next_pg], %%eax\n\t"
-        "movl %%eax, %%cr3\n\t"
-        "movl %[next_sp], %%esp\n\t"
-        "movl $1f, %[prev_ip]\n\t"
-        "pushl %[next_ip]\n\t"
-        "ret\n"
-        "1:\t"
-        "popl %%ebp\n\t"
-		"popl %%gs\n\t"
-		"popl %%fs\n\t"
-		"popl %%es\n\t"
-		"popl %%ds\n\t"
-        "popfl\n\t"
-        : [prev_sp] "=m" (prev->stack),
-          [prev_ip] "=m" (prev->pc)
-        : [next_sp] "m" (next->stack),
-          [next_ip] "m" (next->pc),
-          [next_pg] "m" (next->pgd)
-        :  "memory"
-    );
 }

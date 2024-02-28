@@ -90,3 +90,9 @@ struct task* init_process(void)
 
     return this;
 }
+
+void __do_fork(void)
+{
+    printf("Forking process\n");
+    asm("hlt");
+}
