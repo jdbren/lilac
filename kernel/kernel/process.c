@@ -52,7 +52,6 @@ void start_process(void)
     arch_user_stack();
     asm("cli");
     jump_usermode((u32)jmp, __USER_STACK - 4);
-
 }
 
 struct task* create_process(const char *path)

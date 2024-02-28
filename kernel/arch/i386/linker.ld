@@ -3,9 +3,6 @@ ENTRY (_start)
 SECTIONS
 {
     . = 1M;
-	/* The kernel will live at 3GB + 1MB in the virtual address space, */
-	/* which will be mapped to 1MB in the physical address space. */
-	/* Note that we page-align the sections. */
 
 	_kernel_start = .;
 

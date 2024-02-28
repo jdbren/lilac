@@ -15,6 +15,10 @@
 #define IA32_APIC_BASE_MSR_BSP 0x100
 #define IA32_APIC_BASE_MSR_ENABLE 0x800
 
+#define ICR_SELECT 0x310
+#define ICR_DATA 0x300
+
+
 u32 lapic_base;
 
 static inline void write_reg(u32 reg, u32 value)
@@ -83,12 +87,13 @@ void lapic_enable(uintptr_t addr) {
     printf("BSP local APIC enabled\n");
 }
 
+
+
 volatile u8 aprunning;
 u8 bspdone;
 
 int ap_init(u8 numcores)
 {
-    int i;
     u8 bspid;
     extern void ap_tramp(void);
 
@@ -96,44 +101,41 @@ int ap_init(u8 numcores)
     // copy the AP trampoline code to a fixed address in low memory
     memcpy((void*)0x8000, (void*)ap_tramp, 4096);
 
-    volatile u8 *base = (volatile u8*)lapic_base;
+    const u32 base = lapic_base;
+    volatile u32 *const ap_select = (volatile u32* const)(base + ICR_SELECT);
+    volatile u32 *const ipi_data = (volatile u32* const)(base + ICR_DATA);
 
-    for (i = 0; i < numcores; i++) {
+    for (int i = 0; i < numcores; i++) {
         if (i == bspid)
             continue;
 
         // send INIT IPI
-        *((volatile u32*)(base + 0x280)) = 0;                             // clear APIC errors
-        *((volatile u32*)(base + 0x310)) =
-            (*((volatile u32*)(base + 0x310)) & 0x00ffffff) | (i << 24);  // select AP
-        *((volatile u32*)(base + 0x300)) =
-            (*((volatile u32*)(base + 0x300)) & 0xfff00000) | 0x00C500;   // trigger INIT IPI
+
+        *((volatile u32*)(base + 0x280)) = 0;               // clear errors
+        *ap_select = (*ap_select & 0x00ffffff) | (i << 24); // select AP
+        *ipi_data = (*ipi_data & 0xfff00000) | 0x00C500;    // INIT IPI
 
         do {
             asm volatile ("pause" : : : "memory");
-        } while (*((volatile u32*)(base + 0x300)) & (1 << 12));         // wait for delivery
+        } while (*ipi_data & (1 << 12));                    // wait for deliv
 
-        *((volatile u32*)(base + 0x310)) =
-            (*((volatile u32*)(base + 0x310)) & 0x00ffffff) | (i << 24);         // select AP
-        *((volatile u32*)(base + 0x300)) =
-            (*((volatile u32*)(base + 0x300)) & 0xfff00000) | 0x008500;          // deassert
+        *ap_select = (*ap_select & 0x00ffffff) | (i << 24);
+        *ipi_data = (*ipi_data & 0xfff00000) | 0x008500;    // deassert
 
         do {
             asm volatile ("pause" : : : "memory");
-        } while (*((volatile u32*)(base + 0x300)) & (1 << 12));         // wait for delivery
-        sleep(10);                                                               // wait 10 msec
+        } while (*ipi_data & (1 << 12));
+        sleep(10);                                          // wait
 
         // send STARTUP IPI
-        *((volatile u32*)(base + 0x280)) = 0;                             // clear APIC errors
-        *((volatile u32*)(base + 0x310)) =
-            (*((volatile u32*)(base + 0x310)) & 0x00ffffff) | (i << 24); // select AP
-        *((volatile u32*)(base + 0x300)) =
-            (*((volatile u32*)(base + 0x300)) & 0xfff0f800) | 0x000608;  // trigger STARTUP IPI for 0800:0000
-        sleep(1);                                                             // wait 200 usec
+        *((volatile u32*)(base + 0x280)) = 0;
+        *ap_select = (*ap_select & 0x00ffffff) | (i << 24);
+        *ipi_data = (*ipi_data & 0xfff0f800) | 0x000608;    // STARTUP IPI
+        sleep(1);                                           // wait 200 usec?
 
         do {
             asm volatile ("pause" : : : "memory");
-        } while (*((volatile u32*)(base + 0x300)) & (1 << 12)); // wait for delivery
+        } while (*ipi_data & (1 << 12)); 
     }
 
     // release the AP spinlocks

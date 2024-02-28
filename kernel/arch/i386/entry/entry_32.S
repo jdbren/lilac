@@ -3,7 +3,7 @@
 .intel_syntax noprefix
 #include <asm/segments.h>
 
-.global jump_usermode
+.globl jump_usermode
 .type jump_usermode, @function
 jump_usermode:
 	push ebp
@@ -25,7 +25,7 @@ jump_usermode:
 	pushf
 	mov eax, [esp]
 	or eax, 0x200
-	mov [esp], eax
+	mov [esp], eax		 # eflags
 	push __USER_CS | 0x3 # cs (ring 3)
 	push ebx			 # eip
 	iretd
