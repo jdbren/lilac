@@ -27,7 +27,7 @@ void idle(void)
         asm("hlt");
 }
 
-void start_process(void)
+static void start_process(void)
 {
     int i = 1;
     printf("Process %d started\n", current->pid);
@@ -44,8 +44,7 @@ void start_process(void)
     if (hdr->sig != ELF_MAGIC) {
         printf("Invalid ELF signature\n");
         return;
-    }
-    else {
+    } else {
         printf("Read %d bytes from %s\n", bytes, path);
     }
     void *jmp = elf32_load(hdr);

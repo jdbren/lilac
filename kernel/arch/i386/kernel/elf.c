@@ -16,6 +16,11 @@ void* elf32_load(void *elf)
         return 0;
     }
 
+    if (hdr->elf32.mach != X86) {
+        printf("Invalid machine type\n");
+        return 0;
+    }
+
     printf("ELF sig: %x\n", hdr->sig);
     printf("Class: %x\n", hdr->class);
     printf("Endian: %x\n", hdr->endian);
@@ -43,20 +48,29 @@ void* elf32_load(void *elf)
 
 
     for (int i = 0; i < hdr->elf32.p_tbl_sz; i++) {
+        if (phdr[i].type != LOAD_SEG)
+            continue;
         if (phdr[i].align > PAGE_BYTES)
             kerror("Alignment greater than page size\n");
-        void *phys = alloc_frames(phdr[i].p_memsz / PAGE_BYTES + 1);
-	    void *vaddr = (void*)phdr[i].p_vaddr;
-        assert((u32)vaddr % PAGE_BYTES == 0);
+        int num_pages = phdr[i].p_memsz / PAGE_BYTES + 1;
+        int flags = PG_USER;
 
-        map_page(phys, vaddr, PG_USER | PG_WRITE);
+        void *phys = alloc_frames(num_pages);
+	    void *vaddr = (void*)(phdr[i].p_vaddr & 0xFFFFF000);
+
+        map_pages(phys, vaddr, PG_USER | PG_WRITE, num_pages);
         printf("Mapped %x to %x\n", phys, vaddr);
-	    memcpy(vaddr, elf, phdr[i].p_memsz);
+
+	    memcpy(vaddr, (u8*)elf + phdr[i].p_offset, phdr[i].p_memsz);
         if (phdr[i].p_filesz < phdr[i].p_memsz)
             memset((void*)(phdr[i].p_vaddr + phdr[i].p_filesz), 0,
                     phdr[i].p_memsz - phdr[i].p_filesz);
-    }
 
+        if (phdr[i].flags & WRIT)
+            flags |= PG_WRITE;
+        unmap_pages(vaddr, num_pages);
+        map_pages(phys, vaddr, flags, num_pages);
+    }
 
     return (void*)hdr->elf32.entry;
 }

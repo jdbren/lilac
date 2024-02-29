@@ -32,6 +32,7 @@ $(KERNEL_ARCH_OBJS) \
 kernel/kmain.o \
 kernel/process.o \
 kernel/sched.o \
+kernel/write.o \
 mm/kheap.o \
 fs/fat32.o \
 fs/vfs.o \

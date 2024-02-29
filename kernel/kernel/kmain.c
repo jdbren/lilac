@@ -22,7 +22,7 @@ void start_kernel(void)
 
 	init_sched(2000);
 
-	struct task *task = create_process("A:/bin/code");
+	struct task *task = create_process("A:/bin/init");
 	schedule_task(task);
 
 

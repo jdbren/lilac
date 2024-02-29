@@ -17,3 +17,5 @@ log.txt
 kbuild.config
 libc/libk.a
 kernel/l.sh
+libc/libc.a
+init/init

@@ -98,7 +98,7 @@ int unmap_pages(void *virtualaddr, int num_pages)
 
 static int pde(int index, u16 flags)
 {
-    static const u8 default_flags = 0x3;
+    static const u8 default_flags = PG_WRITE | 1;
     flags |= default_flags;
 
     void *addr = alloc_frame();

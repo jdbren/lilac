@@ -20,8 +20,8 @@ jump_usermode:
 	mov gs, ax
 
 	# set up iret stack frame
-	push eax 			# ss
-	push edx 			# esp
+	push eax 			 # ss
+	push edx 			 # esp
 	pushf
 	mov eax, [esp]
 	or eax, 0x200
