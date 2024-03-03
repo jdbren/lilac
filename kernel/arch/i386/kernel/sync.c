@@ -28,7 +28,8 @@ spinlock_t *create_lock()
 
     spinlock_t *spin = get_spin();
     if (!spin)
-        spin = kzmalloc(sizeof(spinlock_t));
+        spin = kmalloc(sizeof(spinlock_t));
+    *spin = {0}
     return spin;
 }
 
