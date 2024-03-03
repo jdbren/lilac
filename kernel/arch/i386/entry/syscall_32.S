@@ -11,8 +11,10 @@ sys_call_handler:
     pushl %ebx
     movw $0x10, %bp
     movw %bp, %ds
-    leal syscall_table, %ebp
-    movl (%ebp, %eax, 4), %eax
+    pushl %ebx
+    leal syscall_table, %ebx
+    movl (%ebx, %eax, 4), %eax
+    popl %ebx
     calll *%eax
     popl %ebx
     popl %ecx
@@ -30,9 +32,6 @@ exit:
     ret
 
 read:
-    ret
-
-write:
     ret
 
 open:

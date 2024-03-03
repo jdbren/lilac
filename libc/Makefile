@@ -37,11 +37,14 @@ string/memcmp.o \
 string/memcpy.o \
 string/memmove.o \
 string/memset.o \
+string/strcpy.o \
+string/strcmp.o \
+string/strcat.o \
 string/strlen.o \
 math/log2.o \
-ctype/toupper.o \
+ctype/ctype.o \
 unistd/fork.o \
-unistd/write.o \
+unistd/write.o
 
 HOSTEDOBJS=\
 $(ARCH_HOSTEDOBJS) \

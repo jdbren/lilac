@@ -23,7 +23,7 @@ BOOTDIR=/boot
 LIBDIR=$EXEC_PREFIX/lib
 INCLUDEDIR=$PREFIX/include
 
-CFLAGS='-Og -std=gnu11 -pedantic'
+CFLAGS='-Og -std=gnu11'
 CPPFLAGS=''
 
 SYSROOT="$(pwd)/sysroot"

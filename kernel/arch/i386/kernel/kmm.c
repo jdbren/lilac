@@ -67,24 +67,16 @@ void mm_init(struct multiboot_tag_mmap *mmap, u32 mem_upper)
     printf("Kernel virtual address allocation enabled\n");
 }
 
-void* kvirtual_alloc(int size, int flags)
+static void *find_vaddr(int size)
 {
+    void *ptr = NULL;
     u32 num_pages = size / PAGE_SIZE + 1;
     memory_desc_t *mem_addr = list;
-    void *ptr = NULL;
-
     while (mem_addr) {
-        if (mem_addr->size >= num_pages) {
-            ptr = (void*)(mem_addr->start);
-            __update_list(mem_addr, num_pages);
-
-            void *phys = alloc_frames(num_pages);
-            map_pages(phys, ptr, flags, num_pages);
-            memset(ptr, 0, num_pages * PAGE_SIZE);
-
-            return ptr;
+        if (mem_addr->size >= size) {
+            __update_list(mem_addr, size);
+            return mem_addr->start;
         }
-
         mem_addr = mem_addr->next;
     }
 
@@ -94,16 +86,28 @@ void* kvirtual_alloc(int size, int flags)
         kerror("KERNEL OUT OF VIRTUAL MEMORY");
 
     unused_heap_addr = (u32)unused_heap_addr - num_pages * PAGE_SIZE;
-    void *phys = alloc_frames(num_pages);
-    map_pages(phys, ptr, flags, num_pages);
-    memset(ptr, 0, num_pages * PAGE_SIZE);
+    return ptr;
+}
+
+void* kvirtual_alloc(int size, int flags)
+{
+    int done = 0;
+    u32 num_pages = size / PAGE_SIZE + 1;
+    void *ptr = NULL;
+
+    ptr = find_vaddr(num_pages);
+
+    if (ptr) {
+        void *phys = alloc_frames(num_pages);
+        map_pages(phys, ptr, flags, num_pages);
+        memset(ptr, 0, num_pages * PAGE_SIZE);
+    }
 
     return ptr;
 }
 
-void kvirtual_free(void* addr, int size)
+static void free_vaddr(void *addr, int num_pages)
 {
-    u32 num_pages = size / PAGE_SIZE + 1;
     memory_desc_t *mem_addr = &kernel_avail[get_index((u32)addr)];
     mem_addr->start = (u8*)addr;
     mem_addr->size = num_pages;
@@ -114,7 +118,12 @@ void kvirtual_free(void* addr, int size)
     }
 
     list = mem_addr;
+}
 
+void kvirtual_free(void* addr, int size)
+{
+    int num_pages = size / PAGE_SIZE + 1;
+    free_vaddr(addr, size);
     free_frames(get_physaddr(addr), num_pages);
     unmap_pages(addr, num_pages);
 }
@@ -122,6 +131,27 @@ void kvirtual_free(void* addr, int size)
 int map_to_self(void *addr, int flags)
 {
     return map_page(addr, addr, flags);
+}
+
+void *map_phys(void *to_map, int size, int flags)
+{
+    to_map = (void*)((u32)to_map & 0xFFFFF000);
+    void *virt = find_vaddr(size);
+    map_pages(to_map, virt, flags, size / PAGE_SIZE + 1);
+    return virt;
+}
+
+void unmap_phys(void *addr, int size)
+{
+    int num_pages = size / PAGE_SIZE + 1;
+    addr = (void*)((u32)addr & 0xFFFFF000);
+    free_vaddr(addr, size);
+    unmap_pages(addr, num_pages);
+}
+
+u32 virt_to_phys(void *vaddr)
+{
+    return (u32)get_physaddr(vaddr);
 }
 
 static void __update_list(memory_desc_t *mem_addr, unsigned int num_pages)

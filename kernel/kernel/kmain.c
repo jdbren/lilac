@@ -1,6 +1,6 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include <kernel/kmain.h>
+#include <kernel/lilac.h>
 #include <kernel/types.h>
 #include <kernel/panic.h>
 #include <kernel/process.h>

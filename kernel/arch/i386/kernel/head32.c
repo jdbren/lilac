@@ -1,8 +1,7 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <string.h>
-#include <utility/multiboot2.h>
-#include <kernel/kmain.h>
+#include <kernel/lilac.h>
 #include <kernel/tty.h>
 #include <kernel/panic.h>
 #include <kernel/keyboard.h>
@@ -16,10 +15,10 @@
 #include "timer.h"
 
 
-static struct multiboot_info mbd;
+struct multiboot_info mbd;
 static struct acpi_info acpi;
 
-void parse_multiboot(u32, struct multiboot_info*);
+static void parse_multiboot(u32, struct multiboot_info*);
 
 void kernel_early(unsigned int multiboot)
 {
@@ -27,10 +26,13 @@ void kernel_early(unsigned int multiboot)
 	gdt_init();
 	idt_init();
 	parse_multiboot(multiboot, &mbd);
-	mm_init(mbd.mmap, mbd.meminfo->mem_upper);
-	fs_init(mbd.boot_dev);
 
-	parse_acpi((void*)mbd.acpi->rsdp, &acpi);
+	mm_init(mbd.mmap, mbd.meminfo->mem_upper);
+	parse_acpi((void*)mbd.new_acpi->rsdp, &acpi);
+
+	asm ("hlt");
+
+	fs_init(mbd.boot_dev);
 	apic_init(acpi.madt);
 	keyboard_init();
 	timer_init();
@@ -41,7 +43,7 @@ void kernel_early(unsigned int multiboot)
 	start_kernel();
 }
 
-void parse_multiboot(u32 addr, struct multiboot_info *mbd)
+static void parse_multiboot(u32 addr, struct multiboot_info *mbd)
 {
 	if (addr & 7)
 		kerror("Unaligned mbi:\n");
@@ -52,7 +54,11 @@ void parse_multiboot(u32 addr, struct multiboot_info *mbd)
 		tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag
 			+ ((tag->size + 7) & ~7)))
 	{
+		printf("Tag: %d\n", tag->type);
 		switch (tag->type) {
+			case MULTIBOOT_TAG_TYPE_CMDLINE:
+				mbd->cmdline = ((struct multiboot_tag_string*)tag)->string;
+			break;
 			case MULTIBOOT_TAG_TYPE_BOOT_LOADER_NAME:
 				mbd->bootloader = ((struct multiboot_tag_string*)tag)->string;
 			break;
@@ -65,9 +71,29 @@ void parse_multiboot(u32 addr, struct multiboot_info *mbd)
 			case MULTIBOOT_TAG_TYPE_MMAP:
 				mbd->mmap = (struct multiboot_tag_mmap*)tag;
 			break;
-			case MULTIBOOT_TAG_TYPE_ACPI_OLD:
-				mbd->acpi = (struct multiboot_tag_old_acpi*)tag;
+			case MULTIBOOT_TAG_TYPE_EFI32:
+				mbd->efi32 = (struct multiboot_tag_efi32*)tag;
+			break;
+			// case MULTIBOOT_TAG_TYPE_ACPI_OLD:
+			// 	mbd->old_acpi = (struct multiboot_tag_old_acpi*)tag;
+			// break;
+			case MULTIBOOT_TAG_TYPE_ACPI_NEW:
+				mbd->new_acpi = (struct multiboot_tag_new_acpi*)tag;
+			break;
+			case MULTIBOOT_TAG_TYPE_EFI_MMAP:
+				mbd->efi_mmap = (struct multiboot_tag_efi_mmap*)tag;
+			break;
+			case MULTIBOOT_TAG_TYPE_LOAD_BASE_ADDR:
+				mbd->base_addr = (struct multiboot_tag_load_base_addr*)tag;
+			break;
+			default:
+				printf("Unknown tag: %d\n", tag->type);
 			break;
 		}
 	}
+}
+
+void *get_rsdp()
+{
+	return (void*)mbd.new_acpi->rsdp;
 }

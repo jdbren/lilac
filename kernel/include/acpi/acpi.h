@@ -13,6 +13,19 @@ struct RSDP {
     u32 RsdtAddress;
 } __attribute__((packed));
 
+struct XSDP {
+    char Signature[8];
+    u8 Checksum;
+    char OEMID[6];
+    u8 Revision;
+    u32 RsdtAddress;      // deprecated since version 2.0
+
+    u32 Length;
+    u64 XsdtAddress;
+    u8 ExtendedChecksum;
+    u8 reserved[3];
+} __attribute__((packed));
+
 struct SDTHeader {
     char Signature[4];
     u32 Length;

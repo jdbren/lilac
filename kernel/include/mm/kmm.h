@@ -17,5 +17,8 @@ void mm_init(struct multiboot_tag_mmap *mmap, u32 mem_upper);
 void* kvirtual_alloc(int size, int flags);
 void kvirtual_free(void* addr, int size);
 int map_to_self(void* addr, int flags);
+void *map_phys(void *phys, int size, int flags);
+void unmap_phys(void *addr, int num_pages);
+u32 virt_to_phys(void *vaddr);
 
 #endif
