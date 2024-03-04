@@ -5,7 +5,7 @@
 
 typedef atomic_flag spinlock_t;
 
-#define SPINLOCK_INIT (ATOMIC_FLAG_INIT)
+#define SPINLOCK_INIT ATOMIC_FLAG_INIT
 
 spinlock_t *create_lock();
 void delete_lock(spinlock_t *spin);

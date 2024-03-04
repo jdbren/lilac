@@ -105,6 +105,20 @@ void AcpiOsReleaseLock(ACPI_SPINLOCK Handle, ACPI_CPU_FLAGS Flags)
 ACPI_STATUS AcpiOsInstallInterruptHandler (UINT32 InterruptLevel,
     ACPI_OSD_HANDLER Handler, void *Context)
 {
-    
+
     return AE_OK;
+}
+
+// Print
+void AcpiOsPrintf(const char *Format, ...)
+{
+    va_list Args;
+    va_start(Args, Format);
+    vprintf(Format, Args);
+    va_end(Args);
+}
+
+void AcpiOsVprintf(const char *Format, va_list Args)
+{
+    vprintf(Format, Args);
 }

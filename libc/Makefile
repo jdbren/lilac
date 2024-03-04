@@ -30,6 +30,7 @@ LIBK_CPPFLAGS:=$(LIBK_CPPFLAGS) $(KERNEL_ARCH_CPPFLAGS)
 FREEOBJS=\
 $(ARCH_FREEOBJS) \
 stdio/printf.o \
+stdio/vprintf.o \
 stdio/putchar.o \
 stdio/puts.o \
 stdlib/abort.o \
