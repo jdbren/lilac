@@ -3,22 +3,22 @@
 
 #include <kernel/types.h>
 
-static inline void outb(u16 port, u8 val)
+void outb(u16 port, u8 val)
 {
     asm volatile ("outb %0, %1" : : "a"(val), "Nd"(port) : "memory");
 }
 
-static inline void outw(u16 port, u16 val)
+void outw(u16 port, u16 val)
 {
     asm volatile ("outw %0, %1" : : "a"(val), "Nd"(port) : "memory");
 }
 
-static inline void outl(u16 port, u32 val)
+void outl(u16 port, u32 val)
 {
     asm volatile ("outl %0, %1" : : "a"(val), "Nd"(port) : "memory");
 }
 
-static inline u8 inb(u16 port)
+u8 inb(u16 port)
 {
     u8 ret;
     asm volatile ("inb %1, %0"
@@ -28,7 +28,7 @@ static inline u8 inb(u16 port)
     return ret;
 }
 
-static inline u16 inw(u16 port)
+u16 inw(u16 port)
 {
     u16 ret;
     asm volatile ("inw %1, %0"
@@ -38,7 +38,7 @@ static inline u16 inw(u16 port)
     return ret;
 }
 
-static inline u32 inl(u16 port)
+u32 inl(u16 port)
 {
     u32 ret;
     asm volatile ("inl %1, %0"
@@ -48,7 +48,7 @@ static inline u32 inl(u16 port)
     return ret;
 }
 
-static inline void io_wait(void)
+void io_wait(void)
 {
     asm volatile ("outb %%al, $0x80" : : "a"(0) );
 }

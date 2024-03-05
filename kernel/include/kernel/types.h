@@ -20,6 +20,9 @@ typedef int64_t s64;
 
 #define BITS_PER_LONG 32
 
+#define likely(x)       __builtin_expect(!!(x), 1)
+#define unlikely(x)     __builtin_expect(!!(x), 0)
+
 #include <kernel/sync.h>
 
 #endif

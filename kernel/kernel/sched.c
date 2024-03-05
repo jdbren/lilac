@@ -2,6 +2,7 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <kernel/types.h>
 #include <kernel/process.h>
+#include <kernel/sched.h>
 
 static struct task* task_queue[16];
 static int back;
@@ -14,6 +15,12 @@ extern void arch_context_switch(struct task *prev, struct task *next);
 struct task* get_current_task(void)
 {
     return task_queue[current_task];
+}
+
+void yield(void)
+{
+    sched_timer = timer_reset;
+    schedule();
 }
 
 void schedule_task(struct task *new_task)

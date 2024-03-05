@@ -13,7 +13,7 @@ EXEC_PREFIX?=$(PREFIX)
 BOOTDIR?=$(EXEC_PREFIX)/boot
 INCLUDEDIR?=$(PREFIX)/include
 
-CFLAGS:=$(CFLAGS) -D __lilac__ -ffreestanding -Wall -Wextra # 2>> output.txt
+CFLAGS:=$(CFLAGS) -D __lilac__ -ffreestanding -Wall -Wextra -mgeneral-regs-only
 CPPFLAGS:=$(CPPFLAGS) -D__is_kernel -Iinclude
 LDFLAGS:=$(LDFLAGS)
 LIBS:=$(LIBS) -nostdlib -lk -lgcc
@@ -35,13 +35,17 @@ $(KERNEL_ARCH_OBJS) \
 kernel/kmain.o \
 kernel/process.o \
 kernel/sched.o \
+kernel/list.o \
+kernel/mutex.o \
+kernel/sync.o \
 kernel/write.o \
 mm/kheap.o \
 fs/fat32.o \
 fs/vfs.o \
 acpi/acpi.o \
 acpi/madt.o \
-acpi/osl.o 
+acpi/osl.o \
+$(ACPI_OBJS) \
 
 OBJS=\
 $(ARCHDIR)/boot/crti.o \

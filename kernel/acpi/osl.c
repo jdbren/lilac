@@ -7,9 +7,23 @@
 #include <kernel/lilac.h>
 #include <kernel/types.h>
 #include <kernel/config.h>
+#include <kernel/interrupt.h>
+#include <kernel/io.h>
+#include <kernel/process.h>
+#include <kernel/timer.h>
 #include <mm/kmm.h>
 #include <mm/kheap.h>
 #include "acpica/acpi.h"
+
+ACPI_OSD_HANDLER acpi_isr;
+void *acpi_isr_context;
+
+struct interrupt_frame;
+
+void ISR AcpiInt(struct interrupt_frame *frame)
+{
+    (*acpi_isr)(acpi_isr_context);
+}
 
 ACPI_STATUS AcpiOsInitialize() { return AE_OK; }
 
@@ -75,8 +89,61 @@ BOOLEAN AcpiOsWritable(void *Memory, ACPI_SIZE Length)
 }
 
 // Threads
+ACPI_THREAD_ID AcpiOsGetThreadId()
+{
+    return get_pid();
+}
+
+void AcpiOsSleep(UINT64 Milliseconds)
+{
+    sleep(Milliseconds);
+}
+
+void AcpiOsStall(UINT32 Microseconds)
+{
+    sleep(Microseconds);
+}
 
 // Mutexes, locks, and semaphores
+ACPI_STATUS AcpiOsCreateSemaphore(UINT32 MaxUnits, UINT32 InitialUnits, ACPI_SEMAPHORE *OutHandle)
+{
+    if (!OutHandle)
+        return AE_BAD_PARAMETER;
+    *OutHandle = kmalloc(sizeof(sem_t));
+    sem_init(*OutHandle, InitialUnits);
+    return AE_OK;
+}
+
+ACPI_STATUS AcpiOsDeleteSemaphore(ACPI_SEMAPHORE Handle)
+{
+    if (!Handle)
+        return AE_BAD_PARAMETER;
+    kfree(Handle);
+    return AE_OK;
+}
+
+ACPI_STATUS AcpiOsWaitSemaphore(ACPI_SEMAPHORE Handle, UINT32 Units, UINT16 Timeout)
+{
+    if (!Handle)
+        return AE_BAD_PARAMETER;
+    if (Timeout == ACPI_WAIT_FOREVER)
+        while (Units--)
+            sem_wait(Handle);
+    else
+        while (Units--)
+            sem_wait_timeout(Handle, Timeout);
+    return AE_OK;
+}
+
+ACPI_STATUS AcpiOsSignalSemaphore(ACPI_SEMAPHORE Handle, UINT32 Units)
+{
+    if (!Handle)
+        return AE_BAD_PARAMETER;
+    while (Units--)
+        sem_post(Handle);
+    return AE_OK;
+}
+
 ACPI_STATUS AcpiOsCreateLock(ACPI_SPINLOCK *OutHandle)
 {
     if (!OutHandle)
@@ -105,7 +172,55 @@ void AcpiOsReleaseLock(ACPI_SPINLOCK Handle, ACPI_CPU_FLAGS Flags)
 ACPI_STATUS AcpiOsInstallInterruptHandler (UINT32 InterruptLevel,
     ACPI_OSD_HANDLER Handler, void *Context)
 {
+    acpi_isr = Handler;
+    acpi_isr_context = Context;
+    install_isr(InterruptLevel, AcpiInt);
+    return AE_OK;
+}
 
+ACPI_STATUS AcpiOsRemoveInterruptHandler(UINT32 InterruptLevel,
+    ACPI_OSD_HANDLER Handler)
+{
+    uninstall_isr(InterruptLevel);
+    return AE_OK;
+}
+
+// Port I/O
+ACPI_STATUS AcpiOsReadPort(ACPI_IO_ADDRESS Address, UINT32 *Value, UINT32 Width)
+{
+    switch (Width)
+    {
+        case 8:
+            *Value = inb(Address);
+            break;
+        case 16:
+            *Value = inw(Address);
+            break;
+        case 32:
+            *Value = inl(Address);
+            break;
+        default:
+            return AE_BAD_PARAMETER;
+    }
+    return AE_OK;
+}
+
+ACPI_STATUS AcpiOsWritePort(ACPI_IO_ADDRESS Address, UINT32 Value, UINT32 Width)
+{
+    switch (Width)
+    {
+        case 8:
+            outb(Address, Value);
+            break;
+        case 16:
+            outw(Address, Value);
+            break;
+        case 32:
+            outl(Address, Value);
+            break;
+        default:
+            return AE_BAD_PARAMETER;
+    }
     return AE_OK;
 }
 
@@ -121,4 +236,10 @@ void AcpiOsPrintf(const char *Format, ...)
 void AcpiOsVprintf(const char *Format, va_list Args)
 {
     vprintf(Format, Args);
+}
+
+
+ACPI_STATUS AcpiOsSignal(UINT32 Function, void *Info)
+{
+    return AE_OK;
 }

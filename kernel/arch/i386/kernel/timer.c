@@ -3,7 +3,7 @@
 #include "timer.h"
 #include "apic.h"
 #include "idt.h"
-#include <asm/io.h>
+#include <kernel/io.h>
 
 extern void timer_handler(void);
 extern void init_PIT(int freq);

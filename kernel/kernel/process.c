@@ -27,6 +27,11 @@ void idle(void)
         asm("hlt");
 }
 
+u32 get_pid(void)
+{
+    return current->pid;
+}
+
 static void start_process(void)
 {
     int i = 1;

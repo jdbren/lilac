@@ -2,7 +2,7 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <kernel/types.h>
 #include "pic.h"
-#include <asm/io.h>
+#include <kernel/io.h>
 
 void pic_initialize(void)
 {
