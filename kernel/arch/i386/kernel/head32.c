@@ -6,6 +6,7 @@
 #include <kernel/panic.h>
 #include <kernel/keyboard.h>
 #include <acpi/acpi.h>
+#include <kernel/efi.h>
 #include <mm/kmm.h>
 #include <mm/kheap.h>
 #include "apic.h"
@@ -26,17 +27,19 @@ void kernel_early(unsigned int multiboot)
 	gdt_init();
 	idt_init();
 	parse_multiboot(multiboot, &mbd);
+	printf("Kernel loaded at: %x\n", mbd.base_addr->load_base_addr);
 
-	mm_init(mbd.mmap, mbd.meminfo->mem_upper);
+	mm_init(mbd.efi_mmap);
 	parse_acpi((void*)mbd.new_acpi->rsdp, &acpi);
 
-	asm ("hlt");
-
-	fs_init(mbd.boot_dev);
+	//fs_init(mbd.boot_dev);
 	apic_init(acpi.madt);
 	keyboard_init();
 	timer_init();
 	enable_interrupts();
+
+	while (1)
+		asm ("hlt");
 
 	//ap_init(acpi.madt->core_cnt);
 

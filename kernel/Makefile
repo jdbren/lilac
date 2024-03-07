@@ -45,7 +45,7 @@ fs/vfs.o \
 acpi/acpi.o \
 acpi/madt.o \
 acpi/osl.o \
-$(ACPI_OBJS) \
+
 
 OBJS=\
 $(ARCHDIR)/boot/crti.o \

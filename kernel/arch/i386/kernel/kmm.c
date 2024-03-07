@@ -4,6 +4,7 @@
 #include <utility/multiboot2.h>
 #include <kernel/panic.h>
 #include <kernel/config.h>
+#include <kernel/efi.h>
 #include <mm/kmm.h>
 #include "pgframe.h"
 #include "paging.h"
@@ -34,24 +35,10 @@ static const int KHEAP_PAGES = (KHEAP_MAX_ADDR - KHEAP_START_ADDR) / PAGE_SIZE;
 static const int HEAP_MANAGE_PAGES = KHEAP_PAGES * sizeof(struct memory_desc) / PAGE_SIZE;
 
 // TODO: Add support for greater than 4GB memory
-void mm_init(struct multiboot_tag_mmap *mmap, u32 mem_upper)
+void mm_init(struct multiboot_tag_efi_mmap *mmap)
 {
-    int phys_map_sz = 0;
-    struct multiboot_mmap_entry *entry = mmap->entries;
-    for (u32 i = 0; i < mmap->size; i += mmap->entry_size) {
-        if (entry->type == MULTIBOOT_MEMORY_AVAILABLE) {
-            u32 addr = entry->addr;
-            u32 len = entry->len;
-            if (addr + len > (u32)&_kernel_start) {
-                phys_map_sz = phys_mem_init(addr + len);
-                break;
-            }
-        }
-        entry = (struct multiboot_mmap_entry*)((u32)entry + mmap->entry_size);
-    }
-
-    if (phys_map_sz == 0)
-        kerror("Not enough memory");
+    int phys_map_sz = phys_mem_init(mmap);
+    printf("Phys map sz: %x\n", phys_map_sz);
 
     kernel_avail = (memory_desc_t*)((u32)&_kernel_end + (u32)phys_map_sz);
     list = 0;
@@ -67,14 +54,13 @@ void mm_init(struct multiboot_tag_mmap *mmap, u32 mem_upper)
     printf("Kernel virtual address allocation enabled\n");
 }
 
-static void *find_vaddr(int size)
+static void *find_vaddr(int num_pages)
 {
     void *ptr = NULL;
-    u32 num_pages = size / PAGE_SIZE + 1;
     memory_desc_t *mem_addr = list;
     while (mem_addr) {
-        if (mem_addr->size >= size) {
-            __update_list(mem_addr, size);
+        if (mem_addr->size >= num_pages) {
+            __update_list(mem_addr, num_pages);
             return mem_addr->start;
         }
         mem_addr = mem_addr->next;

@@ -62,6 +62,7 @@ struct madt_info* parse_madt(struct SDTHeader *addr)
         kerror("Invalid MADT\n");
 
     struct MADT *madt = (struct MADT*)addr;
+    printf("lapic: %x\n", madt->LocalApicAddress);
     struct madt_info *info = kzmalloc(sizeof(struct madt_info));
     info->lapic_addr = madt->LocalApicAddress;
 

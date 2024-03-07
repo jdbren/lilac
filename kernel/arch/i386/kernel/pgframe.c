@@ -2,15 +2,19 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <string.h>
 #include <math.h>
-#include "pgframe.h"
-#include "paging.h"
 #include <kernel/panic.h>
 #include <kernel/config.h>
+#include <kernel/efi.h>
+#include "pgframe.h"
+#include "paging.h"
+
 
 #define MEMORY_SPACE 0x100000000ULL // 4GB
 
-#define phys_addr(virt_addr) ((u32)(virt_addr) - __KERNEL_BASE)
+#define get_phys_addr(virt_addr) ((u32)(virt_addr) - __KERNEL_BASE)
 #define check_bit(var,pos) ((var) & (1<<(pos)))
+#define get_index(frame) (((u32)frame - FIRST_PAGE) / (32 * PAGE_SIZE))
+#define get_offset(frame) ((((u32)frame - FIRST_PAGE) / PAGE_SIZE) % 32)
 
 typedef struct {
     u8 pg[PAGE_SIZE];
@@ -30,18 +34,56 @@ static void __free_frame(page_t *frame);
 // bit #i in byte #n define the status of page #n*8+i
 // 0 = free, 1 = used
 
-int phys_mem_init(u32 mem_end)
+int phys_mem_init(struct multiboot_tag_efi_mmap *mmap)
 {
-    KERNEL_SIZE = phys_addr(&_kernel_end) - (u32)&_kernel_start;
-    BITMAP_SIZE = (mem_end - KERNEL_SIZE) / PAGE_SIZE / 32;
-    FIRST_PAGE = (phys_addr((u32)pg_frame_bitmap + BITMAP_SIZE) & 0xFFFFF000) + PAGE_SIZE;
+    u32 phys_map_pgcnt = 0;
+    efi_memory_desc_t *entry = (efi_memory_desc_t*)mmap->efi_mmap;
+    for (u32 i = 0; i < mmap->size; i += mmap->descr_size) {
+        printf("Type: %d\n", entry->type);
+        printf("Phys addr: %x\n", entry->phys_addr);
+        printf("Num pages: %x\n", entry->num_pages);
+        if (entry->phys_addr >= get_phys_addr(&_kernel_end))
+            phys_map_pgcnt += entry->num_pages;
+        entry = (efi_memory_desc_t*)((u32)entry + mmap->descr_size);
+    }
 
-    map_pages((void*)phys_addr(&_kernel_end),
+    BITMAP_SIZE = phys_map_pgcnt / 32;
+    FIRST_PAGE = (get_phys_addr((u32)pg_frame_bitmap + BITMAP_SIZE) & 0xFFFFF000) + PAGE_SIZE;
+
+    map_pages((void*)get_phys_addr(&_kernel_end),
             (void*)pg_frame_bitmap,
             PG_WRITE,
             BITMAP_SIZE / PAGE_SIZE + 1);
     memset(pg_frame_bitmap, 0, BITMAP_SIZE);
 
+    entry = (efi_memory_desc_t*)mmap->efi_mmap;
+    for (u32 i = 0; i < mmap->size; i += mmap->descr_size) {
+        if (entry->type != EFI_CONVENTIONAL_MEMORY &&
+        entry->phys_addr >= get_phys_addr(&_kernel_end)) {
+            u32 index = get_index((void*)entry->phys_addr);
+            u32 offset = get_offset((void*)entry->phys_addr);
+            u32 pg_cnt = entry->num_pages;
+            while (offset < 32 && pg_cnt > 0) {
+                pg_frame_bitmap[index] |= (1 << offset);
+                offset++;
+                pg_cnt--;
+            }
+            index++;
+            while (pg_cnt >= 32) {
+                pg_frame_bitmap[index++] = ~0UL;
+                pg_cnt -= 32;
+            }
+            offset = 0;
+            while (pg_cnt > 0) {
+                pg_frame_bitmap[index] |= (1 << offset++);
+                pg_cnt--;
+            }
+        }
+    }
+
+    printf("BITMAP_SIZE: %x\n", BITMAP_SIZE);
+    printf("FIRST_PAGE: %x\n", FIRST_PAGE);
+    printf("Physical memory initialized\n");
     return (BITMAP_SIZE & 0xfffff000) + PAGE_SIZE;
 }
 
@@ -111,8 +153,8 @@ static void* __do_frame_alloc(int start, int num_pages)
 
 static void __free_frame(page_t *frame)
 {
-    u32 index = ((u32)frame - FIRST_PAGE) / (32 * PAGE_SIZE);
-    u32 offset = (((u32)frame - FIRST_PAGE) / PAGE_SIZE) % 32;
+    u32 index = get_index(frame);
+    u32 offset = get_offset(frame);
 
     pg_frame_bitmap[index] &= ~(1 << offset);
 }

@@ -18,7 +18,7 @@ struct XSDP {
     u8 Checksum;
     char OEMID[6];
     u8 Revision;
-    u32 RsdtAddress;      // deprecated since version 2.0
+    u32 RsdtAddress;      // deprecated since v2.0
 
     u32 Length;
     u64 XsdtAddress;

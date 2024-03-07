@@ -31,7 +31,7 @@ typedef u16 efi_char16_t;		/* UNICODE character */
 typedef u64 efi_physical_addr_t;
 typedef void *efi_handle_t;
 
-typedef guid_t efi_guid_t __attribute__((align(u32)));
+typedef guid_t efi_guid_t __attribute__((align(sizeof(u32))));
 
 #define EFI_GUID(a, b, c, d...) (efi_guid_t){ {					            \
 	(a) & 0xff, ((a) >> 8) & 0xff, ((a) >> 16) & 0xff, ((a) >> 24) & 0xff,	\
@@ -249,7 +249,7 @@ typedef union {
 struct efi_boot_memmap {
 	unsigned long		map_size;
 	unsigned long		desc_size;
-	u32			desc_ver;
+	u32					desc_ver;
 	unsigned long		map_key;
 	unsigned long		buff_size;
 	efi_memory_desc_t	map[];

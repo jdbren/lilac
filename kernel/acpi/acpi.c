@@ -60,8 +60,8 @@ void read_xsdt(struct SDTHeader *xsdt, struct acpi_info *info)
         struct SDTHeader *h = (struct SDTHeader*)other_entries[i];
         map_to_self((void*)((u32)h & 0xFFFFF000), 0x1);
         char sig[5];
-        // if (!memcmp(h->Signature, "APIC", 4))
-        //     info->madt = parse_madt(h);
+        if (!memcmp(h->Signature, "APIC", 4))
+            info->madt = parse_madt(h);
         strncpy(sig, h->Signature, 4);
         sig[4] = 0;
         printf("Signature: %s\n", sig);
