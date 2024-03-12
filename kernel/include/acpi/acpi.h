@@ -46,5 +46,6 @@ struct acpi_info {
 
 int FullAcpiInit(void);
 void parse_acpi(struct RSDP *rsdp, struct acpi_info *info);
+void DisplayAllDevices(void);
 
 #endif

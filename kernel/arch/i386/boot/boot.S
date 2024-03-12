@@ -6,7 +6,7 @@
 
 # Declare constants for the multiboot2 header.
 .set ARCH,     0
-.set HEADLEN,  56
+.set HEADLEN,  76
 .set MAGIC,    MULTIBOOT2_HEADER_MAGIC       # 'magic number' lets bootloader find the header
 .set CHECKSUM, -(MAGIC + ARCH + HEADLEN) # checksum of above, to prove we are multiboot
 
@@ -19,6 +19,15 @@
 .long CHECKSUM
 
 # Declare the multiboot2 header tags.
+.align MULTIBOOT_TAG_ALIGN
+.word MULTIBOOT_HEADER_TAG_FRAMEBUFFER
+.word 0
+.long 20
+.long 1024
+.long 768
+.long 32
+
+.align MULTIBOOT_TAG_ALIGN
 .word MULTIBOOT_HEADER_TAG_INFORMATION_REQUEST
 .word 0
 .long 32 # size
@@ -29,6 +38,7 @@
 .long MULTIBOOT_TAG_TYPE_EFI_MMAP
 .long MULTIBOOT_TAG_TYPE_EFI32_IH
 
+.align MULTIBOOT_TAG_ALIGN
 .word MULTIBOOT_HEADER_TAG_END
 .word 0
 .long 8

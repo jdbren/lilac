@@ -11,6 +11,7 @@ struct multiboot_info {
 	struct multiboot_tag_basic_meminfo *meminfo;
 	struct multiboot_tag_bootdev *boot_dev;
 	struct multiboot_tag_mmap *mmap;
+	struct multiboot_tag_framebuffer *framebuffer;
 	union {
 		struct multiboot_tag_old_acpi *old_acpi;
 		struct multiboot_tag_new_acpi *new_acpi;

@@ -2,6 +2,7 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <string.h>
 #include <stdbool.h>
+#include <limits.h>
 #include <kernel/panic.h>
 #include <acpi/acpi.h>
 #include <acpi/madt.h>
@@ -138,4 +139,38 @@ int FullAcpiInit(void)
 
     printf("ACPICA fully initialized\n");
     return status;
+}
+
+ACPI_STATUS DisplayOneDevice(ACPI_HANDLE ObjHandle, UINT32 Level, void *Context, void **ReturnValue)
+{
+    ACPI_STATUS Status;
+    ACPI_DEVICE_INFO *Info = kzmalloc(sizeof(*Info));
+    ACPI_BUFFER Path;
+    char Buffer[256];
+    Path.Length = sizeof(Buffer);
+    Path.Pointer = Buffer;
+
+    /* Get the full path of this device and print it */
+    Status = AcpiGetName(ObjHandle, ACPI_FULL_PATHNAME, &Path);
+    if (ACPI_SUCCESS (Status))
+        printf("%s\n", Path.Pointer);
+    /* Get the device info for this device and print it */
+    Status = AcpiGetObjectInfo(ObjHandle, &Info);
+    if (ACPI_SUCCESS (Status)) {
+        printf (" HID: %s, ADR: 0x%llx, CLASS CODE: %x\n",
+            Info->HardwareId.String, Info->Address, Info->ClassCode.String);
+    }
+    kfree(Info);
+    *ReturnValue = NULL;
+    return AE_OK;
+}
+
+
+void DisplayAllDevices(void)
+{
+    ACPI_HANDLE SysBusHandle;
+ 	AcpiGetHandle(0, "\\_SB", &SysBusHandle);
+ 	printf("Display of all devices in the namespace:\n");
+ 	AcpiWalkNamespace(ACPI_TYPE_DEVICE, SysBusHandle, INT_MAX,
+ 		DisplayOneDevice, NULL, NULL, NULL);
 }

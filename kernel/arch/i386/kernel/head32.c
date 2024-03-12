@@ -2,6 +2,7 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <string.h>
 #include <kernel/lilac.h>
+#include <kernel/types.h>
 #include <kernel/tty.h>
 #include <kernel/panic.h>
 #include <kernel/keyboard.h>
@@ -25,14 +26,14 @@ static struct efi_info efi;
 static void parse_multiboot(u32, struct multiboot_info*);
 static void parse_efi(u32 addr, struct efi_info *efi);
 
-
 void kernel_early(unsigned int multiboot)
 {
-	terminal_init();
 	gdt_init();
 	idt_init();
 	parse_multiboot(multiboot, &mbd);
 	mm_init(mbd.efi_mmap);
+	graphics_init(mbd.framebuffer);
+	printf("New line\n");
 
 	parse_acpi((void*)mbd.new_acpi->rsdp, &acpi);
 	apic_init(acpi.madt);
@@ -45,9 +46,12 @@ void kernel_early(unsigned int multiboot)
 	// enable_interrupts();
 
 	FullAcpiInit();
+	DisplayAllDevices();
 	// fs_init(mbd.boot_dev);
 
 	printf("System Timer: %d\n", get_sys_time());
+
+
 
 	while (1)
 		asm ("hlt");
@@ -63,7 +67,7 @@ static void parse_multiboot(u32 addr, struct multiboot_info *mbd)
 		kerror("Unaligned mbi:\n");
 
 	struct multiboot_tag *tag;
-	for (tag = (struct multiboot_tag *) (addr + 8);
+	for (tag = (struct multiboot_tag *)(addr + 8);
 		tag->type != MULTIBOOT_TAG_TYPE_END;
 		tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag
 			+ ((tag->size + 7) & ~7)))
@@ -83,6 +87,16 @@ static void parse_multiboot(u32 addr, struct multiboot_info *mbd)
 			break;
 			case MULTIBOOT_TAG_TYPE_MMAP:
 				mbd->mmap = (struct multiboot_tag_mmap*)tag;
+			break;
+			case MULTIBOOT_TAG_TYPE_FRAMEBUFFER:
+				mbd->framebuffer = (struct multiboot_tag_framebuffer*)tag;
+				printf("Frame address: 0x%x\n", mbd->framebuffer->common.framebuffer_addr);
+				printf("Framebuffer: %dx%d\n",
+					mbd->framebuffer->common.framebuffer_width,
+					mbd->framebuffer->common.framebuffer_height);
+				printf("Framebuffer: %d bpp\n", mbd->framebuffer->common.framebuffer_bpp);
+				printf("Framebuffer: %d pitch\n", mbd->framebuffer->common.framebuffer_pitch);
+				printf("Framebuffer type: 0x%x\n", mbd->framebuffer->common.framebuffer_type);
 			break;
 			case MULTIBOOT_TAG_TYPE_EFI32:
 				mbd->efi32 = (struct multiboot_tag_efi32*)tag;

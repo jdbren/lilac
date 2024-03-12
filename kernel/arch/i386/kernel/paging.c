@@ -49,7 +49,7 @@ int map_pages(void *physaddr, void *virtualaddr, u16 flags, int num_pages)
     flags |= 1;
     for (int i = 0; i < num_pages; i++, physaddr = (u8*)physaddr + PAGE_BYTES,
     virtualaddr = (u8*)virtualaddr + PAGE_BYTES) {
-        //printf("mapping %x to %x\n", physaddr, virtualaddr);
+        // printf("mapping %x to %x\n", physaddr, virtualaddr);
         assert(is_aligned(physaddr, PAGE_BYTES));
         assert(is_aligned(virtualaddr, PAGE_BYTES));
 

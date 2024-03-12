@@ -195,6 +195,10 @@ void AcpiOsReleaseLock(ACPI_SPINLOCK Handle, ACPI_CPU_FLAGS Flags)
 ACPI_STATUS AcpiOsInstallInterruptHandler (UINT32 InterruptLevel,
     ACPI_OSD_HANDLER Handler, void *Context)
 {
+    static int calls = 0;
+    calls++;
+    if (calls > 1)
+        printf("WARNING: Multiple calls to AcpiOsInstallInterruptHandler\n");
     acpi_isr = Handler;
     acpi_isr_context = Context;
     install_isr(InterruptLevel, &AcpiInt);

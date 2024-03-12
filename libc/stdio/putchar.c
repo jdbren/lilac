@@ -10,7 +10,7 @@ int putchar(int ic) {
 	char c = (char) ic;
 #if defined(__is_libk)
 	outb(0xe9, c);
-	terminal_write(&c, sizeof(c));
+	graphics_putchar(c);
 #else
 	// TODO: Implement stdio and the write system call.
 	write(1, &c, sizeof(c));
