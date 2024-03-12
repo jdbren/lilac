@@ -71,7 +71,8 @@ struct madt_info* parse_madt(struct SDTHeader *addr)
     struct int_override *intptr;
     struct ioapic_nmi *ionmiptr;
     struct lapic_nmi *lnmiptr;
-    for (; (u32)entry < (u32)madt + madt->header.Length; entry = (struct MADTEntry*)((u32)entry + entry->Length)) {
+    for (; (u32)entry < (u32)madt + madt->header.Length;
+    entry = (struct MADTEntry*)((u32)entry + entry->Length)) {
         switch (entry->Type) {
             case 0:
                 info->core_cnt++;

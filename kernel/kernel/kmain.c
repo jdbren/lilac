@@ -20,7 +20,7 @@ void start_kernel(void)
 	// printf("Page directory entry 768: %x\n", ((u32*)0xFFFFF000)[768]);
 	//jump_usermode((u32)jmp);
 
-	init_sched(2000);
+	
 
 	struct task *task = create_process("A:/bin/init");
 	schedule_task(task);

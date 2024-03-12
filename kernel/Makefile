@@ -44,8 +44,9 @@ fs/fat32.o \
 fs/vfs.o \
 acpi/acpi.o \
 acpi/madt.o \
+acpi/hpet.o \
 acpi/osl.o \
-
+$(ACPI_OBJS) \
 
 OBJS=\
 $(ARCHDIR)/boot/crti.o \

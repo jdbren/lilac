@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <ctype.h>
 #include <limits.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -14,7 +15,7 @@ static bool print(const char* data, size_t length)
 	return true;
 }
 
-char *convert(unsigned int num, int base)
+char *convert(unsigned long long num, int base)
 {
     static char Representation[]= "0123456789ABCDEF";
     static char buffer[50];
@@ -33,7 +34,7 @@ char *convert(unsigned int num, int base)
 
 int vprintf(register const char *restrict format, va_list args)
 {
-	int written = 0;
+	register int written = 0;
 
 	while (*format != '\0') {
 		size_t maxrem = INT_MAX - written;
@@ -56,7 +57,9 @@ int vprintf(register const char *restrict format, va_list args)
 		}
 
 		const char* format_begun_at = format++;
-
+		while (*format == '-' || *format == '+' || *format == ' ' ||
+		*format == '#' || *format == '0'|| isdigit(*format) || *format == '.')
+			format++;
 		if (*format == 'c') {
 			format++;
 			char c = (char) va_arg(args, int /* char promotes to int */);
@@ -83,7 +86,7 @@ int vprintf(register const char *restrict format, va_list args)
 		else if (*format == 'd') {
 			format++;
 			int i = va_arg(args, int);
-			if (i<0) {
+			if (i < 0) {
 				i = -i;
 				putchar('-');
 			}
@@ -93,16 +96,73 @@ int vprintf(register const char *restrict format, va_list args)
 				return -1;
 			written += len;
 		}
-		else if (*format == 'x') {
+		else if (*format == 'x' || *format == 'p' || *format == 'X') {
 			format++;
-			int i = va_arg(args, int);
+			unsigned int i = va_arg(args, unsigned int);
 			char *s = convert(i, 16);
-			*--s = 'x';
-			*--s = '0';
 			int len = strlen(s);
 			if (!print(s, len))
 				return -1;
 			written += len;
+		}
+		else if (*format == 'u') {
+			format++;
+			unsigned int i = va_arg(args, unsigned int);
+			char *s = convert(i, 10);
+			int len = strlen(s);
+			if (!print(s, len))
+				return -1;
+			written += len;
+		}
+		else if (*format == 'l') {
+			format++;
+			if (*format == 'l') {
+				format++;
+				if (*format == 'd') {
+					format++;
+					long long i = va_arg(args, long long);
+					if (i < 0) {
+						i = -i;
+						putchar('-');
+					}
+					char *s = convert(i, 10);
+					int len = strlen(s);
+					if (!print(s, len))
+						return -1;
+					written += len;
+				}
+				else if (*format == 'x') {
+					format++;
+					long long i = va_arg(args, long long);
+					char *s = convert(i, 16);
+					int len = strlen(s);
+					if (!print(s, len))
+						return -1;
+					written += len;
+				}
+			}
+			else if (*format == 'd') {
+				format++;
+				long i = va_arg(args, long);
+				if (i<0) {
+					i = -i;
+					putchar('-');
+				}
+				char *s = convert(i, 10);
+				int len = strlen(s);
+				if (!print(s, len))
+					return -1;
+				written += len;
+			}
+			else if (*format == 'x') {
+				format++;
+				long i = va_arg(args, long);
+				char *s = convert(i, 16);
+				int len = strlen(s);
+				if (!print(s, len))
+					return -1;
+				written += len;
+			}
 		}
 		else {
 			format = format_begun_at;

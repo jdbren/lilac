@@ -11,4 +11,9 @@
 #define ACPI_CACHE_T                ACPI_MEMORY_LIST
 #define ACPI_USE_LOCAL_CACHE        1
 
+#define ACPI_SEMAPHORE              sem_t*
+#define ACPI_SPINLOCK               spinlock_t*
+
+//#define ACPI_DEBUG_OUTPUT
+
 #endif

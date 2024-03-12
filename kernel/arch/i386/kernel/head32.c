@@ -5,6 +5,8 @@
 #include <kernel/tty.h>
 #include <kernel/panic.h>
 #include <kernel/keyboard.h>
+#include <kernel/timer.h>
+#include <kernel/sched.h>
 #include <acpi/acpi.h>
 #include <kernel/efi.h>
 #include <mm/kmm.h>
@@ -18,8 +20,11 @@
 
 struct multiboot_info mbd;
 static struct acpi_info acpi;
+static struct efi_info efi;
 
 static void parse_multiboot(u32, struct multiboot_info*);
+static void parse_efi(u32 addr, struct efi_info *efi);
+
 
 void kernel_early(unsigned int multiboot)
 {
@@ -27,16 +32,22 @@ void kernel_early(unsigned int multiboot)
 	gdt_init();
 	idt_init();
 	parse_multiboot(multiboot, &mbd);
-	printf("Kernel loaded at: %x\n", mbd.base_addr->load_base_addr);
-
 	mm_init(mbd.efi_mmap);
-	parse_acpi((void*)mbd.new_acpi->rsdp, &acpi);
 
-	//fs_init(mbd.boot_dev);
+	parse_acpi((void*)mbd.new_acpi->rsdp, &acpi);
 	apic_init(acpi.madt);
 	keyboard_init();
-	timer_init();
-	enable_interrupts();
+	timer_init(1, acpi.hpet); // 1ms interval
+
+	printf("System Timer: %d\n", get_sys_time());
+
+	sched_init(500);
+	// enable_interrupts();
+
+	FullAcpiInit();
+	// fs_init(mbd.boot_dev);
+
+	printf("System Timer: %d\n", get_sys_time());
 
 	while (1)
 		asm ("hlt");
@@ -57,7 +68,6 @@ static void parse_multiboot(u32 addr, struct multiboot_info *mbd)
 		tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag
 			+ ((tag->size + 7) & ~7)))
 	{
-		printf("Tag: %d\n", tag->type);
 		switch (tag->type) {
 			case MULTIBOOT_TAG_TYPE_CMDLINE:
 				mbd->cmdline = ((struct multiboot_tag_string*)tag)->string;
@@ -90,13 +100,14 @@ static void parse_multiboot(u32 addr, struct multiboot_info *mbd)
 				mbd->base_addr = (struct multiboot_tag_load_base_addr*)tag;
 			break;
 			default:
-				printf("Unknown tag: %d\n", tag->type);
+				printf("Unknown multiboot tag: %d\n", tag->type);
 			break;
 		}
 	}
+	printf("Kernel loaded at: 0x%x\n", mbd->base_addr->load_base_addr);
 }
 
-void *get_rsdp()
+u32 get_rsdp(void)
 {
-	return (void*)mbd.new_acpi->rsdp;
+	return virt_to_phys((void*)mbd.new_acpi->rsdp);
 }

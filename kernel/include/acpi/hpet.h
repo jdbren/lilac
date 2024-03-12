@@ -1,0 +1,38 @@
+#ifndef _ACPI_HPET_H
+#define _ACPI_HPET_H
+
+#include <acpi/acpi.h>
+
+struct addr_struct {
+    u8 address_space_id;    // 0 - system memory, 1 - system I/O
+    u8 register_bit_width;
+    u8 register_bit_offset;
+    u8 reserved;
+    u64 address;
+} __attribute__((packed));
+
+struct hpet {
+    struct SDTHeader header;
+    u8 hardware_rev_id;
+    u8 comparator_count:5;
+    u8 counter_size:1;
+    u8 reserved:1;
+    u8 legacy_replacement:1;
+    u16 pci_vendor_id;
+    struct addr_struct address;
+    u8 hpet_number;
+    u16 minimum_tick;
+    u8 page_protection;
+} __attribute__((packed));
+
+struct hpet_info {
+    u64 address;
+    u8 comparator_count;
+    u8 hpet_number;
+    u16 minimum_tick;
+    u8 page_protection;
+};
+
+struct hpet_info *parse_hpet(struct SDTHeader *addr);
+
+#endif

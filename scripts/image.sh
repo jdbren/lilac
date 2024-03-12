@@ -3,8 +3,8 @@ set -euo pipefail
 
 gmake -s install
 
-disk=$(hdiutil attach disk.img)
+disk=$(hdiutil attach uefi.img)
 disk="${disk%% *}"
-cp -r sysroot/* /Volumes/MYOS
+cp -r sysroot/* /Volumes/OS
 hdiutil detach "$disk"
 sync

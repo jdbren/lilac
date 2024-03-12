@@ -49,6 +49,7 @@ int map_pages(void *physaddr, void *virtualaddr, u16 flags, int num_pages)
     flags |= 1;
     for (int i = 0; i < num_pages; i++, physaddr = (u8*)physaddr + PAGE_BYTES,
     virtualaddr = (u8*)virtualaddr + PAGE_BYTES) {
+        //printf("mapping %x to %x\n", physaddr, virtualaddr);
         assert(is_aligned(physaddr, PAGE_BYTES));
         assert(is_aligned(virtualaddr, PAGE_BYTES));
 
@@ -76,6 +77,7 @@ int map_pages(void *physaddr, void *virtualaddr, u16 flags, int num_pages)
 int unmap_pages(void *virtualaddr, int num_pages)
 {
     for (int i = 0; i < num_pages; i++, virtualaddr = (u8*)virtualaddr + PAGE_BYTES) {
+        //printf("unmapping %x\n", virtualaddr);
         assert(is_aligned(virtualaddr, PAGE_BYTES));
 
         u32 pdindex = (u32)virtualaddr >> 22;
@@ -88,7 +90,7 @@ int unmap_pages(void *virtualaddr, int num_pages)
         if (!pt[ptindex] & 0x1)
             return 1;
 
-        pt[ptindex] &= ~1; // set not present
+        pt[ptindex] = 0; // set not present
 
         __native_flush_tlb_single((u32)virtualaddr);
     }

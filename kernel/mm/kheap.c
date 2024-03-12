@@ -18,7 +18,7 @@
 #define is_aligned(POINTER, BYTE_COUNT) \
     (((uintptr_t)(POINTER)) % (BYTE_COUNT) == 0)
 
-#define SUPERBLOCKSIZE (PAGE_SIZE * 8)
+#define SUPERBLOCKSIZE PAGE_SIZE
 #define SUPERBLOCKPAGES (SUPERBLOCKSIZE / PAGE_SIZE)
 #define BUCKETS 13
 

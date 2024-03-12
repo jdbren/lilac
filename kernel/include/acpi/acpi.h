@@ -40,9 +40,11 @@ struct SDTHeader {
 
 struct acpi_info {
     struct madt_info *madt;
+    struct hpet_info *hpet;
     // struct facp_info *facp;
 };
 
+int FullAcpiInit(void);
 void parse_acpi(struct RSDP *rsdp, struct acpi_info *info);
 
 #endif

@@ -5,7 +5,7 @@
 
 void yield(void);
 void schedule(void);
-void init_sched(int timer);
+void sched_init(int timer);
 struct task *create_process(const char *path);
 void schedule_task(struct task *new_task);
 struct task *get_current_task(void);

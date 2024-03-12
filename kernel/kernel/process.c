@@ -8,8 +8,8 @@
 #include <kernel/panic.h>
 #include <kernel/elf.h>
 #include <kernel/sched.h>
+#include <mm/kmm.h>
 #include <mm/kheap.h>
-#include <mm/asm.h>
 #include <fs/vfs.h>
 #include "timer.h"
 
@@ -86,7 +86,6 @@ struct task* init_process(void)
 
     this->pid = 1;
     this->pgd = arch_get_pgd();
-    printf("Page directory: %x\n", this->pgd);
     this->ppid = 0;
     this->priority = 0;
     memcpy(this->name, "_init", 6);

@@ -3,24 +3,17 @@
 #ifndef _KERNEL_LILAC_H
 #define _KERNEL_LILAC_H
 
-#include <utility/multiboot2.h>
+#include <kernel/types.h>
+#include <kernel/boot.h>
+#include <acpi/acpi.h>
 
-struct multiboot_info {
-	char *cmdline;
-	char *bootloader;
-	struct multiboot_tag_basic_meminfo *meminfo;
-	struct multiboot_tag_bootdev *boot_dev;
-	struct multiboot_tag_mmap *mmap;
-	union {
-		struct multiboot_tag_old_acpi *old_acpi;
-		struct multiboot_tag_new_acpi *new_acpi;
-	};
-    struct multiboot_tag_efi32 *efi32;
-	struct multiboot_tag_efi_mmap *efi_mmap;
-	struct multiboot_tag_load_base_addr *base_addr;
+struct boot_info {
+	struct multiboot_info mbd;
+	struct acpi_info acpi;
+	struct efi_info efi;
+	u64 rsdp;
 };
 
 void start_kernel(void);
-void *get_rsdp();
 
 #endif

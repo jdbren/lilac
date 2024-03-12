@@ -4,10 +4,6 @@
 #include <stdio.h>
 #include <string.h>
 
-char *convert(unsigned int num, int base);
-
-
-
 int printf(const char* restrict format, ...)
 {
 	int written = 0;

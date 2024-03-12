@@ -5,18 +5,16 @@
 #include <kernel/panic.h>
 #include <acpi/acpi.h>
 #include <acpi/madt.h>
+#include <acpi/hpet.h>
 #include <mm/kmm.h>
 #include <mm/kheap.h>
+#include "acpica/acpi.h"
 
 static bool doChecksum(struct SDTHeader *tableHeader)
 {
     unsigned char sum = 0;
-
     for (int i = 0; i < tableHeader->Length; i++)
         sum += ((char *) tableHeader)[i];
-
-    printf("Checksum: %d\n", sum);
-
     return sum == 0;
 }
 
@@ -51,42 +49,30 @@ void read_xsdt(struct SDTHeader *xsdt, struct acpi_info *info)
         kerror("Invalid XSDT\n");
 
     int entries = (xsdt->Length - sizeof(*xsdt)) / 8;
-    printf("Entries: %d\n", entries);
-    printf("XSDT: %x\n", xsdt);
 
     u64 *other_entries = (u64*)((u32)xsdt + sizeof(*xsdt));
-    printf("Other entries: %x\n", other_entries);
     for (int i = 0; i < entries; i++) {
         struct SDTHeader *h = (struct SDTHeader*)other_entries[i];
         map_to_self((void*)((u32)h & 0xFFFFF000), 0x1);
         char sig[5];
-        if (!memcmp(h->Signature, "APIC", 4))
-            info->madt = parse_madt(h);
         strncpy(sig, h->Signature, 4);
         sig[4] = 0;
         printf("Signature: %s\n", sig);
+        if (!memcmp(h->Signature, "APIC", 4))
+            info->madt = parse_madt(h);
+        if (!memcmp(h->Signature, "HPET", 4))
+            info->hpet = parse_hpet(h);
+        unmap_from_self((void*)((u32)h & 0xFFFFF000));
     }
 }
 
 void parse_acpi(struct RSDP *rsdp, struct acpi_info *info)
 {
-    char sig[9];
-    char oemid[7];
-
     u8 check = 0;
     for (u32 i = 0; i < sizeof(*rsdp); i++)
         check += ((char *)rsdp)[i];
     if ((u8)(check) != 0)
         kerror("Checksum is incorrect\n");
-
-    strncpy(sig, rsdp->Signature, 8);
-    strncpy(oemid, rsdp->OEMID, 6);
-    sig[8] = 0;
-    oemid[6] = 0;
-
-    printf("revision: %d\n", rsdp->Revision);
-    printf("Signature: %s\n", sig);
-    printf("OEMID: %s\n", oemid);
 
     if (rsdp->Revision == 2) {
         struct XSDP *xsdp = (struct XSDP*)rsdp;
@@ -96,13 +82,60 @@ void parse_acpi(struct RSDP *rsdp, struct acpi_info *info)
         if ((u8)(check) != 0)
             kerror("Checksum is incorrect\n");
 
-        printf("XSDT Length: %d\n", xsdp->Length);
-        printf("XSDT XsdtAddress: %x\n", xsdp->XsdtAddress);
-
         map_to_self((void*)((u32)(xsdp->XsdtAddress) & 0xFFFFF000), 0x1);
-
         read_xsdt((struct SDTHeader*)((u32)(xsdp->XsdtAddress)), info);
+        unmap_from_self((void*)((u32)(xsdp->XsdtAddress) & 0xFFFFF000));
     }
 
     //read_rsdt((struct SDTHeader*)rsdp->RsdtAddress, info);
+}
+
+
+int FullAcpiInit(void)
+{
+    ACPI_STATUS status;
+
+    printf("Initializing ACPICA...\n");
+    status = AcpiInitializeSubsystem();
+    if (ACPI_FAILURE(status)) {
+        printf("Error initializing ACPICA\n");
+        return status;
+    }
+
+    printf("ACPICA subsystem initialized\n");
+
+    status = AcpiInitializeTables(NULL, 16, FALSE);
+    if (ACPI_FAILURE(status)) {
+        printf("Error initializing tables\n");
+        return status;
+    }
+
+    printf("ACPICA tables initialized\n");
+
+    status = AcpiLoadTables();
+    if (ACPI_FAILURE(status)) {
+        printf("Error loading tables\n");
+        return status;
+    }
+
+    printf("ACPICA tables loaded\n");
+
+    status = AcpiEnableSubsystem(ACPI_FULL_INITIALIZATION);
+    if (ACPI_FAILURE(status)) {
+        printf("Error enabling subsystem\n");
+        return status;
+    }
+
+    printf("ACPICA subsystem enabled\n");
+
+    status = AcpiInitializeObjects(ACPI_FULL_INITIALIZATION);
+    if (ACPI_FAILURE(status)) {
+        printf("Error initializing objects\n");
+        return status;
+    }
+
+    printf("ACPICA objects initialized\n");
+
+    printf("ACPICA fully initialized\n");
+    return status;
 }

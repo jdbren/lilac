@@ -22,6 +22,7 @@ struct interrupt_frame;
 
 void ISR AcpiInt(struct interrupt_frame *frame)
 {
+    printf("ACPI interrupt\n");
     (*acpi_isr)(acpi_isr_context);
 }
 
@@ -48,17 +49,28 @@ ACPI_STATUS AcpiOsTableOverride(ACPI_TABLE_HEADER *ExistingTable,
     return AE_OK;
 }
 
+ACPI_STATUS AcpiOsPhysicalTableOverride(ACPI_TABLE_HEADER *ExistingTable,
+    ACPI_PHYSICAL_ADDRESS *NewAddress, UINT32 *NewTableLength)
+{
+    *NewAddress = 0;
+    *NewTableLength = 0;
+    return AE_OK;
+}
+
 
 void *AcpiOsMapMemory(ACPI_PHYSICAL_ADDRESS PhysicalAddress, ACPI_SIZE Length)
 {
-    void *ptr = map_phys((void*)PhysicalAddress, Length, PG_WRITE);
+    //printf("ACPI mapping: %x\n", PhysicalAddress);
     int offset = PhysicalAddress & 0xFFF;
+    void *ptr = map_phys((void*)PhysicalAddress, offset + Length, PG_WRITE);
     return (void*)((u32)ptr + offset);
 }
 
 void AcpiOsUnmapMemory(void *where, ACPI_SIZE length)
 {
-    unmap_phys(where, length);
+    //printf("ACPI unmapping: %x\n", where);
+    int offset = (u32)where & 0xFFF;
+    unmap_phys(where, length + offset);
 }
 
 ACPI_STATUS AcpiOsGetPhysicalAddress(void *LogicalAddress,
@@ -70,11 +82,14 @@ ACPI_STATUS AcpiOsGetPhysicalAddress(void *LogicalAddress,
 
 void *AcpiOsAllocate(ACPI_SIZE Size)
 {
-    return kmalloc(Size);
+    void *ptr = kmalloc(Size);
+    //printf("ACPI alloc: %x\n", ptr);
+    return ptr;
 }
 
 void AcpiOsFree(void *Memory)
 {
+    //printf("ACPI free: %x\n", Memory);
     kfree(Memory);
 }
 
@@ -91,7 +106,13 @@ BOOLEAN AcpiOsWritable(void *Memory, ACPI_SIZE Length)
 // Threads
 ACPI_THREAD_ID AcpiOsGetThreadId()
 {
-    return get_pid();
+    return 1;
+}
+
+ACPI_STATUS AcpiOsExecute(ACPI_EXECUTE_TYPE Type, ACPI_OSD_EXEC_CALLBACK Function, void *Context)
+{
+    (*Function)(Context);
+    return AE_OK;
 }
 
 void AcpiOsSleep(UINT64 Milliseconds)
@@ -101,8 +122,10 @@ void AcpiOsSleep(UINT64 Milliseconds)
 
 void AcpiOsStall(UINT32 Microseconds)
 {
-    sleep(Microseconds);
+    sleep(Microseconds / 1000);
 }
+
+void AcpiOsWaitEventsComplete(void) {}
 
 // Mutexes, locks, and semaphores
 ACPI_STATUS AcpiOsCreateSemaphore(UINT32 MaxUnits, UINT32 InitialUnits, ACPI_SEMAPHORE *OutHandle)
@@ -152,7 +175,7 @@ ACPI_STATUS AcpiOsCreateLock(ACPI_SPINLOCK *OutHandle)
     return AE_OK;
 }
 
-void AcpiOsDeleteLock(ACPI_HANDLE Handle)
+void AcpiOsDeleteLock(ACPI_SPINLOCK Handle)
 {
     delete_lock(Handle);
 }
@@ -174,7 +197,7 @@ ACPI_STATUS AcpiOsInstallInterruptHandler (UINT32 InterruptLevel,
 {
     acpi_isr = Handler;
     acpi_isr_context = Context;
-    install_isr(InterruptLevel, AcpiInt);
+    install_isr(InterruptLevel, &AcpiInt);
     return AE_OK;
 }
 
@@ -184,6 +207,58 @@ ACPI_STATUS AcpiOsRemoveInterruptHandler(UINT32 InterruptLevel,
     uninstall_isr(InterruptLevel);
     return AE_OK;
 }
+
+//Memory
+ACPI_STATUS AcpiOsReadMemory(ACPI_PHYSICAL_ADDRESS Address, UINT64 *Value,
+    UINT32 Width)
+{
+    void *addr = map_phys((void*)(Address), PAGE_SIZE, PG_WRITE);
+    switch (Width)
+    {
+        case 8:
+            *Value = *(u8*)addr;
+            break;
+        case 16:
+            *Value = *(u16*)addr;
+            break;
+        case 32:
+            *Value = *(u32*)addr;
+            break;
+        case 64:
+            *Value = *(u64*)addr;
+            break;
+        default:
+            return AE_BAD_PARAMETER;
+    }
+    unmap_phys(addr, PAGE_SIZE);
+    return AE_OK;
+}
+
+ACPI_STATUS AcpiOsWriteMemory(ACPI_PHYSICAL_ADDRESS Address, UINT64 Value,
+    UINT32 Width)
+{
+    void *addr = map_phys((void*)(Address), PAGE_SIZE, PG_WRITE);
+    switch (Width)
+    {
+        case 8:
+            *(u8*)addr = Value;
+            break;
+        case 16:
+            *(u16*)addr = Value;
+            break;
+        case 32:
+            *(u32*)addr = Value;
+            break;
+        case 64:
+            *(u64*)addr = Value;
+            break;
+        default:
+            return AE_BAD_PARAMETER;
+    }
+    unmap_phys(addr, PAGE_SIZE);
+    return AE_OK;
+}
+
 
 // Port I/O
 ACPI_STATUS AcpiOsReadPort(ACPI_IO_ADDRESS Address, UINT32 *Value, UINT32 Width)
@@ -239,7 +314,102 @@ void AcpiOsVprintf(const char *Format, va_list Args)
 }
 
 
+
+// PCI
+#define PCI_CONFIG_ADDRESS 0xCF8
+#define PCI_CONFIG_DATA 0xCFC
+
+u32 pciConfigReadWord(u8 bus, u8 slot, u8 func, u8 offset, u32 width) {
+    if (width == 64) {
+        printf("64-bit PCI configuration not supported\n");
+        return 0;
+    }
+
+    u32 address;
+    u32 lbus  = (u32)bus;
+    u32 lslot = (u32)slot;
+    u32 lfunc = (u32)func;
+    u32 tmp = 0;
+
+    // Create configuration address
+    address = (u32)((lbus << 16) | (lslot << 11) |
+              (lfunc << 8) | (offset & 0xFC) | (1U << 31));
+
+    // Write out the address
+    outl(PCI_CONFIG_ADDRESS, address);
+    // Read in the data
+    switch (width) {
+        case 8:
+            tmp = (inl(PCI_CONFIG_DATA) >> ((offset & 3) * 8)) & 0xFF;
+            break;
+        case 16:
+            tmp = (inl(PCI_CONFIG_DATA) >> ((offset & 2) * 8)) & 0xFFFF;
+            break;
+        case 32:
+            tmp = inl(PCI_CONFIG_DATA);
+            break;
+    }
+    return tmp;
+}
+
+void pciConfigWriteWord(u8 bus, u8 slot, u8 func, u8 offset, u32 data, u32 width) {
+    if (width == 64) {
+        printf("64-bit PCI configuration not supported\n");
+        return;
+    }
+
+    u32 address;
+    u32 lbus  = (u32)bus;
+    u32 lslot = (u32)slot;
+    u32 lfunc = (u32)func;
+
+    // Create configuration address as per Figure 1
+    address = (u32)((lbus << 16) | (lslot << 11) |
+              (lfunc << 8) | (offset & 0xFC) | (1U << 31));
+
+    // Write out the address
+    outl(PCI_CONFIG_ADDRESS, address);
+    switch (width) {
+        case 8:
+            outb(PCI_CONFIG_DATA, (u8)data);
+            break;
+        case 16:
+            outw(PCI_CONFIG_DATA, (u16)data);
+            break;
+        case 32:
+            outl(PCI_CONFIG_DATA, data);
+            break;
+    }
+}
+
+ACPI_STATUS AcpiOsReadPciConfiguration(ACPI_PCI_ID *PciId, UINT32 Register,
+    UINT64 *Value, UINT32 Width)
+{
+    *Value = (u64)pciConfigReadWord(PciId->Bus, PciId->Device, PciId->Function, (u8)Register, Width);
+    return AE_OK;
+}
+
+ACPI_STATUS AcpiOsWritePciConfiguration(ACPI_PCI_ID *PciId, UINT32 Register,
+    UINT64 Value, UINT32 Width)
+{
+    pciConfigWriteWord(PciId->Bus, PciId->Device, PciId->Function, (u8)Register, Value, Width);
+    return AE_OK;
+}
+
+
+// Other
+UINT64 AcpiOsGetTimer(void)
+{
+    return get_sys_time();
+}
+
 ACPI_STATUS AcpiOsSignal(UINT32 Function, void *Info)
+{
+    return AE_OK;
+}
+
+ACPI_STATUS AcpiOsEnterSleep(UINT8 SleepState, UINT32 RegisterAValue,
+    UINT32 RegisterBValue)
 {
     return AE_OK;
 }
