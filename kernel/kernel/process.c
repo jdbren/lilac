@@ -8,8 +8,8 @@
 #include <kernel/panic.h>
 #include <kernel/elf.h>
 #include <kernel/sched.h>
+#include <mm/kmm.h>
 #include <mm/kheap.h>
-#include <mm/asm.h>
 #include <fs/vfs.h>
 #include "timer.h"
 
@@ -27,13 +27,35 @@ void idle(void)
         asm("hlt");
 }
 
-void start_process(void)
+u32 get_pid(void)
 {
+    return current->pid;
+}
+
+static void start_process(void)
+{
+    int i = 1;
     printf("Process %d started\n", current->pid);
-    asm ("sti");
-    while (1) {
-        asm("hlt");
+
+    char *path = current->info->path;
+    int fd = open(path, 0, 0);
+    if (fd < 0) {
+        printf("Failed to open file %s\n", path);
+        return;
     }
+
+    struct elf_header *hdr = kzmalloc(0x1000);
+    int bytes = read(fd, hdr, 0x1000);
+    if (hdr->sig != ELF_MAGIC) {
+        printf("Invalid ELF signature\n");
+        return;
+    } else {
+        printf("Read %d bytes from %s\n", bytes, path);
+    }
+    void *jmp = elf32_load(hdr);
+    arch_user_stack();
+    asm("cli");
+    jump_usermode((u32)jmp, __USER_STACK - 4);
 }
 
 struct task* create_process(const char *path)
@@ -64,10 +86,15 @@ struct task* init_process(void)
 
     this->pid = 1;
     this->pgd = arch_get_pgd();
-    printf("Page directory: %x\n", this->pgd);
     this->ppid = 0;
     this->priority = 0;
     memcpy(this->name, "_init", 6);
 
     return this;
+}
+
+void __do_fork(void)
+{
+    printf("Forking process\n");
+    asm("hlt");
 }

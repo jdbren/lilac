@@ -6,6 +6,7 @@
 #include "pic.h"
 
 #define IDT_SIZE 256
+#define DPL_3 0x60
 
 typedef struct IDTGate {
     u16 offset_low;
@@ -35,10 +36,12 @@ void enable_interrupts(void)
 
 void idt_init(void)
 {
+    extern void sys_call_handler(void);
     idt_entry(0, (u32)div0, 0x08, TRAP_GATE);
     idt_entry(6, (u32)invldop, 0x08, TRAP_GATE);
     idt_entry(13, (u32)gpflt, 0x08, TRAP_GATE);
     idt_entry(14, (u32)pgflt, 0x08, TRAP_GATE);
+    idt_entry(0x80, (u32)sys_call_handler, 0x08, INT_GATE | DPL_3);
 
     // Remap the PIC
     pic_initialize();

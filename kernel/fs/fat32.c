@@ -122,10 +122,12 @@ void fat32_init(int disknum, u32 boot_sector)
 
 static size_t __do_fat32_read(fat_file_t *file, void *file_buf, size_t count)
 {
+    if (count == 0)
+        return 0;
     size_t bytes_read = 0;
     fat_disk_t *disk = &fat_disks[0];
     const int factor = disk->sectors_per_cluster * BYTES_PER_SECTOR;
-    count = (count / factor) * factor;
+    count = count > factor ? (count / factor) * factor : count;
     printf("Reading %d bytes\n", count);
 
     u32 clst = (u32)file->cl_low + (u32)file->cl_high;

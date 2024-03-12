@@ -4,12 +4,18 @@
 #define x86_PGFRAME_H
 
 #include <kernel/types.h>
+#include <utility/multiboot2.h>
 
-int phys_mem_init(u32 mem_end);
+struct phys_mem {
+    u32 addr;
+    u32 len;
+};
+
+int phys_mem_init(struct multiboot_tag_efi_mmap *mmap);
 void *alloc_frames(u32 num_pages);
 void free_frames(void *frame, u32 num_pages);
 
-static inline void *alloc_frame()
+static inline void *alloc_frame(void)
 {
     return alloc_frames(1);
 }

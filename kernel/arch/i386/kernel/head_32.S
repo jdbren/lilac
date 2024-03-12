@@ -47,7 +47,7 @@ startup_32:
 	xorl %eax, %eax				 		# start addr = 0
 
 1:	movl %eax, %esi
-	orl	 $3, %esi					# set present bit and r/w
+	orl	 $3, %esi					# set present and r/w
 	movl %esi, (%edi)				# set page table entry
 	addl $4, %edi					# next page table entry
 	addl $4096, %eax				# next page address
@@ -113,7 +113,7 @@ startup_32:
 	shrl $2, %ecx
 	rep ; stosl
 
-	# Reload cr3 to force a TLB flush so the changes take effect.
+	# Reload cr3 to force a TLB flush.
 	movl %cr3, %ecx
 	movl %ecx, %cr3
 

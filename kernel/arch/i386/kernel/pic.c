@@ -2,7 +2,7 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <kernel/types.h>
 #include "pic.h"
-#include <asm/io.h>
+#include <kernel/io.h>
 
 void pic_initialize(void)
 {
@@ -43,23 +43,27 @@ void pic_remap(int offset1, int offset2)
 {
 	u8 a1, a2;
 
-	a1 = inb(PIC1_DATA);                        // save masks
+	a1 = inb(PIC1_DATA);
 	a2 = inb(PIC2_DATA);
 
-	outb(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);  // starts the initialization sequence (in cascade mode)
+    // start the init sequence (in cascade mode)
+	outb(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);
 	io_wait();
 	outb(PIC2_COMMAND, ICW1_INIT | ICW1_ICW4);
 	io_wait();
-	outb(PIC1_DATA, offset1);                 // ICW2: Master PIC vector offset
+	outb(PIC1_DATA, offset1);
 	io_wait();
-	outb(PIC2_DATA, offset2);                 // ICW2: Slave PIC vector offset
+	outb(PIC2_DATA, offset2);
 	io_wait();
-	outb(PIC1_DATA, 4);                       // ICW3: tell Master PIC that there is a slave PIC at IRQ2 (0000 0100)
+    // ICW3: tell Master PIC that there is a slave PIC at IRQ2 (0000 0100)
+	outb(PIC1_DATA, 4);
 	io_wait();
-	outb(PIC2_DATA, 2);                       // ICW3: tell Slave PIC its cascade identity (0000 0010)
+    // ICW3: tell Slave PIC its cascade identity (0000 0010)
+	outb(PIC2_DATA, 2);
 	io_wait();
 
-	outb(PIC1_DATA, ICW4_8086);               // ICW4: have the PICs use 8086 mode (and not 8080 mode)
+    // ICW4: have the PICs use 8086 mode (and not 8080 mode)
+	outb(PIC1_DATA, ICW4_8086);
 	io_wait();
 	outb(PIC2_DATA, ICW4_8086);
 	io_wait();
@@ -104,10 +108,9 @@ void IRQ_clear_mask(u8 IRQline)
     outb(port, value);
 }
 
-#define PIC_READ_IRR                0x0a    /* OCW3 irq ready next CMD read */
-#define PIC_READ_ISR                0x0b    /* OCW3 irq service next CMD read */
+#define PIC_READ_IRR 0x0a    /* OCW3 irq ready next CMD read */
+#define PIC_READ_ISR 0x0b    /* OCW3 irq service next CMD read */
 
-/* Helper func */
 static u16 __pic_get_irq_reg(int ocw3)
 {
     /* OCW3 to PIC CMD to get the register values.  PIC2 is chained, and

@@ -1,0 +1,7 @@
+Fully featured system timer implementation
+Synchronization primitives checks
+Finish acpica integration
+Make actual scheduler
+Cleanup header files and arch specific functions
+Maybe do better interrupt handler
+Graphics buffer for efi boot

@@ -68,11 +68,12 @@ void ioapic_init(struct ioapic *ioapic, struct int_override *over, u8 num_over)
 void ioapic_entry(u8 irq, u8 vector, u8 flags, u8 dest)
 {
     irq = get_redir_num(irq);
-    redir_entry_t entry;
-    entry.vector = vector;
-    entry.flags = flags;
-    entry.mask = 0;
-    entry.dest = dest;
+    redir_entry_t entry = {
+        .vector = vector,
+        .flags = flags,
+        .mask = 0,
+        .dest = dest
+    };
 
     write_reg(IOAPIC_REDTBL(irq), *(u32*)&entry);
     write_reg(IOAPIC_REDTBL(irq) + 1, *((u32*)&entry + 1));

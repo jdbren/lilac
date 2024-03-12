@@ -11,50 +11,31 @@ IRQ0_ms:                 .skip 32   # Number of whole ms between IRQs
 IRQ0_frequency:          .skip 32   # Actual frequency of PIT
 PIT_reload_value:        .skip 16   # Current PIT reload value
 
+.globl system_timer_fractions
+.globl system_timer_ms
+
 .text
 .global timer_handler
 timer_handler:
-	push eax
-	push ebx
+    pushfd
+    cld
+	pushad
 
-	mov eax, [IRQ0_fractions]
-	mov ebx, [IRQ0_ms]                    # eax.ebx = amount of time between IRQs
-	add [system_timer_fractions], eax     # Update system timer tick fractions
-	adc [system_timer_ms], ebx            # Update system timer tick milli-seconds
+	// mov eax, [IRQ0_fractions]
+	// mov ebx, [IRQ0_ms]                    # eax.ebx = amount of time between IRQs
+	// add [system_timer_fractions], eax     # Update system timer tick fractions
+	// adc [system_timer_ms], ebx            # Update system timer tick milli-seconds
 
-    mov eax, [sched_timer]
-    cmp eax, -1
-    je .sched_done
-    test eax, eax
-    jz run_scheduler
-    dec eax
-    mov [sched_timer], eax
-.sched_done:
-    mov eax, [timer_cnt]
-    test eax, eax
-    jz TimerDone
-    dec eax
-    mov [timer_cnt], eax
-
-TimerDone:
-	xor eax, eax
-    mov ebx, [lapic_base]
-    mov [ebx+0x0b0], eax                  # Send the EOI to the APIC
-
-	pop ebx
-	pop eax
-	iretd
-
-run_scheduler:
     xor eax, eax
     mov ebx, [lapic_base]
-    mov [ebx+0x0b0], eax
-    pushad
-    pushfd
+    mov [ebx+0x0b0], eax                 # Acknowledge the interrupt
+
     call sched_tick
-    popfd
-    popad
-    jmp .sched_done
+
+	popad
+	popfd
+	iretd
+
 
 # Input
 # param 1: desired frequency in Hz

@@ -30,6 +30,7 @@ LIBK_CPPFLAGS:=$(LIBK_CPPFLAGS) $(KERNEL_ARCH_CPPFLAGS)
 FREEOBJS=\
 $(ARCH_FREEOBJS) \
 stdio/printf.o \
+stdio/vprintf.o \
 stdio/putchar.o \
 stdio/puts.o \
 stdlib/abort.o \
@@ -37,9 +38,14 @@ string/memcmp.o \
 string/memcpy.o \
 string/memmove.o \
 string/memset.o \
+string/strcpy.o \
+string/strcmp.o \
+string/strcat.o \
 string/strlen.o \
 math/log2.o \
-ctype/toupper.o
+ctype/ctype.o \
+unistd/fork.o \
+unistd/write.o
 
 HOSTEDOBJS=\
 $(ARCH_HOSTEDOBJS) \
@@ -50,8 +56,7 @@ $(HOSTEDOBJS) \
 
 LIBK_OBJS=$(FREEOBJS:.o=.libk.o)
 
-#BINARIES=libc.a libk.a # Not ready for libc yet.
-BINARIES=libk.a
+BINARIES=libc.a libk.a
 
 .PHONY: all clean install install-headers install-libs
 .SUFFIXES: .o .libk.o .c .S

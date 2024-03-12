@@ -20,11 +20,11 @@ struct GDT {
 } __attribute__((packed));
 
 struct tss_entry {
-	u32 prev_tss; // The previous TSS - with hardware task switching these form a kind of backward linked list.
-	u32 esp0;     // The stack pointer to load when changing to kernel mode.
-	u32 ss0;      // The stack segment to load when changing to kernel mode.
-	// Everything below here is unused.
-	u32 esp1; // esp and ss 1 and 2 would be used when switching to rings 1 or 2.
+	u32 prev_tss; // Used for hardware task switching.
+	u32 esp0;     // Kernel stack pointer.
+	u32 ss0;      // Kernel stack segment.
+	// All else unused
+	u32 esp1;
 	u32 ss1;
 	u32 esp2;
 	u32 ss2;
@@ -74,9 +74,8 @@ void gdt_init(void)
     for (int i = 0; i < GDT_SIZE; i++)
         gdt_entry((u8*)segment_desc + i*8, &gdt_entries[i]);
 
-    tss.ss0 = 0x10;                           // Set the kernel stack segment.
-	asm("\t movl %%esp,%0" : "=r"(tss.esp0)); // Set the kernel stack pointer.
-	//note that CS is loaded from the IDT entry and should be the regular kernel code segment
+    tss.ss0 = 0x10;
+	tss.esp0 = 0x0;
 
     gdt_set(&gdt);
     reload_segments();
@@ -110,7 +109,7 @@ static void gdt_entry(u8 *target, struct gdt_entry *source)
     target[6] |= (source->flags << 4);
 }
 
-void set_kernel_stack(u32 stack)
+void set_tss_esp0(u32 esp)
 {
-	tss.esp0 = stack;
+	tss.esp0 = esp;
 }

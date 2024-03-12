@@ -1,18 +1,17 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <string.h>
-#include <utility/multiboot2.h>
-#include <kernel/kmain.h>
+#include <kernel/lilac.h>
+#include <kernel/types.h>
 #include <kernel/tty.h>
 #include <kernel/panic.h>
 #include <kernel/keyboard.h>
-#include <kernel/elf.h>
-#include <kernel/process.h>
+#include <kernel/timer.h>
+#include <kernel/sched.h>
 #include <acpi/acpi.h>
+#include <kernel/efi.h>
 #include <mm/kmm.h>
 #include <mm/kheap.h>
-#include <fs/vfs.h>
-#include <fs/fat32.h>
 #include "apic.h"
 #include "gdt.h"
 #include "idt.h"
@@ -20,44 +19,63 @@
 #include "timer.h"
 
 
-static struct multiboot_info mbd;
+struct multiboot_info mbd;
 static struct acpi_info acpi;
+static struct efi_info efi;
 
-void parse_multiboot(u32, struct multiboot_info*);
+static void parse_multiboot(u32, struct multiboot_info*);
+static void parse_efi(u32 addr, struct efi_info *efi);
 
 void kernel_early(unsigned int multiboot)
 {
-	terminal_init();
 	gdt_init();
 	idt_init();
 	parse_multiboot(multiboot, &mbd);
-	mm_init(mbd.mmap, mbd.meminfo->mem_upper);
-	fs_init(mbd.boot_dev);
+	mm_init(mbd.efi_mmap);
+	graphics_init(mbd.framebuffer);
+	printf("New line\n");
 
-	parse_acpi((void*)mbd.acpi->rsdp, &acpi);
+	parse_acpi((void*)mbd.new_acpi->rsdp, &acpi);
 	apic_init(acpi.madt);
 	keyboard_init();
-	timer_init();
+	timer_init(1, acpi.hpet); // 1ms interval
 
-	enable_interrupts();
+	printf("System Timer: %d\n", get_sys_time());
+
+	sched_init(500);
+	// enable_interrupts();
+
+	FullAcpiInit();
+	DisplayAllDevices();
+	// fs_init(mbd.boot_dev);
+
+	printf("System Timer: %d\n", get_sys_time());
+
+
+
+	while (1)
+		asm ("hlt");
 
 	//ap_init(acpi.madt->core_cnt);
 
 	start_kernel();
 }
 
-void parse_multiboot(u32 addr, struct multiboot_info *mbd)
+static void parse_multiboot(u32 addr, struct multiboot_info *mbd)
 {
 	if (addr & 7)
 		kerror("Unaligned mbi:\n");
 
 	struct multiboot_tag *tag;
-	for (tag = (struct multiboot_tag *) (addr + 8);
+	for (tag = (struct multiboot_tag *)(addr + 8);
 		tag->type != MULTIBOOT_TAG_TYPE_END;
 		tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag
 			+ ((tag->size + 7) & ~7)))
 	{
 		switch (tag->type) {
+			case MULTIBOOT_TAG_TYPE_CMDLINE:
+				mbd->cmdline = ((struct multiboot_tag_string*)tag)->string;
+			break;
 			case MULTIBOOT_TAG_TYPE_BOOT_LOADER_NAME:
 				mbd->bootloader = ((struct multiboot_tag_string*)tag)->string;
 			break;
@@ -70,35 +88,40 @@ void parse_multiboot(u32 addr, struct multiboot_info *mbd)
 			case MULTIBOOT_TAG_TYPE_MMAP:
 				mbd->mmap = (struct multiboot_tag_mmap*)tag;
 			break;
-			case MULTIBOOT_TAG_TYPE_ACPI_OLD:
-				mbd->acpi = (struct multiboot_tag_old_acpi*)tag;
+			case MULTIBOOT_TAG_TYPE_FRAMEBUFFER:
+				mbd->framebuffer = (struct multiboot_tag_framebuffer*)tag;
+				printf("Frame address: 0x%x\n", mbd->framebuffer->common.framebuffer_addr);
+				printf("Framebuffer: %dx%d\n",
+					mbd->framebuffer->common.framebuffer_width,
+					mbd->framebuffer->common.framebuffer_height);
+				printf("Framebuffer: %d bpp\n", mbd->framebuffer->common.framebuffer_bpp);
+				printf("Framebuffer: %d pitch\n", mbd->framebuffer->common.framebuffer_pitch);
+				printf("Framebuffer type: 0x%x\n", mbd->framebuffer->common.framebuffer_type);
+			break;
+			case MULTIBOOT_TAG_TYPE_EFI32:
+				mbd->efi32 = (struct multiboot_tag_efi32*)tag;
+			break;
+			// case MULTIBOOT_TAG_TYPE_ACPI_OLD:
+			// 	mbd->old_acpi = (struct multiboot_tag_old_acpi*)tag;
+			// break;
+			case MULTIBOOT_TAG_TYPE_ACPI_NEW:
+				mbd->new_acpi = (struct multiboot_tag_new_acpi*)tag;
+			break;
+			case MULTIBOOT_TAG_TYPE_EFI_MMAP:
+				mbd->efi_mmap = (struct multiboot_tag_efi_mmap*)tag;
+			break;
+			case MULTIBOOT_TAG_TYPE_LOAD_BASE_ADDR:
+				mbd->base_addr = (struct multiboot_tag_load_base_addr*)tag;
+			break;
+			default:
+				printf("Unknown multiboot tag: %d\n", tag->type);
 			break;
 		}
 	}
+	printf("Kernel loaded at: 0x%x\n", mbd->base_addr->load_base_addr);
 }
 
-
-void arch_context_switch(struct task *prev, struct task *next)
+u32 get_rsdp(void)
 {
-	printf("Switching from %s to %s\n", prev->name, next->name);
-    asm volatile (
-        "pushfl\n\t"
-        "pushl %%ebp\n\t"
-        "movl %%esp, %[prev_sp]\n\t"
-        "movl %[next_pg], %%eax\n\t"
-        "movl %%eax, %%cr3\n\t"
-        "movl %[next_sp], %%esp\n\t"
-        "movl $1f, %[prev_ip]\n\t"
-        "pushl %[next_ip]\n\t"
-        "ret\n"
-        "1:\t"
-        "popl %%ebp\n\t"
-        "popfl\n\t"
-        : [prev_sp] "=m" (prev->stack),
-          [prev_ip] "=m" (prev->pc)
-        : [next_sp] "m" (next->stack),
-          [next_ip] "m" (next->pc),
-          [next_pg] "m" (next->pgd)
-        :  "memory"
-    );
+	return virt_to_phys((void*)mbd.new_acpi->rsdp);
 }

@@ -9,7 +9,7 @@ lilac.iso
 *.DS_Store
 kernel/.DS_Store
 libc/.DS_Store
-user_code/*
+/user_code
 docs/IntelManual.pdf
 docs/acpica-reference-19.pdf
 debug.txt
@@ -17,3 +17,5 @@ log.txt
 kbuild.config
 libc/libk.a
 kernel/l.sh
+libc/libc.a
+init/init

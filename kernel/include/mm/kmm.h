@@ -13,9 +13,15 @@
 #define PG_WRITE_THROUGH   0x8
 #define PG_CACHE_DISABLE   0x10
 
-void mm_init(struct multiboot_tag_mmap *mmap, u32 mem_upper);
+void mm_init(struct multiboot_tag_efi_mmap *mmap);
 void* kvirtual_alloc(int size, int flags);
 void kvirtual_free(void* addr, int size);
 int map_to_self(void* addr, int flags);
+void unmap_from_self(void* addr);
+void *map_phys(void *phys, int size, int flags);
+void unmap_phys(void *addr, int num_pages);
+u32 virt_to_phys(void *vaddr);
+
+u32 arch_get_pgd(void);
 
 #endif

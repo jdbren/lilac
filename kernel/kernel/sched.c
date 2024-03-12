@@ -2,6 +2,7 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <kernel/types.h>
 #include <kernel/process.h>
+#include <kernel/sched.h>
 
 static struct task* task_queue[16];
 static int back;
@@ -16,13 +17,19 @@ struct task* get_current_task(void)
     return task_queue[current_task];
 }
 
+void yield(void)
+{
+    sched_timer = timer_reset;
+    schedule();
+}
+
 void schedule_task(struct task *new_task)
 {
     task_queue[back++] = new_task;
     printf("Task_queue[%d] = %s\n", back - 1, new_task->name);
 }
 
-void init_sched(int timer)
+void sched_init(int timer)
 {
     struct task *pid1 = init_process();
     back = 0;
@@ -30,6 +37,7 @@ void init_sched(int timer)
     schedule_task(pid1);
     timer_reset = timer;
     sched_timer = timer;
+    printf("Scheduler initialized\n");
 }
 
 static void context_switch(struct task *prev, struct task *next)
@@ -62,7 +70,11 @@ void schedule()
 
 void sched_tick()
 {
-    printf("Running scheduler\n");
+    if (sched_timer > 0) {
+        sched_timer--;
+        return;
+    }
     sched_timer = timer_reset;
-    schedule();
+    printf("Running scheduler\n");
+    //schedule();
 }

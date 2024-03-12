@@ -18,19 +18,21 @@
 #define is_aligned(POINTER, BYTE_COUNT) \
     (((uintptr_t)(POINTER)) % (BYTE_COUNT) == 0)
 
-#define SUPERBLOCKSIZE (PAGE_SIZE * 8)
+#define SUPERBLOCKSIZE PAGE_SIZE
 #define SUPERBLOCKPAGES (SUPERBLOCKSIZE / PAGE_SIZE)
 #define BUCKETS 13
 
-typedef union Alloc alloc_t;
-typedef unsigned char byte;
+typedef union Alloc {
+    void *next;
+    void *data;
+} alloc_t;
 
 struct SBList {
     struct SBHeader *head;
     u32 allocSize;
     u32 freeCount;
     u32 numSB;
-}; // 16 bytes
+};
 
 struct SBHeader {
     struct SBHeader *nextSB;
@@ -44,10 +46,6 @@ struct SBHeader {
     bool isLarge;
 } __attribute__((aligned(32)));
 
-union Alloc {
-    void *next;
-    void *data;
-};
 
 static struct SBList allLists[BUCKETS];
 
@@ -78,7 +76,7 @@ void* kmalloc(size_t size)
     return alloc;
 }
 
-void *kzmalloc(size_t size)
+void* kzmalloc(size_t size)
 {
     void *ptr = kmalloc(size);
     if (ptr != NULL)
@@ -226,7 +224,7 @@ static void* malloc_large(size_t size)
     struct SBHeader *header = (struct SBHeader*)block;
     header->isLarge = true;
     header->numPages = pages;
-    header->free = (alloc_t*)((byte*)header + sizeof(struct SBHeader));
+    header->free = (alloc_t*)((u8*)header + sizeof(struct SBHeader));
     alloc = header->free;
 
     return (void*)alloc;
@@ -237,7 +235,7 @@ static void initSuper(struct SBHeader *header, size_t size, int bucketIndex)
 {
     // make superblock header
     if (size > sizeof(struct SBHeader))
-        header->free = (alloc_t*)((byte*)header + size);
+        header->free = (alloc_t*)((u8*)header + size);
     else
         header->free = (alloc_t*)(header + 1);
     header->allocSize = size;
@@ -250,7 +248,7 @@ static void initSuper(struct SBHeader *header, size_t size, int bucketIndex)
     // make free list
     alloc_t *current = header->free, *next = 0;
     for (int i = 1; i < header->freeCount; i++) {
-        next = (alloc_t*)((byte*)(current) + size);
+        next = (alloc_t*)((u8*)(current) + size);
         current->next = next;
         current = next;
     }

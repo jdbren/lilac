@@ -1,6 +1,6 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include <kernel/kmain.h>
+#include <kernel/lilac.h>
 #include <kernel/types.h>
 #include <kernel/panic.h>
 #include <kernel/process.h>
@@ -8,8 +8,7 @@
 #include <kernel/elf.h>
 #include <mm/kheap.h>
 #include <fs/vfs.h>
-
-void jump_usermode(u32 addr);
+#include "timer.h"
 
 void start_kernel(void)
 {
@@ -21,18 +20,22 @@ void start_kernel(void)
 	// printf("Page directory entry 768: %x\n", ((u32*)0xFFFFF000)[768]);
 	//jump_usermode((u32)jmp);
 
-	init_sched(1000);
+	
 
-	struct task *task = create_process("2nd process");
+	struct task *task = create_process("A:/bin/init");
 	schedule_task(task);
 
-	struct task *task2 = create_process("3rd process");
-	schedule_task(task2);
+
+	// struct task *task2 = create_process("3rd process");
+	// schedule_task(task2);
 
 	// struct task *task3 = create_process("4th process");
 	// schedule_task(task3);
 
     while (1) {
+		sleep(4000);
+		printf("Kernel task running\n");
         asm("hlt");
+		asm("cli");
 	}
 }

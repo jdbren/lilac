@@ -13,7 +13,7 @@ EXEC_PREFIX?=$(PREFIX)
 BOOTDIR?=$(EXEC_PREFIX)/boot
 INCLUDEDIR?=$(PREFIX)/include
 
-CFLAGS:=$(CFLAGS) -ffreestanding -Wall -Wextra
+CFLAGS:=$(CFLAGS) -D __lilac__ -ffreestanding -Wall -Wextra -mgeneral-regs-only
 CPPFLAGS:=$(CPPFLAGS) -D__is_kernel -Iinclude
 LDFLAGS:=$(LDFLAGS)
 LIBS:=$(LIBS) -nostdlib -lk -lgcc
@@ -27,16 +27,26 @@ CPPFLAGS:=$(CPPFLAGS) $(KERNEL_ARCH_CPPFLAGS)
 LDFLAGS:=$(LDFLAGS) $(KERNEL_ARCH_LDFLAGS)
 LIBS:=$(LIBS) $(KERNEL_ARCH_LIBS)
 
+ACPI_OBJS=\
+$(patsubst %.c,%.o,$(wildcard acpi/acpica/*.c))
+
 KERNEL_OBJS=\
 $(KERNEL_ARCH_OBJS) \
 kernel/kmain.o \
 kernel/process.o \
 kernel/sched.o \
+kernel/list.o \
+kernel/mutex.o \
+kernel/sync.o \
+kernel/write.o \
 mm/kheap.o \
 fs/fat32.o \
 fs/vfs.o \
 acpi/acpi.o \
-acpi/madt.o
+acpi/madt.o \
+acpi/hpet.o \
+acpi/osl.o \
+$(ACPI_OBJS) \
 
 OBJS=\
 $(ARCHDIR)/boot/crti.o \
@@ -76,6 +86,7 @@ clean:
 	rm -f lilac.kernel
 	rm -f $(OBJS) *.o */*.o */*/*.o
 	rm -f $(OBJS:.o=.d) *.d */*.d */*/*.d
+	rm -f output.txt
 
 install: install-headers install-kernel
 

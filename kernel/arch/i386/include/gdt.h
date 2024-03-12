@@ -4,5 +4,6 @@
 #define x86_GDT_H
 
 void gdt_init(void);
+void set_tss_esp0(u32 esp0);
 
 #endif
