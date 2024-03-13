@@ -1,11 +1,11 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#ifndef _ASM_MSR_H
-#define _ASM_MSR_H
+#ifndef _MSR_H
+#define _MSR_H
 
 #include <stdbool.h>
 #include <kernel/types.h>
-#include <asm/cpuid.h>
+#include "cpuid.h"
 
 static const u32 CPUID_FLAG_MSR = 1 << 5;
 

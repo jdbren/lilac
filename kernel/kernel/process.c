@@ -8,10 +8,10 @@
 #include <kernel/panic.h>
 #include <kernel/elf.h>
 #include <kernel/sched.h>
+#include <kernel/timer.h>
 #include <mm/kmm.h>
 #include <mm/kheap.h>
 #include <fs/vfs.h>
-#include "timer.h"
 
 #define MAX_TASKS 1024
 #define INIT_STACK(KSTACK) ((u32)KSTACK + __KERNEL_STACK_SZ - sizeof(size_t))

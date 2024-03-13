@@ -1,6 +1,7 @@
 #include <stdatomic.h>
 #include <kernel/sync.h>
 #include <kernel/types.h>
+#include <kernel/process.h>
 #include <kernel/sched.h>
 #include <mm/kheap.h>
 
@@ -90,4 +91,50 @@ void sem_wait_timeout(sem_t *sem, int timeout)
 void sem_post(sem_t *sem)
 {
     atomic_fetch_add_explicit(&sem->count, 1, memory_order_release);
+}
+
+
+/*
+    Mutexes
+*/
+
+void mutex_init(mutex_t *mutex)
+{
+    atomic_init(&mutex->owner, -1);
+    list_init(&mutex->waiters);
+    atomic_init(&mutex->locked, false);
+}
+
+void mutex_lock(mutex_t *mutex)
+{
+    int id = get_pid();
+    if (atomic_load(&mutex->owner) == id)
+        return;
+    while (atomic_exchange(&mutex->locked, true))
+    {
+        list_add(&mutex->waiters, id);
+        yield();
+    }
+    atomic_store(&mutex->owner, id);
+}
+
+void mutex_unlock(mutex_t *mutex)
+{
+    int id = get_pid();
+    if (atomic_load(&mutex->owner) != id)
+        return;
+    atomic_store(&mutex->owner, -1);
+    atomic_store(&mutex->locked, false);
+    if (!list_empty(&mutex->waiters))
+    {
+        int next = list_pop(&mutex->waiters);
+        atomic_store(&mutex->owner, next);
+    }
+}
+
+void mutex_destroy(mutex_t *mutex)
+{
+    list_destroy(&mutex->waiters);
+    atomic_store(&mutex->locked, false);
+    atomic_store(&mutex->owner, -1);
 }

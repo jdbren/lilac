@@ -1,12 +1,27 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
+#include "timer.h"
+
 #include <acpi/hpet.h>
 #include <mm/kmm.h>
 #include <kernel/io.h>
 #include <kernel/panic.h>
-#include "timer.h"
 #include "apic.h"
 #include "idt.h"
+
+#define HPET_ID_REG 0x0
+#define HPET_CONFIG_REG 0x10
+#define HPET_INTR_REG 0x20
+#define HPET_COUNTER_REG 0xf0
+#define HPET_TIMER_CONF_REG(N) (0x100 + 0x20 * N)
+#define HPET_TIMER_COMP_REG(N) (0x108 + 0x20 * N)
+
+struct hpet_id_reg {
+    u8 rev_id;
+    u8 flags;
+    u16 vendor_id;
+    u32 counter_clk_period;
+} __attribute__((packed));
 
 extern void timer_handler(void);
 extern void init_PIT(int freq);

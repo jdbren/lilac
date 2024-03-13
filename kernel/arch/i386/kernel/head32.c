@@ -42,13 +42,13 @@ void kernel_early(unsigned int multiboot)
 	printf("System Timer: %d\n", get_sys_time());
 
 	sched_init(500);
-	enable_interrupts();
+	//enable_interrupts();
 
 	FullAcpiInit();
-	//DisplayAllDevices();
+	DisplayAllDevices();
 	// fs_init(mbd.boot_dev);
 
-	//printf("System Timer: %d\n", get_sys_time());
+	printf("System Timer: %d\n", get_sys_time());
 
 
 

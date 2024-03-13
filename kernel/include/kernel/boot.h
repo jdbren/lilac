@@ -2,7 +2,7 @@
 #define _KERNEL_BOOT_H
 
 #include <kernel/types.h>
-#include <kernel/efi.h>
+#include <utility/efi.h>
 #include <utility/multiboot2.h>
 
 struct multiboot_info {

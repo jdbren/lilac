@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#ifndef _ASM_CPUID_H
-#define _ASM_CPUID_H
+#ifndef _CPUID_H
+#define _CPUID_H
 
 #include <kernel/types.h>
 

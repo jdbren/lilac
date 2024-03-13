@@ -7,7 +7,7 @@ const int tab32[32] = {
     19, 27, 23,  6, 26,  5,  4, 31
 };
 
-int log2 (uint32_t value)
+int log2 (unsigned int value)
 {
     value |= value >> 1;
     value |= value >> 2;

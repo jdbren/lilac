@@ -49,8 +49,8 @@ struct SBHeader {
 
 static struct SBList allLists[BUCKETS];
 
-static void* malloc_small(size_t);
-static void* malloc_large(size_t);
+static void *malloc_small(size_t);
+static void *malloc_large(size_t);
 static void initSuper(struct SBHeader*, size_t, int);
 static struct SBHeader* manageEmptySuperblock(struct SBHeader*, int);
 static void moveToFront(struct SBHeader*, int);
@@ -58,7 +58,7 @@ static void addToFront(struct SBHeader*, int);
 static size_t nextPowerOfTwo(size_t);
 
 
-void* kmalloc(size_t size)
+void *kmalloc(size_t size)
 {
     if (size <= 0) return NULL;
     assert(BUCKETS >= log2(SUPERBLOCKSIZE)-MIN_ALLOC_POWER);
@@ -76,7 +76,7 @@ void* kmalloc(size_t size)
     return alloc;
 }
 
-void* kzmalloc(size_t size)
+void *kzmalloc(size_t size)
 {
     void *ptr = kmalloc(size);
     if (ptr != NULL)
@@ -84,7 +84,7 @@ void* kzmalloc(size_t size)
     return ptr;
 }
 
-void* krealloc(void *addr, size_t size)
+void *krealloc(void *addr, size_t size)
 {
     if (addr == NULL)
         return kmalloc(size);

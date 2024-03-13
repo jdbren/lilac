@@ -6,11 +6,6 @@
 #include <kernel/types.h>
 #include <utility/multiboot2.h>
 
-struct phys_mem {
-    u32 addr;
-    u32 len;
-};
-
 int phys_mem_init(struct multiboot_tag_efi_mmap *mmap);
 void *alloc_frames(u32 num_pages);
 void free_frames(void *frame, u32 num_pages);

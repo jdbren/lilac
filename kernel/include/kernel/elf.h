@@ -95,6 +95,6 @@ struct elf64_pheader {
     uint64_t align;
 } __attribute__((packed));
 
-void* elf32_load(void *elf);
+void *elf32_load(void *elf);
 
 #endif
