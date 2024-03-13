@@ -4,8 +4,9 @@
 #include <string.h>
 #include <kernel/types.h>
 #include <kernel/panic.h>
-#include <asm/cpuid.h>
-#include <asm/msr.h>
+#include <kernel/timer.h>
+#include "cpuid.h"
+#include "msr.h"
 #include "paging.h"
 #include "timer.h"
 #include "idt.h"
@@ -135,7 +136,7 @@ int ap_init(u8 numcores)
 
         do {
             asm volatile ("pause" : : : "memory");
-        } while (*ipi_data & (1 << 12)); 
+        } while (*ipi_data & (1 << 12));
     }
 
     // release the AP spinlocks

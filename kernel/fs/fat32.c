@@ -7,7 +7,7 @@
 #include <kernel/panic.h>
 #include <fs/fat32.h>
 #include <mm/kheap.h>
-#include <asm/diskio.h>
+#include "diskio.h"
 
 #define LONG_FNAME 0x0F
 #define DIR 0x10

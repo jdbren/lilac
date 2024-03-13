@@ -2,9 +2,90 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <stdbool.h>
 #include <string.h>
-#include <kernel/types.h>
 #include <kernel/tty.h>
+#include <kernel/types.h>
+#include <kernel/panic.h>
+#include <mm/kheap.h>
 #include <utility/vga.h>
+#include "paging.h"
+
+#define SSFN_IMPLEMENTATION
+#define SSFN_CONSOLEBITMAP_TRUECOLOR        /* use the special renderer for 32 bit truecolor packed pixels */
+#define SSFN_realloc krealloc
+#define SSFN_free kfree
+
+#include <utility/ssfn.h>
+#include <utility/VGA9.h>
+
+ssfn_t ctx = {0};
+ssfn_buf_t buf;
+
+static void graphics_scroll(void);
+
+void graphics_putchar(char c)
+{
+	if (c == '\n') {
+		buf.x = 0;
+		if ((buf.y += ctx.f->height) >= buf.h)
+			graphics_scroll();
+		return;
+	}
+    ssfn_render(&ctx, &buf, &c);
+	if (buf.x >= buf.w) {
+		buf.x = 0;
+		if ((buf.y += ctx.f->height) >= buf.h)
+			graphics_scroll();
+	}
+}
+
+void graphics_writestring(const char* data)
+{
+    while (*data)
+        ssfn_render(&ctx, &buf, data++);
+}
+
+void graphics_init(struct multiboot_tag_framebuffer *fb)
+{
+	if (fb->common.framebuffer_type != MULTIBOOT_FRAMEBUFFER_TYPE_RGB
+		|| fb->common.framebuffer_bpp != 32) {
+		kerror("Unsupported framebuffer type\n");
+	}
+
+    if (ssfn_load(&ctx, &VGA9))
+		kerror("error loading font\n");    /* load the font */
+	if (ssfn_select(&ctx, SSFN_FAMILY_ANY, NULL, SSFN_STYLE_REGULAR, 16))
+		kerror("error selecting font\n");    /* select a font */
+
+	buf.ptr = (u8*)fb->common.framebuffer_addr;    /* address of the linear frame buffer */
+	buf.w = fb->common.framebuffer_width;     /* width */
+	buf.h = fb->common.framebuffer_height;    /* height */
+	buf.p = fb->common.framebuffer_pitch;     /* bytes per line */
+	buf.x = 0;                					/* pen position */
+    buf.y = 16;
+	buf.fg = 0xFF0AECFC;                     				/* foreground color */
+
+	map_pages(buf.ptr, buf.ptr, PG_WRITE, (buf.p * buf.h) / PAGE_BYTES);
+	memset(buf.ptr, 0, buf.p * buf.h);
+
+	graphics_writestring("Graphics mode terminal initialized\n");
+}
+
+static void graphics_scroll(void)
+{
+	u8 *dst, *src;
+	u32 line_size = buf.p * ctx.f->height;
+
+	for (dst = buf.ptr, src = buf.ptr + line_size;
+		src < buf.ptr + buf.p * buf.h;
+		dst += line_size, src += line_size
+	){
+		memcpy(dst, src, line_size);
+	}
+	memset(dst, 0, line_size);
+	buf.y -= ctx.f->height;
+}
+
+
 
 static const size_t VGA_WIDTH = 80;
 static const size_t VGA_HEIGHT = 25;
@@ -41,7 +122,7 @@ void terminal_putentryat(unsigned char c, u8 color, size_t x, size_t y)
 	terminal_buffer[index] = vga_entry(c, color);
 }
 
-void terminal_scroll()
+void terminal_scroll(void)
 {
 	size_t i, k, j;
 	for (k = 1, j = 0; k < VGA_HEIGHT; k++, j++) {

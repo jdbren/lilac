@@ -44,8 +44,8 @@ struct acpi_info {
     // struct facp_info *facp;
 };
 
-int FullAcpiInit(void);
 void parse_acpi(struct RSDP *rsdp, struct acpi_info *info);
+int FullAcpiInit(void);
 void DisplayAllDevices(void);
 
 #endif

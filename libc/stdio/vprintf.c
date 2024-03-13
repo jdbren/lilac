@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include <string.h>
 
-static bool print(const char* data, size_t length)
+static bool print(const char *data, size_t length)
 {
 	const unsigned char* bytes = (const unsigned char*) data;
 	for (size_t i = 0; i < length; i++)
@@ -32,7 +32,7 @@ char *convert(unsigned long long num, int base)
     return(ptr);
 }
 
-int vprintf(register const char *restrict format, va_list args)
+int vprintf(const char *restrict format, va_list args)
 {
 	register int written = 0;
 
@@ -56,7 +56,7 @@ int vprintf(register const char *restrict format, va_list args)
 			continue;
 		}
 
-		const char* format_begun_at = format++;
+		const char *format_begun_at = format++;
 		while (*format == '-' || *format == '+' || *format == ' ' ||
 		*format == '#' || *format == '0'|| isdigit(*format) || *format == '.')
 			format++;

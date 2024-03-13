@@ -1,8 +1,8 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #pragma once
-#ifndef _KERNEL_TYPES_H
-#define _KERNEL_TYPES_H
+#ifndef _LILAC_TYPES_H
+#define _LILAC_TYPES_H
 
 #include <stdint.h>
 #include <stdio.h>
@@ -22,7 +22,5 @@ typedef int64_t s64;
 
 #define likely(x)       __builtin_expect(!!(x), 1)
 #define unlikely(x)     __builtin_expect(!!(x), 0)
-
-#include <kernel/sync.h>
 
 #endif

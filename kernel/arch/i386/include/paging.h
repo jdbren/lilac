@@ -14,7 +14,7 @@
 #define PG_WRITE_THROUGH   0x8
 #define PG_CACHE_DISABLE   0x10
 
-void* get_physaddr(void *virtualaddr);
+void *get_physaddr(void *virtualaddr);
 int map_pages(void *physaddr, void *virtualaddr, u16 flags, int num_pages);
 int unmap_pages(void *virtualaddr, int num_pages);
 

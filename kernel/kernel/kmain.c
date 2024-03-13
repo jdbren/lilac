@@ -5,10 +5,10 @@
 #include <kernel/panic.h>
 #include <kernel/process.h>
 #include <kernel/sched.h>
+#include <kernel/timer.h>
 #include <kernel/elf.h>
 #include <mm/kheap.h>
 #include <fs/vfs.h>
-#include "timer.h"
 
 void start_kernel(void)
 {
@@ -20,7 +20,7 @@ void start_kernel(void)
 	// printf("Page directory entry 768: %x\n", ((u32*)0xFFFFF000)[768]);
 	//jump_usermode((u32)jmp);
 
-	
+
 
 	struct task *task = create_process("A:/bin/init");
 	schedule_task(task);

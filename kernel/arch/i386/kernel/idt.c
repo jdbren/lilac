@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <kernel/types.h>
-#include <asm/cpufaults.h>
+#include "cpufaults.h"
 #include "idt.h"
 #include "pic.h"
 

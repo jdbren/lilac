@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-int log2(uint32_t x);
+int log2(unsigned int x);
 
 #ifdef __cplusplus
 }

@@ -7,7 +7,7 @@ ssize_t __do_write(void)
     register const void *buf asm("edx");
     register size_t count asm("ecx");
 
-    terminal_write(buf, count);
+    graphics_writestring(buf);
 
     return count;
 }
