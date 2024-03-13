@@ -33,23 +33,22 @@ void kernel_early(unsigned int multiboot)
 	parse_multiboot(multiboot, &mbd);
 	mm_init(mbd.efi_mmap);
 	graphics_init(mbd.framebuffer);
-	printf("New line\n");
 
 	parse_acpi((void*)mbd.new_acpi->rsdp, &acpi);
 	apic_init(acpi.madt);
-	keyboard_init();
+	//keyboard_init();
 	timer_init(1, acpi.hpet); // 1ms interval
 
 	printf("System Timer: %d\n", get_sys_time());
 
 	sched_init(500);
-	// enable_interrupts();
+	enable_interrupts();
 
 	FullAcpiInit();
-	DisplayAllDevices();
+	//DisplayAllDevices();
 	// fs_init(mbd.boot_dev);
 
-	printf("System Timer: %d\n", get_sys_time());
+	//printf("System Timer: %d\n", get_sys_time());
 
 
 
@@ -90,13 +89,6 @@ static void parse_multiboot(u32 addr, struct multiboot_info *mbd)
 			break;
 			case MULTIBOOT_TAG_TYPE_FRAMEBUFFER:
 				mbd->framebuffer = (struct multiboot_tag_framebuffer*)tag;
-				printf("Frame address: 0x%x\n", mbd->framebuffer->common.framebuffer_addr);
-				printf("Framebuffer: %dx%d\n",
-					mbd->framebuffer->common.framebuffer_width,
-					mbd->framebuffer->common.framebuffer_height);
-				printf("Framebuffer: %d bpp\n", mbd->framebuffer->common.framebuffer_bpp);
-				printf("Framebuffer: %d pitch\n", mbd->framebuffer->common.framebuffer_pitch);
-				printf("Framebuffer type: 0x%x\n", mbd->framebuffer->common.framebuffer_type);
 			break;
 			case MULTIBOOT_TAG_TYPE_EFI32:
 				mbd->efi32 = (struct multiboot_tag_efi32*)tag;

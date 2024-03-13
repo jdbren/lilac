@@ -2,6 +2,7 @@
 #define KERNEL_TTY_H
 
 #include <stddef.h>
+#include <utility/multiboot2.h>
 
 void terminal_init(void);
 void terminal_putchar(char c);

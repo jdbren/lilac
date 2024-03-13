@@ -12,7 +12,6 @@ int putchar(int ic) {
 	outb(0xe9, c);
 	graphics_putchar(c);
 #else
-	// TODO: Implement stdio and the write system call.
 	write(1, &c, sizeof(c));
 #endif
 	return ic;

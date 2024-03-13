@@ -157,7 +157,7 @@ ACPI_STATUS DisplayOneDevice(ACPI_HANDLE ObjHandle, UINT32 Level, void *Context,
     /* Get the device info for this device and print it */
     Status = AcpiGetObjectInfo(ObjHandle, &Info);
     if (ACPI_SUCCESS (Status)) {
-        printf (" HID: %s, ADR: 0x%llx, CLASS CODE: %x\n",
+        printf (" HID: %s, ADR: 0x%llx\n",
             Info->HardwareId.String, Info->Address, Info->ClassCode.String);
     }
     kfree(Info);

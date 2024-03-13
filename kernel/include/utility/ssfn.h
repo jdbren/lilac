@@ -1481,18 +1481,28 @@ int ssfn_putc(uint32_t unicode)
         else { if((uint32_t)i == unicode) { chr = ptr; break; } ptr += 6 + ptr[1] * (ptr[0] & 0x40 ? 6 : 5); }
     }
 #ifdef SSFN_CONSOLEBITMAP_CONTROL
-    i = ssfn_src->height; j = ssfn_dst.h - i - (ssfn_dst.h % i);
+    i = ssfn_src->height;
+    j = ssfn_dst.h - i - (ssfn_dst.h % i);
     if(chr && w) {
-        if(unicode == '\t') ssfn_dst.x -= ssfn_dst.x % chr[4];
-        if(ssfn_dst.x + chr[4] > w) { ssfn_dst.x = 0; ssfn_dst.y += i; }
+        if(unicode == '\t')
+            ssfn_dst.x -= ssfn_dst.x % chr[4];
+        if(ssfn_dst.x + chr[4] > w) {
+            ssfn_dst.x = 0;
+            ssfn_dst.y += i;
+        }
     }
-    if(unicode == '\n') ssfn_dst.y += i;
+    if(unicode == '\n')
+        ssfn_dst.y += i;
     if(j > 0 && ssfn_dst.y > j) {
         ssfn_dst.y = j;
         for(k = 0; k < j; k++)
-            for(l = 0; l < ssfn_dst.p; l++) ssfn_dst.ptr[k * ssfn_dst.p + l] = ssfn_dst.ptr[(k + i) * ssfn_dst.p + l];
+            for(l = 0; l < ssfn_dst.p; l++)
+                ssfn_dst.ptr[k * ssfn_dst.p + l] = ssfn_dst.ptr[(k + i) * ssfn_dst.p + l];
     }
-    if(unicode == '\r' || unicode == '\n') { ssfn_dst.x = 0; return SSFN_OK; }
+    if(unicode == '\r' || unicode == '\n') {
+        ssfn_dst.x = 0;
+        return SSFN_OK;
+    }
 #endif
     if(!chr) return SSFN_ERR_NOGLYPH;
     ptr = chr + 6; o = (SSFN_PIXEL*)(ssfn_dst.ptr + ssfn_dst.y * ssfn_dst.p + ssfn_dst.x * sizeof(SSFN_PIXEL));
