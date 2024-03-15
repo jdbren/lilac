@@ -1,7 +1,36 @@
-#ifndef x86_IO_H
-#define x86_IO_H
+#include "io.h"
+#include <kernel/io.h>
 
-#include <kernel/types.h>
+u32 ReadPort(u32 Address, u32 Width)
+{
+    switch (Width) {
+        case 8:
+            return inb(Address);
+        case 16:
+            return inw(Address);
+        case 32:
+            return inl(Address);
+    }
+    return 0;
+}
+
+int WritePort(u32 Address, u32 Value, u32 Width)
+{
+    switch (Width) {
+        case 8:
+            outb(Address, Value);
+            break;
+        case 16:
+            outw(Address, Value);
+            break;
+        case 32:
+            outl(Address, Value);
+            break;
+        default:
+            return -1;
+    }
+    return 0;
+}
 
 void outb(u16 port, u8 val)
 {
@@ -52,5 +81,3 @@ void io_wait(void)
 {
     asm volatile ("outb %%al, $0x80" : : "a"(0) );
 }
-
-#endif

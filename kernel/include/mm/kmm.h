@@ -21,7 +21,7 @@ int map_to_self(void* addr, int flags);
 void unmap_from_self(void* addr);
 
 void *map_phys(void *phys, int size, int flags);
-void unmap_phys(void *addr, int num_pages);
+void unmap_phys(void *addr, int size);
 u32 virt_to_phys(void *vaddr);
 
 u32 arch_get_pgd(void);

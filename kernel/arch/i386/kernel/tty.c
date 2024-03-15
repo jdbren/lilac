@@ -6,11 +6,11 @@
 #include <kernel/types.h>
 #include <kernel/panic.h>
 #include <mm/kheap.h>
+#include <mm/kmm.h>
 #include <utility/vga.h>
-#include "paging.h"
 
 #define SSFN_IMPLEMENTATION
-#define SSFN_CONSOLEBITMAP_TRUECOLOR        /* use the special renderer for 32 bit truecolor packed pixels */
+#define SSFN_CONSOLEBITMAP_TRUECOLOR /* renderer for 32 bit truecolor */
 #define SSFN_realloc krealloc
 #define SSFN_free kfree
 
@@ -56,15 +56,16 @@ void graphics_init(struct multiboot_tag_framebuffer *fb)
 	if (ssfn_select(&ctx, SSFN_FAMILY_ANY, NULL, SSFN_STYLE_REGULAR, 16))
 		kerror("error selecting font\n");    /* select a font */
 
-	buf.ptr = (u8*)fb->common.framebuffer_addr;    /* address of the linear frame buffer */
 	buf.w = fb->common.framebuffer_width;     /* width */
 	buf.h = fb->common.framebuffer_height;    /* height */
 	buf.p = fb->common.framebuffer_pitch;     /* bytes per line */
 	buf.x = 0;                					/* pen position */
     buf.y = 16;
-	buf.fg = 0xFF0AECFC;                     				/* foreground color */
+	buf.fg = 0xFF0AECFC;                     /* foreground color */
 
-	map_pages(buf.ptr, buf.ptr, PG_WRITE, (buf.p * buf.h) / PAGE_BYTES);
+	void *vframebuf = map_phys((u8*)fb->common.framebuffer_addr,
+						buf.p * buf.h, PG_WRITE);
+	buf.ptr = vframebuf; 			/* pointer to the framebuffer */
 	memset(buf.ptr, 0, buf.p * buf.h);
 
 	graphics_writestring("Graphics mode terminal initialized\n");

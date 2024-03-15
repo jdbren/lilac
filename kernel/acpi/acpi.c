@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <limits.h>
 #include <kernel/panic.h>
+#include <kernel/pci.h>
 #include <acpi/acpi.h>
 #include <acpi/madt.h>
 #include <acpi/hpet.h>
@@ -141,7 +142,8 @@ int FullAcpiInit(void)
     return status;
 }
 
-ACPI_STATUS DisplayOneDevice(ACPI_HANDLE ObjHandle, UINT32 Level, void *Context, void **ReturnValue)
+ACPI_STATUS DisplayOneDevice(ACPI_HANDLE ObjHandle, UINT32 Level,
+    void *Context, void **ReturnValue)
 {
     ACPI_STATUS Status;
     ACPI_DEVICE_INFO *Info = kzmalloc(sizeof(*Info));
@@ -149,6 +151,8 @@ ACPI_STATUS DisplayOneDevice(ACPI_HANDLE ObjHandle, UINT32 Level, void *Context,
     char Buffer[256];
     Path.Length = sizeof(Buffer);
     Path.Pointer = Buffer;
+
+    u32 pci_reg;
 
     /* Get the full path of this device and print it */
     Status = AcpiGetName(ObjHandle, ACPI_FULL_PATHNAME, &Path);
@@ -159,6 +163,20 @@ ACPI_STATUS DisplayOneDevice(ACPI_HANDLE ObjHandle, UINT32 Level, void *Context,
     if (ACPI_SUCCESS (Status)) {
         printf (" HID: %s, ADR: 0x%llx\n",
             Info->HardwareId.String, Info->Address, Info->ClassCode.String);
+        if (Info->Valid & ACPI_VALID_ADR) {
+            pci_reg = pciConfigRead(0, Info->Address >> 16, Info->Address & 0xFFFF, 0, 32);
+            printf(" PCI ID: 0x%x\n", pci_reg);
+            if (pci_reg != 0xffffffff) {
+                pci_reg = pciConfigRead(0, Info->Address >> 16, Info->Address & 0xFFFF, 4, 32);
+                printf(" PCI status: 0x%x\n", pci_reg);
+                pci_reg = pciConfigRead(0, Info->Address >> 16, Info->Address & 0xFFFF, 8, 32);
+                printf(" PCI class/rev: 0x%x\n", pci_reg);
+                pci_reg = pciConfigRead(0, Info->Address >> 16, Info->Address & 0xFFFF, 12, 32);
+                printf(" PCI other: 0x%x\n", pci_reg);
+            }
+
+        }
+
     }
     kfree(Info);
     *ReturnValue = NULL;

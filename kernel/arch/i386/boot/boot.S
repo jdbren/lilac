@@ -23,8 +23,8 @@
 .word MULTIBOOT_HEADER_TAG_FRAMEBUFFER
 .word 0
 .long 20
-.long 1024
-.long 768
+.long 1280
+.long 720
 .long 32
 
 .align MULTIBOOT_TAG_ALIGN

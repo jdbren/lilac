@@ -71,6 +71,7 @@ static void parse_multiboot(u32 addr, struct multiboot_info *mbd)
 		tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag
 			+ ((tag->size + 7) & ~7)))
 	{
+		printf("Tag: %d\n", tag->type);
 		switch (tag->type) {
 			case MULTIBOOT_TAG_TYPE_CMDLINE:
 				mbd->cmdline = ((struct multiboot_tag_string*)tag)->string;

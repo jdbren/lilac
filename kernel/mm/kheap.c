@@ -310,7 +310,7 @@ static size_t nextPowerOfTwo(size_t nextPow2)
 {
     nextPow2--;
     nextPow2 |= nextPow2 >> 1;
-    for (unsigned i = 2; i < sizeof(size_t); i++) {
+    for (unsigned i = 2; i <= sizeof(size_t); i++) {
         nextPow2 |= nextPow2 >> i;
     }
     nextPow2++;

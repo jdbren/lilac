@@ -40,7 +40,6 @@ static const int HEAP_MANAGE_PAGES = KHEAP_PAGES * sizeof(struct memory_desc) / 
 void mm_init(struct multiboot_tag_efi_mmap *mmap)
 {
     int phys_map_sz = phys_mem_init(mmap);
-
     avail_vmem_list = (memory_desc_t*)((u32)&_kernel_end + (u32)phys_map_sz);
     list = 0;
     unused_heap_addr = KHEAP_MAX_ADDR;
@@ -133,9 +132,10 @@ void unmap_from_self(void *addr)
 
 void *map_phys(void *to_map, int size, int flags)
 {
+    int num_pages = size / PAGE_SIZE + 1;
     to_map = (void*)((u32)to_map & 0xFFFFF000);
-    void *virt = find_vaddr(size);
-    map_pages(to_map, virt, flags, size / PAGE_SIZE + 1);
+    void *virt = find_vaddr(num_pages);
+    map_pages(to_map, virt, flags, num_pages);
     return virt;
 }
 
@@ -143,7 +143,7 @@ void unmap_phys(void *addr, int size)
 {
     int num_pages = size / PAGE_SIZE + 1;
     addr = (void*)((u32)addr & 0xFFFFF000);
-    free_vaddr(addr, size);
+    free_vaddr(addr, num_pages);
     unmap_pages(addr, num_pages);
 }
 

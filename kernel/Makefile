@@ -38,6 +38,7 @@ kernel/sched.o \
 kernel/list.o \
 kernel/sync.o \
 kernel/write.o \
+kernel/pci.o \
 mm/kheap.o \
 fs/fat32.o \
 fs/vfs.o \

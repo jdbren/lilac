@@ -51,6 +51,7 @@ int phys_mem_init(struct multiboot_tag_efi_mmap *mmap)
             (void*)pg_frame_bitmap,
             PG_WRITE,
             BITMAP_SIZE / PAGE_SIZE + 1);
+
     memset(pg_frame_bitmap, 0, BITMAP_SIZE);
 
     __init_bitmap(mmap);
@@ -116,13 +117,14 @@ static void __init_bitmap(struct multiboot_tag_efi_mmap *mmap)
     u32 index, offset;
     u32 pg_cnt;
     for (u32 i = 0; i < mmap->size; i += mmap->descr_size) {
-        if (entry->type != EFI_CONVENTIONAL_MEMORY) {
+        if (entry->type != EFI_CONVENTIONAL_MEMORY && entry->type != EFI_RESERVED_TYPE) {
             __mark_frames(get_index(entry->phys_addr),
                     get_offset(entry->phys_addr),
                     entry->num_pages);
         }
         entry = (efi_memory_desc_t*)((u32)entry + mmap->descr_size);
     }
+
     __mark_frames(get_index(get_phys_addr(pg_frame_bitmap)),
                 get_offset(get_phys_addr(pg_frame_bitmap)),
                 BITMAP_SIZE / PAGE_SIZE + 1);

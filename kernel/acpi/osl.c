@@ -8,7 +8,8 @@
 #include <kernel/types.h>
 #include <kernel/config.h>
 #include <kernel/interrupt.h>
-#include <kernel/io.h>
+#include <kernel/pci.h>
+#include <kernel/port.h>
 #include <kernel/process.h>
 #include <kernel/timer.h>
 #include <mm/kmm.h>
@@ -267,39 +268,17 @@ ACPI_STATUS AcpiOsWriteMemory(ACPI_PHYSICAL_ADDRESS Address, UINT64 Value,
 // Port I/O
 ACPI_STATUS AcpiOsReadPort(ACPI_IO_ADDRESS Address, UINT32 *Value, UINT32 Width)
 {
-    switch (Width)
-    {
-        case 8:
-            *Value = inb(Address);
-            break;
-        case 16:
-            *Value = inw(Address);
-            break;
-        case 32:
-            *Value = inl(Address);
-            break;
-        default:
-            return AE_BAD_PARAMETER;
-    }
+    if (Value == NULL || Width != 8 && Width != 16 && Width != 32)
+        return AE_BAD_PARAMETER;
+    *Value = ReadPort(Address, Width);
     return AE_OK;
 }
 
 ACPI_STATUS AcpiOsWritePort(ACPI_IO_ADDRESS Address, UINT32 Value, UINT32 Width)
 {
-    switch (Width)
-    {
-        case 8:
-            outb(Address, Value);
-            break;
-        case 16:
-            outw(Address, Value);
-            break;
-        case 32:
-            outl(Address, Value);
-            break;
-        default:
-            return AE_BAD_PARAMETER;
-    }
+    if (Width != 8 && Width != 16 && Width != 32)
+        return AE_BAD_PARAMETER;
+    WritePort(Address, Value, Width);
     return AE_OK;
 }
 
@@ -318,85 +297,18 @@ void AcpiOsVprintf(const char *Format, va_list Args)
 }
 
 
-
 // PCI
-#define PCI_CONFIG_ADDRESS 0xCF8
-#define PCI_CONFIG_DATA 0xCFC
-
-u32 pciConfigReadWord(u8 bus, u8 slot, u8 func, u8 offset, u32 width) {
-    if (width == 64) {
-        printf("64-bit PCI configuration not supported\n");
-        return 0;
-    }
-
-    u32 address;
-    u32 lbus  = (u32)bus;
-    u32 lslot = (u32)slot;
-    u32 lfunc = (u32)func;
-    u32 tmp = 0;
-
-    // Create configuration address
-    address = (u32)((lbus << 16) | (lslot << 11) |
-              (lfunc << 8) | (offset & 0xFC) | (1U << 31));
-
-    // Write out the address
-    outl(PCI_CONFIG_ADDRESS, address);
-    // Read in the data
-    switch (width) {
-        case 8:
-            tmp = (inl(PCI_CONFIG_DATA) >> ((offset & 3) * 8)) & 0xFF;
-            break;
-        case 16:
-            tmp = (inl(PCI_CONFIG_DATA) >> ((offset & 2) * 8)) & 0xFFFF;
-            break;
-        case 32:
-            tmp = inl(PCI_CONFIG_DATA);
-            break;
-    }
-    return tmp;
-}
-
-void pciConfigWriteWord(u8 bus, u8 slot, u8 func, u8 offset, u32 data, u32 width) {
-    if (width == 64) {
-        printf("64-bit PCI configuration not supported\n");
-        return;
-    }
-
-    u32 address;
-    u32 lbus  = (u32)bus;
-    u32 lslot = (u32)slot;
-    u32 lfunc = (u32)func;
-
-    // Create configuration address as per Figure 1
-    address = (u32)((lbus << 16) | (lslot << 11) |
-              (lfunc << 8) | (offset & 0xFC) | (1U << 31));
-
-    // Write out the address
-    outl(PCI_CONFIG_ADDRESS, address);
-    switch (width) {
-        case 8:
-            outb(PCI_CONFIG_DATA, (u8)data);
-            break;
-        case 16:
-            outw(PCI_CONFIG_DATA, (u16)data);
-            break;
-        case 32:
-            outl(PCI_CONFIG_DATA, data);
-            break;
-    }
-}
-
 ACPI_STATUS AcpiOsReadPciConfiguration(ACPI_PCI_ID *PciId, UINT32 Register,
     UINT64 *Value, UINT32 Width)
 {
-    *Value = (u64)pciConfigReadWord(PciId->Bus, PciId->Device, PciId->Function, (u8)Register, Width);
+    *Value = (u64)pciConfigRead(PciId->Bus, PciId->Device, PciId->Function, (u8)Register, Width);
     return AE_OK;
 }
 
 ACPI_STATUS AcpiOsWritePciConfiguration(ACPI_PCI_ID *PciId, UINT32 Register,
     UINT64 Value, UINT32 Width)
 {
-    pciConfigWriteWord(PciId->Bus, PciId->Device, PciId->Function, (u8)Register, Value, Width);
+    pciConfigWrite(PciId->Bus, PciId->Device, PciId->Function, (u8)Register, Value, Width);
     return AE_OK;
 }
 

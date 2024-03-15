@@ -2,6 +2,10 @@
 set -euo pipefail
 . ./scripts/image.sh
 
-qemu-system-i386 -cpu max -monitor stdio -debugcon file:debug.txt \
-    -m 2G -no-reboot -net none -bios ./bios32.bin -drive file=./uefi.img,format=raw
+qemu-system-x86_64 -machine q35,firmware=OVMF-pure-efi.fd -m 1G \
+    -cpu max -no-reboot \
+    -drive file=./uefi.img,format=raw \
+    -net none \
+    -monitor stdio -debugcon file:debug.txt
 # -d int,pcall,cpu_reset -D log.txt
+# hdiutil create -size 48m -layout GPTSPUD -ov -fs fat32 -volname NEWOS -srcfolder sysroot -format UDIF -attach uefi2.img

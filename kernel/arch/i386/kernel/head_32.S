@@ -158,7 +158,7 @@ boot_page_table0:
 boot_page_table768:
 	.skip 4096
 mbinfo:
-	.skip 4096
+	.skip PAGE_SIZE * 4
 
 .section .bsstack, "aw", @nobits
 .align __PAGE_OFFSET
