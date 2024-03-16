@@ -23,11 +23,10 @@ BOOTDIR=/boot
 LIBDIR=$EXEC_PREFIX/lib
 INCLUDEDIR=$PREFIX/include
 
-CFLAGS='-Og -std=gnu11'
-CPPFLAGS=''
+CFLAGS="-Og -std=gnu11 -isystem=$INCLUDEDIR"
 
 SYSROOT="$(pwd)/sysroot"
-CC="$CC --sysroot=$SYSROOT"
+CC="$CC --sysroot=$SYSROOT "
 
 # Work around that the -elf gcc targets doesn't have a system include directory
 # because it was configured with --without-headers rather than --with-sysroot.
@@ -48,5 +47,5 @@ echo "export BOOTDIR=${BOOTDIR}" >> kbuild.config
 echo "export LIBDIR=${LIBDIR}" >> kbuild.config
 echo "export INCLUDEDIR=${INCLUDEDIR}" >> kbuild.config
 echo "export CFLAGS=${CFLAGS}" >> kbuild.config
-echo "export CPPFLAGS=${CPPFLAGS}" >> kbuild.config
 echo "export SYSROOT=${SYSROOT}" >> kbuild.config
+echo "export HOST=" >> kbuild.config

@@ -40,7 +40,11 @@ void kernel_early(unsigned int multiboot)
 	parse_multiboot(multiboot, &mbd);
 	mm_init(mbd.efi_mmap);
 	graphics_init(mbd.framebuffer);
-	//_fpu_init();
+	_fpu_init();
+
+	float a = 1.0;
+	float b = 2.0;
+	printf("a: %f\n", a / b);
 
 	parse_acpi((void*)mbd.new_acpi->rsdp, &acpi);
 	apic_init(acpi.madt);
