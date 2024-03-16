@@ -2,7 +2,7 @@ DEFAULT_HOST=$(shell ../scripts/default-host.sh)
 HOST?=$(DEFAULT_HOST)
 HOSTARCH=$(shell ../scripts/target-triplet-to-arch.sh $(HOST))
 
-CFLAGS?=-Og
+CFLAGS?=-g
 CPPFLAGS?=
 LDFLAGS?=
 LIBS?=
@@ -13,7 +13,7 @@ EXEC_PREFIX?=$(PREFIX)
 BOOTDIR?=$(EXEC_PREFIX)/boot
 INCLUDEDIR?=$(PREFIX)/include
 
-CFLAGS:=$(CFLAGS) -D __lilac__ -ffreestanding -Wall -Wextra -mgeneral-regs-only
+CFLAGS:=$(CFLAGS) -D __lilac__ -ffreestanding -Wall -Wextra -mgeneral-regs-only -mno-red-zone
 CPPFLAGS:=$(CPPFLAGS) -D__is_kernel -Iinclude
 LDFLAGS:=$(LDFLAGS)
 LIBS:=$(LIBS) -nostdlib -lk -lgcc

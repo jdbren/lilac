@@ -114,6 +114,25 @@ int vprintf(const char *restrict format, va_list args)
 				return -1;
 			written += len;
 		}
+		else if (*format == 'f') {
+			format++;
+			double f = va_arg(args, double);
+			int i = (int)f;
+			char *s = convert(i, 10);
+			int len = strlen(s);
+			if (!print(s, len))
+				return -1;
+			written += len;
+			putchar('.');
+			f -= i;
+			f *= 1000000;
+			i = (int)f;
+			s = convert(i, 10);
+			len = strlen(s);
+			if (!print(s, len))
+				return -1;
+			written += len;
+		}
 		else if (*format == 'l') {
 			format++;
 			if (*format == 'l') {

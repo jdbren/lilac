@@ -4,4 +4,7 @@ Finish acpica integration
 Make actual scheduler
 Cleanup header files and arch specific functions
 Maybe do better interrupt handler
-Graphics buffer for efi boot
+
+FPU implementation
+    - Compile ACPICA separately
+    - Remove -mgeneral-regs-only

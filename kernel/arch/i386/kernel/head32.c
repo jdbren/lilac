@@ -31,7 +31,7 @@ static struct acpi_info acpi;
 static struct efi_info efi;
 
 static void parse_multiboot(u32, struct multiboot_info*);
-static void parse_efi(u32 addr, struct efi_info *efi);
+extern int _fpu_init(void);
 
 void kernel_early(unsigned int multiboot)
 {
@@ -40,6 +40,7 @@ void kernel_early(unsigned int multiboot)
 	parse_multiboot(multiboot, &mbd);
 	mm_init(mbd.efi_mmap);
 	graphics_init(mbd.framebuffer);
+	//_fpu_init();
 
 	parse_acpi((void*)mbd.new_acpi->rsdp, &acpi);
 	apic_init(acpi.madt);
