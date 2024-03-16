@@ -4,7 +4,7 @@
 #include <kernel/tty.h>
 #include <utility/keymap.h>
 #include "idt.h"
-#include <kernel/io.h>
+#include "io.h"
 #include "pic.h"
 #include "apic.h"
 

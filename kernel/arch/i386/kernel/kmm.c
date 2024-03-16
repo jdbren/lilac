@@ -1,12 +1,11 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
+#include <mm/kmm.h>
 #include <string.h>
 #include <stdbool.h>
 #include <utility/multiboot2.h>
 #include <kernel/panic.h>
-#include <kernel/config.h>
-#include <kernel/efi.h>
-#include <mm/kmm.h>
+#include <utility/efi.h>
 #include "pgframe.h"
 #include "paging.h"
 
@@ -83,7 +82,7 @@ static void *find_vaddr(int num_pages)
 void* kvirtual_alloc(int size, int flags)
 {
     int done = 0;
-    u32 num_pages = size / PAGE_SIZE + 1;
+    u32 num_pages = PAGE_ROUND_UP(size) / PAGE_SIZE;
     void *ptr = NULL;
 
     ptr = find_vaddr(num_pages);
@@ -114,25 +113,25 @@ static void free_vaddr(void *addr, int num_pages)
 
 void kvirtual_free(void* addr, int size)
 {
-    int num_pages = size / PAGE_SIZE + 1;
+    int num_pages = PAGE_ROUND_UP(size) / PAGE_SIZE;
     free_vaddr(addr, size);
     free_frames(get_physaddr(addr), num_pages);
     unmap_pages(addr, num_pages);
 }
 
-int map_to_self(void *addr, int flags)
+int map_to_self(void *addr, int size, int flags)
 {
-    return map_page(addr, addr, flags);
+    return map_pages(addr, addr, flags, PAGE_ROUND_UP(size) / PAGE_SIZE);
 }
 
-void unmap_from_self(void *addr)
+void unmap_from_self(void *addr, int size)
 {
-    unmap_page(addr);
+    unmap_pages(addr, PAGE_ROUND_UP(size) / PAGE_SIZE);
 }
 
 void *map_phys(void *to_map, int size, int flags)
 {
-    int num_pages = size / PAGE_SIZE + 1;
+    int num_pages = PAGE_ROUND_UP(size) / PAGE_SIZE;
     to_map = (void*)((u32)to_map & 0xFFFFF000);
     void *virt = find_vaddr(num_pages);
     map_pages(to_map, virt, flags, num_pages);
@@ -141,7 +140,7 @@ void *map_phys(void *to_map, int size, int flags)
 
 void unmap_phys(void *addr, int size)
 {
-    int num_pages = size / PAGE_SIZE + 1;
+    int num_pages = PAGE_ROUND_UP(size) / PAGE_SIZE;
     addr = (void*)((u32)addr & 0xFFFFF000);
     free_vaddr(addr, num_pages);
     unmap_pages(addr, num_pages);

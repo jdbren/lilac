@@ -4,7 +4,7 @@
 #include <math.h>
 #include <kernel/panic.h>
 #include <kernel/config.h>
-#include <kernel/efi.h>
+#include <utility/efi.h>
 #include "pgframe.h"
 #include "paging.h"
 

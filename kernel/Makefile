@@ -28,7 +28,7 @@ LDFLAGS:=$(LDFLAGS) $(KERNEL_ARCH_LDFLAGS)
 LIBS:=$(LIBS) $(KERNEL_ARCH_LIBS)
 
 ACPI_OBJS=\
-$(patsubst %.c,%.o,$(wildcard acpi/acpica/*.c))
+$(patsubst %.c,%.o,$(wildcard drivers/acpi/acpica/*.c))
 
 KERNEL_OBJS=\
 $(KERNEL_ARCH_OBJS) \
@@ -38,15 +38,16 @@ kernel/sched.o \
 kernel/list.o \
 kernel/sync.o \
 kernel/write.o \
-kernel/pci.o \
 mm/kheap.o \
 fs/fat32.o \
 fs/vfs.o \
-acpi/acpi.o \
-acpi/madt.o \
-acpi/hpet.o \
-acpi/osl.o \
+drivers/acpi/acpi.o \
+drivers/acpi/madt.o \
+drivers/acpi/hpet.o \
+drivers/acpi/osl.o \
 $(ACPI_OBJS) \
+drivers/pci.o \
+drivers/ahci.o
 
 OBJS=\
 $(ARCHDIR)/boot/crti.o \

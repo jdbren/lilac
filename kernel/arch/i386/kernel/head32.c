@@ -9,7 +9,7 @@
 #include <kernel/timer.h>
 #include <kernel/sched.h>
 #include <acpi/acpi.h>
-#include <kernel/efi.h>
+#include <utility/efi.h>
 #include <mm/kmm.h>
 #include <mm/kheap.h>
 #include "apic.h"
@@ -18,6 +18,13 @@
 #include "fs_init.h"
 #include "timer.h"
 
+#if UINT32_MAX == UINTPTR_MAX
+#define STACK_CHK_GUARD 0xe2dee396
+#else
+#define STACK_CHK_GUARD 0x595e9fbd94fda766
+#endif
+
+uintptr_t __stack_chk_guard = STACK_CHK_GUARD;
 
 struct multiboot_info mbd;
 static struct acpi_info acpi;
@@ -41,15 +48,12 @@ void kernel_early(unsigned int multiboot)
 
 	printf("System Timer: %d\n", get_sys_time());
 
-	sched_init(500);
+	sched_init(3000);
 	//enable_interrupts();
 
 	FullAcpiInit();
-	DisplayAllDevices();
+	ScanSystemBus();
 	// fs_init(mbd.boot_dev);
-
-	printf("System Timer: %d\n", get_sys_time());
-
 
 
 	while (1)
@@ -114,7 +118,17 @@ static void parse_multiboot(u32 addr, struct multiboot_info *mbd)
 	printf("Kernel loaded at: 0x%x\n", mbd->base_addr->load_base_addr);
 }
 
-u32 get_rsdp(void)
+uintptr_t get_rsdp(void)
 {
 	return virt_to_phys((void*)mbd.new_acpi->rsdp);
+}
+
+__attribute__((noreturn))
+void __stack_chk_fail(void)
+{
+#if __STDC_HOSTED__
+	abort();
+#else
+	kerror("Stack smashing detected\n");
+#endif
 }

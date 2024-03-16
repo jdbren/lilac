@@ -1,19 +1,24 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-/*
-    ACPICA OS Layer
+
+/**
+ * ACPICA OS Services Layer
+ *
+ * OS specific functions for ACPICA. This is not a full implementation, but
+ * it is enough for basic functionality.
+ *
 */
 
 #include <kernel/lilac.h>
 #include <kernel/types.h>
 #include <kernel/config.h>
 #include <kernel/interrupt.h>
-#include <kernel/pci.h>
 #include <kernel/port.h>
 #include <kernel/process.h>
 #include <kernel/timer.h>
 #include <mm/kmm.h>
 #include <mm/kheap.h>
+#include <drivers/pci.h>
 #include "acpica/acpi.h"
 
 ACPI_OSD_HANDLER acpi_isr;
@@ -36,7 +41,8 @@ ACPI_PHYSICAL_ADDRESS AcpiOsGetRootPointer()
     return (ACPI_PHYSICAL_ADDRESS)get_rsdp();
 }
 
-ACPI_STATUS AcpiOsPredefinedOverride(const ACPI_PREDEFINED_NAMES *PredefinedObject,
+ACPI_STATUS
+AcpiOsPredefinedOverride(const ACPI_PREDEFINED_NAMES *PredefinedObject,
     ACPI_STRING *NewValue)
 {
     *NewValue = NULL;

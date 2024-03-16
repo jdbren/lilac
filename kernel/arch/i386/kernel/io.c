@@ -1,5 +1,5 @@
 #include "io.h"
-#include <kernel/io.h>
+#include <kernel/port.h>
 
 u32 ReadPort(u32 Address, u32 Width)
 {

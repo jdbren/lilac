@@ -4,7 +4,7 @@
 
 #include <acpi/hpet.h>
 #include <mm/kmm.h>
-#include <kernel/io.h>
+#include <kernel/port.h>
 #include <kernel/panic.h>
 #include "apic.h"
 #include "idt.h"
@@ -58,7 +58,7 @@ void hpet_init(u32 time, struct hpet_info *info)
 	u32 desired_freq = 1000 / time; // in Hz
 
 	hpet_base = (volatile u64*)info->address;
-	map_to_self(hpet_base, PG_WRITE | PG_CACHE_DISABLE);
+	map_to_self(hpet_base, 0x1000, PG_WRITE | PG_CACHE_DISABLE);
 
 	struct hpet_id_reg *id = (struct hpet_id_reg*)hpet_base;
 	hpet_clk_period = id->counter_clk_period;
@@ -112,30 +112,26 @@ u32 get_sys_time(void)
 	return time;
 }
 
-unsigned read_pit_count(void) {
-	unsigned count = 0;
+// unsigned read_pit_count(void) {
+// 	unsigned count = 0;
 
-	// Disable interrupts
-	asm("cli");
+// 	// Disable interrupts
+// 	asm("cli");
 
-	// al = channel in bits 6 and 7, remaining bits clear
-	outb(0x43, 0);
+// 	// al = channel in bits 6 and 7, remaining bits clear
+// 	outb(0x43, 0);
 
-	count = inb(0x40);			// Low byte
-	count |= inb(0x40)<<8;		// High byte
+// 	count = inb(0x40);			// Low byte
+// 	count |= inb(0x40)<<8;		// High byte
 
-	return count;
-}
+// 	return count;
+// }
 
-void set_pit_count(unsigned count) {
-	// Disable interrupts
-	asm("cli");
+// void set_pit_count(unsigned count) {
+// 	// Disable interrupts
+// 	asm("cli");
 
-	// Set low byte
-	outb(0x40,count&0xFF);			// Low byte
-	outb(0x40,(count&0xFF00)>>8);	// High byte
-}
-
-void timer_print(void) {
-	printf("Timer int\n");
-}
+// 	// Set low byte
+// 	outb(0x40,count&0xFF);			// Low byte
+// 	outb(0x40,(count&0xFF00)>>8);	// High byte
+// }

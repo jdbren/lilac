@@ -14,14 +14,20 @@ void mbr_read(int boot_partition);
 
 void fs_init(struct multiboot_tag_bootdev* boot_dev)
 {
-    int boot_device = boot_dev->biosdev;
-    int boot_partition = (boot_dev->slice) & 0xFF;
+    
 
-    printf("Boot device %x", boot_device);
-    //if (boot_device == 0x80)
-        mbr_read(boot_partition);
-    //else
-       // kerror("Boot device is not the first hard disk\n");
+
+
+
+
+    // int boot_device = boot_dev->biosdev;
+    // int boot_partition = (boot_dev->slice) & 0xFF;
+
+    // printf("Boot device %x", boot_device);
+    // //if (boot_device == 0x80)
+    //     mbr_read(boot_partition);
+    // //else
+    //    // kerror("Boot device is not the first hard disk\n");
     printf("Filesystem initialized\n");
 }
 

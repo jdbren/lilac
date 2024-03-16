@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <limits.h>
 #include <kernel/panic.h>
-#include <kernel/pci.h>
+#include <drivers/pci.h>
 #include <acpi/acpi.h>
 #include <acpi/madt.h>
 #include <acpi/hpet.h>
@@ -55,16 +55,15 @@ void read_xsdt(struct SDTHeader *xsdt, struct acpi_info *info)
     u64 *other_entries = (u64*)((u32)xsdt + sizeof(*xsdt));
     for (int i = 0; i < entries; i++) {
         struct SDTHeader *h = (struct SDTHeader*)other_entries[i];
-        map_to_self((void*)((u32)h & 0xFFFFF000), 0x1);
+        map_to_self((void*)((u32)h & 0xFFFFF000), 0x1000, 0x1);
         char sig[5];
         strncpy(sig, h->Signature, 4);
         sig[4] = 0;
-        printf("Signature: %s\n", sig);
         if (!memcmp(h->Signature, "APIC", 4))
             info->madt = parse_madt(h);
         if (!memcmp(h->Signature, "HPET", 4))
             info->hpet = parse_hpet(h);
-        unmap_from_self((void*)((u32)h & 0xFFFFF000));
+        unmap_from_self((void*)((u32)h & 0xFFFFF000), 0x1000);
     }
 }
 
@@ -84,9 +83,9 @@ void parse_acpi(struct RSDP *rsdp, struct acpi_info *info)
         if ((u8)(check) != 0)
             kerror("Checksum is incorrect\n");
 
-        map_to_self((void*)((u32)(xsdp->XsdtAddress) & 0xFFFFF000), 0x1);
+        map_to_self((void*)((u32)(xsdp->XsdtAddress) & 0xFFFFF000), 0x1000, 0x1);
         read_xsdt((struct SDTHeader*)((u32)(xsdp->XsdtAddress)), info);
-        unmap_from_self((void*)((u32)(xsdp->XsdtAddress) & 0xFFFFF000));
+        unmap_from_self((void*)((u32)(xsdp->XsdtAddress) & 0xFFFFF000), 0x1000);
     }
 
     //read_rsdt((struct SDTHeader*)rsdp->RsdtAddress, info);
@@ -152,7 +151,6 @@ ACPI_STATUS DisplayOneDevice(ACPI_HANDLE ObjHandle, UINT32 Level,
     Path.Length = sizeof(Buffer);
     Path.Pointer = Buffer;
 
-    u32 pci_reg;
 
     /* Get the full path of this device and print it */
     Status = AcpiGetName(ObjHandle, ACPI_FULL_PATHNAME, &Path);
@@ -160,23 +158,9 @@ ACPI_STATUS DisplayOneDevice(ACPI_HANDLE ObjHandle, UINT32 Level,
         printf("%s\n", Path.Pointer);
     /* Get the device info for this device and print it */
     Status = AcpiGetObjectInfo(ObjHandle, &Info);
+
     if (ACPI_SUCCESS (Status)) {
-        printf (" HID: %s, ADR: 0x%llx\n",
-            Info->HardwareId.String, Info->Address, Info->ClassCode.String);
-        if (Info->Valid & ACPI_VALID_ADR) {
-            pci_reg = pciConfigRead(0, Info->Address >> 16, Info->Address & 0xFFFF, 0, 32);
-            printf(" PCI ID: 0x%x\n", pci_reg);
-            if (pci_reg != 0xffffffff) {
-                pci_reg = pciConfigRead(0, Info->Address >> 16, Info->Address & 0xFFFF, 4, 32);
-                printf(" PCI status: 0x%x\n", pci_reg);
-                pci_reg = pciConfigRead(0, Info->Address >> 16, Info->Address & 0xFFFF, 8, 32);
-                printf(" PCI class/rev: 0x%x\n", pci_reg);
-                pci_reg = pciConfigRead(0, Info->Address >> 16, Info->Address & 0xFFFF, 12, 32);
-                printf(" PCI other: 0x%x\n", pci_reg);
-            }
-
-        }
-
+        pcie_read_device(Info);
     }
     kfree(Info);
     *ReturnValue = NULL;
@@ -184,11 +168,21 @@ ACPI_STATUS DisplayOneDevice(ACPI_HANDLE ObjHandle, UINT32 Level,
 }
 
 
-void DisplayAllDevices(void)
+void ScanSystemBus(void)
 {
+    ACPI_TABLE_MCFG *mcfg;
+    ACPI_STATUS status = AcpiGetTable("MCFG", 0, (ACPI_TABLE_HEADER**)&mcfg);
+
+    if (ACPI_SUCCESS(status)) {
+        pcie_add_map(mcfg);
+    }
+
     ACPI_HANDLE SysBusHandle;
- 	AcpiGetHandle(0, "\\_SB", &SysBusHandle);
- 	printf("Display of all devices in the namespace:\n");
+ 	AcpiGetHandle(0, "\\", &SysBusHandle);
+
+ 	printf("System Bus Devices:\n");
  	AcpiWalkNamespace(ACPI_TYPE_DEVICE, SysBusHandle, INT_MAX,
  		DisplayOneDevice, NULL, NULL, NULL);
+
+
 }

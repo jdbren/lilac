@@ -28,6 +28,6 @@ struct efi_info {
     u32 tables;
 };
 
-u32 get_rsdp(void);
+uintptr_t get_rsdp(void);
 
 #endif
