@@ -1,5 +1,6 @@
 Lilac is a hobby operating system project running on x86 (32-bit) in 
-early development.
+early development. I have created it for fun as a way to learn about kernel 
+programming and operating system fundamentals. 
 
-I have created it for fun as a way to learn about kernel programming
-and operating system fundamentals.
+The entry point is _start in the x86 boot folder. I intend to add 
+better documentation soon. 
