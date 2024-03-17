@@ -7,10 +7,9 @@ if [ -f kbuild.config ]; then
   rm -f kbuild.config
 fi
 
-SYSTEM_HEADER_PROJECTS="libc kernel"
 PROJECTS="libc kernel"
 
-MAKE=${MAKE:-make}
+MAKE="gmake -j 11"
 HOST=${HOST:-$(./scripts/default-host.sh)}
 
 AR=${HOST}-ar
@@ -23,19 +22,12 @@ BOOTDIR=/boot
 LIBDIR=$EXEC_PREFIX/lib
 INCLUDEDIR=$PREFIX/include
 
-CFLAGS="-Og -std=gnu11 -isystem=$INCLUDEDIR"
+CFLAGS="-Og -std=gnu11"
 
 SYSROOT="$(pwd)/sysroot"
-CC="$CC --sysroot=$SYSROOT "
+CC="$CC --sysroot=$SYSROOT -isystem=$INCLUDEDIR"
 
-# Work around that the -elf gcc targets doesn't have a system include directory
-# because it was configured with --without-headers rather than --with-sysroot.
-if echo "$HOST" | grep -Eq -- '-elf($|-)'; then
-  CC="$CC -isystem=$INCLUDEDIR"
-fi
-
-echo "SYSTEM_HEADER_PROJECTS=libc kernel" >> kbuild.config
-echo "PROJECTS=libc kernel" >> kbuild.config
+echo "PROJECTS=${PROJECTS}" >> kbuild.config
 echo "export MAKE=${MAKE}" >> kbuild.config
 echo "export HOST=${HOST}" >> kbuild.config
 echo "export AR=${AR}" >> kbuild.config
@@ -48,4 +40,3 @@ echo "export LIBDIR=${LIBDIR}" >> kbuild.config
 echo "export INCLUDEDIR=${INCLUDEDIR}" >> kbuild.config
 echo "export CFLAGS=${CFLAGS}" >> kbuild.config
 echo "export SYSROOT=${SYSROOT}" >> kbuild.config
-echo "export HOST=" >> kbuild.config

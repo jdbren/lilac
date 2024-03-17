@@ -67,7 +67,6 @@ ACPI_STATUS AcpiOsPhysicalTableOverride(ACPI_TABLE_HEADER *ExistingTable,
 
 void *AcpiOsMapMemory(ACPI_PHYSICAL_ADDRESS PhysicalAddress, ACPI_SIZE Length)
 {
-    //printf("ACPI mapping: %x\n", PhysicalAddress);
     int offset = PhysicalAddress & 0xFFF;
     void *ptr = map_phys((void*)PhysicalAddress, offset + Length, PG_WRITE);
     return (void*)((u32)ptr + offset);
@@ -75,7 +74,6 @@ void *AcpiOsMapMemory(ACPI_PHYSICAL_ADDRESS PhysicalAddress, ACPI_SIZE Length)
 
 void AcpiOsUnmapMemory(void *where, ACPI_SIZE length)
 {
-    //printf("ACPI unmapping: %x\n", where);
     int offset = (u32)where & 0xFFF;
     unmap_phys(where, length + offset);
 }
@@ -90,13 +88,11 @@ ACPI_STATUS AcpiOsGetPhysicalAddress(void *LogicalAddress,
 void *AcpiOsAllocate(ACPI_SIZE Size)
 {
     void *ptr = kmalloc(Size);
-    //printf("ACPI alloc: %x\n", ptr);
     return ptr;
 }
 
 void AcpiOsFree(void *Memory)
 {
-    //printf("ACPI free: %x\n", Memory);
     kfree(Memory);
 }
 

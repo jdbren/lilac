@@ -4,7 +4,7 @@ HOSTARCH=$(shell ../scripts/target-triplet-to-arch.sh $(HOST))
 
 CFLAGS?=-Og
 LDFLAGS?=
-LIBS?=./drivers/acpi/acpi.lib
+LIBS?=./drivers/acpi/acpi.lib ../libc/libk.a
 
 DESTDIR?=
 PREFIX?=/usr/local
@@ -15,7 +15,7 @@ INCLUDEDIR?=$(PREFIX)/include
 CFLAGS:=$(CFLAGS) -D __lilac__ -D __is_kernel -I include \
 -ffreestanding -Wall -Wextra -mno-red-zone
 LDFLAGS:=$(LDFLAGS)
-LIBS:=$(LIBS) -nostdlib -lk -lgcc
+LIBS:=$(LIBS) -nostdlib -lgcc
 
 ARCHDIR=arch/$(HOSTARCH)
 
@@ -83,17 +83,10 @@ $(ARCHDIR)/crtbegin.o $(ARCHDIR)/crtend.o:
 
 clean:
 	rm -f lilac.kernel
-	rm -f $(OBJS) *.o */*.o */*/*.o
-	rm -f $(OBJS:.o=.d) *.d */*.d */*/*.d
-	$(MAKE) -C drivers/acpi clean
+	rm -f $(OBJS)
+	rm -f $(OBJS:.o=.d)
 
-install: install-headers install-kernel
-
-install-headers:
-	mkdir -p $(DESTDIR)$(INCLUDEDIR)
-	cp -Rp include/. $(DESTDIR)$(INCLUDEDIR)/.
-
-install-kernel: lilac.kernel
+install: lilac.kernel
 	mkdir -p $(DESTDIR)$(BOOTDIR)
 	cp lilac.kernel $(DESTDIR)$(BOOTDIR)
 

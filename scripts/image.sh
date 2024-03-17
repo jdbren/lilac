@@ -1,7 +1,7 @@
 #!/bin/sh
 set -euo pipefail
 
-gmake -s install
+sh build.sh
 
 disk=$(hdiutil attach uefi.img)
 disk="${disk%% *}"

@@ -12,8 +12,8 @@ EXEC_PREFIX?=$(PREFIX)
 INCLUDEDIR?=$(PREFIX)/include
 LIBDIR?=$(EXEC_PREFIX)/lib
 
-CFLAGS:=$(CFLAGS) -ffreestanding -Wall -Wextra -D__is_libc -Iinclude
-LIBK_CFLAGS:=$(CFLAGS) -D__is_libk
+CFLAGS:=$(CFLAGS) -ffreestanding -Wall -Wextra -Iinclude
+LIBK_CFLAGS:=$(CFLAGS) -D__is_libk -I ../kernel/include
 
 ARCHDIR=arch/$(HOSTARCH)
 
@@ -38,12 +38,12 @@ string/strcmp.o \
 string/strcat.o \
 string/strlen.o \
 math/log2.o \
-ctype/ctype.o \
-unistd/fork.o \
-unistd/write.o
+ctype/ctype.o
 
 HOSTEDOBJS=\
 $(ARCH_HOSTEDOBJS) \
+unistd/fork.o \
+unistd/write.o
 
 OBJS=\
 $(FREEOBJS) \
@@ -65,13 +65,13 @@ libk.a: $(LIBK_OBJS)
 	$(AR) rcs $@ $(LIBK_OBJS)
 
 .c.o:
-	$(CC) -MD -c $< -o $@ -std=gnu11 $(CFLAGS)
+	$(CC) -MD -c $< -o $@ $(CFLAGS)
 
 .c.S:
 	$(CC) -MD -c $< -o $@ $(CFLAGS)
 
 .c.libk.o:
-	$(CC) -MD -c $< -o $@ -std=gnu11 $(LIBK_CFLAGS)
+	$(CC) -MD -c $< -o $@ $(LIBK_CFLAGS)
 
 .S.libk.o:
 	$(CC) -MD -c $< -o $@ $(LIBK_CFLAGS)
