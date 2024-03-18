@@ -12,22 +12,23 @@
 
 void mbr_read(int boot_partition);
 
-void fs_init(struct multiboot_tag_bootdev* boot_dev)
+void fs_init(struct multiboot_tag_bootdev *boot_dev)
 {
-    
+    // If no boot_dev, assume EFI boot and detect all disks
+    if (boot_dev == NULL) {
+        //install_disks();
 
+    }
+    else {
+        int boot_device = boot_dev->biosdev;
+        int boot_partition = (boot_dev->slice) & 0xFF;
 
-
-
-
-    // int boot_device = boot_dev->biosdev;
-    // int boot_partition = (boot_dev->slice) & 0xFF;
-
-    // printf("Boot device %x", boot_device);
-    // //if (boot_device == 0x80)
-    //     mbr_read(boot_partition);
-    // //else
-    //    // kerror("Boot device is not the first hard disk\n");
+        printf("Boot device %x", boot_device);
+        if (boot_device == 0x80)
+            mbr_read(boot_partition);
+        else
+        kerror("Boot device is not the first hard disk\n");
+    }
     printf("Filesystem initialized\n");
 }
 
@@ -37,7 +38,7 @@ void mbr_read(int boot_partition)
     if (mbr->signature != 0xAA55)
         kerror("Invalid MBR signature\n");
 
-    const struct PartitionEntry *partition = &mbr->partition_table[boot_partition];
+    const struct mbr_part_entry *partition = &mbr->partition_table[boot_partition];
 
 	u32 fat32_lba;
 	if (partition->type == 0xB) {

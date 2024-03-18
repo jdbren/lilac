@@ -62,13 +62,12 @@ $(LIBS) \
 $(ARCHDIR)/crtend.o \
 $(ARCHDIR)/boot/crtn.o \
 
-.PHONY: all clean install install-headers install-kernel
+.PHONY: all clean install install-headers install-kernel acpi
 .SUFFIXES: .o .c .S
 
 all: lilac.kernel
 
-lilac.kernel: $(OBJS) $(ARCHDIR)/linker.ld
-	$(MAKE) -C drivers/acpi
+lilac.kernel: $(OBJS) $(ARCHDIR)/linker.ld acpi
 	$(CC) -T $(ARCHDIR)/linker.ld -o $@ $(CFLAGS) $(LINK_LIST)
 	grub-file --is-x86-multiboot2 lilac.kernel
 
@@ -90,5 +89,8 @@ clean:
 install: lilac.kernel
 	mkdir -p $(DESTDIR)$(BOOTDIR)
 	cp lilac.kernel $(DESTDIR)$(BOOTDIR)
+
+acpi:
+	$(MAKE) -C drivers/acpi
 
 -include $(OBJS:.o=.d)

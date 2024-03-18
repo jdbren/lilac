@@ -45,7 +45,7 @@ struct acpi_info {
 };
 
 void parse_acpi(struct RSDP *rsdp, struct acpi_info *info);
-int FullAcpiInit(void);
-void ScanSystemBus(void);
+int acpi_full_init(void);
+void scan_sys_bus(void);
 
 #endif

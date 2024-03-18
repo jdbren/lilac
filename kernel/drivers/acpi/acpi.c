@@ -92,7 +92,7 @@ void parse_acpi(struct RSDP *rsdp, struct acpi_info *info)
 }
 
 
-int FullAcpiInit(void)
+int acpi_full_init(void)
 {
     ACPI_STATUS status;
 
@@ -102,7 +102,6 @@ int FullAcpiInit(void)
         printf("Error initializing ACPICA\n");
         return status;
     }
-
     printf("ACPICA subsystem initialized\n");
 
     status = AcpiInitializeTables(NULL, 16, FALSE);
@@ -110,7 +109,6 @@ int FullAcpiInit(void)
         printf("Error initializing tables\n");
         return status;
     }
-
     printf("ACPICA tables initialized\n");
 
     status = AcpiLoadTables();
@@ -118,7 +116,6 @@ int FullAcpiInit(void)
         printf("Error loading tables\n");
         return status;
     }
-
     printf("ACPICA tables loaded\n");
 
     status = AcpiEnableSubsystem(ACPI_FULL_INITIALIZATION);
@@ -126,7 +123,6 @@ int FullAcpiInit(void)
         printf("Error enabling subsystem\n");
         return status;
     }
-
     printf("ACPICA subsystem enabled\n");
 
     status = AcpiInitializeObjects(ACPI_FULL_INITIALIZATION);
@@ -134,14 +130,13 @@ int FullAcpiInit(void)
         printf("Error initializing objects\n");
         return status;
     }
-
     printf("ACPICA objects initialized\n");
 
     printf("ACPICA fully initialized\n");
     return status;
 }
 
-ACPI_STATUS DisplayOneDevice(ACPI_HANDLE ObjHandle, UINT32 Level,
+ACPI_STATUS detect_device(ACPI_HANDLE ObjHandle, UINT32 Level,
     void *Context, void **ReturnValue)
 {
     ACPI_STATUS Status;
@@ -154,12 +149,12 @@ ACPI_STATUS DisplayOneDevice(ACPI_HANDLE ObjHandle, UINT32 Level,
 
     /* Get the full path of this device and print it */
     Status = AcpiGetName(ObjHandle, ACPI_FULL_PATHNAME, &Path);
-    if (ACPI_SUCCESS (Status))
-        printf("%s\n", Path.Pointer);
+    // if (ACPI_SUCCESS (Status))
+    //     printf("%s\n", Path.Pointer);
     /* Get the device info for this device and print it */
     Status = AcpiGetObjectInfo(ObjHandle, &Info);
 
-    if (ACPI_SUCCESS (Status)) {
+    if (ACPI_SUCCESS (Status) && Info->Type == ACPI_TYPE_DEVICE) {
         pcie_read_device(Info);
     }
     kfree(Info);
@@ -167,8 +162,8 @@ ACPI_STATUS DisplayOneDevice(ACPI_HANDLE ObjHandle, UINT32 Level,
     return AE_OK;
 }
 
-
-void ScanSystemBus(void)
+// TODO: Add PCI support w/ no PCI-E
+void scan_sys_bus(void)
 {
     ACPI_TABLE_MCFG *mcfg;
     ACPI_STATUS status = AcpiGetTable("MCFG", 0, (ACPI_TABLE_HEADER**)&mcfg);
@@ -180,9 +175,8 @@ void ScanSystemBus(void)
     ACPI_HANDLE SysBusHandle;
  	AcpiGetHandle(0, "\\", &SysBusHandle);
 
- 	printf("System Bus Devices:\n");
+ 	printf("Reading system devices...\n");
  	AcpiWalkNamespace(ACPI_TYPE_DEVICE, SysBusHandle, INT_MAX,
- 		DisplayOneDevice, NULL, NULL, NULL);
-
+ 		detect_device, NULL, NULL, NULL);
 
 }

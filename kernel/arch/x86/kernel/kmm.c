@@ -188,6 +188,9 @@ static void __parse_mmap(struct multiboot_tag_efi_mmap *mmap)
     void *vaddr = NULL;
     for (u32 i = 0; i < mmap->size; i += mmap->descr_size,
             entry = (efi_memory_desc_t*)((u32)entry + mmap->descr_size)) {
+        // printf("Type: %d\n", entry->type);
+        // printf("Phys addr: %x\n", entry->phys_addr);
+        // printf("Num pages: %d\n", entry->num_pages);
         switch (entry->type) {
             case EFI_BOOT_SERVICES_CODE:
             case EFI_BOOT_SERVICES_DATA:

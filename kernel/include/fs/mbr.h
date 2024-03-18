@@ -5,7 +5,7 @@
 
 #include <kernel/types.h>
 
-struct PartitionEntry {
+struct mbr_part_entry {
     u8 status;
     u8 chs_first_sector[3];
     u8 type;
@@ -16,7 +16,7 @@ struct PartitionEntry {
 
 typedef struct MBR {
     u8 boot_code[446];
-    struct PartitionEntry partition_table[4];
+    struct mbr_part_entry partition_table[4];
     u16 signature;
 } __attribute__((packed)) MBR_t;
 

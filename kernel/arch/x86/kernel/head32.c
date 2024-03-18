@@ -42,10 +42,6 @@ void kernel_early(unsigned int multiboot)
 	graphics_init(mbd.framebuffer);
 	_fpu_init();
 
-	float a = 1.0;
-	float b = 2.0;
-	printf("a: %f\n", a / b);
-
 	parse_acpi((void*)mbd.new_acpi->rsdp, &acpi);
 	apic_init(acpi.madt);
 	//keyboard_init();
@@ -53,12 +49,12 @@ void kernel_early(unsigned int multiboot)
 
 	printf("System Timer: %d\n", get_sys_time());
 
-	sched_init(3000);
+	//sched_init(3000);
 	//enable_interrupts();
 
-	FullAcpiInit();
-	ScanSystemBus();
-	// fs_init(mbd.boot_dev);
+	acpi_full_init();
+	scan_sys_bus();
+	//fs_init(mbd.boot_dev);
 
 
 	while (1)
@@ -80,7 +76,6 @@ static void parse_multiboot(u32 addr, struct multiboot_info *mbd)
 		tag = (struct multiboot_tag *) ((multiboot_uint8_t *) tag
 			+ ((tag->size + 7) & ~7)))
 	{
-		printf("Tag: %d\n", tag->type);
 		switch (tag->type) {
 			case MULTIBOOT_TAG_TYPE_CMDLINE:
 				mbd->cmdline = ((struct multiboot_tag_string*)tag)->string;

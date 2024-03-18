@@ -10,6 +10,7 @@ enum fs_type {
     FAT
 };
 
+int install_disks(void);
 void vfs_install_disk(int type, bool boot);
 
 int open(const char *path, int flags, int mode);

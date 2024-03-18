@@ -1,5 +1,5 @@
-#ifndef _KERNEL_PCI_H
-#define _KERNEL_PCI_H
+#ifndef _PCI_H
+#define _PCI_H
 
 #include <kernel/types.h>
 #include <acpi/acpica.h>
@@ -7,12 +7,12 @@
 #define PCI_TYPE0_ADDRESSES 6
 #define PCI_TYPE1_ADDRESSES 2
 
+u32 pciRead(u32 addr);
+void pciWrite(u32 addr, u32 data);
+
 u32 pciConfigRead(u8 bus, u8 slot, u8 func, u8 offset, u32 width);
 void pciConfigWrite(u8 bus, u8 slot, u8 func, u8 offset, u32 data,
     u32 width);
-
-u32 pciRead(u32 addr);
-void pciWrite(u32 addr, u32 data);
 
 uintptr_t get_pci_mmio_addr(u8 bus, u8 device, u8 function);
 void pcie_add_map(ACPI_TABLE_MCFG *mcfg);
