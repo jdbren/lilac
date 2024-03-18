@@ -2,7 +2,7 @@
 set -euo pipefail
 . ./scripts/image.sh
 
-qemu-system-x86_64 -machine q35,firmware=OVMF-pure-efi.fd -m 1G \
+qemu-system-x86_64 -machine q35,firmware=./resources/OVMF-pure-efi.fd -m 1G \
     -cpu max -no-reboot \
     -drive file=./uefi.img,format=raw \
     -net none \

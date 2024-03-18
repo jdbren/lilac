@@ -85,6 +85,7 @@ clean:
 	rm -f lilac.kernel
 	rm -f $(OBJS)
 	rm -f $(OBJS:.o=.d)
+	$(MAKE) -C drivers/acpi clean
 
 install: lilac.kernel
 	mkdir -p $(DESTDIR)$(BOOTDIR)

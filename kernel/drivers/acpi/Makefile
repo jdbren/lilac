@@ -8,7 +8,7 @@ EXEC_PREFIX?=$(PREFIX)
 BOOTDIR?=$(EXEC_PREFIX)/boot
 INCLUDEDIR?=$(PREFIX)/include
 
-CFLAGS:=$(CFLAGS) -D __lilac__ -D__is_kernel -I ../../include \
+CFLAGS:=$(CFLAGS) -D__lilac__ -D__is_kernel -I ../../include \
 -ffreestanding -Wall -Wextra -mgeneral-regs-only -mno-red-zone
 LDFLAGS:=$(LDFLAGS)
 LIBS:=$(LIBS) -nostdlib -lk -lgcc
@@ -34,6 +34,6 @@ acpi.lib: $(OBJS)
 	$(CC) -MD -c $< -o $@ $(CFLAGS)
 
 clean:
-	rm -f acpi.lib $(OBJS) $(OBJS:.o=.d)
+	rm -f $(OBJS) $(OBJS:.o=.d)
 
 -include $(OBJS:.o=.d)
