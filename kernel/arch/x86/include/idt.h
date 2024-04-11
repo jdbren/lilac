@@ -3,7 +3,7 @@
 #ifndef x86_IDT_H
 #define x86_IDT_H
 
-#include <kernel/types.h>
+#include <lilac/types.h>
 
 #define INT_GATE 0x8E
 #define TRAP_GATE 0x8F

@@ -3,7 +3,7 @@
 #ifndef x86_TIMER_H
 #define x86_TIMER_H
 
-#include <kernel/types.h>
+#include <lilac/types.h>
 #include <acpi/hpet.h>
 
 void hpet_init(u32 time, struct hpet_info *info);

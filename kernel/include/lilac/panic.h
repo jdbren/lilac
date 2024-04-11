@@ -8,7 +8,9 @@
 
 #define assert(x) if (!(x)) kerror("Assertion failed: " #x)
 
-static inline void kerror(const char* msg) {
+
+static inline __attribute__((noreturn))
+void kerror(const char* msg) {
 	printf("Kernel panic: %s\n", msg);
 	asm("cli");
 	while (1) {

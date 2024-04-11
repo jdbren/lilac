@@ -2,8 +2,8 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <string.h>
 #include <math.h>
-#include <kernel/panic.h>
-#include <kernel/config.h>
+#include <lilac/panic.h>
+#include <lilac/config.h>
 #include <utility/efi.h>
 #include "pgframe.h"
 #include "paging.h"

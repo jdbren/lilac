@@ -1,13 +1,14 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <string.h>
-#include <kernel/lilac.h>
-#include <kernel/types.h>
-#include <kernel/tty.h>
-#include <kernel/panic.h>
-#include <kernel/keyboard.h>
-#include <kernel/timer.h>
-#include <kernel/sched.h>
+#include <lilac/lilac.h>
+#include <lilac/types.h>
+#include <lilac/tty.h>
+#include <lilac/panic.h>
+#include <lilac/keyboard.h>
+#include <lilac/timer.h>
+#include <lilac/sched.h>
+#include <lilac/fs.h>
 #include <acpi/acpi.h>
 #include <utility/efi.h>
 #include <mm/kmm.h>
@@ -15,7 +16,6 @@
 #include "apic.h"
 #include "gdt.h"
 #include "idt.h"
-#include "fs_init.h"
 #include "timer.h"
 
 #if UINT32_MAX == UINTPTR_MAX
@@ -54,8 +54,14 @@ void kernel_early(unsigned int multiboot)
 
 	acpi_full_init();
 	scan_sys_bus();
-	//fs_init(mbd.boot_dev);
 
+	int fd = open("A:/boot/grub/grub", 0, 0);
+	printf("File descriptor: %d\n", fd);
+
+	char buf[512];
+	read(fd, buf, 512);
+	for (int i = 0; i < 512; i++)
+		printf("%c", buf[i]);
 
 	while (1)
 		asm ("hlt");

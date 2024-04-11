@@ -3,7 +3,7 @@
 #ifndef _KERNEL_PROCESS_H
 #define _KERNEL_PROCESS_H
 
-#include <kernel/types.h>
+#include <lilac/types.h>
 
 struct task_info {
     const char *path;

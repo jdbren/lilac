@@ -9,7 +9,7 @@ BOOTDIR?=$(EXEC_PREFIX)/boot
 INCLUDEDIR?=$(PREFIX)/include
 
 CFLAGS:=$(CFLAGS) -D__lilac__ -D__is_kernel -I ../../include \
--ffreestanding -Wall -Wextra -mgeneral-regs-only -mno-red-zone
+-ffreestanding -mgeneral-regs-only -mno-red-zone -Wno-unused-parameter
 LDFLAGS:=$(LDFLAGS)
 LIBS:=$(LIBS) -nostdlib -lk -lgcc
 

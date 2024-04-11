@@ -43,6 +43,8 @@ kernel/write.o \
 mm/kheap.o \
 fs/fat32.o \
 fs/vfs.o \
+fs/gpt.o \
+drivers/blkdev.o \
 drivers/pci.o \
 drivers/ahci.o
 

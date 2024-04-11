@@ -20,3 +20,4 @@ kernel/l.sh
 libc/libc.a
 init/init
 kernel/drivers/acpi/acpi.lib
+resources/code/inodes.txt

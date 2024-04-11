@@ -1,5 +1,5 @@
-#include <kernel/types.h>
-#include <kernel/process.h>
+#include <lilac/types.h>
+#include <lilac/process.h>
 #include "gdt.h"
 
 void arch_context_switch(struct task *prev, struct task *next)

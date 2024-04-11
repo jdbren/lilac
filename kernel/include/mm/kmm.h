@@ -3,8 +3,8 @@
 #ifndef KERNEL_MM_H
 #define KERNEL_MM_H
 
-#include <kernel/types.h>
-#include <kernel/config.h>
+#include <lilac/types.h>
+#include <lilac/config.h>
 #include <utility/multiboot2.h>
 
 #define PG_READ            0x0

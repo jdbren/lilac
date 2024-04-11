@@ -2,16 +2,15 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <stdatomic.h>
 #include <string.h>
-#include <kernel/process.h>
-#include <kernel/types.h>
-#include <kernel/config.h>
-#include <kernel/panic.h>
-#include <kernel/elf.h>
-#include <kernel/sched.h>
-#include <kernel/timer.h>
+#include <lilac/process.h>
+#include <lilac/types.h>
+#include <lilac/config.h>
+#include <lilac/panic.h>
+#include <lilac/elf.h>
+#include <lilac/sched.h>
+#include <lilac/timer.h>
 #include <mm/kmm.h>
 #include <mm/kheap.h>
-#include <fs/vfs.h>
 
 #define MAX_TASKS 1024
 #define INIT_STACK(KSTACK) ((u32)KSTACK + __KERNEL_STACK_SZ - sizeof(size_t))
@@ -38,14 +37,14 @@ static void start_process(void)
     printf("Process %d started\n", current->pid);
 
     char *path = current->info->path;
-    int fd = open(path, 0, 0);
+    int fd; //= open(path, 0, 0);
     if (fd < 0) {
         printf("Failed to open file %s\n", path);
         return;
     }
 
     struct elf_header *hdr = kzmalloc(0x1000);
-    int bytes = read(fd, hdr, 0x1000);
+    int bytes; //= read(fd, hdr, 0x1000);
     if (hdr->sig != ELF_MAGIC) {
         printf("Invalid ELF signature\n");
         return;

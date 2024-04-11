@@ -4,7 +4,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <utility/multiboot2.h>
-#include <kernel/panic.h>
+#include <lilac/panic.h>
 #include <utility/efi.h>
 #include "pgframe.h"
 #include "paging.h"

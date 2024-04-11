@@ -1,7 +1,7 @@
 #ifndef _VGA_H
 #define _VGA_H
 
-#include <kernel/types.h>
+#include <lilac/types.h>
 
 enum vga_color {
 	VGA_COLOR_BLACK = 0,

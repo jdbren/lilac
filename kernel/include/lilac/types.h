@@ -18,9 +18,31 @@ typedef int16_t s16;
 typedef int32_t s32;
 typedef int64_t s64;
 
+typedef signed long ssize_t;
+
+typedef unsigned short umode_t;
+
 #define BITS_PER_LONG 32
 
 #define likely(x)       __builtin_expect(!!(x), 1)
 #define unlikely(x)     __builtin_expect(!!(x), 0)
+
+struct list_head {
+    struct list_head *next, *prev;
+};
+
+struct hlist_head {
+	struct hlist_node *first;
+};
+
+struct hlist_node {
+	struct hlist_node *next, **pprev;
+};
+
+enum disk_cmd {
+    DISK_READ,
+    DISK_WRITE,
+    DISK_FLUSH
+};
 
 #endif

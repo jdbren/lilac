@@ -3,6 +3,8 @@
 #ifndef _KERNEL_SCHED_H
 #define _KERNEL_SCHED_H
 
+struct task;
+
 void sched_init(int timer);
 void schedule(void);
 void yield(void);

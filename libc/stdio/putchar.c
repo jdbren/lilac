@@ -2,8 +2,8 @@
 #include <unistd.h>
 
 #if defined(__is_libk)
-#include <kernel/tty.h>
-#include <kernel/port.h>
+#include <lilac/tty.h>
+#include <lilac/port.h>
 #endif
 
 int putchar(int ic)

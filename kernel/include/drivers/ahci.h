@@ -1,7 +1,8 @@
 #ifndef _AHCI_H
 #define _AHCI_H
 
-#include <kernel/types.h>
+#include <lilac/types.h>
+#include <drivers/blkdev.h>
 #include <drivers/sata.h>
 
 typedef volatile struct HBA_PORT {
@@ -133,9 +134,7 @@ void port_rebase(hba_port_t *port, int portno);
 void start_cmd(hba_port_t *port);
 void stop_cmd(hba_port_t *port);
 
-int ahci_read(struct ahci_device *dev, u32 startl, u32 starth, u32 count,
-	u16 *buf);
-int ahci_write(struct ahci_device *dev, u32 startl, u32 starth, u32 count,
-	u16 *buf);
+int ahci_read(struct gendisk *disk, u64 lba, void *buf, u32 count);
+int ahci_write(struct gendisk *disk, u64 lba, const void *buf, u32 count);
 
 #endif

@@ -1,8 +1,8 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include <kernel/types.h>
-#include <kernel/process.h>
-#include <kernel/sched.h>
+#include <lilac/types.h>
+#include <lilac/process.h>
+#include <lilac/sched.h>
 
 static struct task* task_queue[16];
 static int back;

@@ -3,8 +3,8 @@
 #include <acpi/madt.h>
 #include <string.h>
 #include <stdbool.h>
-#include <kernel/panic.h>
-#include <kernel/types.h>
+#include <lilac/panic.h>
+#include <lilac/types.h>
 #include <mm/kheap.h>
 
 static bool is_valid(struct SDTHeader *addr)

@@ -3,7 +3,7 @@
 #ifndef x86_PGFRAME_H
 #define x86_PGFRAME_H
 
-#include <kernel/types.h>
+#include <lilac/types.h>
 #include <utility/multiboot2.h>
 
 int phys_mem_init(struct multiboot_tag_efi_mmap *mmap);

@@ -3,7 +3,7 @@
 #ifndef KERNEL_HEAP_H
 #define KERNEL_HEAP_H
 
-#include <kernel/types.h>
+#include <lilac/types.h>
 
 void *kmalloc(size_t size);
 void *kzmalloc(size_t size);

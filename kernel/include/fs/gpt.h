@@ -1,7 +1,7 @@
 #ifndef _GPT_H
 #define _GPT_H
 
-#include <kernel/types.h>
+#include <lilac/types.h>
 
 #define GPT_SIGNATURE 0x5452415020494645ULL
 #define GPT_HEADER_LBA 1
@@ -31,5 +31,7 @@ struct gpt_part_entry {
     u64 attributes;
     u16 partition_name[36];
 } __attribute__((packed));
+
+int gpt_validate(struct GPT *gpt);
 
 #endif

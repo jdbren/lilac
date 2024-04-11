@@ -1,4 +1,4 @@
-#include "kernel/config.h"
+#include <lilac/config.h>
 
 # TODO: Set up acutal stack and code to jump to
 

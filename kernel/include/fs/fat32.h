@@ -3,7 +3,7 @@
 #ifndef _FAT32_H
 #define _FAT32_H
 
-#include <kernel/types.h>
+#include <lilac/types.h>
 
 typedef struct fat_extBS_32 {
 	u32		FAT_size_32;
@@ -46,8 +46,8 @@ typedef struct fat_BS {
 
 
 void print_fat32_data(fat_BS_t*);
-void fat32_init(int disknum, u32 boot_sector);
-int fat32_open(const char *path);
-size_t fat32_read(int fd, void *buf, size_t count);
+int fat32_init(struct vfsmount *mnt);
+int fat32_open(const char *path, struct file *file);
+ssize_t fat32_read(struct file *file, void *file_buf, size_t count);
 
 #endif

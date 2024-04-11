@@ -3,7 +3,7 @@
 #ifndef x86_APIC_H
 #define x86_APIC_H
 
-#include <kernel/types.h>
+#include <lilac/types.h>
 #include <acpi/madt.h>
 
 void apic_init(struct madt_info *madt);

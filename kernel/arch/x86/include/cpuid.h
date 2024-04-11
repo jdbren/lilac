@@ -3,7 +3,7 @@
 #ifndef _CPUID_H
 #define _CPUID_H
 
-#include <kernel/types.h>
+#include <lilac/types.h>
 
 #define CPUID_FEAT_EDX_APIC (1 << 9)
 

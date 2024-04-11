@@ -2,7 +2,7 @@
 #define _KERNEL_LIST_H
 
 #include <stdbool.h>
-#include <kernel/types.h>
+#include <lilac/types.h>
 
 struct node {
     struct node *next;

@@ -1,8 +1,8 @@
 #include <stdatomic.h>
-#include <kernel/sync.h>
-#include <kernel/types.h>
-#include <kernel/process.h>
-#include <kernel/sched.h>
+#include <lilac/sync.h>
+#include <lilac/types.h>
+#include <lilac/process.h>
+#include <lilac/sched.h>
 #include <mm/kheap.h>
 
 #define MAX_SPINLOCKS 16

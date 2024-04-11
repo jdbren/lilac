@@ -3,7 +3,7 @@
 #ifndef x86_PAGING_H
 #define x86_PAGING_H
 
-#include <kernel/types.h>
+#include <lilac/types.h>
 
 #define PAGE_BYTES 4096
 

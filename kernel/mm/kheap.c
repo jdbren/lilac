@@ -5,9 +5,9 @@
 #include <string.h>
 #include <math.h>
 
-#include <kernel/config.h>
-#include <kernel/types.h>
-#include <kernel/panic.h>
+#include <lilac/config.h>
+#include <lilac/types.h>
+#include <lilac/panic.h>
 #include <mm/kheap.h>
 #include <mm/kmm.h>
 

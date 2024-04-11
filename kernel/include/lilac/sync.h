@@ -2,8 +2,8 @@
 #define _KERNEL_SYNC_H
 
 #include <stdatomic.h>
-#include <kernel/types.h>
-#include <kernel/list.h>
+#include <lilac/types.h>
+#include <lilac/list.h>
 
 typedef atomic_flag spinlock_t;
 #define SPINLOCK_INIT ATOMIC_FLAG_INIT
@@ -13,7 +13,10 @@ void delete_lock(spinlock_t *spin);
 void acquire_lock(spinlock_t *spin);
 void release_lock(spinlock_t *spin);
 
-
+struct lockref {
+    spinlock_t lock;
+    int count;
+};
 
 typedef struct semaphore {
     atomic_int count;

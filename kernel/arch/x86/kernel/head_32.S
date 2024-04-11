@@ -1,6 +1,6 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include "kernel/config.h"
+#include <lilac/config.h>
 #define __PAGE_OFFSET PAGE_SIZE
 
 #define __BOOT_CS 0x08

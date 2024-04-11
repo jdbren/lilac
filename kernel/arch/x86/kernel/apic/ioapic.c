@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <string.h>
-#include <kernel/types.h>
+#include <lilac/types.h>
 #include <acpi/madt.h>
 #include <mm/kheap.h>
 #include "apic.h"

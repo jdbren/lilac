@@ -1,14 +1,13 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include <kernel/lilac.h>
-#include <kernel/types.h>
-#include <kernel/panic.h>
-#include <kernel/process.h>
-#include <kernel/sched.h>
-#include <kernel/timer.h>
-#include <kernel/elf.h>
+#include <lilac/lilac.h>
+#include <lilac/types.h>
+#include <lilac/panic.h>
+#include <lilac/process.h>
+#include <lilac/sched.h>
+#include <lilac/timer.h>
+#include <lilac/elf.h>
 #include <mm/kheap.h>
-#include <fs/vfs.h>
 
 void start_kernel(void)
 {

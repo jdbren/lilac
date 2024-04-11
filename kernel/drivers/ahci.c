@@ -1,9 +1,9 @@
 #include <stdbool.h>
 #include <string.h>
 #include <drivers/ahci.h>
+#include <drivers/blkdev.h>
 #include <mm/kmm.h>
 #include <mm/kheap.h>
-#include <fs/gpt.h>
 #include <utility/ata.h>
 
 #define	SATA_SIG_ATA	0x00000101	// SATA drive
@@ -45,6 +45,11 @@ struct ahci_device {
 	int type;
 };
 
+struct disk_operations ahci_ops = {
+	.disk_read = &ahci_read,
+	.disk_write = NULL,
+};
+
 static hba_mem_t *abar;
 static int num_ports;
 static int num_devices;
@@ -52,9 +57,12 @@ static int num_devices;
 static uintptr_t ahci_base;
 static struct ahci_device *devices;
 
+static void ahci_install_device(struct ahci_device *dev);
 static int check_type(hba_port_t *port);
 static void port_mem_init(int num_ports);
 static int find_cmdslot(hba_port_t *port);
+static int __ahci_read(struct ahci_device *dev, u32 startl, u32 starth,
+	u32 count, u16 *buf);
 
 // Initialize AHCI controller
 void ahci_init(hba_mem_t *abar_phys)
@@ -104,6 +112,9 @@ void ahci_init(hba_mem_t *abar_phys)
 	for (i = 0; i < num_ports; i++)
 		port_rebase(&abar->ports[i], i);
 
+	for (i = 0; i < num_devices; i++)
+		ahci_install_device(&devices[i]);
+
 	printf("AHCI initialized\n");
 }
 
@@ -146,6 +157,8 @@ static void port_mem_init(int num_ports)
 
 void port_rebase(hba_port_t *port, int portno)
 {
+	printf("Rebasing port %d\n", portno);
+	printf("Port: %x\n", port);
 	stop_cmd(port);	// Stop command engine
 
 	// Command list offset: 1K*portno
@@ -170,6 +183,17 @@ void port_rebase(hba_port_t *port, int portno)
 	}
 
 	start_cmd(port);	// Start command engine
+}
+
+void ahci_install_device(struct ahci_device *dev)
+{
+	struct gendisk *new_disk = kzmalloc(sizeof(*new_disk));
+	strcpy(new_disk->driver, "AHCI");
+	new_disk->ops = &ahci_ops;
+	new_disk->private = dev;
+
+	add_gendisk(new_disk);
+	scan_partitions(new_disk);
 }
 
 // Start command engine
@@ -204,8 +228,16 @@ void stop_cmd(hba_port_t *port)
 	}
 }
 
+int ahci_read(struct gendisk *disk, u64 lba, void *buf, u32 count)
+{
+	printf("Reading %d sectors from disk at LBA %x\n", count, lba);
+	return __ahci_read(disk->private, lba & 0xFFFFFFFF, 0, count,
+		(void*)virt_to_phys(buf));
+}
+
 // DMA - Read
-int ahci_read(struct ahci_device *dev, u32 startl, u32 starth, u32 count, u16 *buf)
+// Buf is a physical address
+static int __ahci_read(struct ahci_device *dev, u32 startl, u32 starth, u32 count, u16 *buf)
 {
 	hba_port_t *port = dev->port;
 	int i = 0;
@@ -226,14 +258,14 @@ int ahci_read(struct ahci_device *dev, u32 startl, u32 starth, u32 count, u16 *b
  		(cmdheader->prdtl)*sizeof(hba_prdt_entry_t));
 
 	// 8K bytes (16 sectors) per PRDT
-	for (i = 0; i < cmdheader->prdtl-1, count >= 16; i++)
-	{
-		cmdtbl->prdt_entry[i].dba = (u32)buf;
-		cmdtbl->prdt_entry[i].dbc = 8 * 1024 - 1;	// 8K bytes (this value should always be set to 1 less than the actual value)
-		cmdtbl->prdt_entry[i].i = 1;
-		buf += 4 * 1024;	// 4K words
-		count -= 16;		// 16 sectors
-	}
+	// for (i = 0; i < cmdheader->prdtl-1; i++)
+	// {
+	// 	cmdtbl->prdt_entry[i].dba = (u32)buf;
+	// 	cmdtbl->prdt_entry[i].dbc = 8 * 1024 - 1;	// 8K bytes (this value should always be set to 1 less than the actual value)
+	// 	cmdtbl->prdt_entry[i].i = 1;
+	// 	buf += 4 * 1024;	// 4K words
+	// 	count -= 16;		// 16 sectors
+	// }
 	// Last entry
 	cmdtbl->prdt_entry[i].dba = (u32)buf;
 	cmdtbl->prdt_entry[i].dbc = (count<<9)-1;	// 512 bytes per sector
@@ -260,11 +292,8 @@ int ahci_read(struct ahci_device *dev, u32 startl, u32 starth, u32 count, u16 *b
 
 	// The below loop waits until the port is no longer busy before issuing a new command
 	while ((port->tfd & (ATA_DEV_BUSY | ATA_DEV_DRQ)) && spin < 1000000)
-	{
 		spin++;
-	}
-	if (spin == 1000000)
-	{
+	if (spin == 1000000) {
 		printf("Port is hung\n");
 		return 1;
 	}
@@ -291,6 +320,8 @@ int ahci_read(struct ahci_device *dev, u32 startl, u32 starth, u32 count, u16 *b
 		printf("Read disk error\n");
 		return 1;
 	}
+
+	printf("Read disk success\n");
 
 	return 0;
 }

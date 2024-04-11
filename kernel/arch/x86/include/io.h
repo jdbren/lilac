@@ -1,7 +1,7 @@
 #ifndef _ARCH_I386_IO_H
 #define _ARCH_I386_IO_H
 
-#include <kernel/types.h>
+#include <lilac/types.h>
 
 void outb(u16 port, u8 value);
 void outw(u16 port, u16 value);

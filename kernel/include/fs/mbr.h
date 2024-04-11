@@ -3,7 +3,7 @@
 #ifndef _MBR_H
 #define _MBR_H
 
-#include <kernel/types.h>
+#include <lilac/types.h>
 
 struct mbr_part_entry {
     u8 status;
@@ -19,5 +19,7 @@ typedef struct MBR {
     struct mbr_part_entry partition_table[4];
     u16 signature;
 } __attribute__((packed)) MBR_t;
+
+void mbr_read(struct MBR *mbr);
 
 #endif // MBR_H

@@ -1,7 +1,7 @@
 #ifndef _KERNEL_EFI_H
 #define _KERNEL_EFI_H
 
-#include <kernel/types.h>
+#include <lilac/types.h>
 
 #define UUID_SIZE 16
 
@@ -30,8 +30,6 @@ typedef u8 efi_bool_t;
 typedef u16 efi_char16_t;		/* UNICODE character */
 typedef u64 efi_physical_addr_t;
 typedef void *efi_handle_t;
-
-typedef guid_t guid_t __attribute__((align(sizeof(u32))));
 
 #define guid_t(a, b, c, d...) (guid_t){ {					            \
 	(a) & 0xff, ((a) >> 8) & 0xff, ((a) >> 16) & 0xff, ((a) >> 24) & 0xff,	\

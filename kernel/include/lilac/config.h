@@ -18,4 +18,7 @@
 
 #define pa(X) ((X) - __KERNEL_BASE)
 
+#define __align(x)      __attribute__((aligned(x)))
+#define __must_check    __attribute__((__warn_unused_result__))
+
 #endif

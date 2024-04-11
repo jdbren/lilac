@@ -1,5 +1,7 @@
+#include <limits.h>
 #include <drivers/pci.h>
-#include <kernel/port.h>
+#include <lilac/port.h>
+#include <lilac/panic.h>
 #include <mm/kmm.h>
 #include <mm/kheap.h>
 #include <drivers/ahci.h>
@@ -14,21 +16,97 @@ static struct {
 } *pcie_mmio_maps;
 static int pcie_mmio_map_cnt;
 
+static uintptr_t get_pci_mmio_addr(u8 bus, u8 device, u8 function);
+static ACPI_STATUS pcie_init_device(ACPI_HANDLE ObjHandle, UINT32 Level,
+    void *Context, void **ReturnValue);
 
-u32 pciRead(u32 addr)
+int pcie_bus_init(ACPI_HANDLE PciBus)
 {
-    WritePort(PCI_CONFIG_ADDRESS, addr | (1U << 31), 32);
-    return ReadPort(PCI_CONFIG_DATA, 32);
+    ACPI_TABLE_MCFG *mcfg;
+    ACPI_STATUS status = AcpiGetTable("MCFG", 0, (ACPI_TABLE_HEADER**)&mcfg);
+
+    if (ACPI_SUCCESS(status))
+        pcie_add_map(mcfg);
+    else
+        kerror("No MCFG table found\n");
+
+    status = AcpiWalkNamespace(ACPI_TYPE_DEVICE, PciBus, INT_MAX,
+ 		pcie_init_device, NULL, NULL, NULL);
+
+    if (ACPI_FAILURE(status))
+        return -1;
+    return 0;
 }
 
-void pciWrite(u32 addr, u32 data)
+static ACPI_STATUS pcie_init_device(ACPI_HANDLE ObjHandle, UINT32 Level,
+    void *Context, void **ReturnValue)
 {
-    WritePort(PCI_CONFIG_ADDRESS, addr | (1U << 31), 32);
-    WritePort(PCI_CONFIG_DATA, data, 32);
+    ACPI_STATUS Status;
+    ACPI_BUFFER Path;
+    char Buffer[256];
+    Path.Length = sizeof(Buffer);
+    Path.Pointer = Buffer;
+    ACPI_DEVICE_INFO *Info = kzmalloc(sizeof(*Info));
+
+    Status = AcpiGetName(ObjHandle, ACPI_FULL_PATHNAME, &Path);
+    if (ACPI_SUCCESS(Status))
+        printf(" %s\n", Path.Pointer);
+
+    Status = AcpiGetObjectInfo(ObjHandle, &Info);
+    if (ACPI_SUCCESS(Status)) {
+        if (Info->Valid & ACPI_VALID_ADR)
+            pcie_read_device(Info);
+    }
+
+    kfree(Info);
+    return AE_OK;
 }
+
+void pcie_read_device(ACPI_DEVICE_INFO *Info)
+{
+    struct pci_device *pci_dev;
+
+    if (!(Info->Valid & ACPI_VALID_ADR))
+        return;
+
+    pci_dev = (struct pci_device*)
+        get_pci_mmio_addr(0, Info->Address >> 16, Info->Address & 0xFFFF);
+
+    if (pci_dev->BaseClass == 1 && pci_dev->SubClass == 6) {
+        printf("Found AHCI Controller\n");
+        ahci_init((void*)(pci_dev->u.type0.BaseAddresses[5] & 0xFFFFF000));
+    }
+}
+
+void pci_read_device(ACPI_DEVICE_INFO *Info)
+{
+    ACPI_STATUS Status;
+    ACPI_BUFFER Path;
+    char Buffer[256];
+    Path.Length = sizeof(Buffer);
+    Path.Pointer = Buffer;
+
+    struct pci_device *pci_dev = kzmalloc(sizeof(*pci_dev));
+    u32 *pci_reg = (u32*)pci_dev;
+
+    if (Info->Valid & ACPI_VALID_ADR) {
+        pci_reg = (u32*)pci_dev;
+        *pci_reg = pciConfigRead(0, Info->Address >> 16, Info->Address & 0xFFFF, 0, 32);
+        if (*pci_reg++ != 0xffffffff) {
+            *pci_reg++ = pciConfigRead(0, Info->Address >> 16, Info->Address & 0xFFFF, 4, 32);
+            *pci_reg++ = pciConfigRead(0, Info->Address >> 16, Info->Address & 0xFFFF, 8, 32);
+            *pci_reg = pciConfigRead(0, Info->Address >> 16, Info->Address & 0xFFFF, 12, 32);
+        }
+    }
+}
+
+
+/**
+ * Memory-mapped I/O for PCIe devices
+*/
 
 // Get the MMIO address for a PCI device
-uintptr_t get_pci_mmio_addr(u8 bus, u8 device, u8 function)
+static uintptr_t get_pci_mmio_addr(u8 bus, u8 device, u8 function)
 {
     uintptr_t addr;
     for (int i = 0; i < 256; i++) {
@@ -73,49 +151,22 @@ void pcie_add_map(ACPI_TABLE_MCFG *mcfg)
     }
 }
 
-void pcie_read_device(ACPI_DEVICE_INFO *Info)
+
+/**
+ * PCI configuration space access
+*/
+
+u32 pciRead(u32 addr)
 {
-    ACPI_STATUS Status;
-    ACPI_BUFFER Path;
-    char Buffer[256];
-    Path.Length = sizeof(Buffer);
-    Path.Pointer = Buffer;
-    struct pci_device *pci_dev;
-
-    if (!(Info->Valid & ACPI_VALID_ADR))
-        return;
-
-    pci_dev = (struct pci_device*)
-        get_pci_mmio_addr(0, Info->Address >> 16, Info->Address & 0xFFFF);
-
-    if (pci_dev->BaseClass == 1 && pci_dev->SubClass == 6) {
-        printf("Found AHCI Controller\n");
-        ahci_init((void*)(pci_dev->u.type0.BaseAddresses[5] & 0xFFFFF000));
-    }
+    WritePort(PCI_CONFIG_ADDRESS, addr | (1U << 31), 32);
+    return ReadPort(PCI_CONFIG_DATA, 32);
 }
 
-void pci_read_device(ACPI_DEVICE_INFO *Info)
+void pciWrite(u32 addr, u32 data)
 {
-    ACPI_STATUS Status;
-    ACPI_BUFFER Path;
-    char Buffer[256];
-    Path.Length = sizeof(Buffer);
-    Path.Pointer = Buffer;
-
-    struct pci_device *pci_dev = kzmalloc(sizeof(*pci_dev));
-    u32 *pci_reg = (u32*)pci_dev;
-
-    if (Info->Valid & ACPI_VALID_ADR) {
-        pci_reg = (u32*)pci_dev;
-        *pci_reg = pciConfigRead(0, Info->Address >> 16, Info->Address & 0xFFFF, 0, 32);
-        if (*pci_reg++ != 0xffffffff) {
-            *pci_reg++ = pciConfigRead(0, Info->Address >> 16, Info->Address & 0xFFFF, 4, 32);
-            *pci_reg++ = pciConfigRead(0, Info->Address >> 16, Info->Address & 0xFFFF, 8, 32);
-            *pci_reg = pciConfigRead(0, Info->Address >> 16, Info->Address & 0xFFFF, 12, 32);
-        }
-    }
+    WritePort(PCI_CONFIG_ADDRESS, addr | (1U << 31), 32);
+    WritePort(PCI_CONFIG_DATA, data, 32);
 }
-
 
 u32 pciConfigRead(u8 bus, u8 slot, u8 func, u8 offset, u32 width)
 {

@@ -4,7 +4,7 @@
 #define _MSR_H
 
 #include <stdbool.h>
-#include <kernel/types.h>
+#include <lilac/types.h>
 #include "cpuid.h"
 
 static const u32 CPUID_FLAG_MSR = 1 << 5;

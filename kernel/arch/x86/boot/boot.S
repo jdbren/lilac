@@ -2,7 +2,7 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #define ASM_FILE 1
 #include <utility/multiboot2.h>
-#include <kernel/config.h>
+#include <lilac/config.h>
 
 # Declare constants for the multiboot2 header.
 .set ARCH,     0

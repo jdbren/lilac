@@ -1,5 +1,5 @@
 #include <sys/types.h>
-#include <kernel/tty.h>
+#include <lilac/tty.h>
 
 ssize_t __do_write(void)
 {

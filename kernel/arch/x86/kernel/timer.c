@@ -4,8 +4,8 @@
 
 #include <acpi/hpet.h>
 #include <mm/kmm.h>
-#include <kernel/port.h>
-#include <kernel/panic.h>
+#include <lilac/port.h>
+#include <lilac/panic.h>
 #include "apic.h"
 #include "idt.h"
 
@@ -78,7 +78,7 @@ void hpet_init(u32 time, struct hpet_info *info)
 	write_reg(HPET_TIMER_COMP_REG(info->hpet_number), time);
 	write_reg(HPET_CONFIG_REG, 0x3); // Enable counter
 
-	printf("HPET initialized at %d Hz\n", desired_freq);
+	printf("HPET set at %d Hz\n", desired_freq);
 }
 
 u32 hpet_read(void)
@@ -103,11 +103,11 @@ void sleep(u32 millis)
     }
 }
 
-// Get system timer in 100 ns intervals
+// Get system timer in 1 ns intervals
 u32 get_sys_time(void)
 {
 	u32 counter = hpet_read();
-	u32 frq = hpet_frq / 10000000U;
+	u32 frq = hpet_frq / 100000U;
 	u32 time = counter / frq;
 	return time;
 }

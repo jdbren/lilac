@@ -1,7 +1,7 @@
 #ifndef _KERNEL_INTERRUPT_H
 #define _KERNEL_INTERRUPT_H
 
-#include <kernel/types.h>
+#include <lilac/types.h>
 
 #define ISR __attribute__((interrupt))
 

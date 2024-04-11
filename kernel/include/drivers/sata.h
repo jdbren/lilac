@@ -1,7 +1,7 @@
 #ifndef _SATA_H
 #define _SATA_H
 
-#include <kernel/types.h>
+#include <lilac/types.h>
 
 typedef enum {
 	FIS_TYPE_REG_H2D	= 0x27,	// Register FIS - host to device

@@ -3,8 +3,8 @@
 #ifndef _LILAC_LILAC_H
 #define _LILAC_LILAC_H
 
-#include <kernel/types.h>
-#include <kernel/boot.h>
+#include <lilac/types.h>
+#include <lilac/boot.h>
 #include <acpi/acpi.h>
 
 struct boot_info {

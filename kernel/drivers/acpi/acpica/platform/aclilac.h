@@ -1,8 +1,8 @@
 #ifndef __ACLILAC_H__
 #define __ACLILAC_H__
 
-#include <kernel/types.h>
-#include <kernel/sync.h>
+#include <lilac/types.h>
+#include <lilac/sync.h>
 
 #define ACPI_MACHINE_WIDTH          BITS_PER_LONG
 #define ACPI_USE_SYSTEM_CLIBRARY

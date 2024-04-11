@@ -3,7 +3,7 @@
 #ifndef _ACPI_H
 #define _ACPI_H
 
-#include <kernel/types.h>
+#include <lilac/types.h>
 
 struct RSDP {
     char Signature[8];

@@ -2,9 +2,9 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <stdbool.h>
 #include <string.h>
-#include <kernel/types.h>
-#include <kernel/panic.h>
-#include <kernel/timer.h>
+#include <lilac/types.h>
+#include <lilac/panic.h>
+#include <lilac/timer.h>
 #include "cpuid.h"
 #include "msr.h"
 #include "paging.h"

@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <limits.h>
-#include <kernel/panic.h>
+#include <lilac/panic.h>
 #include <drivers/pci.h>
 #include <acpi/acpi.h>
 #include <acpi/madt.h>
@@ -11,6 +11,11 @@
 #include <mm/kmm.h>
 #include <mm/kheap.h>
 #include "acpica/acpi.h"
+
+enum ACPI_BRIDGE_TYPE {
+    ACPI_BRIDGE_PCI,
+    ACPI_BRIDGE_PCIe
+};
 
 static bool doChecksum(struct SDTHeader *tableHeader)
 {
@@ -136,7 +141,7 @@ int acpi_full_init(void)
     return status;
 }
 
-ACPI_STATUS detect_device(ACPI_HANDLE ObjHandle, UINT32 Level,
+ACPI_STATUS detect_top_level_device(ACPI_HANDLE ObjHandle, UINT32 Level,
     void *Context, void **ReturnValue)
 {
     ACPI_STATUS Status;
@@ -146,37 +151,36 @@ ACPI_STATUS detect_device(ACPI_HANDLE ObjHandle, UINT32 Level,
     Path.Length = sizeof(Buffer);
     Path.Pointer = Buffer;
 
-
     /* Get the full path of this device and print it */
     Status = AcpiGetName(ObjHandle, ACPI_FULL_PATHNAME, &Path);
-    // if (ACPI_SUCCESS (Status))
-    //     printf("%s\n", Path.Pointer);
+    if (ACPI_SUCCESS(Status))
+        printf("%s\n", Path.Pointer);
     /* Get the device info for this device and print it */
     Status = AcpiGetObjectInfo(ObjHandle, &Info);
+    printf("HID: %s\n", Info->HardwareId.String);
 
-    if (ACPI_SUCCESS (Status) && Info->Type == ACPI_TYPE_DEVICE) {
-        pcie_read_device(Info);
+    if (ACPI_SUCCESS(Status) && Info->Valid & ACPI_VALID_HID) {
+        if (!strcmp(Info->HardwareId.String, "PNP0A03"))
+            printf("Found PCI bridge\n");
+        if (!strcmp(Info->HardwareId.String, "PNP0A08")) {
+            printf("Found PCIe bridge\n");
+            pcie_bus_init(ObjHandle);
+        }
+        else
+            printf("Found unknown device\n");
     }
+
     kfree(Info);
-    *ReturnValue = NULL;
     return AE_OK;
 }
 
 // TODO: Add PCI support w/ no PCI-E
 void scan_sys_bus(void)
 {
-    ACPI_TABLE_MCFG *mcfg;
-    ACPI_STATUS status = AcpiGetTable("MCFG", 0, (ACPI_TABLE_HEADER**)&mcfg);
+    ACPI_HANDLE sys_bus_handle;
+ 	AcpiGetHandle(0, "\\_SB_", &sys_bus_handle);
 
-    if (ACPI_SUCCESS(status)) {
-        pcie_add_map(mcfg);
-    }
-
-    ACPI_HANDLE SysBusHandle;
- 	AcpiGetHandle(0, "\\", &SysBusHandle);
-
- 	printf("Reading system devices...\n");
- 	AcpiWalkNamespace(ACPI_TYPE_DEVICE, SysBusHandle, INT_MAX,
- 		detect_device, NULL, NULL, NULL);
-
+ 	printf("Reading system bus root devices...\n");
+ 	AcpiWalkNamespace(ACPI_TYPE_DEVICE, sys_bus_handle, 1,
+ 		detect_top_level_device, NULL, NULL, NULL);
 }

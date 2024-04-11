@@ -1,6 +1,6 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include <kernel/panic.h>
+#include <lilac/panic.h>
 
 void div0_handler(void)
 {

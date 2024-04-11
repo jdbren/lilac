@@ -1,10 +1,10 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <string.h>
-#include <kernel/process.h>
-#include <kernel/types.h>
-#include <kernel/panic.h>
-#include <kernel/config.h>
+#include <lilac/process.h>
+#include <lilac/types.h>
+#include <lilac/panic.h>
+#include <lilac/config.h>
 #include <mm/kmm.h>
 #include "pgframe.h"
 #include "paging.h"

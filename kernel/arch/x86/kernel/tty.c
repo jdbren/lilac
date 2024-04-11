@@ -2,9 +2,9 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <stdbool.h>
 #include <string.h>
-#include <kernel/tty.h>
-#include <kernel/types.h>
-#include <kernel/panic.h>
+#include <lilac/tty.h>
+#include <lilac/types.h>
+#include <lilac/panic.h>
 #include <mm/kheap.h>
 #include <mm/kmm.h>
 #include <utility/vga.h>

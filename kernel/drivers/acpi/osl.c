@@ -9,13 +9,13 @@
  *
 */
 
-#include <kernel/lilac.h>
-#include <kernel/types.h>
-#include <kernel/config.h>
-#include <kernel/interrupt.h>
-#include <kernel/port.h>
-#include <kernel/process.h>
-#include <kernel/timer.h>
+#include <lilac/lilac.h>
+#include <lilac/types.h>
+#include <lilac/config.h>
+#include <lilac/interrupt.h>
+#include <lilac/port.h>
+#include <lilac/process.h>
+#include <lilac/timer.h>
 #include <mm/kmm.h>
 #include <mm/kheap.h>
 #include <drivers/pci.h>
