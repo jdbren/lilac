@@ -5,7 +5,8 @@
 
 struct task;
 
-void sched_init(int timer);
+void sched_init(void);
+void sched_clock_init(void);
 void schedule(void);
 void yield(void);
 void schedule_task(struct task *new_task);

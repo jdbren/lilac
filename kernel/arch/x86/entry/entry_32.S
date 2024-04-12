@@ -11,6 +11,9 @@ jump_usermode:
 	push ebx
 	push esi
 	push edi
+	push esp
+	call set_tss_esp0
+	add esp, 4
 	mov ebx, [ebp+8] 			# return address
 	mov edx, [ebp+12] 			# stack address
 	mov eax, __USER_DS | 0x3 	# ring 3 data

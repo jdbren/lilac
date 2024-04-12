@@ -163,5 +163,5 @@ mbinfo:
 .section .bsstack, "aw", @nobits
 .align __PAGE_OFFSET
 stack_bottom:
-	.skip 32768
+	.skip 0x40000
 stack_top:

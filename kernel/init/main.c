@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <unistd.h>
 
-int main()
+void main(void)
 {
     printf("Starting init task\n");
-    fork();
+    //fork();
 }

@@ -72,7 +72,7 @@ void read_xsdt(struct SDTHeader *xsdt, struct acpi_info *info)
     }
 }
 
-void parse_acpi(struct RSDP *rsdp, struct acpi_info *info)
+void acpi_early(struct RSDP *rsdp, struct acpi_info *info)
 {
     u8 check = 0;
     for (u32 i = 0; i < sizeof(*rsdp); i++)
@@ -152,12 +152,11 @@ ACPI_STATUS detect_top_level_device(ACPI_HANDLE ObjHandle, UINT32 Level,
     Path.Pointer = Buffer;
 
     /* Get the full path of this device and print it */
-    Status = AcpiGetName(ObjHandle, ACPI_FULL_PATHNAME, &Path);
-    if (ACPI_SUCCESS(Status))
-        printf("%s\n", Path.Pointer);
+    // Status = AcpiGetName(ObjHandle, ACPI_FULL_PATHNAME, &Path);
+    // if (ACPI_SUCCESS(Status))
+    //     printf("%s\n", Path.Pointer);
     /* Get the device info for this device and print it */
     Status = AcpiGetObjectInfo(ObjHandle, &Info);
-    printf("HID: %s\n", Info->HardwareId.String);
 
     if (ACPI_SUCCESS(Status) && Info->Valid & ACPI_VALID_HID) {
         if (!strcmp(Info->HardwareId.String, "PNP0A03"))
@@ -166,8 +165,6 @@ ACPI_STATUS detect_top_level_device(ACPI_HANDLE ObjHandle, UINT32 Level,
             printf("Found PCIe bridge\n");
             pcie_bus_init(ObjHandle);
         }
-        else
-            printf("Found unknown device\n");
     }
 
     kfree(Info);

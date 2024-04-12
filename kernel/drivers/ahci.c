@@ -115,7 +115,7 @@ void ahci_init(hba_mem_t *abar_phys)
 	for (i = 0; i < num_devices; i++)
 		ahci_install_device(&devices[i]);
 
-	printf("AHCI initialized\n");
+	printf("AHCI controller initialized\n");
 }
 
 // Check device type
@@ -151,14 +151,10 @@ static void port_mem_init(int num_ports)
 		+ sizeof(struct HBA_PRDT_ENTRY) * NUM_PRDT_ENTRIES * CMD_LIST_SZ * num_ports;
 
 	ahci_base = (uintptr_t)kvirtual_alloc(size, PG_WRITE | PG_CACHE_DISABLE);
-	printf("AHCI memory at: %x, mapped to %x\n",
-		virt_to_phys((void*)ahci_base), ahci_base);
 }
 
 void port_rebase(hba_port_t *port, int portno)
 {
-	printf("Rebasing port %d\n", portno);
-	printf("Port: %x\n", port);
 	stop_cmd(port);	// Stop command engine
 
 	// Command list offset: 1K*portno
@@ -320,8 +316,6 @@ static int __ahci_read(struct ahci_device *dev, u32 startl, u32 starth, u32 coun
 		printf("Read disk error\n");
 		return 1;
 	}
-
-	printf("Read disk success\n");
 
 	return 0;
 }

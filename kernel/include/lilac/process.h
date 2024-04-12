@@ -5,6 +5,10 @@
 
 #include <lilac/types.h>
 
+#define TASK_RUNNING 0
+#define TASK_SLEEPING 1
+#define TASK_DEAD 2
+
 struct task_info {
     const char *path;
     char **argv;
@@ -15,16 +19,16 @@ struct task {
     u16 pid;
     u16 ppid;
     u32 pgd;
-    u32 pc;
+    uintptr_t pc;
     void *stack;
     u32 time_slice;
     struct task *parent;
     struct fs_info *fs;
-    struct files *files;
+    struct file *files;
     struct task_info *info;
     u8 priority;
     volatile u8 state;
-    char name[16];
+    char name[32];
 };
 
 struct mm_info {

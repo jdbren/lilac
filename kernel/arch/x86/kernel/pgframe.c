@@ -44,7 +44,7 @@ int phys_mem_init(struct multiboot_tag_efi_mmap *mmap)
         entry = (efi_memory_desc_t*)((u32)entry + mmap->descr_size);
     }
 
-    BITMAP_SIZE = phys_map_pgcnt / 8 + 4;
+    BITMAP_SIZE = phys_map_pgcnt / 8 + 8;
     FIRST_PAGE = 0;
 
     map_pages((void*)get_phys_addr(&_kernel_end),
@@ -70,8 +70,9 @@ void* alloc_frames(u32 num_pages)
     for (size_t i = 0; i < BITMAP_SIZE / sizeof(u32); i++) {
         if (pg_frame_bitmap[i] != ~0UL) {
             void *ptr = __check_bitmap(i, num_pages, &count, &start);
-            if (ptr)
+            if (ptr) {
                 return ptr;
+            }
         }
         else
             count = 0;
@@ -115,7 +116,6 @@ static void __init_bitmap(struct multiboot_tag_efi_mmap *mmap)
 {
     efi_memory_desc_t *entry = (efi_memory_desc_t*)mmap->efi_mmap;
     u32 index, offset;
-    u32 pg_cnt;
     for (u32 i = 0; i < mmap->size; i += mmap->descr_size) {
         if (entry->type != EFI_CONVENTIONAL_MEMORY && entry->type != EFI_RESERVED_TYPE) {
             __mark_frames(get_index(entry->phys_addr),
@@ -128,6 +128,9 @@ static void __init_bitmap(struct multiboot_tag_efi_mmap *mmap)
     __mark_frames(get_index(get_phys_addr(pg_frame_bitmap)),
                 get_offset(get_phys_addr(pg_frame_bitmap)),
                 BITMAP_SIZE / PAGE_SIZE + 1);
+    __mark_frames(get_index(0xb0000),
+                get_offset(0xb0000),
+                128);
 }
 
 static void* __check_bitmap(int i, int num_pages, int *count, int *start)

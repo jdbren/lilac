@@ -109,8 +109,6 @@ int fat32_init(struct vfsmount *mnt)
     printf("Initializing FAT32 filesystem\n");
 
     fat_disk_t *fat_disk = kzmalloc(sizeof(*fat_disk));
-    printf("Allocated fat_disk at %x\n", fat_disk);
-
     struct block_device *bdev = mnt->bdev;
     struct disk_operations *disk_ops = bdev->disk->ops;
     int fat_sectors;
@@ -119,11 +117,12 @@ int fat32_init(struct vfsmount *mnt)
     disk_ops->disk_read(bdev->disk, bdev->first_sector, &fat_disk->volID, 1);
     disk_init(fat_disk);
     fat_disk->base_lba = bdev->first_sector;
-    print_fat32_data(&fat_disk->volID);
-    printf("FAT begin LBA: %x\n", fat_disk->fat_begin_lba);
-    printf("Cluster begin LBA: %x\n", fat_disk->cluster_begin_lba);
-    printf("Root start: %x\n", fat_disk->root_start);
-    printf("Sectors per cluster: %x\n", fat_disk->sectors_per_cluster);
+
+    // print_fat32_data(&fat_disk->volID);
+    // printf("FAT begin LBA: %x\n", fat_disk->fat_begin_lba);
+    // printf("Cluster begin LBA: %x\n", fat_disk->cluster_begin_lba);
+    // printf("Root start: %x\n", fat_disk->root_start);
+    // printf("Sectors per cluster: %x\n", fat_disk->sectors_per_cluster);
 
     fat_sectors = fat_disk->volID.extended_section.FAT_size_32;
     fat_sectors = (fat_sectors > MAX_SECTOR_READS) ? MAX_SECTOR_READS : fat_sectors;
@@ -132,19 +131,15 @@ int fat32_init(struct vfsmount *mnt)
 
 static ssize_t __do_fat32_read(struct file *file, void *file_buf, size_t count)
 {
-    printf("Reading file\n");
     if (count == 0)
         return 0;
 
     size_t bytes_read = 0;
     struct gendisk *gendisk = file->f_disk->bdev->disk;
-    printf("Reading file from disk %s\n", gendisk->driver);
     fat_disk_t *disk = file->f_disk->private;
     fat_file_t *fat_file = (fat_file_t*)file->f_info;
     const int factor = disk->sectors_per_cluster * BYTES_PER_SECTOR;
-    printf("Factor: %d\n", factor);
     count = count > factor ? (count / factor) * factor : count;
-    printf("Reading %d bytes\n", count);
 
     u32 clst = (u32)fat_file->cl_low + (u32)fat_file->cl_high;
     u32 fat_value = 0;
@@ -191,10 +186,7 @@ int fat32_open(const char *path, struct file *file)
     fat_file_t *entry = NULL;
     u8 *sec_buf = kzmalloc(fat_disk->sectors_per_cluster * BYTES_PER_SECTOR);
 
-    printf("Opening file %s\n", path);
-
     path = next_dir_name(path, cur);
-    printf("Current directory: %s\n", cur);
 
     gendisk->ops->disk_read(gendisk, LBA_ADDR(fat_disk->root_start, fat_disk),
         sec_buf, fat_disk->sectors_per_cluster);
@@ -228,7 +220,6 @@ int fat32_open(const char *path, struct file *file)
 
 ssize_t fat32_read(struct file *file, void *file_buf, size_t count)
 {
-    printf("Reading %d bytes from file\n", count);
     return __do_fat32_read(file, file_buf, count);
 }
 

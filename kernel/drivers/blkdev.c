@@ -31,7 +31,6 @@ int __must_check add_gendisk(struct gendisk *disk)
 int scan_partitions(struct gendisk *disk)
 {
     printf("Scanning partitions\n");
-    printf("Disk size: %d\n", disk->size);
     printf("Driver: %s\n", disk->driver);
     char *buf = kzmalloc(512);
     const struct MBR *mbr;
@@ -42,15 +41,12 @@ int scan_partitions(struct gendisk *disk)
 
     disk->ops->disk_read(disk, 0, buf, 1);
     mbr = (struct MBR*)buf;
-    printf("Signature: %x\n", mbr->signature);
     if (mbr->signature != 0xAA55) {
 		printf("Invalid MBR signature\n");
         return -1;
 	}
 
     mbr_part = &mbr->partition_table[0];
-    printf("Partition type: %x\n", mbr_part->type);
-    printf("Partition start: %x\n", mbr_part->lba_first_sector);
     if (mbr_part->type != 0xEE) {
 		// Not yet implemented
 		// mbr_read(mbr);
@@ -104,12 +100,6 @@ int __must_check create_block_dev(struct gendisk *disk,
         }
         tmp->next = bdev;
     }
-
-    printf("Block device created\n");
-    printf("First sector: %d\n", bdev->first_sector);
-    printf("Number of sectors: %d\n", bdev->num_sectors);
-    printf("Disk: %s\n", bdev->disk->driver);
-    printf("Partition type: %d\n", type);
 
     // Register with vfs
     fs_mount(bdev, type);

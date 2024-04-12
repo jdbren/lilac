@@ -17,24 +17,18 @@ void start_kernel(void)
 	// printf("%x\n", *ptr);
 	// void *jmp = elf32_load(ptr);
 	// printf("Page directory entry 768: %x\n", ((u32*)0xFFFFF000)[768]);
-	//jump_usermode((u32)jmp);
+	// jump_usermode((u32)jmp);
 
+	acpi_full_init();
+	scan_sys_bus();
 
+	// struct task *task = create_process("A:/bin/init");
+	// schedule_task(task);
 
-	struct task *task = create_process("A:/bin/init");
-	schedule_task(task);
+    sched_init();
+	arch_enable_interrupts();
 
+	sched_clock_init();
 
-	// struct task *task2 = create_process("3rd process");
-	// schedule_task(task2);
-
-	// struct task *task3 = create_process("4th process");
-	// schedule_task(task3);
-
-    while (1) {
-		sleep(4000);
-		printf("Kernel task running\n");
-        asm("hlt");
-		asm("cli");
-	}
+	arch_idle();
 }

@@ -31,7 +31,7 @@ static struct acpi_info acpi;
 static struct efi_info efi;
 
 static void parse_multiboot(u32, struct multiboot_info*);
-extern int _fpu_init(void);
+//extern int _fpu_init(void);
 
 void kernel_early(unsigned int multiboot)
 {
@@ -40,35 +40,27 @@ void kernel_early(unsigned int multiboot)
 	parse_multiboot(multiboot, &mbd);
 	mm_init(mbd.efi_mmap);
 	graphics_init(mbd.framebuffer);
-	_fpu_init();
+	//_fpu_init();
 
-	parse_acpi((void*)mbd.new_acpi->rsdp, &acpi);
+	acpi_early((void*)mbd.new_acpi->rsdp, &acpi);
 	apic_init(acpi.madt);
 	//keyboard_init();
 	timer_init(1, acpi.hpet); // 1ms interval
 
-	printf("System Timer: %d\n", get_sys_time());
-
-	//sched_init(3000);
-	//enable_interrupts();
-
-	acpi_full_init();
-	scan_sys_bus();
-
-	int fd = open("A:/boot/grub/grub", 0, 0);
-	printf("File descriptor: %d\n", fd);
-
-	char buf[512];
-	read(fd, buf, 512);
-	for (int i = 0; i < 512; i++)
-		printf("%c", buf[i]);
-
-	while (1)
-		asm ("hlt");
-
 	//ap_init(acpi.madt->core_cnt);
 
 	start_kernel();
+}
+
+inline void arch_idle(void)
+{
+	while (1)
+		asm("hlt");
+}
+
+void arch_enable_interrupts(void)
+{
+	enable_interrupts();
 }
 
 static void parse_multiboot(u32 addr, struct multiboot_info *mbd)

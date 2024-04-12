@@ -15,7 +15,7 @@ static bool print(const char *data, size_t length)
 	return true;
 }
 
-char *convert(unsigned long long num, int base)
+char *convert(unsigned long num, int base)
 {
     static char Representation[]= "0123456789ABCDEF";
     static char buffer[50];

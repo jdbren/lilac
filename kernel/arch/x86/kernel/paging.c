@@ -49,12 +49,14 @@ int map_pages(void *physaddr, void *virtualaddr, u16 flags, int num_pages)
     flags |= 1;
     for (int i = 0; i < num_pages; i++, physaddr = (u8*)physaddr + PAGE_BYTES,
     virtualaddr = (u8*)virtualaddr + PAGE_BYTES) {
-        // printf("mapping %x to %x\n", physaddr, virtualaddr);
+        //printf("mapping %x to %x\n", physaddr, virtualaddr);
         assert(is_aligned(physaddr, PAGE_BYTES));
         assert(is_aligned(virtualaddr, PAGE_BYTES));
 
         u32 pdindex = (u32)virtualaddr >> 22;
         u32 ptindex = (u32)virtualaddr >> 12 & 0x03FF;
+
+        //printf("pdindex: %x, ptindex: %x\n", pdindex, ptindex);
 
         if (!(pd[pdindex] & 0x1))
             pde(pdindex, flags);
@@ -62,7 +64,7 @@ int map_pages(void *physaddr, void *virtualaddr, u16 flags, int num_pages)
         u32 *pt = ((u32*)0xFFC00000) + (0x400 * pdindex);
         if (pt[ptindex] & 0x1) {
             printf("mapping already present\n");
-            printf("physaddr: %x, virtualaddr: %x\n", physaddr, virtualaddr);
+            printf("physaddr: %x, virtualaddr: %x\n", pt[ptindex], virtualaddr);
             return 1;
         }
 
@@ -109,8 +111,10 @@ static int pde(int index, u16 flags)
     pde_t entry = (u32)addr | flags;
     pd[index] = entry;
 
-    u32 *pt = ((u32*)0xFFC00000) + (0x400 * index);
+    volatile u32 *pt = ((u32*)0xFFC00000) + (0x400 * index);
     memset(pt, 0, PAGE_BYTES);
+
+    printf("pde %x: %x\n", index, entry);
 
     return 0;
 }
