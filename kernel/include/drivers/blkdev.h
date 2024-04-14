@@ -5,11 +5,20 @@
 #include <lilac/config.h>
 
 struct gendisk {
-    struct disk_operations *ops;
+    int major;
+    int first_minor;
     char driver[8];
-    u64 size;
+    struct disk_operations *ops;
     struct block_device *partitions;
+    struct request_queue *queue;
     void *private;
+    spinlock_t lock;
+    int state;
+#define GD_NEED_PART_SCAN		0
+#define GD_READ_ONLY			1
+#define GD_DEAD				    2
+#define GD_NATIVE_CAPACITY		3
+#define GD_ADDED			    4
 };
 
 struct disk_operations {

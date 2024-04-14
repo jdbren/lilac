@@ -110,7 +110,7 @@ void ahci_init(hba_mem_t *abar_phys)
 
 	port_mem_init(num_ports);
 	for (i = 0; i < num_ports; i++)
-		port_rebase(&abar->ports[i], i);
+		ahci_port_rebase(&abar->ports[i], i);
 
 	for (i = 0; i < num_devices; i++)
 		ahci_install_device(&devices[i]);
@@ -153,7 +153,7 @@ static void port_mem_init(int num_ports)
 	ahci_base = (uintptr_t)kvirtual_alloc(size, PG_WRITE | PG_CACHE_DISABLE);
 }
 
-void port_rebase(hba_port_t *port, int portno)
+void ahci_port_rebase(hba_port_t *port, int portno)
 {
 	stop_cmd(port);	// Stop command engine
 
@@ -178,7 +178,7 @@ void port_rebase(hba_port_t *port, int portno)
 		memset(get_cmdtbl(portno, i), 0, 256);
 	}
 
-	start_cmd(port);	// Start command engine
+	ahci_start_cmd(port);	// Start command engine
 }
 
 void ahci_install_device(struct ahci_device *dev)
@@ -193,7 +193,7 @@ void ahci_install_device(struct ahci_device *dev)
 }
 
 // Start command engine
-void start_cmd(hba_port_t *port)
+void ahci_start_cmd(hba_port_t *port)
 {
 	// Wait until CR (bit15) is cleared
 	while (port->cmd & HBA_PxCMD_CR)

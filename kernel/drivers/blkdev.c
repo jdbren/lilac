@@ -50,6 +50,7 @@ int scan_partitions(struct gendisk *disk)
     if (mbr_part->type != 0xEE) {
 		// Not yet implemented
 		// mbr_read(mbr);
+        return -1;
 	} else {
     	printf("GPT found\n");
         disk->ops->disk_read(disk, 1, buf, 1);
@@ -71,6 +72,7 @@ int scan_partitions(struct gendisk *disk)
             }
         }
 	}
+
     return 0;
 }
 
@@ -95,9 +97,8 @@ int __must_check create_block_dev(struct gendisk *disk,
         disk->partitions = bdev;
     } else {
         struct block_device *tmp = disk->partitions;
-        while (tmp->next != NULL) {
+        while (tmp->next)
             tmp = tmp->next;
-        }
         tmp->next = bdev;
     }
 

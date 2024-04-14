@@ -40,7 +40,7 @@ open:
 close:
     ret
 
-.section .data
+.data
 syscall_table:
     .long restart
     .long exit

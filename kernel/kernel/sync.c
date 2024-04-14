@@ -107,12 +107,16 @@ void mutex_init(mutex_t *mutex)
 
 void mutex_lock(mutex_t *mutex)
 {
+    bool add = false;
     int id = get_pid();
     if (atomic_load(&mutex->owner) == id)
         return;
     while (atomic_exchange(&mutex->locked, true))
     {
-        list_add(&mutex->waiters, id);
+        if (!add) {
+            list_add(&mutex->waiters, id);
+            add = true;
+        }
         yield();
     }
     atomic_store(&mutex->owner, id);

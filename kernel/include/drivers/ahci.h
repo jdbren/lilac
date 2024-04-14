@@ -127,11 +127,10 @@ typedef struct HBA_CMD_TBL {
 	hba_prdt_entry_t	prdt_entry[];
 } hba_cmd_tbl_t;
 
-struct ahci_device;
 
 void ahci_init(hba_mem_t *abar);
-void port_rebase(hba_port_t *port, int portno);
-void start_cmd(hba_port_t *port);
+void ahci_port_rebase(hba_port_t *port, int portno);
+void ahci_start_cmd(hba_port_t *port);
 void stop_cmd(hba_port_t *port);
 
 int ahci_read(struct gendisk *disk, u64 lba, void *buf, u32 count);
