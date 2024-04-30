@@ -114,7 +114,7 @@ static int pde(int index, u16 flags)
     volatile u32 *pt = ((u32*)0xFFC00000) + (0x400 * index);
     memset(pt, 0, PAGE_BYTES);
 
-    printf("pde %x: %x\n", index, entry);
+    // printf("pde %x: %x\n", index, entry);
 
     return 0;
 }

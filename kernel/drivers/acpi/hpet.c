@@ -4,8 +4,8 @@
 
 struct hpet_info *parse_hpet(struct SDTHeader *addr)
 {
-    struct hpet_info *info = (struct hpet_info*)kmalloc(sizeof(struct hpet_info));
-    struct hpet *hpet = (struct hpet *)addr;
+    struct hpet_info *info = kmalloc(sizeof(*info));
+    struct hpet *hpet = (struct hpet*)addr;
 
     info->address = hpet->address.address;
     info->comparator_count = hpet->comparator_count;
@@ -14,4 +14,10 @@ struct hpet_info *parse_hpet(struct SDTHeader *addr)
     info->page_protection = hpet->page_protection;
 
     return info;
+}
+
+int dealloc_hpet(struct hpet_info *info)
+{
+    kfree(info);
+    return 0;
 }

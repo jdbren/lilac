@@ -3,6 +3,7 @@
 
 #include <lilac/types.h>
 #include <lilac/config.h>
+#include <lilac/sync.h>
 
 struct gendisk {
     int major;

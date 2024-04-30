@@ -28,7 +28,7 @@ uintptr_t __stack_chk_guard = STACK_CHK_GUARD;
 
 struct multiboot_info mbd;
 static struct acpi_info acpi;
-static struct efi_info efi;
+//static struct efi_info efi;
 
 static void parse_multiboot(u32, struct multiboot_info*);
 //extern int _fpu_init(void);
@@ -46,6 +46,7 @@ void kernel_early(unsigned int multiboot)
 	apic_init(acpi.madt);
 	//keyboard_init();
 	timer_init(1, acpi.hpet); // 1ms interval
+	acpi_early_cleanup(&acpi);
 
 	//ap_init(acpi.madt->core_cnt);
 

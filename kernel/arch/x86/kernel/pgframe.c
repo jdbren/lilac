@@ -130,7 +130,7 @@ static void __init_bitmap(struct multiboot_tag_efi_mmap *mmap)
                 BITMAP_SIZE / PAGE_SIZE + 1);
     __mark_frames(get_index(0xb0000),
                 get_offset(0xb0000),
-                128);
+                ((u32)&_kernel_start - 0xb0000) / PAGE_SIZE);
 }
 
 static void* __check_bitmap(int i, int num_pages, int *count, int *start)

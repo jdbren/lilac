@@ -9,31 +9,32 @@
 #include <mm/kmm.h>
 #include <utility/vga.h>
 
-#define SSFN_IMPLEMENTATION
+// #define SSFN_IMPLEMENTATION
 #define SSFN_CONSOLEBITMAP_TRUECOLOR /* renderer for 32 bit truecolor */
+// #define SSFN_CONSOLEBITMAP_CONTROL
 #define SSFN_realloc krealloc
 #define SSFN_free kfree
 
 #include <utility/ssfn.h>
 #include <utility/VGA9.h>
 
-ssfn_t ctx = {0};
-ssfn_buf_t buf;
+// ssfn_t ctx = {0};
+// ssfn_buf_t buf;
 
 static void graphics_scroll(void);
 
 void graphics_putchar(char c)
 {
 	if (c == '\n') {
-		buf.x = 0;
-		if ((buf.y += ctx.f->height) >= buf.h)
+		ssfn_dst.x = 0;
+		if ((ssfn_dst.y += ssfn_src->height) >= ssfn_dst.h)
 			graphics_scroll();
 		return;
 	}
-    ssfn_render(&ctx, &buf, &c);
-	if (buf.x >= buf.w) {
-		buf.x = 0;
-		if ((buf.y += ctx.f->height) >= buf.h)
+    ssfn_putc(c);
+	if (ssfn_dst.x >= ssfn_dst.w) {
+		ssfn_dst.x = 0;
+		if ((ssfn_dst.y += ssfn_src->height) >= ssfn_dst.h)
 			graphics_scroll();
 	}
 }
@@ -41,7 +42,7 @@ void graphics_putchar(char c)
 void graphics_writestring(const char* data)
 {
     while (*data)
-        ssfn_render(&ctx, &buf, data++);
+        graphics_putchar(*data++);
 }
 
 void graphics_init(struct multiboot_tag_framebuffer *fb)
@@ -51,22 +52,24 @@ void graphics_init(struct multiboot_tag_framebuffer *fb)
 		kerror("Unsupported framebuffer type\n");
 	}
 
-    if (ssfn_load(&ctx, &VGA9))
-		kerror("error loading font\n");    /* load the font */
-	if (ssfn_select(&ctx, SSFN_FAMILY_ANY, NULL, SSFN_STYLE_REGULAR, 16))
-		kerror("error selecting font\n");    /* select a font */
+	ssfn_src = (ssfn_font_t*)&VGA9;
 
-	buf.w = fb->common.framebuffer_width;     /* width */
-	buf.h = fb->common.framebuffer_height;    /* height */
-	buf.p = fb->common.framebuffer_pitch;     /* bytes per line */
-	buf.x = 0;                					/* pen position */
-    buf.y = 16;
-	buf.fg = 0xFF0AECFC;                     /* foreground color */
+    // if (ssfn_load(&ctx, &VGA9))
+	// 	kerror("error loading font\n");    /* load the font */
+	// if (ssfn_select(&ctx, SSFN_FAMILY_ANY, NULL, SSFN_STYLE_REGULAR, 16))
+	// 	kerror("error selecting font\n");    /* select a font */
+
+	ssfn_dst.w = fb->common.framebuffer_width;     /* width */
+	ssfn_dst.h = fb->common.framebuffer_height;    /* height */
+	ssfn_dst.p = fb->common.framebuffer_pitch;     /* bytes per line */
+	ssfn_dst.x = 0;                					/* pen position */
+    ssfn_dst.y = 0;
+	ssfn_dst.fg = 0xFF0AECFC;                     /* foreground color */
 
 	void *vframebuf = map_phys((u8*)fb->common.framebuffer_addr,
-						buf.p * buf.h, PG_WRITE);
-	buf.ptr = vframebuf; 			/* pointer to the framebuffer */
-	memset(buf.ptr, 0, buf.p * buf.h);
+						ssfn_dst.p * ssfn_dst.h, PG_WRITE);
+	ssfn_dst.ptr = vframebuf; 			/* pointer to the framebuffer */
+	memset(ssfn_dst.ptr, 0, ssfn_dst.p * ssfn_dst.h);
 
 	graphics_writestring("Graphics mode terminal initialized\n");
 }
@@ -74,16 +77,15 @@ void graphics_init(struct multiboot_tag_framebuffer *fb)
 static void graphics_scroll(void)
 {
 	u8 *dst, *src;
-	u32 line_size = buf.p * ctx.f->height;
+	u32 line_size = ssfn_dst.p * ssfn_src->height;
 
-	for (dst = buf.ptr, src = buf.ptr + line_size;
-		src < buf.ptr + buf.p * buf.h;
-		dst += line_size, src += line_size
-	){
+	for (dst = ssfn_dst.ptr, src = ssfn_dst.ptr + line_size;
+			src < ssfn_dst.ptr + ssfn_dst.p * ssfn_dst.h;
+			dst += line_size, src += line_size) {
 		memcpy(dst, src, line_size);
 	}
 	memset(dst, 0, line_size);
-	buf.y -= ctx.f->height;
+	ssfn_dst.y -= ssfn_src->height;
 }
 
 

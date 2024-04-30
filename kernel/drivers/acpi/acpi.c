@@ -96,6 +96,14 @@ void acpi_early(struct RSDP *rsdp, struct acpi_info *info)
     //read_rsdt((struct SDTHeader*)rsdp->RsdtAddress, info);
 }
 
+void acpi_early_cleanup(struct acpi_info *info)
+{
+    if (info->madt)
+        dealloc_madt(info->madt);
+    if (info->hpet)
+        dealloc_hpet(info->hpet);
+}
+
 
 int acpi_full_init(void)
 {
@@ -155,7 +163,8 @@ ACPI_STATUS detect_top_level_device(ACPI_HANDLE ObjHandle, UINT32 Level,
     // Status = AcpiGetName(ObjHandle, ACPI_FULL_PATHNAME, &Path);
     // if (ACPI_SUCCESS(Status))
     //     printf("%s\n", Path.Pointer);
-    /* Get the device info for this device and print it */
+    
+    /* Get the device info for this device */
     Status = AcpiGetObjectInfo(ObjHandle, &Info);
 
     if (ACPI_SUCCESS(Status) && Info->Valid & ACPI_VALID_HID) {

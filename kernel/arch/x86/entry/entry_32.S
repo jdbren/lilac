@@ -6,6 +6,7 @@
 .globl jump_usermode
 .type jump_usermode, @function
 jump_usermode:
+	cli
 	push ebp
 	mov ebp, esp
 	push ebx
@@ -31,4 +32,11 @@ jump_usermode:
 	mov [esp], eax		 # eflags
 	push __USER_CS | 0x3 # cs (ring 3)
 	push ebx			 # eip
+	xor eax, eax
+	xor ebx, ebx
+	xor ecx, ecx
+	xor edx, edx
+	xor esi, esi
+	xor edi, edi
+	xor ebp, ebp
 	iretd

@@ -34,5 +34,6 @@ struct hpet_info {
 };
 
 struct hpet_info *parse_hpet(struct SDTHeader *addr);
+int dealloc_hpet(struct hpet_info *info);
 
 #endif

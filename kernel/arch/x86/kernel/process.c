@@ -48,5 +48,5 @@ void arch_user_stack()
     static const int num_pgs = __USER_STACK_SZ / PAGE_SIZE;
     void *stack = (void*)(__USER_STACK - __USER_STACK_SZ);
     map_pages(alloc_frames(num_pgs), stack, PG_USER | PG_WRITE, num_pgs);
-    printf("Mapped user stack to %x\n", stack);
+    printf("Mapped %d pages of user stack to %x\n", num_pgs, stack);
 }
