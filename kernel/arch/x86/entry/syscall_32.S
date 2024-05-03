@@ -2,7 +2,6 @@
 .globl sys_call_handler
 sys_call_handler:
     # already on stack: ss, sp, flags, cs, ip.
-    hlt
     pushl %ds
     pushl %ebp
     pushl %edi
