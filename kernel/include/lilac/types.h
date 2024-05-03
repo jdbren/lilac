@@ -19,8 +19,8 @@ typedef int32_t s32;
 typedef int64_t s64;
 
 typedef signed long ssize_t;
-
 typedef unsigned short umode_t;
+typedef u32 dev_t;
 
 #define BITS_PER_LONG 32
 

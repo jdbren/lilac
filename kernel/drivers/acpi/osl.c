@@ -9,9 +9,9 @@
  *
 */
 
-#include <lilac/lilac.h>
 #include <lilac/types.h>
 #include <lilac/config.h>
+#include <lilac/boot.h>
 #include <lilac/interrupt.h>
 #include <lilac/port.h>
 #include <lilac/process.h>
@@ -270,7 +270,7 @@ ACPI_STATUS AcpiOsWriteMemory(ACPI_PHYSICAL_ADDRESS Address, UINT64 Value,
 // Port I/O
 ACPI_STATUS AcpiOsReadPort(ACPI_IO_ADDRESS Address, UINT32 *Value, UINT32 Width)
 {
-    if (Value == NULL || Width != 8 && Width != 16 && Width != 32)
+    if (Value == NULL || (Width != 8 && Width != 16 && Width != 32))
         return AE_BAD_PARAMETER;
     *Value = ReadPort(Address, Width);
     return AE_OK;

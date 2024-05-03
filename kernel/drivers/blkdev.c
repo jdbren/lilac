@@ -10,7 +10,11 @@
 static struct gendisk *disks[MAX_DISKS];
 static int num_disks;
 
-static int __must_check get_part_type(struct gendisk *disk, struct gpt_part_entry *part)
+static int __must_check create_block_dev(struct gendisk *disk,
+   const struct gpt_part_entry *part_entry, int num);
+
+static int __must_check get_part_type(struct gendisk *disk,
+    const struct gpt_part_entry *part)
 {
     unsigned char buf[512];
     disk->ops->disk_read(disk, part->starting_lba, buf, 1);
@@ -30,12 +34,19 @@ int __must_check add_gendisk(struct gendisk *disk)
 
 int scan_partitions(struct gendisk *disk)
 {
+    if (disk == NULL) {
+        for (int i = 0; i < num_disks; i++) {
+            if (disks[i]->state == GD_NEED_PART_SCAN)
+                scan_partitions(disks[i]);
+        }
+        return 0;
+    }
+
     printf("Scanning partitions\n");
     printf("Driver: %s\n", disk->driver);
     char *buf = kzmalloc(512);
     const struct MBR *mbr;
 	const struct mbr_part_entry *mbr_part;
-    const struct GPT *gpt;
     const struct gpt_part_entry *gpt_part;
     int status;
 
@@ -58,26 +69,40 @@ int scan_partitions(struct gendisk *disk)
 			printf("GPT invalid\n");
             return -1;
 		}
-        for (int i = 0; i < 1; i ++) {
-            disk->ops->disk_read(disk, i+2, buf, 1);
-            gpt_part = (struct gpt_part_entry*)buf;
-            for (int j = 0; j < 4; j++, gpt_part++) {
-                if (gpt_part->starting_lba == 0)
-                    continue;
-                status = create_block_dev(disk, gpt_part);
-                if (status) {
-                    printf("Invalid partition found at lba %d\n",
-                        gpt_part->starting_lba);
-                }
+        disk->ops->disk_read(disk, 2, buf, 1);
+        gpt_part = (struct gpt_part_entry*)buf;
+        for (int j = 0; j < 4; j++, gpt_part++) {
+            if (gpt_part->starting_lba == 0)
+                continue;
+            status = create_block_dev(disk, gpt_part, j);
+            if (status) {
+                printf("Invalid partition found at lba %d\n",
+                    gpt_part->starting_lba);
             }
         }
+        disk->state = GD_ADDED;
 	}
 
     return 0;
 }
 
-int __must_check create_block_dev(struct gendisk *disk,
-    struct gpt_part_entry *part_entry)
+// Look for a block device with the given number
+struct block_device *get_bdev(dev_t devnum)
+{
+    for (int i = 0; i < num_disks; i++) {
+        struct block_device *bdev = disks[i]->partitions;
+        while (bdev) {
+            if (bdev->devnum == devnum)
+                return bdev;
+            bdev = bdev->next;
+        }
+    }
+    return NULL;
+}
+
+
+static int __must_check create_block_dev(struct gendisk *disk,
+    const struct gpt_part_entry *part_entry, int num)
 {
     struct block_device *bdev = kzmalloc(sizeof(*bdev));
 
@@ -90,9 +115,11 @@ int __must_check create_block_dev(struct gendisk *disk,
     }
 
     // Initialize block device
+    bdev->devnum = (disk->major << 20) | (disk->first_minor + num);
     bdev->first_sector = part_entry->starting_lba;
     bdev->num_sectors = part_entry->ending_lba - part_entry->starting_lba;
     bdev->disk = disk;
+    bdev->type = type;
     if (disk->partitions == NULL) {
         disk->partitions = bdev;
     } else {
@@ -103,7 +130,7 @@ int __must_check create_block_dev(struct gendisk *disk,
     }
 
     // Register with vfs
-    fs_mount(bdev, type);
+    // mount_bdev(bdev, type);
 
     return 0;
 }

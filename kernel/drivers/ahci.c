@@ -1,5 +1,6 @@
 #include <stdbool.h>
 #include <string.h>
+#include <lilac/device.h>
 #include <drivers/ahci.h>
 #include <drivers/blkdev.h>
 #include <mm/kmm.h>
@@ -181,15 +182,18 @@ void ahci_port_rebase(hba_port_t *port, int portno)
 	ahci_start_cmd(port);	// Start command engine
 }
 
-void ahci_install_device(struct ahci_device *dev)
+static void ahci_install_device(struct ahci_device *dev)
 {
 	struct gendisk *new_disk = kzmalloc(sizeof(*new_disk));
 	strcpy(new_disk->driver, "AHCI");
+
+	new_disk->major = SATA_DEVICE;
+	new_disk->first_minor = dev->portno * 16;
 	new_disk->ops = &ahci_ops;
 	new_disk->private = dev;
 
 	add_gendisk(new_disk);
-	scan_partitions(new_disk);
+	// scan_partitions(new_disk);
 }
 
 // Start command engine
@@ -227,7 +231,7 @@ void stop_cmd(hba_port_t *port)
 int ahci_read(struct gendisk *disk, u64 lba, void *buf, u32 count)
 {
 	printf("Reading %d sectors from disk at LBA %x\n", count, lba);
-	return __ahci_read(disk->private, lba & 0xFFFFFFFF, 0, count,
+	return __ahci_read(disk->private, lba & 0xFFFFFFFF, lba >> 32, count,
 		(void*)virt_to_phys(buf));
 }
 

@@ -1,6 +1,5 @@
 Fully featured system timer implementation
 Synchronization primitives checks
-Finish acpica integration
 Make actual scheduler
 Cleanup header files and arch specific functions
 Maybe do better interrupt handler
@@ -8,3 +7,5 @@ Maybe do better interrupt handler
 FPU implementation
     - Compile ACPICA separately
     - Remove -mgeneral-regs-only
+
+Make device tree implementation generic with ACPI function pointers

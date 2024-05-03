@@ -31,7 +31,7 @@ void keyboard_interrupt(void)
     keycode = inb(KEYBOARD_DATA_PORT);
 
     if (keycode >= 0 && keyboard_map[keycode])
-        terminal_putchar(keyboard_map[keycode]);
+        graphics_putchar(keyboard_map[keycode]);
 
     /* Send End of Interrupt (EOI) to master PIC */
     apic_eoi();

@@ -18,7 +18,11 @@
 
 #define pa(X) ((X) - __KERNEL_BASE)
 
+#define __packed        __attribute__((packed))
 #define __align(x)      __attribute__((aligned(x)))
 #define __must_check    __attribute__((__warn_unused_result__))
+#define __noreturn      __attribute__((noreturn))
+
+#define __cacheline_align __attribute__((aligned(64)))
 
 #endif

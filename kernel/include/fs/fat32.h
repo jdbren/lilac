@@ -44,10 +44,16 @@ typedef struct fat_BS {
     };
 } __attribute__((packed)) fat_BS_t;
 
+struct inode *fat_alloc_inode(struct super_block *sb);
+void fat_destroy_inode(struct inode *inode);
+
+struct dentry *fat32_lookup(struct inode *parent, struct dentry *find,
+    unsigned int flags);
+
 
 void print_fat32_data(fat_BS_t*);
-int fat32_init(struct vfsmount *mnt);
-int fat32_open(const char *path, struct file *file);
+struct dentry *fat32_init(struct block_device *bdev, struct super_block *sb);
+int fat32_open(struct inode *inode, struct file *file);
 ssize_t fat32_read(struct file *file, void *file_buf, size_t count);
 
 #endif

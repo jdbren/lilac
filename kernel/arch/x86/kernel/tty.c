@@ -66,7 +66,7 @@ void graphics_init(struct multiboot_tag_framebuffer *fb)
     ssfn_dst.y = 0;
 	ssfn_dst.fg = 0xFF0AECFC;                     /* foreground color */
 
-	void *vframebuf = map_phys((u8*)fb->common.framebuffer_addr,
+	void *vframebuf = map_phys((void*)fb->common.framebuffer_addr,
 						ssfn_dst.p * ssfn_dst.h, PG_WRITE);
 	ssfn_dst.ptr = vframebuf; 			/* pointer to the framebuffer */
 	memset(ssfn_dst.ptr, 0, ssfn_dst.p * ssfn_dst.h);

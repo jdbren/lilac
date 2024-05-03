@@ -6,6 +6,7 @@
 #include <lilac/types.h>
 #include <lilac/panic.h>
 #include <lilac/fs.h>
+#include <lilac/list.h>
 #include <drivers/blkdev.h>
 #include <fs/fat32.h>
 #include <mm/kheap.h>
@@ -43,9 +44,35 @@ typedef struct fat_file {
     u32 file_size;
 } __attribute__((packed)) fat_file_t;
 
-const struct file_operations fat32_fops = {
+const struct file_operations fat_fops = {
     .read = &fat32_read,
 };
+
+const struct super_operations fat_sops = {
+    .alloc_inode = &fat_alloc_inode,
+    .destroy_inode = &fat_destroy_inode
+};
+
+const struct inode_operations fat_iops = {
+    .lookup = &fat32_lookup,
+    .open = &fat32_open
+};
+
+struct inode *fat_alloc_inode(struct super_block *sb)
+{
+    struct inode *new_node = kzmalloc(sizeof(struct inode));
+
+    new_node->i_sb = sb;
+    new_node->i_op = &fat_iops;
+    new_node->i_count = 1;
+
+    return new_node;
+}
+
+void fat_destroy_inode(struct inode *inode)
+{
+    kfree(inode);
+}
 
 
 /***
@@ -67,31 +94,9 @@ static void disk_init(fat_disk_t *disk)
     disk->root_start = id->extended_section.root_cluster;
 }
 
-static inline int name_length(const char* name, char delim)
+static bool check_entry(fat_file_t *entry, const char *cur)
 {
-    int i = 0;
-    while (name[i] != delim && name[i] != 0)
-        i++;
-
-    return i;
-}
-
-static const char *next_dir_name(const char *path, char *const cur)
-{
-    if (*path == '/') path++;
-    else return 0;
-
-    int dname_len = name_length(path, '/');
-    if (dname_len > 8)
-        kerror("Pathname too long\n");
-    for (int i = 0; i < dname_len; i++)
-        cur[i] = toupper(*path++);
-    cur[dname_len] = '\0';
-    return path;
-}
-
-static bool check_entry(fat_file_t *entry, fat_disk_t *disk, const char *cur)
-{
+    printf("Checking entry %s\n", entry->name);
     if (entry->attributes != LONG_FNAME && entry->name[0] != (char)UNUSED) {
         if (!memcmp(entry->name, cur, strlen(cur)))
             return true;
@@ -104,69 +109,93 @@ static bool check_entry(fat_file_t *entry, fat_disk_t *disk, const char *cur)
  *  FAT32 functions
 */
 
-int fat32_init(struct vfsmount *mnt)
+struct dentry *fat32_init(struct block_device *bdev, struct super_block *sb)
 {
     printf("Initializing FAT32 filesystem\n");
 
     fat_disk_t *fat_disk = kzmalloc(sizeof(*fat_disk));
-    struct block_device *bdev = mnt->bdev;
+    fat_file_t *fat_file = kzmalloc(sizeof(*fat_file));
     struct disk_operations *disk_ops = bdev->disk->ops;
     int fat_sectors;
+    struct inode *root_inode;
+    struct dentry *root_dentry;
 
-    mnt->private = fat_disk;
+    // Initialize the FAT32 disk info
     disk_ops->disk_read(bdev->disk, bdev->first_sector, &fat_disk->volID, 1);
     disk_init(fat_disk);
     fat_disk->base_lba = bdev->first_sector;
 
-    // print_fat32_data(&fat_disk->volID);
-    // printf("FAT begin LBA: %x\n", fat_disk->fat_begin_lba);
-    // printf("Cluster begin LBA: %x\n", fat_disk->cluster_begin_lba);
-    // printf("Root start: %x\n", fat_disk->root_start);
-    // printf("Sectors per cluster: %x\n", fat_disk->sectors_per_cluster);
+    // Initialize the root inode
+    root_inode = fat_alloc_inode(sb);
+    root_inode->i_ino = 1;
+    root_inode->i_private = fat_file;
+    fat_file->cl_low = fat_disk->root_start;
 
+    // Initialize the dentry
+    root_dentry = kzmalloc(sizeof(struct dentry));
+    root_dentry->d_sb = sb;
+    root_dentry->d_inode = root_inode;
+
+    // Initialize the super block
+    sb->s_blocksize = BYTES_PER_SECTOR;
+    sb->s_maxbytes = 0xFFFFFFFF;
+    sb->s_type = MSDOS;
+    sb->s_op = &fat_sops;
+    sb->s_root = root_dentry;
+    sb->s_bdev = bdev;
+    atomic_store(&sb->s_active, true);
+    INIT_LIST_HEAD(&sb->s_inodes);
+    list_add(&root_inode->i_list, &sb->s_inodes);
+    sb->private = fat_disk;
+
+    // Read the FAT table
     fat_sectors = fat_disk->volID.extended_section.FAT_size_32;
     fat_sectors = (fat_sectors > MAX_SECTOR_READS) ? MAX_SECTOR_READS : fat_sectors;
     disk_ops->disk_read(bdev->disk, fat_disk->fat_begin_lba, fat_disk->fat_buffer, fat_sectors);
+
+    print_fat32_data(&fat_disk->volID);
+
+    return root_dentry;
 }
 
-static ssize_t __do_fat32_read(struct file *file, void *file_buf, size_t count)
+static ssize_t __do_fat32_read(struct inode *inode, void *file_buf, size_t count)
 {
     if (count == 0)
         return 0;
 
     size_t bytes_read = 0;
-    struct gendisk *gendisk = file->f_disk->bdev->disk;
-    fat_disk_t *disk = file->f_disk->private;
-    fat_file_t *fat_file = (fat_file_t*)file->f_info;
-    const int factor = disk->sectors_per_cluster * BYTES_PER_SECTOR;
+    struct gendisk *gd = inode->i_sb->s_bdev->disk;
+    fat_disk_t *fat_disk = (fat_disk_t*)inode->i_sb->private;
+    fat_file_t *fat_file = (fat_file_t*)inode->i_private;
+    const size_t factor = fat_disk->sectors_per_cluster * BYTES_PER_SECTOR;
     count = count > factor ? (count / factor) * factor : count;
 
     u32 clst = (u32)fat_file->cl_low + (u32)fat_file->cl_high;
     u32 fat_value = 0;
     while (fat_value < 0x0FFFFFF8 && bytes_read < count) {
-        gendisk->ops->disk_read(gendisk, LBA_ADDR(clst, disk), file_buf, disk->sectors_per_cluster);
+        gd->ops->disk_read(gd, LBA_ADDR(clst, fat_disk), file_buf, fat_disk->sectors_per_cluster);
         if (clst >= 32768)
             kerror("clst out of fat bounds\n");
-        fat_value = disk->fat_buffer[clst] & 0x0FFFFFFF;
+        fat_value = fat_disk->fat_buffer[clst] & 0x0FFFFFFF;
         clst = fat_value;
-        file_buf = (void*)((u32)file_buf + disk->sectors_per_cluster * BYTES_PER_SECTOR);
-        bytes_read += disk->sectors_per_cluster * BYTES_PER_SECTOR;
+        file_buf = (void*)((u32)file_buf + fat_disk->sectors_per_cluster * BYTES_PER_SECTOR);
+        bytes_read += fat_disk->sectors_per_cluster * BYTES_PER_SECTOR;
     }
     return bytes_read;
 }
 
 // Read a directory and return a buffer containing the directory entries
-static void *fat32_read_dir(fat_file_t *entry, void *buffer, fat_disk_t *disk,
-    struct gendisk *hd)
+static void *fat32_read_dir(fat_file_t *entry, fat_disk_t *disk, struct gendisk *hd)
 {
     size_t bytes_read = 0;
     u32 clst = (u32)entry->cl_low + (u32)entry->cl_high;
     u32 fat_value = 0;
-    void *current;
+    unsigned char *current;
+    unsigned char *buffer = kzmalloc(disk->sectors_per_cluster * BYTES_PER_SECTOR);
 
     while (fat_value < 0x0FFFFFF8) {
         buffer = krealloc(buffer, bytes_read + disk->sectors_per_cluster * BYTES_PER_SECTOR);
-        current = (void*)((u32)buffer + bytes_read);
+        current = buffer + bytes_read;
         hd->ops->disk_read(hd, LBA_ADDR(clst, disk), current, disk->sectors_per_cluster);
         if (clst >= 32768)
             kerror("clst out of fat bounds\n");
@@ -178,49 +207,17 @@ static void *fat32_read_dir(fat_file_t *entry, void *buffer, fat_disk_t *disk,
     return buffer;
 }
 
-int fat32_open(const char *path, struct file *file)
+int fat32_open(struct inode *inode, struct file *file)
 {
-    char cur[9];
-    struct gendisk *gendisk = file->f_disk->bdev->disk;
-    fat_disk_t *fat_disk = file->f_disk->private;
-    fat_file_t *entry = NULL;
-    u8 *sec_buf = kzmalloc(fat_disk->sectors_per_cluster * BYTES_PER_SECTOR);
-
-    path = next_dir_name(path, cur);
-
-    gendisk->ops->disk_read(gendisk, LBA_ADDR(fat_disk->root_start, fat_disk),
-        sec_buf, fat_disk->sectors_per_cluster);
-    entry = (fat_file_t*)sec_buf;
-
-    while (entry->name[0] != 0) {
-        //printf("Checking entry %s\n", entry->name);
-        if (check_entry(entry, fat_disk, cur)) {
-            if (*path != '\0') {
-                u8 *tmp = kmalloc(fat_disk->sectors_per_cluster * BYTES_PER_SECTOR);
-                tmp = fat32_read_dir(entry, tmp, fat_disk, gendisk);
-                kfree(sec_buf);
-                sec_buf = tmp;
-                entry = (fat_file_t*)sec_buf;
-                path = next_dir_name(path, cur);
-                continue;
-            }
-            else {
-                kfree(sec_buf);
-                file->f_info = entry;
-                file->f_op = &fat32_fops;
-                return 0;
-            }
-        }
-        entry++;
-    }
-    kfree(sec_buf);
-    printf("File not found\n");
-    return -1;
+    printf("Opening file %s\n", file->f_path);
+    file->f_inode = inode;
+    file->f_op = &fat_fops;
+    return 0;
 }
 
 ssize_t fat32_read(struct file *file, void *file_buf, size_t count)
 {
-    return __do_fat32_read(file, file_buf, count);
+    return __do_fat32_read(file->f_inode, file_buf, count);
 }
 
 void print_fat32_data(fat_BS_t *ptr)
@@ -243,4 +240,92 @@ void print_fat32_data(fat_BS_t *ptr)
     printf("Drive number: %x\n", ptr->extended_section.drive_number);
     printf("Volume ID: %x\n", ptr->extended_section.volume_id);
     printf("Signature: %x\n", ptr->extended_section.signature);
+}
+
+static int unique_ino(void)
+{
+	static unsigned long ino = 1;
+	return ++ino;
+}
+
+static struct inode *fat_iget(struct super_block *sb, unsigned long pos)
+{
+    struct inode *tmp;
+    struct fat_file *info;
+    unsigned long i_pos;
+
+    list_for_each_entry(tmp, &sb->s_inodes, i_list) {
+        info = (fat_file_t*)tmp->i_private;
+        i_pos = (u32)info->cl_low + (u32)info->cl_high;
+        if (i_pos == pos)
+            return tmp;
+    }
+
+    return NULL;
+}
+
+static struct inode *fat_build_inode(struct super_block *sb, struct fat_file *info)
+{
+    struct inode *inode;
+    unsigned long pos = (u32)info->cl_low + (u32)info->cl_high;
+
+    inode = fat_iget(sb, pos);
+    if (inode) {
+        kfree(info);
+        return inode;
+    }
+
+    inode = fat_alloc_inode(sb);
+
+    inode->i_ino = unique_ino();
+    inode->i_size = info->file_size;
+    inode->i_private = info;
+
+    list_add_tail(&inode->i_list, &sb->s_inodes);
+
+    return inode;
+}
+
+static int fat32_find(struct inode *dir, const char *name,
+    struct fat_file *info)
+{
+    int ret = 0;
+    fat_file_t *entry = (fat_file_t*)dir->i_private;
+    fat_disk_t *disk = (fat_disk_t*)dir->i_sb->private;
+    unsigned char *buffer;
+
+    buffer = fat32_read_dir(entry, disk, dir->i_sb->s_bdev->disk);
+    entry = (fat_file_t*)buffer;
+
+    while (entry->name[0] != 0) {
+        if (check_entry(entry, name)) {
+            printf("Found %s\n", name);
+            memcpy(info, entry, sizeof(*info));
+            break;
+        }
+        entry++;
+    }
+
+    kfree(buffer);
+    return ret;
+}
+
+struct dentry *fat32_lookup(struct inode *parent, struct dentry *find,
+    unsigned int flags)
+{
+    struct inode *inode;
+    struct fat_file *info = kzmalloc(sizeof(*info));
+    char name[9];
+
+    for (int i = 0; i < 8; i++)
+        name[i] = toupper(find->d_name[i]);
+    name[8] = '\0';
+    printf("Looking up %s\n", name);
+
+    if (fat32_find(parent, name, info) == 0) {
+        inode = fat_build_inode(parent->i_sb, info);
+        find->d_inode = inode;
+    }
+
+    return NULL;
 }

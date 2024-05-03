@@ -160,10 +160,10 @@ ACPI_STATUS detect_top_level_device(ACPI_HANDLE ObjHandle, UINT32 Level,
     Path.Pointer = Buffer;
 
     /* Get the full path of this device and print it */
-    // Status = AcpiGetName(ObjHandle, ACPI_FULL_PATHNAME, &Path);
-    // if (ACPI_SUCCESS(Status))
-    //     printf("%s\n", Path.Pointer);
-    
+    Status = AcpiGetName(ObjHandle, ACPI_FULL_PATHNAME, &Path);
+    if (ACPI_SUCCESS(Status))
+        printf("%s\n", Path.Pointer);
+
     /* Get the device info for this device */
     Status = AcpiGetObjectInfo(ObjHandle, &Info);
 

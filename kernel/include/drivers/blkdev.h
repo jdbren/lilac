@@ -4,6 +4,7 @@
 #include <lilac/types.h>
 #include <lilac/config.h>
 #include <lilac/sync.h>
+#include <fs/types.h>
 
 struct gendisk {
     int major;
@@ -11,7 +12,7 @@ struct gendisk {
     char driver[8];
     struct disk_operations *ops;
     struct block_device *partitions;
-    struct request_queue *queue;
+    // struct request_queue *queue;
     void *private;
     spinlock_t lock;
     int state;
@@ -31,15 +32,18 @@ struct block_device {
     u32 first_sector;
     u32 num_sectors;
     struct gendisk *disk;
+    enum fs_type type;
+    dev_t devnum;
     char name[32];
+    struct inode *bd_inode;
     struct block_device *next;
+    struct mutex bd_holder_lock;
 };
 
 struct gpt_part_entry;
 
 int __must_check add_gendisk(struct gendisk *disk);
 int scan_partitions(struct gendisk *disk);
-int __must_check create_block_dev(struct gendisk *disk,
-    struct gpt_part_entry *part_entry);
+struct block_device *get_bdev(dev_t devnum);
 
 #endif

@@ -1,5 +1,6 @@
 #include <limits.h>
 #include <drivers/pci.h>
+#include <lilac/device.h>
 #include <lilac/port.h>
 #include <lilac/panic.h>
 #include <mm/kmm.h>
@@ -48,9 +49,9 @@ static ACPI_STATUS pcie_init_device(ACPI_HANDLE ObjHandle, UINT32 Level,
     Path.Pointer = Buffer;
     ACPI_DEVICE_INFO *Info = kzmalloc(sizeof(*Info));
 
-    // Status = AcpiGetName(ObjHandle, ACPI_FULL_PATHNAME, &Path);
-    // if (ACPI_SUCCESS(Status))
-    //     printf(" %s\n", Path.Pointer);
+    Status = AcpiGetName(ObjHandle, ACPI_FULL_PATHNAME, &Path);
+    if (ACPI_SUCCESS(Status))
+        printf(" %s\n", Path.Pointer);
 
     Status = AcpiGetObjectInfo(ObjHandle, &Info);
     if (ACPI_SUCCESS(Status)) {

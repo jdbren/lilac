@@ -37,7 +37,7 @@ static void start_process(void)
     printf("Process %d started\n", current->pid);
     printf("cr3[1023]: %x\n", ((u32*)(0xfffff000))[1023]);
 
-    char *path = current->info->path;
+    const char *path = current->info->path;
     int fd = open(path, 0, 0);
     if (fd < 0) {
         printf("Failed to open file %s\n", path);
@@ -91,7 +91,7 @@ struct task *init_process(void)
     this->pc = (u32)(start_process);
     this->state = TASK_RUNNING;
     this->info = kzmalloc(sizeof(*this->info));
-    this->info->path = "A:/bin/init";
+    this->info->path = "/bin/init";
     memcpy(this->name, "init", 5);
 
     return this;

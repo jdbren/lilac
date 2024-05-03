@@ -101,24 +101,17 @@ void sem_post(sem_t *sem)
 void mutex_init(mutex_t *mutex)
 {
     atomic_init(&mutex->owner, -1);
-    list_init(&mutex->waiters);
     atomic_init(&mutex->locked, false);
 }
 
 void mutex_lock(mutex_t *mutex)
 {
-    bool add = false;
+    // bool add = false;
     int id = get_pid();
     if (atomic_load(&mutex->owner) == id)
         return;
     while (atomic_exchange(&mutex->locked, true))
-    {
-        if (!add) {
-            list_add(&mutex->waiters, id);
-            add = true;
-        }
         yield();
-    }
     atomic_store(&mutex->owner, id);
 }
 
@@ -129,16 +122,16 @@ void mutex_unlock(mutex_t *mutex)
         return;
     atomic_store(&mutex->owner, -1);
     atomic_store(&mutex->locked, false);
-    if (!list_empty(&mutex->waiters))
-    {
-        int next = list_pop(&mutex->waiters);
-        atomic_store(&mutex->owner, next);
-    }
+    // if (!list_empty(&mutex->waiters))
+    // {
+    //     int next = list_pop(&mutex->waiters);
+    //     atomic_store(&mutex->owner, next);
+    // }
 }
 
 void mutex_destroy(mutex_t *mutex)
 {
-    list_destroy(&mutex->waiters);
+    // list_destroy(&mutex->waiters);
     atomic_store(&mutex->locked, false);
     atomic_store(&mutex->owner, -1);
 }

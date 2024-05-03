@@ -3,6 +3,7 @@
 #include <lilac/lilac.h>
 #include <lilac/types.h>
 #include <lilac/panic.h>
+#include <lilac/fs.h>
 #include <lilac/process.h>
 #include <lilac/sched.h>
 #include <lilac/timer.h>
@@ -13,6 +14,8 @@ __no_ret __no_stack_chk void start_kernel(void)
 {
 	acpi_full_init();
 	scan_sys_bus();
+
+	fs_init();
 
     sched_init();
 	arch_enable_interrupts();

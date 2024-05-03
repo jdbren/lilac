@@ -37,7 +37,6 @@ $(KERNEL_ARCH_OBJS) \
 kernel/kmain.o \
 kernel/process.o \
 kernel/sched.o \
-kernel/list.o \
 kernel/sync.o \
 kernel/write.o \
 mm/kheap.o \

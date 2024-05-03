@@ -2,30 +2,23 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <stdbool.h>
 #include <string.h>
+#include <ctype.h>
+#include <lilac/panic.h>
 #include <lilac/fs.h>
+#include <lilac/device.h>
 #include <drivers/blkdev.h>
 #include <fs/fat32.h>
 #include <mm/kheap.h>
 
-static struct fs_operations ops[4] = {
-    {
-        .init_fs = &fat32_init,
-        .open = &fat32_open,
-    },
-    {
-        .open = NULL,
-    },
-    {
-        .open = NULL,
-    },
-    {
-        .open = NULL,
-    }
-};
+static struct dentry *(*init_ops[4])(struct block_device *, struct super_block *)
+    = { fat32_init };
+
+static struct vfsmount root_disk;
+static struct dentry *root_dentry;
 
 static int numdisks = 0;
 static struct vfsmount disks[8];
-static struct vnode *vnodes[256];
+static struct file *vnodes[256];
 
 static int get_fd(void)
 {
@@ -36,60 +29,127 @@ static int get_fd(void)
     return -1;
 }
 
-static struct vnode *mk_vnode(int dev, struct file *f)
+enum fs_type str_to_fs(const char *fs_type)
 {
-    struct vnode *vnode = kzmalloc(sizeof(struct vnode));
-    vnode->disknum = dev;
-    vnode->type = VNODE_FILE;
-    vnode->f = f;
-    return vnode;
+    if (strcmp(fs_type, "msdos") == 0)
+        return MSDOS;
+    else
+        return -1;
 }
 
-// enum fs_type str_to_fs(const char *fs_type)
+void root_init(struct block_device *bdev)
+{
+    struct super_block *sb = kzmalloc(sizeof(struct super_block));
+
+    root_disk.mnt_sb = sb;
+    root_disk.init_fs = init_ops[bdev->type];
+
+    root_dentry = root_disk.init_fs(bdev, sb);
+    root_disk.mnt_root = root_dentry;
+
+    root_dentry->d_parent = root_dentry;
+}
+
+int fs_init(void)
+{
+    dev_t dev = DEVICE_ID(SATA_DEVICE, 0);
+    struct block_device *bdev;
+
+    scan_partitions(NULL);
+    bdev = get_bdev(dev);
+    if (!bdev)
+        kerror("Failed to get root block device\n");
+
+    root_init(bdev);
+    disks[numdisks++] = root_disk;
+    // create_dev_files();
+    return 0;
+}
+
+// struct dentry *mount_bdev(struct block_device *bdev)
 // {
-//     if (strcmp(fs_type, "msdos") == 0)
-//         return MSDOS;
-//     else
-//         return -1;
+//     struct vfsmount *mnt = &disks[numdisks++];
+//     struct super_block *sb = kzmalloc(sizeof(struct super_block));
+//     mnt->init_fs = &init_ops[bdev->type];
+//     mnt->mnt_sb = sb;
+
+//     mnt->init_fs(bdev, sb);
+
+//     return 0;
 // }
 
-int fs_mount(struct block_device *bdev, enum fs_type type)
+static int name_len(const char *path, int n_pos)
 {
-    struct vfsmount *mnt = &disks[numdisks];
-    mnt->num = numdisks++;
-    //strcpy(disk->devname, dev_name);
-    mnt->ops = &ops[type];
-    mnt->bdev = bdev;
-
-    mnt->ops->init_fs(mnt);
-
-    return 0;
+    int i = 0;
+    while (path[n_pos] != '/' && path[n_pos] != '\0') {
+        i++; n_pos++;
+    }
+    return i;
 }
 
 int open(const char *path, int flags, int mode)
 {
+    int n_pos = 0;
+    int n_len = strlen(path);
     int fd;
-    struct vfsmount *disk = &disks[path[0] - 'A'];
+    struct inode *parent;
+    struct dentry *current = root_dentry;
+    struct dentry *find;
     struct file *new_file = kzmalloc(sizeof(*new_file));
-    new_file->f_path = path;
-    new_file->f_disk = disk;
 
-    disk->ops->open(path+2, new_file);
+    printf("Opening file %s\n", path);
+
+    if (path[n_pos] != '/')
+        goto error;
+
+    while (path[n_pos++] != '\0') {
+        int len = name_len(path, n_pos);
+        char *name = kzmalloc(len+1);
+        find = kzmalloc(sizeof(*find));
+
+        parent = current->d_inode;
+        find->d_parent = current;
+        strncpy(name, path + n_pos, len);
+        name[len] = '\0';
+        find->d_name = name;
+
+        parent->i_op->lookup(parent, find, 0);
+        // dcache_add(find);
+
+        if (find->d_inode == NULL)
+            goto error;
+
+        current = find;
+        n_pos += len;
+    }
+
+    new_file->f_path = kzmalloc(n_len+1);
+    strcpy(new_file->f_path, path);
+    new_file->f_path[n_len] = '\0';
+
+    parent = current->d_inode;
+    printf("Parent inode %p\n", parent);
+    parent->i_op->open(parent, new_file);
+
     if (new_file == NULL) {
         kfree(new_file);
         return -1;
     }
+
     fd = get_fd();
-    vnodes[fd] = mk_vnode(disk->num, new_file);
+    vnodes[fd] = new_file;
 
     return fd;
+
+error:
+    kfree(new_file);
+    kerror("File open failed\n");
+    return -1;
 }
 
 ssize_t read(int fd, void *buf, size_t count)
 {
-    struct vnode *vnode = vnodes[fd];
-    if (vnode->type != VNODE_FILE)
-        return -1;
-    printf("Reading from disk %d\n", vnode->disknum);
-    return vnode->f->f_op->read(vnode->f, buf, count);
+    struct file *file = vnodes[fd];
+    printf("Reading from disk %d\n", file->f_inode->i_sb->s_bdev->devnum);
+    return file->f_op->read(file, buf, count);
 }
