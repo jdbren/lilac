@@ -230,7 +230,7 @@ void stop_cmd(hba_port_t *port)
 
 int ahci_read(struct gendisk *disk, u64 lba, void *buf, u32 count)
 {
-	printf("Reading %d sectors from disk at LBA %x\n", count, lba);
+	// printf("Reading %d sectors from disk at LBA %x\n", count, lba);
 	return __ahci_read(disk->private, lba & 0xFFFFFFFF, lba >> 32, count,
 		(void*)virt_to_phys(buf));
 }

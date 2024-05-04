@@ -41,7 +41,7 @@ void yield(void)
 void schedule_task(struct task *new_task)
 {
     task_queue[++back] = new_task;
-    printf("Task_queue[%d] = %s\n", back, new_task->name);
+    // printf("Task_queue[%d] = %s\n", back, new_task->name);
 }
 
 void sched_init(void)
@@ -63,11 +63,11 @@ void sched_clock_init(void)
 static void context_switch(struct task *prev, struct task *next)
 {
     printf("Next task info: \n");
-    printf("PID: %d\n", next->pid);
-    printf("PPID: %d\n", next->ppid);
-    printf("PGD: %x\n", next->pgd);
-    printf("PC: %x\n", next->pc);
-    printf("Stack: %x\n", next->stack);
+    printf("\tPID: %d\n", next->pid);
+    printf("\tPPID: %d\n", next->ppid);
+    printf("\tPGD: %x\n", next->pgd);
+    printf("\tPC: %x\n", next->pc);
+    printf("\tStack: %x\n", next->stack);
 
     arch_context_switch(prev, next);
 }

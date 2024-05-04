@@ -29,7 +29,7 @@ struct disk_operations {
 };
 
 struct block_device {
-    u32 first_sector;
+    u32 first_sector_lba;
     u32 num_sectors;
     struct gendisk *disk;
     enum fs_type type;

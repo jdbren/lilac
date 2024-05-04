@@ -7,6 +7,10 @@
 #include <lilac/sync.h>
 #include <fs/types.h>
 
+/**
+ * Based on the Linux VFS structures
+*/
+
 struct file;
 struct inode;
 struct dentry;
@@ -67,15 +71,6 @@ struct file_operations {
 	ssize_t (*write)(struct file *, const void *, size_t);
 };
 
-// struct dir {
-// 	unsigned int d_flags;
-// 	struct dir *d_parent;	/* parent directory */
-// 	char *d_name;
-// 	void *d_info;
-// 	struct lockref d_lockref;
-// 	struct super_block *d_sb;	/* The root of the dentry tree */
-// 	struct hlist_head d_children;	/* our children */
-// };
 
 #define d_lock	d_lockref.lock
 
@@ -101,21 +96,6 @@ struct dentry_operations {
 	int (*d_delete)(const struct dentry *);
 	int (*d_init)(struct dentry *);
 } __cacheline_align;
-
-// enum vnode_type {
-//     VNODE_FILE,
-//     VNODE_DIR
-// };
-
-// struct vnode {
-//     u8 disknum;
-//     u8 type;
-//     u16 streams;
-//     union {
-//         struct dir *d;
-//         struct file *f;
-//     };
-// };
 
 struct super_block {
 	// struct list_head			s_list;		/* Keep this first */
@@ -158,11 +138,12 @@ ssize_t read(int fd, void *buf, size_t count);
 ssize_t write(int fd, const void *buf, size_t count);
 int close(int fd);
 
+int mount(const char *source, const char *target,
+        const char *filesystemtype, unsigned long mountflags,
+        const void *data);
+
 int fs_init(void);
 struct dentry *mount_bdev(struct block_device *bdev,
 	int (*fill_super)(struct super_block*));
-int vfs_mount(const char *source, const char *target,
-        const char *filesystemtype, unsigned long mountflags,
-        const void *data);
 
 #endif

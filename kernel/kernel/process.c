@@ -35,7 +35,6 @@ u32 get_pid(void)
 static void start_process(void)
 {
     printf("Process %d started\n", current->pid);
-    printf("cr3[1023]: %x\n", ((u32*)(0xfffff000))[1023]);
 
     const char *path = current->info->path;
     int fd = open(path, 0, 0);
@@ -54,6 +53,8 @@ static void start_process(void)
     }
     void *jmp = elf32_load(hdr);
     arch_user_stack();
+
+    printf("Going to user mode\n");
     jump_usermode((u32)jmp, __USER_STACK - 4);
 }
 

@@ -42,9 +42,9 @@ int scan_partitions(struct gendisk *disk)
         return 0;
     }
 
-    printf("Scanning partitions\n");
+    printf("Scanning partitions...\n");
     printf("Driver: %s\n", disk->driver);
-    char *buf = kzmalloc(512);
+    char buf[512];
     const struct MBR *mbr;
 	const struct mbr_part_entry *mbr_part;
     const struct gpt_part_entry *gpt_part;
@@ -116,7 +116,7 @@ static int __must_check create_block_dev(struct gendisk *disk,
 
     // Initialize block device
     bdev->devnum = (disk->major << 20) | (disk->first_minor + num);
-    bdev->first_sector = part_entry->starting_lba;
+    bdev->first_sector_lba = part_entry->starting_lba;
     bdev->num_sectors = part_entry->ending_lba - part_entry->starting_lba;
     bdev->disk = disk;
     bdev->type = type;

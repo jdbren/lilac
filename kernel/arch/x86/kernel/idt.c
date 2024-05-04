@@ -28,12 +28,6 @@ static struct IDT idtptr = {
     (u32)&idt_entries
 };
 
-void enable_interrupts(void)
-{
-    asm("sti");
-    printf("Interrupts enabled\n");
-}
-
 void idt_init(void)
 {
     extern void sys_call_handler(void);

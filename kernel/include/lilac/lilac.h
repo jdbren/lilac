@@ -22,6 +22,6 @@ struct boot_info {
 __no_ret __no_stack_chk
 void start_kernel(void);
 extern inline void arch_idle(void);
-extern void arch_enable_interrupts(void);
+extern inline void arch_enable_interrupts(void);
 
 #endif

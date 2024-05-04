@@ -59,9 +59,9 @@ inline void arch_idle(void)
 		asm("hlt");
 }
 
-void arch_enable_interrupts(void)
+inline void arch_enable_interrupts(void)
 {
-	enable_interrupts();
+	asm volatile ("sti");
 }
 
 static void parse_multiboot(u32 addr, struct multiboot_info *mbd)
