@@ -11,7 +11,8 @@
 #include <lilac/elf.h>
 #include <mm/kheap.h>
 
-__no_ret __no_stack_chk void start_kernel(void)
+__no_ret __no_stack_chk
+void start_kernel(void)
 {
 	acpi_full_init();
 	scan_sys_bus();
@@ -25,10 +26,14 @@ __no_ret __no_stack_chk void start_kernel(void)
 	memset(buf, 0, 512);
 	memset(buf2, 0, 512);
 	int fd = open("/root/test", 0, 0);
-	read(fd, buf, 512);
+	read(fd, buf, 6);
 	while (*p)
 		putchar(*p++);
-
+	putchar('\n');
+	p = buf;
+	read(fd, buf, 4);
+	while (*p)
+		putchar(*p++);
 	// *p = '\n';
 	// strcpy(p, str);
 	// printf("\n%s", buf);
@@ -39,7 +44,7 @@ __no_ret __no_stack_chk void start_kernel(void)
 	// while (*p)
 	// 	putchar(*p++);
 
-	arch_idle();
+	//arch_idle();
 
     sched_init();
 	arch_enable_interrupts();

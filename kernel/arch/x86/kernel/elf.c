@@ -12,12 +12,12 @@ void* elf32_load(void *elf)
 
     if (hdr->sig != 0x464c457f) {
         printf("Invalid ELF signature\n");
-        return 0;
+        kerror("Invalid ELF signature\n");
     }
 
     if (hdr->elf32.mach != X86) {
         printf("Invalid machine type\n");
-        return 0;
+        kerror("Invalid machine type\n");
     }
 
     printf("ELF header:\n");
