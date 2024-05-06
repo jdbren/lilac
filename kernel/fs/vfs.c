@@ -95,6 +95,7 @@ int fs_init(void)
 //     return 0;
 // }
 
+// Need to implement dcache, currently leaks memory
 int open(const char *path, int flags, int mode)
 {
     int n_pos = 0;
@@ -138,6 +139,7 @@ int open(const char *path, int flags, int mode)
     if(parent->i_op->open(parent, new_file))
         return -1;
 
+    // should add to current process's file table
     fd = get_fd();
     vnodes[fd] = new_file;
 

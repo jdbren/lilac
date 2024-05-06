@@ -10,7 +10,7 @@ struct gendisk {
     int major;
     int first_minor;
     char driver[8];
-    struct disk_operations *ops;
+    const struct disk_operations *ops;
     struct block_device *partitions;
     // struct request_queue *queue;
     void *private;

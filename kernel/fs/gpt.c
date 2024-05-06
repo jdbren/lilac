@@ -6,3 +6,10 @@ int gpt_validate(struct GPT *gpt) {
     }
     return 0;
 }
+
+#include <fs/mbr.h>
+
+void mbr_read(struct MBR *mbr)
+{
+
+}
