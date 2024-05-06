@@ -19,33 +19,6 @@ void start_kernel(void)
 
 	fs_init();
 
-	char buf[512];
-	char buf2[512];
-	char *p = buf;
-	char *str = " Hello, World!\n";
-	memset(buf, 0, 512);
-	memset(buf2, 0, 512);
-	int fd = open("/root/test", 0, 0);
-	read(fd, buf, 6);
-	while (*p)
-		putchar(*p++);
-	putchar('\n');
-	p = buf;
-	read(fd, buf, 4);
-	while (*p)
-		putchar(*p++);
-	// *p = '\n';
-	// strcpy(p, str);
-	// printf("\n%s", buf);
-	// write(fd, buf, 512);
-
-	// read(fd, buf2, 512);
-	// p = buf2;
-	// while (*p)
-	// 	putchar(*p++);
-
-	//arch_idle();
-
     sched_init();
 	arch_enable_interrupts();
 	sched_clock_init();

@@ -66,7 +66,7 @@ struct file {
 } __align(4);
 
 struct file_operations {
-	long (*llseek)(struct file *, long, int);
+	int (*lseek)(struct file *, int, int);
     ssize_t (*read)(struct file *, void *, size_t);
 	ssize_t (*write)(struct file *, const void *, size_t);
 };
@@ -133,6 +133,7 @@ struct vfsmount {
 	struct dentry *(*init_fs)(struct block_device *, struct super_block *);
 };
 
+int lseek(int fd, int offset, int whence);
 int open(const char *path, int flags, int mode);
 ssize_t read(int fd, void *buf, size_t count);
 ssize_t write(int fd, const void *buf, size_t count);

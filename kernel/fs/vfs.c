@@ -95,6 +95,25 @@ int fs_init(void)
 //     return 0;
 // }
 
+#define SEEK_SET 0
+#define SEEK_CUR 1
+// #define SEEK_END 2
+
+int lseek(int fd, int offset, int whence)
+{
+    struct file *file = vnodes[fd];
+    if (whence == SEEK_SET)
+        file->f_pos = offset;
+    else if (whence == SEEK_CUR)
+        file->f_pos += offset;
+    // else if (whence == SEEK_END)
+    //     file->f_pos = file->f_inode->i_size + offset;
+    else
+        return -1;
+
+    return file->f_pos;
+}
+
 // Need to implement dcache, currently leaks memory
 int open(const char *path, int flags, int mode)
 {

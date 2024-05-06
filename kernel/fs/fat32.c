@@ -177,6 +177,25 @@ static u32 __get_clst_num(struct file *file, struct fat_disk *disk)
     return clst_num;
 }
 
+static u32 __find_free_clst(struct fat_disk *disk)
+{
+    u32 clst = disk->fs_info.next_free_clst;
+    u32 FAT_sz = disk->bpb.extended_section.FAT_size_32;
+
+    while (1) {
+        if (clst > disk->FAT.last_clst) {
+            kerror("clst out of fat bounds\n");
+        }
+        if (disk->FAT.buf[clst] == 0) {
+            disk->fs_info.next_free_clst = clst;
+            return clst;
+        }
+        clst++;
+    }
+
+    return 0;
+}
+
 static void disk_init(struct fat_disk *disk)
 {
     struct fat_BS *id = &disk->bpb;
@@ -262,38 +281,54 @@ static int __do_fat32_read(const struct file *file, u32 clst, u8 *buffer,
     size_t num_clst)
 {
     if (num_clst == 0)
-        return 0;
+        return -1;
 
     size_t clst_read = 0;
     const struct inode *inode = file->f_inode;
     const struct gendisk *gd = inode->i_sb->s_bdev->disk;
     struct fat_disk *fat_disk = (struct fat_disk*)inode->i_sb->private;
-    const size_t bpc = fat_disk->bytes_per_clst;
 
     while (clst < 0x0FFFFFF8 && clst_read < num_clst) {
         __fat_read_clst(fat_disk, gd, clst, buffer);
         clst = __get_FAT_val(clst, fat_disk);
-        buffer = (void*)((u32)buffer + fat_disk->bytes_per_clst);
-        num_clst++;
+        buffer += fat_disk->bytes_per_clst;
+        clst_read++;
     }
 
     return 0;
 }
 
-static ssize_t __do_fat32_write(struct inode *inode, const void *buf, size_t count)
+static int __do_fat32_write(const struct file *file, u32 clst,
+    const u8 *buffer, size_t num_clst)
 {
-    ssize_t bytes_written = 0;
-    struct gendisk *gd = inode->i_sb->s_bdev->disk;
+    if (num_clst == 0)
+        return -1;
+
+    size_t clst_writ = 0;
+    u32 next_val;
+    const struct inode *inode = file->f_inode;
+    const struct gendisk *gd = inode->i_sb->s_bdev->disk;
     struct fat_disk *fat_disk = (struct fat_disk*)inode->i_sb->private;
-    struct fat_file *fat_file = (struct fat_file*)inode->i_private;
-    const size_t bpc = fat_disk->bytes_per_clst;
-    count = count > bpc ? (count / bpc) * bpc : count;
-    u32 clst = (u32)fat_file->cl_low + (u32)fat_file->cl_high;
 
-    gd->ops->disk_write(gd, LBA_ADDR(clst, fat_disk), buf,
-        fat_disk->sect_per_clst);
+    while (clst_writ < num_clst) {
+        clst_writ++;
+        __fat_write_clst(fat_disk, gd, clst, buffer);
 
-    return count;
+        clst = __get_FAT_val(clst, fat_disk);
+        if (clst >= 0x0FFFFFF8 && clst_writ < num_clst) {
+            printf("clst: %x\n", clst);
+            next_val = __find_free_clst(fat_disk);
+            if (next_val == 0)
+                kerror("No free clusters\n");
+            fat_disk->FAT.buf[clst] = next_val;
+            fat_disk->FAT.buf[next_val] = 0x0FFFFFFF;
+            clst = next_val;
+        }
+
+        buffer += fat_disk->bytes_per_clst;
+    }
+
+    return 0;
 }
 
 // Read a directory and return a buffer containing the directory entries
@@ -332,8 +367,8 @@ ssize_t fat32_read(struct file *file, void *file_buf, size_t count)
     struct fat_disk *disk = (struct fat_disk*)file->f_inode->i_sb->private;
     struct fat_file *fat_file = (struct fat_file*)file->f_inode->i_private;
     u32 offset = file->f_pos % disk->bytes_per_clst;
-    u32 num_clst = ROUND_UP(count + (disk->bytes_per_clst - offset),
-        disk->bytes_per_clst) / disk->bytes_per_clst;
+    u32 num_clst = ROUND_UP(count + offset, disk->bytes_per_clst) /
+        disk->bytes_per_clst;
     unsigned char *buffer = kzmalloc(disk->bytes_per_clst * num_clst);
 
     start_clst = __get_clst_num(file, disk);
@@ -357,7 +392,38 @@ out:
 
 ssize_t fat32_write(struct file *file, const void *file_buf, size_t count)
 {
-    return __do_fat32_write(file->f_inode, file_buf, count);
+    ssize_t bytes_written;
+    u32 start_clst;
+    struct fat_disk *disk = (struct fat_disk*)file->f_inode->i_sb->private;
+    struct fat_file *fat_file = (struct fat_file*)file->f_inode->i_private;
+    u32 offset = file->f_pos % disk->bytes_per_clst;
+    u32 num_clst = ROUND_UP(count + offset, disk->bytes_per_clst) /
+        disk->bytes_per_clst;
+    unsigned char *buffer = kzmalloc(disk->bytes_per_clst * num_clst);
+
+    start_clst = __get_clst_num(file, disk);
+    if (start_clst == 0)
+        goto out;
+
+    if (offset) {
+        if(__do_fat32_read(file, start_clst, buffer, 1) < 0)
+            goto out;
+    }
+
+    if (file->f_pos + count > fat_file->file_size)
+        fat_file->file_size = file->f_pos + count;
+    memcpy(buffer + offset, file_buf, count);
+
+    bytes_written = __do_fat32_write(file, start_clst, buffer, num_clst);
+    if (bytes_written < 0)
+        goto out;
+
+    file->f_pos += count;
+    bytes_written = count;
+
+out:
+    kfree(buffer);
+    return bytes_written;
 }
 
 void print_fat32_data(struct fat_BS *ptr)
