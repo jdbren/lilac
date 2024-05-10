@@ -2,6 +2,7 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <string.h>
 #include <lilac/types.h>
+#include <lilac/config.h>
 #include <acpi/madt.h>
 #include <mm/kheap.h>
 #include "apic.h"
@@ -21,7 +22,7 @@ typedef struct redir_entry {
     u8 mask;
     u8 reserved[4];
     u8 dest;
-} __attribute__((packed)) redir_entry_t;
+} __packed redir_entry_t;
 
 static uintptr_t ioapic_base;
 static u8 ioapic_gsi_base;

@@ -180,6 +180,11 @@ ssize_t write(int fd, const void *buf, size_t count)
 // int close(int fd)
 // {
 //     struct file *file = vnodes[fd];
+//     file->f_op->flush(file);
+//     if (--file->f_count)
+//         return 0;
+
+//     file->f_op->release(file->f_inode, file);
 //     kfree(file->f_path);
 //     kfree(file);
 //     vnodes[fd] = NULL;

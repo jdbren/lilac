@@ -69,6 +69,8 @@ struct file_operations {
 	int (*lseek)(struct file *, int, int);
     ssize_t (*read)(struct file *, void *, size_t);
 	ssize_t (*write)(struct file *, const void *, size_t);
+	int (*flush) (struct file *);
+	int (*release) (struct inode *, struct file *);
 };
 
 

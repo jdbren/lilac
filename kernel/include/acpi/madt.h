@@ -3,18 +3,19 @@
 #ifndef ACPI_MADT_H
 #define ACPI_MADT_H
 
+#include <lilac/config.h>
 #include <acpi/acpi.h>
 
 struct MADT {
     struct SDTHeader header;
     u32 LocalApicAddress;
     u32 Flags;
-} __attribute__((packed));
+} __packed;
 
 struct MADTEntry {
     u8 Type;
     u8 Length;
-} __attribute__((packed));
+} __packed;
 
 struct ioapic {
     struct ioapic *next;

@@ -1,6 +1,7 @@
 #ifndef _ACPI_HPET_H
 #define _ACPI_HPET_H
 
+#include <lilac/config.h>
 #include <acpi/acpi.h>
 
 struct addr_struct {
@@ -9,7 +10,7 @@ struct addr_struct {
     u8 register_bit_offset;
     u8 reserved;
     u64 address;
-} __attribute__((packed));
+} __packed;
 
 struct hpet {
     struct SDTHeader header;
@@ -23,7 +24,7 @@ struct hpet {
     u8 hpet_number;
     u16 minimum_tick;
     u8 page_protection;
-} __attribute__((packed));
+} __packed;
 
 struct hpet_info {
     u64 address;

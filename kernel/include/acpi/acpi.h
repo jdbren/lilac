@@ -4,6 +4,7 @@
 #define _ACPI_H
 
 #include <lilac/types.h>
+#include <lilac/config.h>
 
 struct RSDP {
     char Signature[8];
@@ -11,7 +12,7 @@ struct RSDP {
     char OEMID[6];
     u8 Revision;
     u32 RsdtAddress;
-} __attribute__((packed));
+} __packed;
 
 struct XSDP {
     char Signature[8];
@@ -24,7 +25,7 @@ struct XSDP {
     u64 XsdtAddress;
     u8 ExtendedChecksum;
     u8 reserved[3];
-} __attribute__((packed));
+} __packed;
 
 struct SDTHeader {
     char Signature[4];
@@ -36,7 +37,7 @@ struct SDTHeader {
     u32 OEMRevision;
     u32 CreatorID;
     u32 CreatorRevision;
-} __attribute__((packed));
+} __packed;
 
 struct acpi_info {
     struct madt_info *madt;

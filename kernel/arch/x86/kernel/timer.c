@@ -21,7 +21,7 @@ struct hpet_id_reg {
     u8 flags;
     u16 vendor_id;
     u32 counter_clk_period;
-} __attribute__((packed));
+} __packed;
 
 extern void timer_handler(void);
 extern void init_PIT(int freq);

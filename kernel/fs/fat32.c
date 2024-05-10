@@ -26,6 +26,12 @@ struct fat_FAT_buf {
     u32 buf[FAT_BUFFER_SIZE / 4];
 };
 
+struct fat_file_buf {
+    u32 cl;
+    u32 buf_sz;
+    u8 *buffer;
+};
+
 struct fat_disk {
     u32 base_lba;
     u32 fat_begin_lba;
@@ -298,6 +304,7 @@ static int __do_fat32_read(const struct file *file, u32 clst, u8 *buffer,
     return 0;
 }
 
+// Write to a file from a buffer (always multiples of cluster size)
 static int __do_fat32_write(const struct file *file, u32 clst,
     const u8 *buffer, size_t num_clst)
 {
@@ -311,12 +318,11 @@ static int __do_fat32_write(const struct file *file, u32 clst,
     struct fat_disk *fat_disk = (struct fat_disk*)inode->i_sb->private;
 
     while (clst_writ < num_clst) {
-        clst_writ++;
         __fat_write_clst(fat_disk, gd, clst, buffer);
+        clst_writ++;
 
         clst = __get_FAT_val(clst, fat_disk);
         if (clst >= 0x0FFFFFF8 && clst_writ < num_clst) {
-            printf("clst: %x\n", clst);
             next_val = __find_free_clst(fat_disk);
             if (next_val == 0)
                 kerror("No free clusters\n");

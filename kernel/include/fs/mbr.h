@@ -4,6 +4,7 @@
 #define _MBR_H
 
 #include <lilac/types.h>
+#include <lilac/config.h>
 
 struct mbr_part_entry {
     u8 status;
@@ -12,13 +13,13 @@ struct mbr_part_entry {
     u8 chs_last_sector[3];
     u32 lba_first_sector;
     u32 sector_count;
-} __attribute__((packed));
+} __packed;
 
-typedef struct MBR {
+struct MBR {
     u8 boot_code[446];
     struct mbr_part_entry partition_table[4];
     u16 signature;
-} __attribute__((packed)) MBR_t;
+} __packed;
 
 void mbr_read(struct MBR *mbr);
 

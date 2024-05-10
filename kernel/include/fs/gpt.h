@@ -2,6 +2,7 @@
 #define _GPT_H
 
 #include <lilac/types.h>
+#include <lilac/config.h>
 
 #define GPT_SIGNATURE 0x5452415020494645ULL
 #define GPT_HEADER_LBA 1
@@ -21,7 +22,7 @@ struct GPT {
     u32 num_partition_entries;
     u32 size_of_partition_entry;
     u32 partition_entry_array_crc32;
-} __attribute__((packed));
+} __packed;
 
 struct gpt_part_entry {
     u64 partition_type_guid[2];
@@ -30,7 +31,7 @@ struct gpt_part_entry {
     u64 ending_lba;
     u64 attributes;
     u16 partition_name[36];
-} __attribute__((packed));
+} __packed;
 
 int gpt_validate(struct GPT *gpt);
 

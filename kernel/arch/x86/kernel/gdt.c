@@ -2,6 +2,7 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <string.h>
 #include <lilac/types.h>
+#include <lilac/config.h>
 #include <lilac/panic.h>
 #include "gdt.h"
 
@@ -12,12 +13,12 @@ struct gdt_entry {
     u32 limit;
     u8 access_byte;
     u8 flags;
-} __attribute__((packed));
+} __packed;
 
 struct GDT {
     u16 size;
     u32 offset;
-} __attribute__((packed));
+} __packed;
 
 struct tss_entry {
 	u32 prev_tss; // Used for hardware task switching.
@@ -49,7 +50,7 @@ struct tss_entry {
 	u16 trap;
 	u16 iomap_base;
     u32 ssp;
-} __attribute__((packed));
+} __packed;
 
 static u32 segment_desc[GDT_SIZE*2];
 static struct GDT gdt = {(64 * GDT_SIZE) - 1, (u32)&segment_desc};

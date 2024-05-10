@@ -18,7 +18,7 @@
 
 typedef struct {
     u8 pg[PAGE_SIZE];
-} __attribute__((packed)) page_t;
+} __packed page_t;
 
 extern const u32 _kernel_start;
 extern const u32 _kernel_end;

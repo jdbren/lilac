@@ -1,6 +1,7 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/types.h>
+#include <lilac/config.h>
 #include "cpufaults.h"
 #include "idt.h"
 #include "pic.h"
@@ -14,12 +15,12 @@ typedef struct IDTGate {
     u8 zero;
     u8 type_attr;
     u16 offset_high;
-} __attribute__((packed)) idt_entry_t;
+} __packed idt_entry_t;
 
 struct IDT {
     u16 size;
     u32 offset;
-} __attribute__((packed));
+} __packed;
 
 
 static idt_entry_t idt_entries[IDT_SIZE];
@@ -62,11 +63,11 @@ struct cpu_state {
     unsigned int ecx;
     //...
     unsigned int esp;
-} __attribute__((packed));
+} __packed;
 
 struct stack_state {
     unsigned int error_code;
     unsigned int eip;
     unsigned int cs;
     unsigned int eflags;
-} __attribute__((packed));
+} __packed;

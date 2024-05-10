@@ -4,6 +4,7 @@
 #define KERNEL_ELF_H
 
 #include <lilac/types.h>
+#include <lilac/config.h>
 
 #define ELF_MAGIC 0x464C457FU
 
@@ -42,7 +43,7 @@ struct elf32_header {
     u16 s_entry_sz;
     u16 s_tbl_sz;
     u16 nms_idx;
-} __attribute__((packed));
+} __packed;
 
 struct elf64_header {
     u16 type;
@@ -58,7 +59,7 @@ struct elf64_header {
     u16 s_entrysz;
     u16 s_tblsz;
     u16 nms_idx;
-} __attribute__((packed));
+} __packed;
 
 struct elf_header {
     u32 sig;
@@ -71,7 +72,7 @@ struct elf_header {
         struct elf32_header elf32;
         struct elf64_header elf64;
     };
-} __attribute__((packed));
+} __packed;
 
 struct elf32_pheader {
     u32 type;
@@ -82,7 +83,7 @@ struct elf32_pheader {
     u32 p_memsz;
     u32 flags;
     u32 align;
-} __attribute__((packed));
+} __packed;
 
 struct elf64_pheader {
     u32 type;
@@ -93,7 +94,7 @@ struct elf64_pheader {
     uint64_t p_filesz;
     uint64_t p_memsz;
     uint64_t align;
-} __attribute__((packed));
+} __packed;
 
 void *elf32_load(void *elf);
 
