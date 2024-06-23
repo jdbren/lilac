@@ -111,7 +111,7 @@ struct super_block {
 	int						s_count;
 	atomic_bool				s_active;
 
-	struct block_device		*s_bdev;	/* can go away once we use an accessor for @s_bdev_file */
+	struct block_device		*s_bdev;
 	struct file				*s_bdev_file;
 
 	spinlock_t				s_lock;		/* Protects the sb and inode list */

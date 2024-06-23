@@ -32,6 +32,8 @@ jump_usermode:
 	mov [esp], eax		 # eflags
 	push __USER_CS | 0x3 # cs (ring 3)
 	push ebx			 # eip
+
+	# Clear registers
 	xor eax, eax
 	xor ebx, ebx
 	xor ecx, ecx
@@ -39,4 +41,5 @@ jump_usermode:
 	xor esi, esi
 	xor edi, edi
 	xor ebp, ebp
+
 	iretd
