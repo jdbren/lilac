@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <ctype.h>
+#include <lilac/log.h>
 #include <lilac/panic.h>
 #include <lilac/fs.h>
 #include <lilac/device.h>
@@ -63,7 +64,7 @@ static void root_init(struct block_device *bdev)
     root_dentry->d_parent = root_dentry;
     root_dentry->d_name = "/";
 
-    printf("%s mounted on /\n", bdev->name);
+    klog(LOG_INFO, "%s mounted on /\n", bdev->name);
 }
 
 int fs_init(void)
@@ -79,7 +80,7 @@ int fs_init(void)
     root_init(bdev);
     disks[numdisks++] = root_disk;
     // create_dev_files();
-    printf("Filesystem initialized\n");
+    kstatus(STATUS_OK, "Filesystem initialized\n");
     return 0;
 }
 

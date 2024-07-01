@@ -1,4 +1,5 @@
 #include <string.h>
+#include <lilac/log.h>
 #include <drivers/blkdev.h>
 #include <lilac/fs.h>
 #include <mm/kheap.h>
@@ -42,8 +43,8 @@ int scan_partitions(struct gendisk *disk)
         return 0;
     }
 
-    printf("Scanning partitions...\n");
-    printf("Driver: %s\n", disk->driver);
+    klog(LOG_INFO, "Scanning partitions...\n");
+    klog(LOG_INFO, "Driver: %s\n", disk->driver);
     char buf[512];
     const struct MBR *mbr;
 	const struct mbr_part_entry *mbr_part;
@@ -53,7 +54,7 @@ int scan_partitions(struct gendisk *disk)
     disk->ops->disk_read(disk, 0, buf, 1);
     mbr = (struct MBR*)buf;
     if (mbr->signature != 0xAA55) {
-		printf("Invalid MBR signature\n");
+		klog(LOG_ERROR, "Invalid MBR signature\n");
         return -1;
 	}
 
@@ -63,10 +64,9 @@ int scan_partitions(struct gendisk *disk)
 		// mbr_read(mbr);
         return -1;
 	} else {
-    	printf("GPT found\n");
         disk->ops->disk_read(disk, 1, buf, 1);
 		if (gpt_validate((struct GPT*)buf)) {
-			printf("GPT invalid\n");
+			klog(LOG_ERROR, "GPT invalid\n");
             return -1;
 		}
         disk->ops->disk_read(disk, 2, buf, 1);
@@ -76,7 +76,7 @@ int scan_partitions(struct gendisk *disk)
                 continue;
             status = create_block_dev(disk, gpt_part, j);
             if (status) {
-                printf("Invalid partition found at lba %d\n",
+                klog(LOG_WARN, "Invalid partition found at lba %d\n",
                     gpt_part->starting_lba);
             }
         }
@@ -110,7 +110,7 @@ static int __must_check create_block_dev(struct gendisk *disk,
     enum fs_type type = get_part_type(disk, part_entry);
     if (type < 0) {
         kfree(bdev);
-        printf("Invalid partition type\n");
+        klog(LOG_ERROR, "Invalid partition type\n");
         return -1;
     }
 

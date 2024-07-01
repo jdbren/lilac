@@ -1,5 +1,6 @@
 #include <limits.h>
 #include <drivers/pci.h>
+#include <lilac/log.h>
 #include <lilac/device.h>
 #include <lilac/port.h>
 #include <lilac/panic.h>
@@ -74,7 +75,7 @@ void pcie_read_device(ACPI_DEVICE_INFO *Info)
         get_pci_mmio_addr(0, Info->Address >> 16, Info->Address & 0xFFFF);
 
     if (pci_dev->BaseClass == 1 && pci_dev->SubClass == 6) {
-        printf("Found AHCI Controller\n");
+        klog(LOG_INFO, "Found AHCI Controller\n");
         ahci_init((void*)(pci_dev->u.type0.BaseAddresses[5] & 0xFFFFF000));
     }
 }

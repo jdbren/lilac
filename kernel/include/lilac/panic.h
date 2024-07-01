@@ -5,13 +5,14 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <lilac/log.h>
 
 #define assert(x) if (!(x)) kerror("Assertion failed: " #x)
 
 
 static inline __attribute__((noreturn))
 void kerror(const char *msg) {
-	printf("Kernel panic: %s\n", msg);
+	klog(LOG_FATAL, "Kernel panic: %s\n", msg);
 	asm("cli");
 	while (1)
 		asm("hlt");

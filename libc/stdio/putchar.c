@@ -11,7 +11,7 @@ int putchar(int ic)
 	char c = (char)ic;
 #if defined(__is_libk)
 	WritePort(0xe9, c, 8);
-	// graphics_putchar(c);
+	graphics_putchar(c);
 #else
 	write(1, &c, sizeof(c));
 #endif

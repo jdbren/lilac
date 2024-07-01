@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <limits.h>
+#include <lilac/log.h>
 #include <lilac/panic.h>
 #include <drivers/pci.h>
 #include <acpi/acpi.h>
@@ -109,43 +110,38 @@ int acpi_full_init(void)
 {
     ACPI_STATUS status;
 
-    printf("Initializing ACPICA...\n");
+    klog(LOG_INFO, "Initializing ACPICA...\n");
     status = AcpiInitializeSubsystem();
     if (ACPI_FAILURE(status)) {
-        printf("Error initializing ACPICA\n");
+        klog(LOG_ERROR, "Error initializing ACPI subsystem\n");
         return status;
     }
-    printf("ACPICA subsystem initialized\n");
 
     status = AcpiInitializeTables(NULL, 16, FALSE);
     if (ACPI_FAILURE(status)) {
-        printf("Error initializing tables\n");
+        klog(LOG_ERROR, "Error initializing ACPI tables\n");
         return status;
     }
-    printf("ACPICA tables initialized\n");
 
     status = AcpiLoadTables();
     if (ACPI_FAILURE(status)) {
-        printf("Error loading tables\n");
+        klog(LOG_ERROR, "Error loading ACPI tables\n");
         return status;
     }
-    printf("ACPICA tables loaded\n");
 
     status = AcpiEnableSubsystem(ACPI_FULL_INITIALIZATION);
     if (ACPI_FAILURE(status)) {
-        printf("Error enabling subsystem\n");
+        klog(LOG_ERROR, "Error enabling subsystem\n");
         return status;
     }
-    printf("ACPICA subsystem enabled\n");
 
     status = AcpiInitializeObjects(ACPI_FULL_INITIALIZATION);
     if (ACPI_FAILURE(status)) {
-        printf("Error initializing objects\n");
+        klog(LOG_ERROR, "Error initializing objects\n");
         return status;
     }
-    printf("ACPICA objects initialized\n");
 
-    printf("ACPICA fully initialized\n");
+    kstatus(STATUS_OK, "ACPICA fully initialized\n");
     return status;
 }
 
@@ -169,9 +165,9 @@ ACPI_STATUS detect_top_level_device(ACPI_HANDLE ObjHandle, UINT32 Level,
 
     if (ACPI_SUCCESS(Status) && Info->Valid & ACPI_VALID_HID) {
         if (!strcmp(Info->HardwareId.String, "PNP0A03"))
-            printf("Found PCI bridge\n");
+            klog(LOG_INFO, "Found PCI bridge\n");
         if (!strcmp(Info->HardwareId.String, "PNP0A08")) {
-            printf("Found PCIe bridge\n");
+            klog(LOG_INFO, "Found PCIe bridge\n");
             pcie_bus_init(ObjHandle);
         }
     }
@@ -186,7 +182,7 @@ void scan_sys_bus(void)
     ACPI_HANDLE sys_bus_handle;
  	AcpiGetHandle(0, "\\_SB_", &sys_bus_handle);
 
- 	printf("Reading system bus root devices...\n");
+ 	klog(LOG_INFO, "Reading system bus root devices...\n");
  	AcpiWalkNamespace(ACPI_TYPE_DEVICE, sys_bus_handle, 1,
  		detect_top_level_device, NULL, NULL, NULL);
 }

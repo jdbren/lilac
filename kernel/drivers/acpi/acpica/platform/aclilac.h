@@ -3,6 +3,7 @@
 
 #include <lilac/types.h>
 #include <lilac/sync.h>
+#include <lilac/log.h>
 
 #define ACPI_MACHINE_WIDTH          BITS_PER_LONG
 #define ACPI_USE_SYSTEM_CLIBRARY
@@ -15,6 +16,7 @@
 #define ACPI_SEMAPHORE              sem_t*
 #define ACPI_SPINLOCK               spinlock_t*
 
-//#define ACPI_DEBUG_OUTPUT
+// #define ACPI_DEBUG_OUTPUT
+// #define ACPI_NO_ERROR_MESSAGES
 
 #endif

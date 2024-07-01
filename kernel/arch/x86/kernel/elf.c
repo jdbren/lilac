@@ -3,6 +3,7 @@
 #include <string.h>
 #include <lilac/panic.h>
 #include <lilac/elf.h>
+#include <lilac/log.h>
 #include "paging.h"
 #include "pgframe.h"
 
@@ -11,16 +12,16 @@ void* elf32_load(void *elf)
     struct elf_header *hdr = (struct elf_header*)elf;
 
     if (hdr->sig != 0x464c457f) {
-        printf("Invalid ELF signature\n");
+        klog(LOG_ERROR, "Invalid ELF signature\n");
         kerror("Invalid ELF signature\n");
     }
 
     if (hdr->elf32.mach != X86) {
-        printf("Invalid machine type\n");
+        klog(LOG_ERROR, "Invalid machine type\n");
         kerror("Invalid machine type\n");
     }
 
-    printf("ELF header:\n");
+    klog(LOG_INFO, "ELF header:\n");
     printf("\tELF sig: %x\n", hdr->sig);
     printf("\tClass: %x\n", hdr->class);
     printf("\tEndian: %x\n", hdr->endian);
@@ -60,7 +61,7 @@ void* elf32_load(void *elf)
 
         map_pages(phys, vaddr, PG_USER | PG_WRITE, num_pages);
 
-	    memcpy(vaddr, (u8*)elf + phdr[i].p_offset, phdr[i].p_memsz);
+	    memcpy((void*)phdr[i].p_vaddr, (u8*)elf + phdr[i].p_offset, phdr[i].p_filesz);
         if (phdr[i].p_filesz < phdr[i].p_memsz)
             memset((void*)(phdr[i].p_vaddr + phdr[i].p_filesz), 0,
                     phdr[i].p_memsz - phdr[i].p_filesz);

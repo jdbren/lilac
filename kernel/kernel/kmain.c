@@ -3,6 +3,7 @@
 #include <string.h>
 #include <lilac/lilac.h>
 #include <lilac/types.h>
+#include <lilac/log.h>
 #include <lilac/panic.h>
 #include <lilac/fs.h>
 #include <lilac/process.h>
@@ -14,6 +15,8 @@
 __no_ret __no_stack_chk
 void start_kernel(void)
 {
+	kstatus(STATUS_OK, "Starting kernel\n");
+
 	acpi_full_init();
 	scan_sys_bus();
 

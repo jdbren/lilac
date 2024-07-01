@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <lilac/panic.h>
 #include <lilac/types.h>
+#include <lilac/log.h>
 #include <mm/kheap.h>
 
 static bool is_valid(struct SDTHeader *addr)
@@ -62,7 +63,6 @@ struct madt_info* parse_madt(struct SDTHeader *addr)
         kerror("Invalid MADT\n");
 
     struct MADT *madt = (struct MADT*)addr;
-    printf("lapic: %x\n", madt->LocalApicAddress);
     struct madt_info *info = kzmalloc(sizeof(struct madt_info));
     info->lapic_addr = madt->LocalApicAddress;
 
@@ -80,7 +80,7 @@ struct madt_info* parse_madt(struct SDTHeader *addr)
             case 1:
                 info->ioapic_cnt++;
                 if (info->ioapic_cnt > 1) {
-                    printf("WARNING: Multiple IOAPICs not supported\n");
+                    klog(LOG_WARN, "Multiple IOAPICs not supported\n");
                     info->ioapic_cnt--;
                     continue;
                 }
@@ -110,7 +110,7 @@ struct madt_info* parse_madt(struct SDTHeader *addr)
                 kerror("Unknown madt entry\n");
         }
     }
-    printf("MADT: %d cores, %d ioapics, %d overrides, %d ioapic nmis, %d lapic nmis\n",
+    klog(LOG_INFO, "MADT: %d cores, %d ioapics, %d overrides, %d ioapic nmis, %d lapic nmis\n",
         info->core_cnt, info->ioapic_cnt, info->override_cnt,
         info->ionmi_cnt, info->lnmi_cnt);
     return info;

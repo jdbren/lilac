@@ -1,6 +1,7 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/panic.h>
+#include <lilac/log.h>
 
 void div0_handler(void)
 {
@@ -12,14 +13,14 @@ void pgflt_handler(int error_code)
     int addr = 0;
 	asm volatile("mov %%cr2,%0\n\t" : "=r"(addr));
 
-	printf("Fault address: %x\n", addr);
-    printf("Error code: %x\n", error_code);
+	klog(LOG_WARN, "Fault address: %x\n", addr);
+    klog(LOG_WARN, "Error code: %x\n", error_code);
     kerror("Page fault detected\n");
 }
 
 void gpflt_handler(int error_code)
 {
-    printf("Error code: %x\n", error_code);
+    klog(LOG_WARN, "Error code: %x\n", error_code);
     kerror("General protection fault detected\n");
 }
 

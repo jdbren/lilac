@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <lilac/types.h>
+#include <lilac/log.h>
 #include <lilac/panic.h>
 #include <lilac/timer.h>
 #include "cpuid.h"
@@ -85,7 +86,7 @@ void lapic_enable(uintptr_t addr) {
     /* Set the Spurious Interrupt Vector Register bit 8 to start receiving interrupts */
     write_reg(0xF0, read_reg(0xF0) | 0x100);
 
-    printf("BSP local APIC enabled\n");
+    kstatus(STATUS_OK, "BSP local APIC enabled\n");
 }
 
 

@@ -228,13 +228,13 @@ extern const char                       *AcpiGbl_ClockInputScale[];
  * Common error message prefixes
  */
 #ifndef ACPI_MSG_ERROR
-#define ACPI_MSG_ERROR          "ACPI Error: "
+#define ACPI_MSG_ERROR          "[ ACPI Error ] "
 #endif
 #ifndef ACPI_MSG_WARNING
-#define ACPI_MSG_WARNING        "ACPI Warning: "
+#define ACPI_MSG_WARNING        "[ ACPI Warning ] "
 #endif
 #ifndef ACPI_MSG_INFO
-#define ACPI_MSG_INFO           "ACPI: "
+#define ACPI_MSG_INFO           "[ ACPI ] "
 #endif
 
 #ifndef ACPI_MSG_BIOS_ERROR

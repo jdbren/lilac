@@ -2,6 +2,7 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/keyboard.h>
 #include <lilac/tty.h>
+#include <lilac/log.h>
 #include <utility/keymap.h>
 #include "idt.h"
 #include "io.h"
@@ -21,7 +22,7 @@ void keyboard_init(void)
 {
     idt_entry(0x20 + 1, (u32)keyboard_handler, 0x08, INT_GATE);
     ioapic_entry(1, 0x20 + 1, 0, 0);
-    printf("Keyboard initialized\n");
+    kstatus(STATUS_OK, "Keyboard initialized\n");
 }
 
 void keyboard_interrupt(void)

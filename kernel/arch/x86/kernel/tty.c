@@ -4,6 +4,7 @@
 #include <string.h>
 #include <lilac/tty.h>
 #include <lilac/types.h>
+#include <lilac/log.h>
 #include <lilac/panic.h>
 #include <mm/kheap.h>
 #include <mm/kmm.h>
@@ -64,14 +65,15 @@ void graphics_init(struct multiboot_tag_framebuffer *fb)
 	ssfn_dst.p = fb->common.framebuffer_pitch;     /* bytes per line */
 	ssfn_dst.x = 0;                					/* pen position */
     ssfn_dst.y = 0;
-	ssfn_dst.fg = 0xFF0AECFC;                     /* foreground color */
+	ssfn_dst.fg = RGB_LIGHT_GRAY;                  /* foreground color */
+	ssfn_dst.bg = RGB_BLACK;                       /* background color */
 
 	void *vframebuf = map_phys((void*)fb->common.framebuffer_addr,
 						ssfn_dst.p * ssfn_dst.h, PG_WRITE);
 	ssfn_dst.ptr = vframebuf; 			/* pointer to the framebuffer */
 	memset(ssfn_dst.ptr, 0, ssfn_dst.p * ssfn_dst.h);
 
-	graphics_writestring("Graphics mode terminal initialized\n");
+	kstatus(STATUS_OK, "Graphics mode terminal initialized\n");
 }
 
 static void graphics_scroll(void)
@@ -86,6 +88,19 @@ static void graphics_scroll(void)
 	}
 	memset(dst, 0, line_size);
 	ssfn_dst.y -= ssfn_src->height;
+}
+
+void graphics_clear(void)
+{
+	memset(ssfn_dst.ptr, 0, ssfn_dst.p * ssfn_dst.h);
+	ssfn_dst.x = 0;
+	ssfn_dst.y = 0;
+}
+
+void graphics_setcolor(u32 fg, u32 bg)
+{
+	ssfn_dst.fg = fg;
+	ssfn_dst.bg = bg;
 }
 
 

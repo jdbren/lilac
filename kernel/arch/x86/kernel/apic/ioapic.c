@@ -3,6 +3,7 @@
 #include <string.h>
 #include <lilac/types.h>
 #include <lilac/config.h>
+#include <lilac/log.h>
 #include <acpi/madt.h>
 #include <mm/kheap.h>
 #include "apic.h"
@@ -63,7 +64,7 @@ void ioapic_init(struct ioapic *ioapic, struct int_override *over, u8 num_over)
         overrides[i].next = 0;
     }
     map_page((void*)ioapic_base, (void*)ioapic_base, PG_CACHE_DISABLE | PG_WRITE);
-    printf("IOAPIC initialized\n");
+    kstatus(STATUS_OK, "IOAPIC initialized\n");
 }
 
 void ioapic_entry(u8 irq, u8 vector, u8 flags, u8 dest)

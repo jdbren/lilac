@@ -229,7 +229,7 @@ static bool check_entry(struct fat_file *entry, const char *cur)
 
 struct dentry *fat32_init(struct block_device *bdev, struct super_block *sb)
 {
-    printf("Initializing FAT32 filesystem\n");
+    klog(LOG_INFO, "Initializing FAT32 filesystem\n");
 
     struct fat_disk *fat_disk = kzmalloc(sizeof(*fat_disk));
     struct fat_file *fat_file = kzmalloc(sizeof(*fat_file));

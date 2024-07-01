@@ -6,6 +6,7 @@
 #include <mm/kmm.h>
 #include <lilac/port.h>
 #include <lilac/panic.h>
+#include <lilac/log.h>
 #include "apic.h"
 #include "idt.h"
 
@@ -78,7 +79,7 @@ void hpet_init(u32 time, struct hpet_info *info)
 	write_reg(HPET_TIMER_COMP_REG(info->hpet_number), time);
 	write_reg(HPET_CONFIG_REG, 0x3); // Enable counter
 
-	printf("HPET set at %d Hz\n", desired_freq);
+	klog(LOG_INFO, "HPET set at %d Hz\n", desired_freq);
 }
 
 u32 hpet_read(void)
@@ -92,7 +93,7 @@ void timer_init(u32 ms, struct hpet_info *info)
     idt_entry(0x20, (u32)timer_handler, 0x08, INT_GATE);
     ioapic_entry(0, 0x20, 0, 0);
 	hpet_init(ms, info);
-	printf("Timer initialized\n");
+	kstatus(STATUS_OK, "HPET initialized\n");
 }
 
 void sleep(u32 millis)

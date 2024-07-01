@@ -1,5 +1,6 @@
 #include <stdbool.h>
 #include <string.h>
+#include <lilac/log.h>
 #include <lilac/device.h>
 #include <drivers/ahci.h>
 #include <drivers/blkdev.h>
@@ -82,18 +83,18 @@ void ahci_init(hba_mem_t *abar_phys)
 		if (pi & 1) {
 			int dt = check_type(&abar->ports[i]);
 			if (dt == AHCI_DEV_SATA) {
-				printf("SATA drive found at port %d\n", i);
+				klog(LOG_INFO, "SATA drive found at port %d\n", i);
 				devices = krealloc(devices, (num_devices+1) * sizeof(*devices));
 				devices[num_devices].port = &abar->ports[i];
 				devices[num_devices].portno = i;
 				devices[num_devices++].type = dt;
 			}
 			else if (dt == AHCI_DEV_SATAPI)
-				printf("SATAPI drive found at port %d\n", i);
+				klog(LOG_INFO, "SATAPI drive found at port %d\n", i);
 			else if (dt == AHCI_DEV_SEMB)
-				printf("SEMB drive found at port %d\n", i);
+				klog(LOG_INFO, "SEMB drive found at port %d\n", i);
 			else if (dt == AHCI_DEV_PM)
-				printf("PM drive found at port %d\n", i);
+				klog(LOG_INFO, "PM drive found at port %d\n", i);
 			num_ports++;
 		}
 		pi >>= 1;
@@ -118,7 +119,7 @@ void ahci_init(hba_mem_t *abar_phys)
 	for (i = 0; i < num_devices; i++)
 		ahci_install_device(&devices[i]);
 
-	printf("AHCI controller initialized\n");
+	kstatus(STATUS_OK, "AHCI controller initialized\n");
 }
 
 // Check device type
