@@ -7,6 +7,22 @@
 #include "paging.h"
 #include "pgframe.h"
 
+void elf_print(struct elf_header *hdr)
+{
+    printf("\tELF sig: %x\n", hdr->sig);
+    printf("\tClass: %x\n", hdr->class);
+    printf("\tEndian: %x\n", hdr->endian);
+    printf("\tHeader version: %x\n", hdr->headv);
+    printf("\tABI: %x\n", hdr->abi);
+    printf("\tType: %x\n", hdr->elf32.type);
+    printf("\tMachine: %x\n", hdr->elf32.mach);
+    printf("\tVersion: %x\n", hdr->elf32.elfv);
+    printf("\tEntry: %x\n", hdr->elf32.entry);
+    printf("\tProgram header table: %x\n", hdr->elf32.p_tbl);
+    printf("\tProgram header table entry size: %x\n", hdr->elf32.p_entry_sz);
+    printf("\tProgram header table entry count: %x\n", hdr->elf32.p_tbl_sz);
+}
+
 void* elf32_load(void *elf)
 {
     struct elf_header *hdr = (struct elf_header*)elf;
@@ -22,18 +38,7 @@ void* elf32_load(void *elf)
     }
 
     klog(LOG_INFO, "ELF header:\n");
-    printf("\tELF sig: %x\n", hdr->sig);
-    printf("\tClass: %x\n", hdr->class);
-    printf("\tEndian: %x\n", hdr->endian);
-    printf("\tHeader version: %x\n", hdr->headv);
-    printf("\tABI: %x\n", hdr->abi);
-    printf("\tType: %x\n", hdr->elf32.type);
-    printf("\tMachine: %x\n", hdr->elf32.mach);
-    printf("\tVersion: %x\n", hdr->elf32.elfv);
-    printf("\tEntry: %x\n", hdr->elf32.entry);
-    printf("\tProgram header table: %x\n", hdr->elf32.p_tbl);
-    printf("\tProgram header table entry size: %x\n", hdr->elf32.p_entry_sz);
-    printf("\tProgram header table entry count: %x\n", hdr->elf32.p_tbl_sz);
+    // elf_print(hdr);
 
     struct elf32_pheader *phdr = (struct elf32_pheader*)((u32)elf + hdr->elf32.p_tbl);
     // printf("Program header table:\n");

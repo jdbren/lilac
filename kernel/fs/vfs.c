@@ -191,3 +191,15 @@ ssize_t write(int fd, const void *buf, size_t count)
 //     vnodes[fd] = NULL;
 //     return 0;
 // }
+
+int getdents(unsigned int fd, struct dirent *dirp, unsigned int buf_size)
+{
+    struct file *file = vnodes[fd];
+    struct inode *inode = file->f_inode;
+
+    if (inode->i_type != TYPE_DIR)
+        return -1;
+
+    memset(dirp, 0, buf_size);
+    return file->f_op->readdir(file, dirp, buf_size);
+}

@@ -12,7 +12,7 @@
 #include <mm/kheap.h>
 
 #define LONG_FNAME 0x0F
-#define DIR 0x10
+#define FAT_DIR_ATTR 0x10
 #define UNUSED 0xE5
 #define MAX_SECTOR_READS 64
 #define BYTES_PER_SECTOR 512
@@ -62,7 +62,8 @@ struct fat_file {
 
 const struct file_operations fat_fops = {
     .read = fat32_read,
-    .write = fat32_write
+    .write = fat32_write,
+    .readdir = fat32_readdir
 };
 
 const struct super_operations fat_sops = {
@@ -359,7 +360,7 @@ static void *fat32_read_dir(struct fat_file *entry, struct fat_disk *disk,
 
 int fat32_open(struct inode *inode, struct file *file)
 {
-    printf("Opening file %s\n", file->f_path);
+    klog(LOG_INFO, "Opening file %s\n", file->f_path);
     file->f_inode = inode;
     file->f_op = &fat_fops;
     file->f_count++;
@@ -432,6 +433,36 @@ out:
     return bytes_written;
 }
 
+// count is the size of the buffer
+int fat32_readdir(struct file *file, struct dirent *dir_buf, unsigned int count)
+{
+    int num_dirents = count / sizeof(struct dirent);
+    u32 start_clst;
+    struct fat_disk *disk = (struct fat_disk*)file->f_inode->i_sb->private;
+    u32 offset = file->f_pos % disk->bytes_per_clst;
+    u32 num_clst = ROUND_UP(count + offset, disk->bytes_per_clst) /
+        disk->bytes_per_clst;
+    unsigned char *buffer = kzmalloc(disk->bytes_per_clst * num_clst);
+
+    start_clst = __get_clst_num(file, disk);
+    if (start_clst <= 0)
+        return -1;
+    if (__do_fat32_read(file, start_clst, buffer, num_clst) < 0)
+        return -1;
+
+    int i = 0;
+    struct fat_file *entry = (struct fat_file*)buffer;
+    while (i < num_dirents && entry->name[0] != 0) {
+        strncpy(dir_buf->d_name, entry->name, 8);
+        entry++;
+        dir_buf++;
+        i++;
+    }
+
+    kfree(buffer);
+    return i;
+}
+
 void print_fat32_data(struct fat_BS *ptr)
 {
     printf("FAT32 data:\n");
@@ -492,6 +523,7 @@ static struct inode *fat_build_inode(struct super_block *sb, struct fat_file *in
     inode->i_ino = unique_ino();
     inode->i_size = info->file_size;
     inode->i_private = info;
+    inode->i_type = info->attributes == FAT_DIR_ATTR ? TYPE_DIR : TYPE_FILE;
 
     list_add_tail(&inode->i_list, &sb->s_inodes);
 

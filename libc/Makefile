@@ -43,7 +43,9 @@ ctype/ctype.o
 HOSTEDOBJS=\
 $(ARCH_HOSTEDOBJS) \
 unistd/fork.o \
-unistd/write.o
+unistd/write.o \
+fcntl/open.o \
+dirent/readdir.o
 
 OBJS=\
 $(FREEOBJS) \

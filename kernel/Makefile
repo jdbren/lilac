@@ -39,6 +39,7 @@ kernel/log.o \
 kernel/process.o \
 kernel/sched.o \
 kernel/sync.o \
+kernel/open.o \
 kernel/write.o \
 mm/kheap.o \
 fs/fat32.o \

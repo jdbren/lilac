@@ -32,6 +32,15 @@ void graphics_putchar(char c)
 			graphics_scroll();
 		return;
 	}
+	else if (c == '\t') {
+		ssfn_dst.x += 4 * ssfn_src->width;
+		if (ssfn_dst.x >= ssfn_dst.w) {
+			ssfn_dst.x = 0;
+			if ((ssfn_dst.y += ssfn_src->height) >= ssfn_dst.h)
+				graphics_scroll();
+		}
+		return;
+	}
     ssfn_putc(c);
 	if (ssfn_dst.x >= ssfn_dst.w) {
 		ssfn_dst.x = 0;

@@ -1,6 +1,7 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/types.h>
+#include <lilac/log.h>
 #include <lilac/process.h>
 #include <lilac/sched.h>
 
@@ -52,7 +53,7 @@ void sched_init(void)
     current_task = 0;
     schedule_task(pid1);
     timer_reset = 1000;
-    printf("Scheduler initialized\n");
+    kstatus(STATUS_OK, "Scheduler initialized\n");
 }
 
 void sched_clock_init(void)
@@ -62,7 +63,7 @@ void sched_clock_init(void)
 
 static void context_switch(struct task *prev, struct task *next)
 {
-    printf("Next task info: \n");
+    klog(LOG_INFO, "Next task info: \n");
     printf("\tPID: %d\n", next->pid);
     printf("\tPPID: %d\n", next->ppid);
     printf("\tPGD: %x\n", next->pgd);

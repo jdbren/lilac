@@ -18,7 +18,7 @@ static bool print(const char *data, size_t length)
 char *convert(unsigned long num, int base)
 {
     static char Representation[]= "0123456789ABCDEF";
-    static char buffer[50];
+    char buffer[50];
     char *ptr;
 
     ptr = &buffer[49];
@@ -34,7 +34,7 @@ char *convert(unsigned long num, int base)
 
 int vprintf(const char *restrict format, va_list args)
 {
-	register int written = 0;
+	int written = 0;
 
 	while (*format != '\0') {
 		size_t maxrem = INT_MAX - written;
@@ -57,9 +57,42 @@ int vprintf(const char *restrict format, va_list args)
 		}
 
 		const char *format_begun_at = format++;
-		while (*format == '-' || *format == '+' || *format == ' ' ||
-		*format == '#' || *format == '0'|| isdigit(*format) || *format == '.')
+		bool left_justify = false;
+		bool zero_pad = false;
+		bool use_width = false;
+		unsigned int width = UINT32_MAX;
+		if (*format == '-') {
 			format++;
+			left_justify = true;
+		}
+		if (*format == '+') {
+			format++;
+		}
+		if (*format == ' ') {
+			format++;
+		}
+		if (*format == '#') {
+			format++;
+		}
+		if (*format == '0') {
+			format++;
+			zero_pad = true;
+		}
+		if (isdigit(*format)) {
+			use_width = true;
+			width = format[0] - '0';
+			format++;
+		}
+		if (*format == '.') {
+			format++;
+			if (isdigit(*format)) {
+				use_width = true;
+				zero_pad = true;
+				width = format[0] - '0';
+				format++;
+			}
+		}
+
 		if (*format == 'c') {
 			format++;
 			char c = (char) va_arg(args, int /* char promotes to int */);
@@ -74,7 +107,17 @@ int vprintf(const char *restrict format, va_list args)
 		else if (*format == 's') {
 			format++;
 			const char* str = va_arg(args, const char*);
-			size_t len = strlen(str);
+			unsigned len = strlen(str);
+			if (use_width) {
+				if (width < len)
+					len = width;
+				while (len < width && !left_justify) {
+					if (!print(" ", 1))
+						return -1;
+					written++;
+					width--;
+				}
+			}
 			if (maxrem < len) {
 				// TODO: Set errno to EOVERFLOW.
 				return -1;
@@ -82,6 +125,12 @@ int vprintf(const char *restrict format, va_list args)
 			if (!print(str, len))
 				return -1;
 			written += len;
+			while (use_width && len < width && left_justify) {
+				if (!print(" ", 1))
+					return -1;
+				written++;
+				width--;
+			}
 		}
 		else if (*format == 'd') {
 			format++;
@@ -91,7 +140,23 @@ int vprintf(const char *restrict format, va_list args)
 				putchar('-');
 			}
 			char *s = convert(i, 10);
-			int len = strlen(s);
+			unsigned len = strlen(s);
+			if (use_width) {
+				if (width < len)
+					len = width;
+				while (len < width && !left_justify) {
+					if (zero_pad) {
+						if (!print("0", 1))
+							return -1;
+					}
+					else {
+						if(!print(" ", 1))
+							return -1;
+					}
+					written++;
+					width--;
+				}
+			}
 			if (!print(s, len))
 				return -1;
 			written += len;
@@ -100,7 +165,23 @@ int vprintf(const char *restrict format, va_list args)
 			format++;
 			unsigned int i = va_arg(args, unsigned int);
 			char *s = convert(i, 16);
-			int len = strlen(s);
+			unsigned int len = strlen(s);
+			if (use_width) {
+				if (width < len)
+					len = width;
+				while (len < width && !left_justify) {
+					if (zero_pad) {
+						if (!print("0", 1))
+							return -1;
+					}
+					else {
+						if(!print(" ", 1))
+							return -1;
+					}
+					written++;
+					width--;
+				}
+			}
 			if (!print(s, len))
 				return -1;
 			written += len;
@@ -109,7 +190,8 @@ int vprintf(const char *restrict format, va_list args)
 			format++;
 			unsigned int i = va_arg(args, unsigned int);
 			char *s = convert(i, 10);
-			int len = strlen(s);
+			unsigned len = strlen(s);
+			len = (width < len) ? width : len;
 			if (!print(s, len))
 				return -1;
 			written += len;
@@ -119,7 +201,7 @@ int vprintf(const char *restrict format, va_list args)
 			double f = va_arg(args, double);
 			int i = (int)f;
 			char *s = convert(i, 10);
-			int len = strlen(s);
+			unsigned len = strlen(s);
 			if (!print(s, len))
 				return -1;
 			written += len;
@@ -145,7 +227,7 @@ int vprintf(const char *restrict format, va_list args)
 						putchar('-');
 					}
 					char *s = convert(i, 10);
-					int len = strlen(s);
+					unsigned len = strlen(s);
 					if (!print(s, len))
 						return -1;
 					written += len;
@@ -154,7 +236,7 @@ int vprintf(const char *restrict format, va_list args)
 					format++;
 					long long i = va_arg(args, long long);
 					char *s = convert(i, 16);
-					int len = strlen(s);
+					unsigned len = strlen(s);
 					if (!print(s, len))
 						return -1;
 					written += len;
@@ -168,7 +250,7 @@ int vprintf(const char *restrict format, va_list args)
 					putchar('-');
 				}
 				char *s = convert(i, 10);
-				int len = strlen(s);
+				unsigned len = strlen(s);
 				if (!print(s, len))
 					return -1;
 				written += len;
@@ -177,7 +259,7 @@ int vprintf(const char *restrict format, va_list args)
 				format++;
 				long i = va_arg(args, long);
 				char *s = convert(i, 16);
-				int len = strlen(s);
+				unsigned len = strlen(s);
 				if (!print(s, len))
 					return -1;
 				written += len;

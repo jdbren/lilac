@@ -1,11 +1,12 @@
 #include <lilac/types.h>
+#include <lilac/log.h>
 #include <lilac/process.h>
 #include "gdt.h"
 
 void arch_context_switch(struct task *prev, struct task *next)
 {
 	set_tss_esp0((u32)next->stack);
-	printf("Switching from %s to %s\n", prev->name, next->name);
+	klog(LOG_INFO, "Switching from %s to %s\n", prev->name, next->name);
     asm volatile (
         "pushfl\n\t"
         "pushl %%ebp\n\t"

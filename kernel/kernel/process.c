@@ -34,27 +34,27 @@ u32 get_pid(void)
 
 static void start_process(void)
 {
-    printf("Process %d started\n", current->pid);
+    klog(LOG_INFO, "Process %d started\n", current->pid);
 
     const char *path = current->info->path;
     int fd = open(path, 0, 0);
     if (fd < 0) {
-        printf("Failed to open file %s\n", path);
+        klog(LOG_ERROR, "Failed to open file %s\n", path);
         return;
     }
 
     struct elf_header *hdr = kzmalloc(0x1000);
     int bytes = read(fd, hdr, 0x1000);
     if (hdr->sig != ELF_MAGIC) {
-        printf("Invalid ELF signature\n");
+        klog(LOG_ERROR, "Invalid ELF signature\n");
         return;
     } else {
-        printf("Read %d bytes from %s\n", bytes, path);
+        klog(LOG_INFO, "Read %d bytes from %s\n", bytes, path);
     }
     void *jmp = elf32_load(hdr);
     arch_user_stack();
 
-    printf("Going to user mode\n");
+    klog(LOG_INFO, "Going to user mode\n");
     jump_usermode((u32)jmp, __USER_STACK - 4);
 }
 

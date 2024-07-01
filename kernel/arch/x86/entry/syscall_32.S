@@ -34,10 +34,10 @@ exit:
 read:
     ret
 
-open:
+close:
     ret
 
-close:
+getdents:
     ret
 
 .data
@@ -47,5 +47,6 @@ syscall_table:
     .long __do_fork
     .long read
     .long __do_write
-    .long open
+    .long __do_open
     .long close
+    .long __do_getdents

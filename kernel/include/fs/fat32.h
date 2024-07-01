@@ -66,5 +66,6 @@ struct dentry *fat32_init(struct block_device *bdev, struct super_block *sb);
 int fat32_open(struct inode *inode, struct file *file);
 ssize_t fat32_read(struct file *file, void *file_buf, size_t count);
 ssize_t fat32_write(struct file *file, const void *file_buf, size_t count);
+int fat32_readdir(struct file *file, struct dirent *dirp, unsigned int count);
 
 #endif

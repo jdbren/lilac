@@ -15,11 +15,17 @@ struct file;
 struct inode;
 struct dentry;
 struct super_block;
+struct dirent;
+
+enum file_type {
+	TYPE_FILE, TYPE_DIR
+};
 
 struct inode {
 	unsigned long 	i_ino;
 	struct list_head i_list;
 	umode_t			i_mode;
+	unsigned short 	i_type;
 	atomic_ulong 	i_count;
 	const struct inode_operations *i_op;
 	struct super_block *i_sb;
@@ -69,6 +75,7 @@ struct file_operations {
 	int (*lseek)(struct file *, int, int);
     ssize_t (*read)(struct file *, void *, size_t);
 	ssize_t (*write)(struct file *, const void *, size_t);
+	int (*readdir) (struct file *, struct dirent *, unsigned int);
 	int (*flush) (struct file *);
 	int (*release) (struct inode *, struct file *);
 };
@@ -128,6 +135,12 @@ struct super_operations {
 	void (*shutdown)(struct super_block *sb);
 };
 
+struct dirent {
+    int             d_ino;       /* Inode number */
+    unsigned short  d_reclen;    /* Length of this record */
+    char            d_name[32]; /* Null-terminated filename */
+};
+
 struct vfsmount {
 	struct dentry *mnt_root;	/* root of the mounted tree */
 	struct super_block *mnt_sb;	/* pointer to superblock */
@@ -140,6 +153,7 @@ int open(const char *path, int flags, int mode);
 ssize_t read(int fd, void *buf, size_t count);
 ssize_t write(int fd, const void *buf, size_t count);
 int close(int fd);
+int getdents(unsigned int fd, struct dirent *dirp, unsigned int buf_size);
 
 int mount(const char *source, const char *target,
         const char *filesystemtype, unsigned long mountflags,
