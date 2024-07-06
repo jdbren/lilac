@@ -1,5 +1,4 @@
 #!/bin/sh
-set -euo pipefail
 
 gmake install
 # mkdir -p sysroot/EFI/BOOT

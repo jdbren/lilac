@@ -1,5 +1,4 @@
 #!/bin/sh
-set -euo pipefail
 
 # Remove the old configuration file
 if [ -f kbuild.config ]; then
