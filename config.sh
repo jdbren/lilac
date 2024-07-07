@@ -1,4 +1,5 @@
 #!/bin/sh
+set -e
 
 # Remove the old configuration file
 if [ -f kbuild.config ]; then

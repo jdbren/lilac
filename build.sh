@@ -1,4 +1,5 @@
 #!/bin/sh
+set -e
 
 gmake install
 # mkdir -p sysroot/EFI/BOOT

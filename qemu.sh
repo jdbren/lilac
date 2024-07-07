@@ -1,5 +1,5 @@
 #!/bin/sh
-
+set -e
 . ./scripts/image.sh
 
 qemu-system-x86_64 -machine q35,firmware=./resources/OVMF-pure-efi.fd -m 1G \
