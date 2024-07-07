@@ -1,10 +1,8 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/config.h>
+#include <asm/segments.h>
 #define __PAGE_OFFSET PAGE_SIZE
-
-#define __BOOT_CS 0x08
-#define __BOOT_DS 0x10
 
 .text
 .globl startup_32
@@ -13,15 +11,16 @@ startup_32:
 
 	# Set up the boot segment registers.
 	lgdt pa(boot_gdt_descr)
-	leal (__BOOT_DS), %edx
-	movl %edx, %ds
-	movl %edx, %es
-	movl %edx, %fs
-	movl %edx, %gs
-	movl %edx, %ss
+	leal (__KERNEL_DS), %edx
+	movw %dx, %ds
+	movw %dx, %es
+	movw %dx, %fs
+	movw %dx, %gs
+	movw %dx, %ss
+
 	leal (%ecx), %esp
 
-    # Save the multiboot information.
+	# Save the multiboot information.
  	movl %ebx, pa(_mbd_addr)
  	leal pa(_mbd_size), %ecx
  	movl (%ebx), %eax
@@ -103,8 +102,7 @@ startup_32:
 	movl %eax, %cr0
 
 	# Switch to the higher half.
-	ljmp $__BOOT_CS,$4f
-
+	ljmp $__KERNEL_CS,$4f
 
     # Unmap the kernel identity mapping as it is now unnecessary.
 4: 	leal boot_page_table0+1024, %edi
