@@ -5,8 +5,8 @@
 
 void arch_context_switch(struct task *prev, struct task *next)
 {
+  klog(LOG_INFO, "Switching from %s to %s\n", prev->name, next->name);
 	set_tss_esp0((u32)next->stack);
-	klog(LOG_INFO, "Switching from %s to %s\n", prev->name, next->name);
     asm volatile (
         "pushfl\n\t"
         "pushl %%ebp\n\t"

@@ -7,8 +7,8 @@
 # Declare constants for the multiboot2 header.
 .set ARCH,     0
 .set HEADLEN,  76
-.set MAGIC,    MULTIBOOT2_HEADER_MAGIC       # 'magic number' lets bootloader find the header
-.set CHECKSUM, -(MAGIC + ARCH + HEADLEN) # checksum of above, to prove we are multiboot
+.set MAGIC,    MULTIBOOT2_HEADER_MAGIC   # 'magic number' lets bootloader find the header
+.set CHECKSUM, -(MAGIC + ARCH + HEADLEN) # checksum of above
 
 # Declare a multiboot2 header.
 .section .multiboot.data, "aw"
