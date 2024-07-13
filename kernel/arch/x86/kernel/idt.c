@@ -38,9 +38,7 @@ void idt_init(void)
     idt_entry(14, (u32)pgflt, 0x08, TRAP_GATE);
     idt_entry(0x80, (u32)sys_call_handler, 0x08, INT_GATE | DPL_3);
 
-    // Remap the PIC
-    pic_initialize();
-    printf("Remapped PIC\n");
+    pic_disable();
 
     asm volatile("lidt %0" : : "m"(idtptr));
     printf("Loaded IDT\n");

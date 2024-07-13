@@ -34,6 +34,6 @@ void keyboard_interrupt(void)
     if (keycode >= 0 && keyboard_map[keycode])
         graphics_putchar(keyboard_map[keycode]);
 
-    /* Send End of Interrupt (EOI) to master PIC */
+    /* Send End of Interrupt (EOI) */
     apic_eoi();
 }

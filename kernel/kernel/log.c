@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-static int log_level = LOG_INFO;
+static int log_level;
 
 int log_init(int level)
 {
@@ -18,6 +18,10 @@ void klog(int level, const char *data, ...)
     putchar('[');
     switch (level)
     {
+    case LOG_DEBUG:
+        graphics_setcolor(RGB_MAGENTA, RGB_BLACK);
+        printf(" DEBUG ");
+        break;
     case LOG_INFO:
         graphics_setcolor(RGB_CYAN, RGB_BLACK);
         printf(" INFO ");

@@ -77,6 +77,8 @@ void ioapic_entry(u8 irq, u8 vector, u8 flags, u8 dest)
         .dest = dest
     };
 
+    klog(LOG_DEBUG, "IOAPIC entry: irq %d, vector %d, flags %d, dest %d\n", irq, entry.vector, entry.flags, entry.dest);
+
     write_reg(IOAPIC_REDTBL(irq), *(u32*)&entry);
     write_reg(IOAPIC_REDTBL(irq) + 1, *((u32*)&entry + 1));
 }

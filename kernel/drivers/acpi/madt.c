@@ -36,6 +36,8 @@ static struct int_override* parse_override(struct MADTEntry *entry)
     info->global_system_interrupt = ((u32*)entry)[1];
     info->bus = ((u8*)entry)[2];
     info->source = ((u8*)entry)[3];
+
+    klog(LOG_DEBUG, "Override: %x %x %x %x\n", info->flags, info->global_system_interrupt, info->bus, info->source);
     return info;
 }
 
