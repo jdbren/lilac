@@ -1,30 +1,29 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-.intel_syntax noprefix
 
 .macro isr_err name
     .extern \name\()_handler
     .global \name
     \name:
-    pop eax
-    pushad
+    popl %eax
+    pushal
     cld
-    push eax
+    pushl %eax
 	call \name\()_handler
-    add  esp, 4
-    popad
-    iretd
+    addl  $4, %esp
+    popal
+    iret
 .endm
 
 .macro isr_no_err name
     .extern \name\()_handler
     .global \name
     \name:
-    pushad
+    pushal
     cld
 	call \name\()_handler
-    popad
-    iretd
+    popal
+    iret
 .endm
 
 isr_no_err div0
@@ -65,8 +64,8 @@ isr_err    pgflt
 .extern keyboard_interrupt
 .global keyboard_handler
 keyboard_handler:
-    pushad
+    pusha
     cld
     call keyboard_interrupt
-    popad
-    iretd
+    popa
+    iret

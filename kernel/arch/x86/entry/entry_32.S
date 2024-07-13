@@ -1,45 +1,44 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-.intel_syntax noprefix
 #include <asm/segments.h>
 
 .globl jump_usermode
 .type jump_usermode, @function
 jump_usermode:
 	cli
-	push ebp
-	mov ebp, esp
-	push ebx
-	push esi
-	push edi
-	push esp
+	pushl %ebp
+	movl %esp, %ebp
+	pushl %ebx
+	pushl %esi
+	pushl %edi
+	pushl %esp
 	call set_tss_esp0
-	add esp, 4
-	mov ebx, [ebp+8] 			# return address
-	mov edx, [ebp+12] 			# stack address
-	mov eax, __USER_DS | 0x3 	# ring 3 data
-	mov ds, ax
-	mov es, ax
-	mov fs, ax
-	mov gs, ax
+	addl $4, %esp
+	movl 8(%ebp), %ebx 			# return address
+	movl 12(%ebp), %edx 		# stack address
+	movl $(__USER_DS | 0x3), %eax 	# ring 3 data
+	movw %ax, %ds
+	movw %ax, %es
+	movw %ax, %fs
+	movw %ax, %gs
 
 	# set up iret stack frame
-	push eax 			 # ss
-	push edx 			 # esp
+	pushl %eax 			 	# ss
+	pushl %edx 			 	# esp
 	pushf
-	mov eax, [esp]
-	or eax, 0x200
-	mov [esp], eax		 # eflags
-	push __USER_CS | 0x3 # cs (ring 3)
-	push ebx			 # eip
+	movl (%esp), %eax
+	orl $0x200, %eax
+	mov %eax, (%esp)	 	# eflags
+	pushl $__USER_CS | 0x3 	# cs (ring 3)
+	pushl %ebx			 	# eip
 
 	# Clear registers
-	xor eax, eax
-	xor ebx, ebx
-	xor ecx, ecx
-	xor edx, edx
-	xor esi, esi
-	xor edi, edi
-	xor ebp, ebp
+	xorl %eax, %eax
+	xorl %ebx, %ebx
+	xorl %ecx, %ecx
+	xorl %edx, %edx
+	xorl %esi, %esi
+	xorl %edi, %edi
+	xorl %ebp, %ebp
 
-	iretd
+	iret
