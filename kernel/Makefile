@@ -41,7 +41,7 @@ kernel/sched.o \
 kernel/sync.o \
 kernel/open.o \
 kernel/write.o \
-mm/kheap.o \
+mm/kmalloc.o \
 fs/fat32.o \
 fs/vfs.o \
 fs/gpt.o \

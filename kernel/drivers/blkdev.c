@@ -2,7 +2,7 @@
 #include <lilac/log.h>
 #include <drivers/blkdev.h>
 #include <lilac/fs.h>
-#include <mm/kheap.h>
+#include <mm/kmalloc.h>
 #include <fs/mbr.h>
 #include <fs/gpt.h>
 

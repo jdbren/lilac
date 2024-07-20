@@ -6,7 +6,7 @@
 #include <lilac/types.h>
 #include <lilac/log.h>
 #include <lilac/panic.h>
-#include <mm/kheap.h>
+#include <mm/kmalloc.h>
 #include <mm/kmm.h>
 #include <utility/vga.h>
 

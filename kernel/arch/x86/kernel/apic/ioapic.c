@@ -5,7 +5,7 @@
 #include <lilac/config.h>
 #include <lilac/log.h>
 #include <acpi/madt.h>
-#include <mm/kheap.h>
+#include <mm/kmalloc.h>
 #include "apic.h"
 #include "paging.h"
 

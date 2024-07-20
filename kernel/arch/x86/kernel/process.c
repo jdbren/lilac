@@ -6,6 +6,7 @@
 #include <lilac/panic.h>
 #include <lilac/config.h>
 #include <mm/kmm.h>
+#include <mm/kmalloc.h>
 #include "pgframe.h"
 #include "paging.h"
 
@@ -17,7 +18,7 @@ static const int KERNEL_FIRST_PT = PG_DIR_INDEX(0xb0000000);
 
 static u32 *pd = (u32*)0xFFFFF000;
 
-struct mm_info arch_process_mmap()
+struct mm_info * arch_process_mmap()
 {
     u32 *cr3 = map_phys(alloc_frame(), PAGE_BYTES, PG_WRITE);
     memset(cr3, 0, PAGE_SIZE);
@@ -37,7 +38,9 @@ struct mm_info arch_process_mmap()
     for (int i = KERNEL_FIRST_PT; i < 1023; i++)
         cr3[i] = pd[i];
 
-    struct mm_info info = {virt_to_phys(cr3), kstack};
+    struct mm_info *info = kmalloc(sizeof *info);
+    info->pgd = virt_to_phys(cr3);
+    info->kstack = kstack;
     unmap_phys(cr3, PAGE_BYTES);
 
     return info;

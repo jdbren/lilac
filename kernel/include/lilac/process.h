@@ -18,7 +18,8 @@ struct task_info {
 struct task {
     u16 pid;
     u16 ppid;
-    u32 pgd;
+    struct mm_info *mm;
+    uintptr_t pgd;
     uintptr_t pc;
     void *stack;
     u32 time_slice;
@@ -32,15 +33,29 @@ struct task {
 };
 
 struct mm_info {
-    u32 pgd;
+    struct vm_desc *mmap;
+    // struct rb_tree mm_rb;
+    uintptr_t pgd;
     void *kstack;
+    // atomic_uint ref_count;
+    // u32 map_count;
+    // struct semaphore mmap_sem;
+    // spinlock_t page_table_lock;
+    // struct list_head mmlist;
+    u32 start_code, end_code;
+    u32 start_data, end_data;
+    u32 start_brk, brk;
+    u32 start_stack;
+    u32 arg_start, arg_end;
+    u32 env_start, env_end;
+    u32 total_vm;
 };
 
 struct task *init_process(void);
 struct task *create_process(const char *path);
 u32 get_pid(void);
 
-struct mm_info arch_process_mmap();
+struct mm_info *arch_process_mmap();
 void arch_user_stack();
 extern void jump_usermode(u32 addr, u32 stack);
 

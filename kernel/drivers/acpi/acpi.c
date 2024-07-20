@@ -10,7 +10,7 @@
 #include <acpi/madt.h>
 #include <acpi/hpet.h>
 #include <mm/kmm.h>
-#include <mm/kheap.h>
+#include <mm/kmalloc.h>
 #include "acpica/acpi.h"
 
 enum ACPI_BRIDGE_TYPE {

@@ -5,7 +5,7 @@
 #include <lilac/port.h>
 #include <lilac/panic.h>
 #include <mm/kmm.h>
-#include <mm/kheap.h>
+#include <mm/kmalloc.h>
 #include <drivers/ahci.h>
 
 #define PCI_CONFIG_ADDRESS 0xCF8

@@ -6,7 +6,7 @@
 #include <lilac/panic.h>
 #include <lilac/types.h>
 #include <lilac/log.h>
-#include <mm/kheap.h>
+#include <mm/kmalloc.h>
 
 static bool is_valid(struct SDTHeader *addr)
 {

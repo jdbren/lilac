@@ -9,7 +9,7 @@
 #include <lilac/list.h>
 #include <drivers/blkdev.h>
 #include <fs/fat32.h>
-#include <mm/kheap.h>
+#include <mm/kmalloc.h>
 
 #define LONG_FNAME 0x0F
 #define FAT_DIR_ATTR 0x10

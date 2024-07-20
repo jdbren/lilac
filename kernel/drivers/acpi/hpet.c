@@ -1,5 +1,5 @@
 #include <acpi/hpet.h>
-#include <mm/kheap.h>
+#include <mm/kmalloc.h>
 
 
 struct hpet_info *parse_hpet(struct SDTHeader *addr)

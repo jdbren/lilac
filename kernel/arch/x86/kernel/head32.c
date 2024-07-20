@@ -12,7 +12,7 @@
 #include <acpi/acpi.h>
 #include <utility/efi.h>
 #include <mm/kmm.h>
-#include <mm/kheap.h>
+#include <mm/kmalloc.h>
 #include "apic.h"
 #include "gdt.h"
 #include "idt.h"

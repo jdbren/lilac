@@ -9,7 +9,7 @@
 #include <lilac/device.h>
 #include <drivers/blkdev.h>
 #include <fs/fat32.h>
-#include <mm/kheap.h>
+#include <mm/kmalloc.h>
 
 static struct dentry *
 (*init_ops[4])(struct block_device*, struct super_block*) = {

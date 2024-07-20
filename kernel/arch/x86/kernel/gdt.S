@@ -1,6 +1,7 @@
 #include <asm/segments.h>
 
 .global gdt_init
+.type gdt_init, @function
 gdt_init:
     leal gdt_descr, %eax
 	movl $gdt_entries, 2(%eax)
@@ -40,7 +41,6 @@ flush_tss:
     movw $(5 * 8) | 0, %ax  # RPL 0
 	ltr %ax
 	ret
-
 
 
 .data

@@ -11,7 +11,7 @@
 #include <lilac/sched.h>
 #include <lilac/timer.h>
 #include <mm/kmm.h>
-#include <mm/kheap.h>
+#include <mm/kmalloc.h>
 
 #define MAX_TASKS 1024
 #define INIT_STACK(KSTACK) ((u32)KSTACK + __KERNEL_STACK_SZ - sizeof(size_t))
@@ -63,14 +63,16 @@ struct task* create_process(const char *path)
     static int pid = 1;
     struct task *new_task = &tasks[++pid];
     // Allocate new page directory
-    struct mm_info mem = arch_process_mmap();
+    struct mm_info *mem = arch_process_mmap();
 
     memcpy(new_task->name, path, strlen(path) + 1);
     new_task->pid = pid;
     new_task->ppid = current->pid;
-    new_task->pgd = mem.pgd;
+    new_task->parent = current;
+    new_task->mm = mem;
+    new_task->pgd = mem->pgd;
     new_task->pc = (u32)(start_process);
-    new_task->stack = (void*)INIT_STACK(mem.kstack);
+    new_task->stack = (void*)INIT_STACK(mem->kstack);
     new_task->state = TASK_SLEEPING;
     new_task->info = kzmalloc(sizeof(*new_task->info));
     memcpy(new_task->info->path, path, strlen(path) + 1);
@@ -83,12 +85,13 @@ struct task *init_process(void)
 {
     num_tasks = 1;
     struct task *this = &tasks[1];
-    struct mm_info mem = arch_process_mmap();
+    struct mm_info *mem = arch_process_mmap();
 
     this->pid = 1;
     this->ppid = 0;
-    this->pgd = mem.pgd;
-    this->stack = (void*)INIT_STACK(mem.kstack);
+    this->mm = mem;
+    this->pgd = mem->pgd;
+    this->stack = (void*)INIT_STACK(mem->kstack);
     this->pc = (u32)(start_process);
     this->state = TASK_RUNNING;
     this->info = kzmalloc(sizeof(*this->info));

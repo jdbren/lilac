@@ -8,7 +8,7 @@
 #include <lilac/config.h>
 #include <lilac/types.h>
 #include <lilac/panic.h>
-#include <mm/kheap.h>
+#include <mm/kmalloc.h>
 #include <mm/kmm.h>
 
 #define MIN_ALLOC 4

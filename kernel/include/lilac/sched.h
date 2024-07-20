@@ -12,4 +12,6 @@ void yield(void);
 void schedule_task(struct task *new_task);
 struct task *get_current_task(void);
 
+#define current get_current_task()
+
 #endif

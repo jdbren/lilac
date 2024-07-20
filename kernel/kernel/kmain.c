@@ -10,7 +10,7 @@
 #include <lilac/sched.h>
 #include <lilac/timer.h>
 #include <lilac/elf.h>
-#include <mm/kheap.h>
+#include <mm/kmalloc.h>
 
 __no_ret __no_stack_chk
 void start_kernel(void)

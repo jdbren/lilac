@@ -17,7 +17,7 @@
 #include <lilac/process.h>
 #include <lilac/timer.h>
 #include <mm/kmm.h>
-#include <mm/kheap.h>
+#include <mm/kmalloc.h>
 #include <drivers/pci.h>
 #include "acpica/acpi.h"
 

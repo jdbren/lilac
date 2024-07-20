@@ -5,7 +5,7 @@
 #include <drivers/ahci.h>
 #include <drivers/blkdev.h>
 #include <mm/kmm.h>
-#include <mm/kheap.h>
+#include <mm/kmalloc.h>
 #include <utility/ata.h>
 
 #define	SATA_SIG_ATA	0x00000101	// SATA drive

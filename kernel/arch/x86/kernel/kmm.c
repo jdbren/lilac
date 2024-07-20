@@ -60,8 +60,6 @@ static void *find_vaddr(int num_pages)
     void *ptr = NULL;
     memory_desc_t *mem_addr = list;
     while (mem_addr) {
-        // printf("mem_addr: %x\n", mem_addr->start);
-        // printf("mem_addr->size: %x\n", mem_addr->size);
         if (mem_addr->size >= num_pages) {
             ptr = mem_addr->start;
             __update_list(mem_addr, num_pages);

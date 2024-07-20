@@ -3,7 +3,7 @@
 #include <lilac/types.h>
 #include <lilac/process.h>
 #include <lilac/sched.h>
-#include <mm/kheap.h>
+#include <mm/kmalloc.h>
 
 #define MAX_SPINLOCKS 16
 #define pause __builtin_ia32_pause
