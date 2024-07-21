@@ -9,6 +9,7 @@
 #include <lilac/list.h>
 #include <drivers/blkdev.h>
 #include <fs/fat32.h>
+#include <mm/kmm.h>
 #include <mm/kmalloc.h>
 
 #define LONG_FNAME 0x0F
@@ -376,7 +377,7 @@ ssize_t fat32_read(struct file *file, void *file_buf, size_t count)
     u32 offset = file->f_pos % disk->bytes_per_clst;
     u32 num_clst = ROUND_UP(count + offset, disk->bytes_per_clst) /
         disk->bytes_per_clst;
-    unsigned char *buffer = kzmalloc(disk->bytes_per_clst * num_clst);
+    unsigned char *buffer = kvirtual_alloc(disk->bytes_per_clst * num_clst, PG_WRITE);
 
     start_clst = __get_clst_num(file, disk);
     if (start_clst == 0)
@@ -393,7 +394,7 @@ ssize_t fat32_read(struct file *file, void *file_buf, size_t count)
     bytes_read = count;
 
 out:
-    kfree(buffer);
+    kvirtual_free(buffer, disk->bytes_per_clst * num_clst);
     return bytes_read;
 }
 
@@ -406,7 +407,7 @@ ssize_t fat32_write(struct file *file, const void *file_buf, size_t count)
     u32 offset = file->f_pos % disk->bytes_per_clst;
     u32 num_clst = ROUND_UP(count + offset, disk->bytes_per_clst) /
         disk->bytes_per_clst;
-    unsigned char *buffer = kzmalloc(disk->bytes_per_clst * num_clst);
+    unsigned char *buffer = kvirtual_alloc(disk->bytes_per_clst * num_clst, PG_WRITE);
 
     start_clst = __get_clst_num(file, disk);
     if (start_clst == 0)
@@ -429,7 +430,7 @@ ssize_t fat32_write(struct file *file, const void *file_buf, size_t count)
     bytes_written = count;
 
 out:
-    kfree(buffer);
+    kvirtual_free(buffer, disk->bytes_per_clst * num_clst);
     return bytes_written;
 }
 
@@ -442,7 +443,7 @@ int fat32_readdir(struct file *file, struct dirent *dir_buf, unsigned int count)
     u32 offset = file->f_pos % disk->bytes_per_clst;
     u32 num_clst = ROUND_UP(count + offset, disk->bytes_per_clst) /
         disk->bytes_per_clst;
-    unsigned char *buffer = kzmalloc(disk->bytes_per_clst * num_clst);
+    unsigned char *buffer = kvirtual_alloc(disk->bytes_per_clst * num_clst, PG_WRITE);
 
     start_clst = __get_clst_num(file, disk);
     if (start_clst <= 0)
@@ -459,7 +460,7 @@ int fat32_readdir(struct file *file, struct dirent *dir_buf, unsigned int count)
         i++;
     }
 
-    kfree(buffer);
+    kvirtual_free(buffer, disk->bytes_per_clst * num_clst);
     return i;
 }
 

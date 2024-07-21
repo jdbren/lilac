@@ -1,89 +1,93 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <mm/kmm.h>
+
 #include <string.h>
 #include <stdbool.h>
-#include <utility/multiboot2.h>
+
 #include <lilac/panic.h>
+#include <utility/multiboot2.h>
 #include <utility/efi.h>
+
 #include "pgframe.h"
 #include "paging.h"
 
 
-#define KHEAP_START_ADDR    0xC8000000
+#define KHEAP_START_ADDR    0xC0400000
 #define KHEAP_MAX_ADDR      0xEFFFF000
-#define get_index(VIRT_ADDR) ((KHEAP_MAX_ADDR - VIRT_ADDR) / PAGE_SIZE)
+#define check_bit(var,pos) ((var) & (1<<(pos)))
+#define get_index(page) ((u32)(page - KHEAP_START_ADDR)/ (32 * PAGE_SIZE))
+#define get_offset(page) (((u32)(page - KHEAP_START_ADDR) / PAGE_SIZE) % 32)
 
 typedef struct memory_desc memory_desc_t;
 
-struct memory_desc {
-    memory_desc_t *next, *prev;
-    u32 size;
-    u8 *start;
-};
-
-static void __update_list(memory_desc_t *mem_addr, unsigned int num_pages);
+static void *__check_bitmap(int i, int num_pages, int *count, int *start);
+static void __free_page(u8 *page);
 static void __parse_mmap(struct multiboot_tag_efi_mmap *mmap);
 
-extern u32 _kernel_end;
-extern u32 _kernel_start;
+extern const int _kernel_end;
+extern const int _kernel_start;
 
-static memory_desc_t *avail_vmem_list;
-static memory_desc_t *list;
-static u32 unused_heap_addr;
+// static memory_desc_t *avail_vmem_list;
+// static memory_desc_t *list;
+// static u32 unused_heap_addr;
 
-static const int KHEAP_PAGES = (KHEAP_MAX_ADDR - KHEAP_START_ADDR) / PAGE_SIZE;
-static const int HEAP_MANAGE_PAGES = KHEAP_PAGES * sizeof(struct memory_desc) / PAGE_SIZE;
+#define KHEAP_PAGES ((KHEAP_MAX_ADDR - KHEAP_START_ADDR) / PAGE_SIZE)
+#define KHEAP_BITMAP_SIZE (KHEAP_PAGES / 8)
+#define HEAP_MANAGE_BYTES PAGE_ROUND_UP(KHEAP_BITMAP_SIZE)
+
+static u32 kheap_bitmap[HEAP_MANAGE_BYTES / 4];
 
 // TODO: Add support for greater than 4GB memory
 void mm_init(struct multiboot_tag_efi_mmap *mmap)
 {
     int phys_map_sz = phys_mem_init(mmap);
-    avail_vmem_list = (memory_desc_t*)((u32)&_kernel_end + (u32)phys_map_sz);
-    list = 0;
-    unused_heap_addr = KHEAP_MAX_ADDR;
-
-    if ((u32)avail_vmem_list + HEAP_MANAGE_PAGES * PAGE_SIZE > __KERNEL_MAX_ADDR)
-        kerror("Heap management pages exceed kernel space");
-
-    void *phys = alloc_frames(HEAP_MANAGE_PAGES);
-    map_pages(phys, (void*)avail_vmem_list, PG_WRITE, HEAP_MANAGE_PAGES);
-    memset(avail_vmem_list, 0, HEAP_MANAGE_PAGES * PAGE_SIZE);
-
     __parse_mmap(mmap);
 
-    printf("Kernel virtual address allocation enabled\n");
+    kstatus(STATUS_OK, "Kernel virtual address allocation enabled\n");
 }
 
 static void *find_vaddr(int num_pages)
 {
+    if (num_pages > 0x0001000)
+        kerror("Cannot allocate more than 4MB kernel mem at a time");
+    if (num_pages <= 0)
+        return NULL;
+
     void *ptr = NULL;
-    memory_desc_t *mem_addr = list;
-    while (mem_addr) {
-        if (mem_addr->size >= num_pages) {
-            ptr = mem_addr->start;
-            __update_list(mem_addr, num_pages);
-            return ptr;
+    int start = 0;
+    int count = 0;
+    for (size_t i = 0; i < KHEAP_BITMAP_SIZE / sizeof(u32); i++) {
+        if (kheap_bitmap[i] != ~0UL) {
+            ptr = __check_bitmap(i, num_pages, &count, &start);
+            if (ptr)
+                break;
         }
-        mem_addr = mem_addr->next;
+        else
+            count = 0;
     }
 
-    if (unused_heap_addr >= KHEAP_START_ADDR)
-        ptr = (u8*)unused_heap_addr - (num_pages - 1) * PAGE_SIZE;
-    else
+    if (!ptr)
         kerror("KERNEL OUT OF VIRTUAL MEMORY");
 
-    unused_heap_addr = (u32)unused_heap_addr - num_pages * PAGE_SIZE;
+    klog(LOG_DEBUG, "Allocated %d pages at %x\n", num_pages, ptr);
     return ptr;
+}
+
+static void free_vaddr(u8 *page, u32 num_pages)
+{
+    klog(LOG_DEBUG, "Freed %d pages at %x\n", num_pages, page);
+    for (u8 *end = page + num_pages * PAGE_SIZE; page < end; page += PAGE_SIZE)
+        __free_page(page);
 }
 
 void* kvirtual_alloc(int size, int flags)
 {
-    int done = 0;
-    u32 num_pages = PAGE_ROUND_UP(size) / PAGE_SIZE;
-    void *ptr = NULL;
+    if (size == 0)
+        return NULL;
 
-    ptr = find_vaddr(num_pages);
+    u32 num_pages = PAGE_ROUND_UP(size) / PAGE_SIZE;
+    void *ptr = find_vaddr(num_pages);
 
     if (ptr) {
         void *phys = alloc_frames(num_pages);
@@ -94,25 +98,11 @@ void* kvirtual_alloc(int size, int flags)
     return ptr;
 }
 
-static void free_vaddr(void *addr, int num_pages)
-{
-    memory_desc_t *mem_addr = &avail_vmem_list[get_index((u32)addr)];
-    //printf("mem_addr: %x\n", mem_addr);
-    mem_addr->start = (u8*)addr;
-    mem_addr->size = num_pages;
-
-    if (list) {
-        list->prev = mem_addr;
-        mem_addr->next = list;
-    }
-
-    list = mem_addr;
-}
 
 void kvirtual_free(void* addr, int size)
 {
     int num_pages = PAGE_ROUND_UP(size) / PAGE_SIZE;
-    free_vaddr(addr, size);
+    free_vaddr(addr, num_pages);
     free_frames(get_physaddr(addr), num_pages);
     unmap_pages(addr, num_pages);
 }
@@ -149,35 +139,46 @@ u32 virt_to_phys(void *vaddr)
     return (u32)get_physaddr(vaddr);
 }
 
-static void __update_list(memory_desc_t *mem_addr, unsigned int num_pages)
+
+
+static void* __do_page_alloc(int start, int num_pages)
 {
-    void *ptr = (void*)(mem_addr->start);
+    for (int k = start; k < start + num_pages; k++) {
+        int index = k / 32;
+        int offset = k % 32;
 
-    if (mem_addr->size > num_pages) {
-        u32 tmp = (u32)mem_addr->start + num_pages * PAGE_SIZE;
-
-        memory_desc_t *new_desc = &avail_vmem_list[get_index(tmp)];
-        new_desc->start = (u8*)tmp;
-        new_desc->size = mem_addr->size - num_pages;
-        new_desc->prev = mem_addr->prev;
-        new_desc->next = mem_addr->next;
-
-        if (mem_addr->prev)
-            mem_addr->prev->next = new_desc;
-        if (mem_addr->next)
-            mem_addr->next->prev = new_desc;
-        mem_addr->next = new_desc;
-    } else {
-        if (mem_addr->prev)
-            mem_addr->prev->next = mem_addr->next;
-        if (mem_addr->next)
-            mem_addr->next->prev = mem_addr->prev;
+        kheap_bitmap[index] |= (1 << offset);
     }
 
-    if (list == mem_addr)
-        list = mem_addr->next;
+    return (void*)(KHEAP_START_ADDR + start * PAGE_SIZE);
+}
 
-    memset(mem_addr, 0, sizeof(*mem_addr));
+static void* __check_bitmap(int i, int num_pages, int *count, int *start)
+{
+    for (int j = 0; j < 32; j++) {
+        if (!check_bit(kheap_bitmap[i], j)) {
+            if (*count == 0)
+                *start = i * 32 + j;
+
+            (*count)++;
+
+            if (*count == num_pages)
+                return __do_page_alloc(*start, num_pages);
+        }
+        else {
+            *count = 0;
+        }
+    }
+
+    return 0;
+}
+
+static void __free_page(u8 *page)
+{
+    u32 index = get_index(page);
+    u32 offset = get_offset(page);
+
+    kheap_bitmap[index] &= ~(1 << offset);
 }
 
 static void __parse_mmap(struct multiboot_tag_efi_mmap *mmap)
@@ -186,9 +187,9 @@ static void __parse_mmap(struct multiboot_tag_efi_mmap *mmap)
     void *vaddr = NULL;
     for (u32 i = 0; i < mmap->size; i += mmap->descr_size,
             entry = (efi_memory_desc_t*)((u32)entry + mmap->descr_size)) {
-        // printf("Type: %d\n", entry->type);
-        // printf("Phys addr: %x\n", entry->phys_addr);
-        // printf("Num pages: %d\n", entry->num_pages);
+        klog(LOG_DEBUG, "Type: %d\n", entry->type);
+        klog(LOG_DEBUG, "Phys addr: %x\n", entry->phys_addr);
+        klog(LOG_DEBUG, "Num pages: %d\n", entry->num_pages);
         switch (entry->type) {
             case EFI_BOOT_SERVICES_CODE:
             case EFI_BOOT_SERVICES_DATA:

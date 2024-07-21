@@ -16,13 +16,12 @@
 #define get_index(frame) ((u32)frame / (32 * PAGE_SIZE))
 #define get_offset(frame) (((u32)frame / PAGE_SIZE) % 32)
 
-typedef struct {
+typedef struct page {
     u8 pg[PAGE_SIZE];
 } __packed page_t;
 
 extern const u32 _kernel_start;
 extern const u32 _kernel_end;
-static u32 KERNEL_SIZE;
 static u32 FIRST_PAGE;
 static u32 BITMAP_SIZE;
 static u32 *const pg_frame_bitmap = (u32*)&_kernel_end;

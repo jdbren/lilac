@@ -9,18 +9,18 @@
 
 void elf_print(struct elf_header *hdr)
 {
-    printf("\tELF sig: %x\n", hdr->sig);
-    printf("\tClass: %x\n", hdr->class);
-    printf("\tEndian: %x\n", hdr->endian);
-    printf("\tHeader version: %x\n", hdr->headv);
-    printf("\tABI: %x\n", hdr->abi);
-    printf("\tType: %x\n", hdr->elf32.type);
-    printf("\tMachine: %x\n", hdr->elf32.mach);
-    printf("\tVersion: %x\n", hdr->elf32.elfv);
-    printf("\tEntry: %x\n", hdr->elf32.entry);
-    printf("\tProgram header table: %x\n", hdr->elf32.p_tbl);
-    printf("\tProgram header table entry size: %x\n", hdr->elf32.p_entry_sz);
-    printf("\tProgram header table entry count: %x\n", hdr->elf32.p_tbl_sz);
+    klog(LOG_DEBUG, "\tELF sig: %x\n", hdr->sig);
+    klog(LOG_DEBUG, "\tClass: %x\n", hdr->class);
+    klog(LOG_DEBUG, "\tEndian: %x\n", hdr->endian);
+    klog(LOG_DEBUG, "\tHeader version: %x\n", hdr->headv);
+    klog(LOG_DEBUG, "\tABI: %x\n", hdr->abi);
+    klog(LOG_DEBUG, "\tType: %x\n", hdr->elf32.type);
+    klog(LOG_DEBUG, "\tMachine: %x\n", hdr->elf32.mach);
+    klog(LOG_DEBUG, "\tVersion: %x\n", hdr->elf32.elfv);
+    klog(LOG_DEBUG, "\tEntry: %x\n", hdr->elf32.entry);
+    klog(LOG_DEBUG, "\tProgram header table: %x\n", hdr->elf32.p_tbl);
+    klog(LOG_DEBUG, "\tProgram header table entry size: %x\n", hdr->elf32.p_entry_sz);
+    klog(LOG_DEBUG, "\tProgram header table entry count: %x\n", hdr->elf32.p_tbl_sz);
 }
 
 void* elf32_load(void *elf)
@@ -37,20 +37,20 @@ void* elf32_load(void *elf)
         kerror("Invalid machine type\n");
     }
 
-    klog(LOG_INFO, "ELF header:\n");
-    // elf_print(hdr);
+    klog(LOG_DEBUG, "ELF header:\n");
+    elf_print(hdr);
 
     struct elf32_pheader *phdr = (struct elf32_pheader*)((u32)elf + hdr->elf32.p_tbl);
-    // printf("Program header table:\n");
-    // for (int i = 0; i < hdr->elf32.p_tbl_sz; i++) {
-    //     printf("Type: %x\n", phdr[i].type);
-    //     printf("Offset: %x\n", phdr[i].p_offset);
-    //     printf("Virt addr: %x\n", phdr[i].p_vaddr);
-    //     printf("File size: %x\n", phdr[i].p_filesz);
-    //     printf("Mem size: %x\n", phdr[i].p_memsz);
-    //     printf("Flags: %x\n", phdr[i].flags);
-    //     printf("Align: %x\n", phdr[i].align);
-    // }
+    klog(LOG_DEBUG, "Program header table:\n");
+    for (int i = 0; i < hdr->elf32.p_tbl_sz; i++) {
+        klog(LOG_DEBUG, "Type: %x\n", phdr[i].type);
+        klog(LOG_DEBUG, "Offset: %x\n", phdr[i].p_offset);
+        klog(LOG_DEBUG, "Virt addr: %x\n", phdr[i].p_vaddr);
+        klog(LOG_DEBUG, "File size: %x\n", phdr[i].p_filesz);
+        klog(LOG_DEBUG, "Mem size: %x\n", phdr[i].p_memsz);
+        klog(LOG_DEBUG, "Flags: %x\n", phdr[i].flags);
+        klog(LOG_DEBUG, "Align: %x\n", phdr[i].align);
+    }
 
 
     for (int i = 0; i < hdr->elf32.p_tbl_sz; i++) {

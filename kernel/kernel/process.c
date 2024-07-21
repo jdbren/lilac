@@ -52,6 +52,7 @@ static void start_process(void)
         klog(LOG_INFO, "Read %d bytes from %s\n", bytes, path);
     }
     void *jmp = elf32_load(hdr);
+    // close(fd);
     arch_user_stack();
 
     klog(LOG_INFO, "Going to user mode\n");
