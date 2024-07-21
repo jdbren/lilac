@@ -37,7 +37,9 @@ static struct int_override* parse_override(struct MADTEntry *entry)
     info->bus = ((u8*)entry)[2];
     info->source = ((u8*)entry)[3];
 
+#ifdef DEBUG_APIC
     klog(LOG_DEBUG, "Override: %x %x %x %x\n", info->flags, info->global_system_interrupt, info->bus, info->source);
+#endif
     return info;
 }
 

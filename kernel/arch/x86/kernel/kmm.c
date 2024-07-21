@@ -28,10 +28,6 @@ static void __parse_mmap(struct multiboot_tag_efi_mmap *mmap);
 extern const int _kernel_end;
 extern const int _kernel_start;
 
-// static memory_desc_t *avail_vmem_list;
-// static memory_desc_t *list;
-// static u32 unused_heap_addr;
-
 #define KHEAP_PAGES ((KHEAP_MAX_ADDR - KHEAP_START_ADDR) / PAGE_SIZE)
 #define KHEAP_BITMAP_SIZE (KHEAP_PAGES / 8)
 #define HEAP_MANAGE_BYTES PAGE_ROUND_UP(KHEAP_BITMAP_SIZE)
@@ -70,13 +66,17 @@ static void *find_vaddr(int num_pages)
     if (!ptr)
         kerror("KERNEL OUT OF VIRTUAL MEMORY");
 
+#ifdef DEBUG_KMM
     klog(LOG_DEBUG, "Allocated %d pages at %x\n", num_pages, ptr);
+#endif
     return ptr;
 }
 
 static void free_vaddr(u8 *page, u32 num_pages)
 {
+#ifdef DEBUG_KMM
     klog(LOG_DEBUG, "Freed %d pages at %x\n", num_pages, page);
+#endif
     for (u8 *end = page + num_pages * PAGE_SIZE; page < end; page += PAGE_SIZE)
         __free_page(page);
 }

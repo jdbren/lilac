@@ -9,6 +9,7 @@
 
 void elf_print(struct elf_header *hdr)
 {
+    klog(LOG_DEBUG, "ELF header:\n");
     klog(LOG_DEBUG, "\tELF sig: %x\n", hdr->sig);
     klog(LOG_DEBUG, "\tClass: %x\n", hdr->class);
     klog(LOG_DEBUG, "\tEndian: %x\n", hdr->endian);
@@ -36,11 +37,11 @@ void* elf32_load(void *elf)
         klog(LOG_ERROR, "Invalid machine type\n");
         kerror("Invalid machine type\n");
     }
+    struct elf32_pheader *phdr = (struct elf32_pheader*)((u32)elf + hdr->elf32.p_tbl);
 
-    klog(LOG_DEBUG, "ELF header:\n");
+#ifdef DEBUG_ELF
     elf_print(hdr);
 
-    struct elf32_pheader *phdr = (struct elf32_pheader*)((u32)elf + hdr->elf32.p_tbl);
     klog(LOG_DEBUG, "Program header table:\n");
     for (int i = 0; i < hdr->elf32.p_tbl_sz; i++) {
         klog(LOG_DEBUG, "Type: %x\n", phdr[i].type);
@@ -51,7 +52,7 @@ void* elf32_load(void *elf)
         klog(LOG_DEBUG, "Flags: %x\n", phdr[i].flags);
         klog(LOG_DEBUG, "Align: %x\n", phdr[i].align);
     }
-
+#endif
 
     for (int i = 0; i < hdr->elf32.p_tbl_sz; i++) {
         if (phdr[i].type != LOAD_SEG)
