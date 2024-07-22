@@ -14,9 +14,9 @@
 #define PG_TABLE_INDEX(x) (((x) >> 12) & 0x3FF)
 
 extern const u32 _kernel_end;
-static const int KERNEL_FIRST_PT = PG_DIR_INDEX(0xb0000000);
+static const int KERNEL_FIRST_PT = PG_DIR_INDEX(0xc0000000);
 
-static u32 *pd = (u32*)0xFFFFF000;
+static u32 *const pd = (u32*)0xFFFFF000;
 
 struct mm_info * arch_process_mmap()
 {
@@ -26,11 +26,6 @@ struct mm_info * arch_process_mmap()
     // Do recursive mapping
     cr3[1023] = virt_to_phys(cr3) | PG_WRITE | PG_SUPER | 1;
 
-    // map io space
-    // cr3[0] = pd[0];
-    // printf("page_dir[0]: %x\n", cr3[0]);
-    // printf("pd[0]: %x\n", pd[0]);
-
     // Allocate kernel stack
     void *kstack = kvirtual_alloc(__KERNEL_STACK_SZ, PG_WRITE);
 
@@ -38,7 +33,7 @@ struct mm_info * arch_process_mmap()
     for (int i = KERNEL_FIRST_PT; i < 1023; i++)
         cr3[i] = pd[i];
 
-    struct mm_info *info = kmalloc(sizeof *info);
+    struct mm_info *info = kzmalloc(sizeof *info);
     info->pgd = virt_to_phys(cr3);
     info->kstack = kstack;
     unmap_phys(cr3, PAGE_BYTES);
@@ -46,9 +41,10 @@ struct mm_info * arch_process_mmap()
     return info;
 }
 
-void arch_user_stack()
+void * arch_user_stack(void)
 {
     static const int num_pgs = __USER_STACK_SZ / PAGE_SIZE;
     void *stack = (void*)(__USER_STACK - __USER_STACK_SZ);
     map_pages(alloc_frames(num_pgs), stack, PG_USER | PG_WRITE, num_pgs);
+    return stack;
 }

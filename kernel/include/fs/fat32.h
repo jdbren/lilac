@@ -3,7 +3,15 @@
 #ifndef _FAT32_H
 #define _FAT32_H
 
+#include <lilac/config.h>
 #include <lilac/types.h>
+
+struct super_block;
+struct block_device;
+struct inode;
+struct dentry;
+struct file;
+struct dirent;
 
 struct fat_extBS_32 {
 	u32		FAT_size_32;

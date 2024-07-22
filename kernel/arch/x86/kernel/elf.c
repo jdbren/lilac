@@ -1,9 +1,14 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include <string.h>
-#include <lilac/panic.h>
 #include <lilac/elf.h>
+
+#include <string.h>
+
+#include <lilac/panic.h>
 #include <lilac/log.h>
+#include <lilac/process.h>
+#include <lilac/mm.h>
+#include <mm/kmalloc.h>
 #include "paging.h"
 #include "pgframe.h"
 
@@ -24,18 +29,18 @@ void elf_print(struct elf_header *hdr)
     klog(LOG_DEBUG, "\tProgram header table entry count: %x\n", hdr->elf32.p_tbl_sz);
 }
 
-void* elf32_load(void *elf)
+void* elf32_load(void *elf, struct mm_info *mm)
 {
     struct elf_header *hdr = (struct elf_header*)elf;
 
     if (hdr->sig != 0x464c457f) {
         klog(LOG_ERROR, "Invalid ELF signature\n");
-        kerror("Invalid ELF signature\n");
+        return NULL;
     }
 
     if (hdr->elf32.mach != X86) {
         klog(LOG_ERROR, "Invalid machine type\n");
-        kerror("Invalid machine type\n");
+        return NULL;
     }
     struct elf32_pheader *phdr = (struct elf32_pheader*)((u32)elf + hdr->elf32.p_tbl);
 
@@ -53,7 +58,6 @@ void* elf32_load(void *elf)
         klog(LOG_DEBUG, "Align: %x\n", phdr[i].align);
     }
 #endif
-
     for (int i = 0; i < hdr->elf32.p_tbl_sz; i++) {
         if (phdr[i].type != LOAD_SEG)
             continue;
@@ -61,6 +65,7 @@ void* elf32_load(void *elf)
             kerror("Alignment greater than page size\n");
         int num_pages = phdr[i].p_memsz / PAGE_BYTES + 1;
         int flags = PG_USER;
+        struct vm_desc *desc = kzmalloc(sizeof *desc);
 
         void *phys = alloc_frames(num_pages);
 	    void *vaddr = (void*)(phdr[i].p_vaddr & 0xFFFFF000);
@@ -72,10 +77,29 @@ void* elf32_load(void *elf)
             memset((void*)(phdr[i].p_vaddr + phdr[i].p_filesz), 0,
                     phdr[i].p_memsz - phdr[i].p_filesz);
 
-        if (phdr[i].flags & WRIT)
+        if (phdr[i].flags & WRIT) {
             flags |= PG_WRITE;
+            desc->vm_prot |= PROT_WRITE;
+        }
+        if (phdr[i].flags & EXEC) {
+            mm->start_code = (u32)phdr[i].p_vaddr;
+            mm->end_code = (u32)phdr[i].p_vaddr + phdr[i].p_filesz;
+            desc->vm_prot |= PROT_EXEC;
+        }
         unmap_pages(vaddr, num_pages);
         map_pages(phys, vaddr, flags, num_pages);
+
+        desc->mm = mm;
+        desc->start = (uintptr_t)vaddr;
+        desc->end = (uintptr_t)vaddr + num_pages * PAGE_BYTES;
+        desc->vm_prot |= PROT_READ;
+        desc->vm_flags = MAP_PRIVATE;
+
+        if (desc->vm_prot & PROT_WRITE && desc->vm_prot & PROT_EXEC)
+            klog(LOG_WARN, "Segment is both writable and executable\n");
+
+        vma_list_insert(desc, &mm->mmap);
+        // vma_rb_insert(desc, &mm->mmap_rb);
     }
 
     return (void*)hdr->elf32.entry;

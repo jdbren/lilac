@@ -42,6 +42,7 @@ kernel/sync.o \
 kernel/open.o \
 kernel/write.o \
 mm/kmalloc.o \
+mm/mm.o \
 fs/fat32.o \
 fs/vfs.o \
 fs/gpt.o \

@@ -1,14 +1,17 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
+#include <fs/fat32.h>
+
 #include <string.h>
 #include <stdbool.h>
 #include <ctype.h>
+
 #include <lilac/types.h>
 #include <lilac/panic.h>
 #include <lilac/fs.h>
+#include <lilac/file.h>
 #include <lilac/list.h>
 #include <drivers/blkdev.h>
-#include <fs/fat32.h>
 #include <mm/kmm.h>
 #include <mm/kmalloc.h>
 

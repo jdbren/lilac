@@ -7,17 +7,6 @@
 
 static struct task* task_queue[16];
 static struct task root = {
-    .pid = 0,
-    .ppid = 0,
-    .pgd = 0,
-    .pc = 0,
-    .stack = 0,
-    .time_slice = 0,
-    .parent = NULL,
-    .fs = NULL,
-    .files = NULL,
-    .info = NULL,
-    .priority = 0,
     .state = TASK_DEAD,
     .name = "root"
 };
@@ -42,15 +31,13 @@ void yield(void)
 void schedule_task(struct task *new_task)
 {
     task_queue[++back] = new_task;
-    // printf("Task_queue[%d] = %s\n", back, new_task->name);
+    // klog(LOG_INFO, "Task_queue[%d] = %s\n", back, new_task->name);
 }
 
 void sched_init(void)
 {
     task_queue[0] = &root;
     struct task *pid1 = init_process();
-    back = 0;
-    current_task = 0;
     schedule_task(pid1);
     timer_reset = 1000;
     kstatus(STATUS_OK, "Scheduler initialized\n");
@@ -63,12 +50,12 @@ void sched_clock_init(void)
 
 static void context_switch(struct task *prev, struct task *next)
 {
-    klog(LOG_INFO, "Next task info: \n");
-    printf("\tPID: %d\n", next->pid);
-    printf("\tPPID: %d\n", next->ppid);
-    printf("\tPGD: %x\n", next->pgd);
-    printf("\tPC: %x\n", next->pc);
-    printf("\tStack: %x\n", next->stack);
+    klog(LOG_DEBUG, "Next task info: \n");
+    klog(LOG_DEBUG, "\tPID: %d\n", next->pid);
+    klog(LOG_DEBUG, "\tPPID: %d\n", next->ppid);
+    klog(LOG_DEBUG, "\tPGD: %x\n", next->pgd);
+    klog(LOG_DEBUG, "\tPC: %x\n", next->pc);
+    klog(LOG_DEBUG, "\tStack: %x\n", next->stack);
 
     arch_context_switch(prev, next);
 }
@@ -92,7 +79,7 @@ void schedule(void)
         i++;
     }
     if (task_queue[current_task] == prev) {
-        printf("Running task %s\n", prev->name);
+        klog(LOG_INFO, "Running task %s\n", prev->name);
         return;
     }
     struct task *next = task_queue[current_task];
@@ -109,6 +96,6 @@ void sched_tick()
         return;
     }
     sched_timer = timer_reset;
-    //printf("Running scheduler\n");
+    //klog(LOG_INFO, "Running scheduler\n");
     schedule();
 }

@@ -1,15 +1,18 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include <stdbool.h>
-#include <string.h>
-#include <ctype.h>
+#include <lilac/fs.h>
+#include <lilac/file.h>
+
 #include <lilac/log.h>
 #include <lilac/panic.h>
-#include <lilac/fs.h>
 #include <lilac/device.h>
 #include <drivers/blkdev.h>
 #include <fs/fat32.h>
 #include <mm/kmalloc.h>
+
+#include <stdbool.h>
+#include <string.h>
+#include <ctype.h>
 
 static struct dentry *
 (*init_ops[4])(struct block_device*, struct super_block*) = {

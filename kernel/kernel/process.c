@@ -1,8 +1,10 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
+#include <lilac/process.h>
+
 #include <stdatomic.h>
 #include <string.h>
-#include <lilac/process.h>
+
 #include <lilac/types.h>
 #include <lilac/config.h>
 #include <lilac/panic.h>
@@ -10,6 +12,8 @@
 #include <lilac/fs.h>
 #include <lilac/sched.h>
 #include <lilac/timer.h>
+#include <lilac/log.h>
+#include <lilac/mm.h>
 #include <mm/kmm.h>
 #include <mm/kmalloc.h>
 
@@ -34,6 +38,7 @@ u32 get_pid(void)
 
 static void start_process(void)
 {
+    struct mm_info *mem = current->mm;
     klog(LOG_INFO, "Process %d started\n", current->pid);
 
     const char *path = current->info->path;
@@ -44,16 +49,49 @@ static void start_process(void)
     }
 
     struct elf_header *hdr = kzmalloc(0x1000);
-    int bytes = read(fd, hdr, 0x1000);
-    if (hdr->sig != ELF_MAGIC) {
-        klog(LOG_ERROR, "Invalid ELF signature\n");
-        return;
-    } else {
-        klog(LOG_INFO, "Read %d bytes from %s\n", bytes, path);
+    int bytes = 0;
+    while(read(fd, (u8*)hdr + bytes, 0x1000) > 0) {
+        bytes += 0x1000;
+        hdr = krealloc(hdr, bytes + 0x1000);
     }
-    void *jmp = elf32_load(hdr);
+    klog(LOG_INFO, "Read %d bytes from %s\n", bytes, path);
+
+    void *jmp = elf32_load(hdr, mem);
+    if (!jmp)
+        kerror("Failed to load ELF file\n");
+
     // close(fd);
-    arch_user_stack();
+
+    mem->start_stack = (uintptr_t)arch_user_stack();
+
+    struct vm_desc *stack_desc = kzmalloc(sizeof(*stack_desc));
+    stack_desc->mm = mem;
+    stack_desc->start = mem->start_stack;
+    stack_desc->end = __USER_STACK;
+    stack_desc->vm_prot = PROT_READ | PROT_WRITE;
+    stack_desc->vm_flags = MAP_PRIVATE | MAP_ANONYMOUS;
+    vma_list_insert(stack_desc, &mem->mmap);
+
+    // Set up heap
+    mem->start_brk = 0x40000000UL;
+    mem->brk = 0x40000000UL;
+
+    struct vm_desc *heap_desc = kzmalloc(sizeof(*heap_desc));
+    heap_desc->mm = mem;
+    heap_desc->start = mem->start_brk;
+    heap_desc->end = mem->brk;
+    heap_desc->vm_prot = PROT_READ | PROT_WRITE;
+    heap_desc->vm_flags = MAP_PRIVATE | MAP_ANONYMOUS;
+    vma_list_insert(heap_desc, &mem->mmap);
+
+    struct vm_desc *desc = mem->mmap;
+    while (desc) {
+        klog(LOG_DEBUG, "Start: %x\n", desc->start);
+        klog(LOG_DEBUG, "End: %x\n", desc->end);
+        klog(LOG_DEBUG, "Prot: %x\n", desc->vm_prot);
+        klog(LOG_DEBUG, "Flags: %x\n", desc->vm_flags);
+        desc = desc->vm_next;
+    }
 
     klog(LOG_INFO, "Going to user mode\n");
     jump_usermode((u32)jmp, __USER_STACK - 4);

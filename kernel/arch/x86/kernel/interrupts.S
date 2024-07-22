@@ -59,13 +59,3 @@ isr_err    pgflt
 # isr_no_err 29
 # isr_err    30
 # isr_no_err 31
-
-
-.extern keyboard_interrupt
-.global keyboard_handler
-keyboard_handler:
-    pusha
-    cld
-    call keyboard_interrupt
-    popa
-    iret

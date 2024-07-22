@@ -1,22 +1,21 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include <string.h>
 #include <lilac/lilac.h>
 #include <lilac/types.h>
 #include <lilac/tty.h>
 #include <lilac/panic.h>
 #include <lilac/keyboard.h>
 #include <lilac/timer.h>
-#include <lilac/sched.h>
-#include <lilac/fs.h>
 #include <acpi/acpi.h>
 #include <utility/efi.h>
 #include <mm/kmm.h>
-#include <mm/kmalloc.h>
+
 #include "apic.h"
 #include "gdt.h"
 #include "idt.h"
 #include "timer.h"
+
+#include <string.h>
 
 #if UINT32_MAX == UINTPTR_MAX
 #define STACK_CHK_GUARD 0xe2dee396
@@ -45,7 +44,7 @@ void kernel_early(unsigned int multiboot)
 	acpi_early((void*)mbd.new_acpi->rsdp, &acpi);
 	apic_init(acpi.madt);
 	keyboard_init();
-	timer_init(1, acpi.hpet); // 1ms interval
+	timer_init(10, acpi.hpet); // 1ms interval
 	acpi_early_cleanup(&acpi);
 
 	//ap_init(acpi.madt->core_cnt);

@@ -5,7 +5,7 @@
 
 void arch_context_switch(struct task *prev, struct task *next)
 {
-  klog(LOG_INFO, "Switching from %s to %s\n", prev->name, next->name);
+    klog(LOG_INFO, "Switching from %s to %s\n", prev->name, next->name);
 	set_tss_esp0((u32)next->stack);
     asm volatile (
         "pushfl\n\t"
@@ -20,10 +20,11 @@ void arch_context_switch(struct task *prev, struct task *next)
         "1:\t"
         "popl %%ebp\n\t"
         "popfl\n\t"
-        : [prev_sp] "=m" (prev->stack),
-          [prev_ip] "=m" (prev->pc)
-        : [next_sp] "m" (next->stack),
-          [next_ip] "m" (next->pc),
-          [next_pg] "m" (next->pgd)
-        : "memory");
+        :   [prev_sp] "=m" (prev->stack),
+            [prev_ip] "=m" (prev->pc)
+        :   [next_sp] "m" (next->stack),
+            [next_ip] "m" (next->pc),
+            [next_pg] "m" (next->pgd)
+        :   "memory"
+    );
 }

@@ -1,4 +1,4 @@
-CFLAGS?=-Og
+CFLAGS?=-O2
 LDFLAGS?=
 LIBS?=./libc/libk.a
 

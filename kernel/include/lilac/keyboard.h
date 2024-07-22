@@ -7,6 +7,5 @@
 
 u8 keyboard_read(void);
 void keyboard_init(void);
-void keyboard_interrupt(void);
 
 #endif

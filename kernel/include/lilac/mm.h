@@ -1,5 +1,5 @@
-#ifndef __MEMORY_MANAGEMENT_H_
-#define __MEMORY_MANAGEMENT_H_
+#ifndef _LILAC_MM_H_
+#define _LILAC_MM_H_
 
 #include <lilac/types.h>
 #include <lilac/sync.h>
@@ -14,13 +14,10 @@
 #define MAP_ANONYMOUS	0x04
 #define MAP_FIXED	    0x08
 
-
-
-
 struct vm_desc;
 
 struct vm_desc {
-    struct mm_struct *mm;
+    struct mm_info *mm;
     uintptr_t start;
     uintptr_t end;
 
@@ -28,11 +25,13 @@ struct vm_desc {
     struct vm_desc *vm_next;
     // rb_node_t vm_rb;
 
+    u32 vm_prot;
     u32 vm_flags;
 
     u32 vm_pgoff;
     struct file *vm_file;
 };
 
+void vma_list_insert(struct vm_desc *vma, struct vm_desc **list);
 
 #endif

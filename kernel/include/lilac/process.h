@@ -15,6 +15,10 @@ struct task_info {
     char **envp;
 };
 
+struct file_info {
+    struct fdtable *fdt;
+};
+
 struct task {
     u16 pid;
     u16 ppid;
@@ -24,8 +28,7 @@ struct task {
     void *stack;
     u32 time_slice;
     struct task *parent;
-    struct fs_info *fs;
-    struct file *files;
+    struct file_info *files;
     struct task_info *info;
     u8 priority;
     volatile u8 state;
@@ -34,7 +37,7 @@ struct task {
 
 struct mm_info {
     struct vm_desc *mmap;
-    // struct rb_tree mm_rb;
+    // struct rb_tree mmap_rb;
     uintptr_t pgd;
     void *kstack;
     // atomic_uint ref_count;
@@ -42,12 +45,12 @@ struct mm_info {
     // struct semaphore mmap_sem;
     // spinlock_t page_table_lock;
     // struct list_head mmlist;
-    u32 start_code, end_code;
-    u32 start_data, end_data;
-    u32 start_brk, brk;
-    u32 start_stack;
-    u32 arg_start, arg_end;
-    u32 env_start, env_end;
+    uintptr_t start_code, end_code;
+    uintptr_t start_data, end_data;
+    uintptr_t start_brk, brk;
+    uintptr_t start_stack;
+    // u32 arg_start, arg_end;
+    // u32 env_start, env_end;
     u32 total_vm;
 };
 
@@ -56,7 +59,7 @@ struct task *create_process(const char *path);
 u32 get_pid(void);
 
 struct mm_info *arch_process_mmap();
-void arch_user_stack();
+void *arch_user_stack(void);
 extern void jump_usermode(u32 addr, u32 stack);
 
 #endif
