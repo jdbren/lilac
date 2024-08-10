@@ -205,10 +205,6 @@ static u32 __get_clst_num(struct file *file, struct fat_disk *disk)
     u32 clst_num = (u32)fat_file->cl_low + ((u32)fat_file->cl_high << 16);
     u32 clst_off = file->f_pos / disk->bytes_per_clst;
 
-    printf("fat_file: %p\n", fat_file);
-    printf("clst num: %x\n", clst_num);
-    printf("clst off: %x\n", clst_off);
-
     while (clst_off--) {
         if (clst_num > 0x0FFFFFF8)
             return 0;
@@ -314,6 +310,7 @@ struct dentry *fat32_init(struct block_device *bdev, struct super_block *sb)
     // Read the FAT table
     fat_read_FAT(fat_disk, bdev->disk, 0);
 
+#ifdef DEBUG_FAT
     print_fat32_data(&fat_disk->bpb);
     printf("FSInfo:\n");
     printf("Lead sig: %x\n", fat_disk->fs_info.lead_sig);
@@ -321,6 +318,7 @@ struct dentry *fat32_init(struct block_device *bdev, struct super_block *sb)
     printf("Free clst cnt: %x\n", fat_disk->fs_info.free_clst_cnt);
     printf("Next free clst: %x\n", fat_disk->fs_info.next_free_clst);
     printf("Trail sig: %x\n", fat_disk->fs_info.trail_sig);
+#endif
 
     return root_dentry;
 
@@ -493,7 +491,6 @@ int fat32_readdir(struct file *file, struct dirent *dir_buf, unsigned int count)
     volatile unsigned char *buffer = kvirtual_alloc(disk->bytes_per_clst * num_clst, PG_WRITE);
 
     start_clst = __get_clst_num(file, disk);
-    printf("start clst: %x\n", start_clst);
     if (start_clst <= 0)
         return -1;
     if (__do_fat32_read(file, start_clst, buffer, num_clst) < 0)

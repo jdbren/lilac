@@ -7,7 +7,6 @@
 #include <lilac/keyboard.h>
 #include <lilac/timer.h>
 #include <acpi/acpi.h>
-#include <utility/efi.h>
 #include <mm/kmm.h>
 
 #include "apic.h"
