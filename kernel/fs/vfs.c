@@ -3,8 +3,12 @@
 #include <lilac/fs.h>
 #include <lilac/file.h>
 
+#include <lilac/syscall.h>
 #include <lilac/log.h>
 #include <lilac/panic.h>
+#include <lilac/device.h>
+#include <lilac/process.h>
+#include <lilac/sched.h>
 #include <lilac/device.h>
 #include <drivers/blkdev.h>
 #include <fs/fat32.h>
@@ -20,28 +24,17 @@ static struct dentry *
 };
 
 static struct vfsmount root_disk;
-static struct dentry *root_dentry;
+struct dentry *root_dentry;
 
 static int numdisks = 0;
 static struct vfsmount disks[8];
-static struct file *vnodes[256];
+// static struct file *vnodes[256];
 
 static int get_fd(void)
 {
-    for (int i = 0; i < 256; i++) {
-        if (vnodes[i] == NULL)
-            return i;
-    }
+    if (current->files.size < 256)
+        return current->files.size++;
     return -1;
-}
-
-static int name_len(const char *path, int n_pos)
-{
-    int i = 0;
-    while (path[n_pos] != '/' && path[n_pos] != '\0') {
-        i++; n_pos++;
-    }
-    return i;
 }
 
 static enum fs_type str_to_fs(const char *fs_type)
@@ -82,7 +75,9 @@ int fs_init(void)
 
     root_init(bdev);
     disks[numdisks++] = root_disk;
-    // create_dev_files();
+
+    dev_files_init();
+
     kstatus(STATUS_OK, "Filesystem initialized\n");
     return 0;
 }
@@ -105,7 +100,7 @@ int fs_init(void)
 
 int lseek(int fd, int offset, int whence)
 {
-    struct file *file = vnodes[fd];
+    struct file *file = current->files.fdarray[fd];
     if (whence == SEEK_SET)
         file->f_pos = offset;
     else if (whence == SEEK_CUR)
@@ -125,79 +120,64 @@ int open(const char *path, int flags, int mode)
     int n_len = strlen(path);
     int fd;
     struct inode *parent;
-    struct dentry *current = root_dentry;
-    struct dentry *find;
     struct file *new_file;
-
-    if (path[n_pos] != '/')
-        return -1;
-
-    while (path[n_pos++] != '\0') {
-        int len = name_len(path, n_pos);
-        char *name = kzmalloc(len+1);
-        find = kzmalloc(sizeof(*find));
-
-        parent = current->d_inode;
-        find->d_parent = current;
-        strncpy(name, path + n_pos, len);
-        name[len] = '\0';
-        find->d_name = name;
-
-        parent->i_op->lookup(parent, find, 0);
-        // dcache_add(find);
-
-        if (find->d_inode == NULL)
-            return -1;
-
-        current = find;
-        n_pos += len;
-    }
 
     new_file = kzmalloc(sizeof(*new_file));
     new_file->f_path = kzmalloc(n_len+1);
     strcpy(new_file->f_path, path);
 
     // Is this all open is supposed to do?
-    parent = current->d_inode;
+    parent = lookup_path(path);
+    if (!parent)
+        return -1;
     if(parent->i_op->open(parent, new_file))
         return -1;
 
-    // should add to current process's file table
     fd = get_fd();
-    vnodes[fd] = new_file;
+    current->files.fdarray[fd] = new_file;
 
     return fd;
 }
+SYSCALL_DECL3(open, const char*, path, int, flags, int, mode)
+
 
 ssize_t read(int fd, void *buf, size_t count)
 {
-    struct file *file = vnodes[fd];
+    struct file *file = current->files.fdarray[fd];
     return file->f_op->read(file, buf, count);
 }
+SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
+
 
 ssize_t write(int fd, const void *buf, size_t count)
 {
-    struct file *file = vnodes[fd];
+    printf("%c", *(char*)buf);
+    return 1;
+    struct file *file = current->files.fdarray[fd];
     return file->f_op->write(file, buf, count);
 }
+SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
 
-// int close(int fd)
-// {
-//     struct file *file = vnodes[fd];
-//     file->f_op->flush(file);
-//     if (--file->f_count)
-//         return 0;
 
-//     file->f_op->release(file->f_inode, file);
-//     kfree(file->f_path);
-//     kfree(file);
-//     vnodes[fd] = NULL;
-//     return 0;
-// }
+int close(int fd)
+{
+    struct file *file = current->files.fdarray[fd];
+    file->f_op->flush(file);
+    if (--file->f_count)
+        return 0;
+
+    file->f_op->release(file->f_inode, file);
+    kfree(file->f_path);
+    kfree(file);
+    current->files.fdarray[fd] = NULL;
+    return 0;
+}
+SYSCALL_DECL1(close, int, fd)
+
 
 int getdents(unsigned int fd, struct dirent *dirp, unsigned int buf_size)
 {
-    struct file *file = vnodes[fd];
+    struct file *file = current->files.fdarray[fd];
     struct inode *inode = file->f_inode;
 
     if (inode->i_type != TYPE_DIR)
@@ -205,4 +185,36 @@ int getdents(unsigned int fd, struct dirent *dirp, unsigned int buf_size)
 
     memset(dirp, 0, buf_size);
     return file->f_op->readdir(file, dirp, buf_size);
+}
+SYSCALL_DECL3(getdents, unsigned int, fd, struct dirent*, dirp, size_t, buf_size)
+
+int mkdir(const char *path, umode_t mode)
+{
+    struct inode *parent;
+    struct dentry *new_dentry;
+
+    char name[16];
+    char dir_path[64];
+    char *p = strrchr(path, '/');
+    if (!p)
+        return -1;
+    if (!*(p+1))
+        p = strrchr(p-1, '/');
+
+    strcpy(name, p+1);
+    strncpy(dir_path, path, (uintptr_t)p - (uintptr_t)path);
+
+    parent = lookup_path(dir_path);
+    if (!parent)
+        return -1;
+    struct file *new_file = kzmalloc(sizeof(*new_file));
+    new_file->f_path = kzmalloc(strlen(path)+1);
+    strcpy(new_file->f_path, path);
+    parent->i_op->open(parent, new_file);
+
+    new_dentry = kzmalloc(sizeof(*new_dentry));
+    strcpy(new_dentry->d_name, name);
+    dcache_add(new_dentry);
+
+    return parent->i_op->mkdir(parent, new_dentry, mode);
 }

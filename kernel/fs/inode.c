@@ -1,5 +1,9 @@
 #include <lilac/fs.h>
 
+#include <string.h>
+
+#include <mm/kmalloc.h>
+
 #define L1_CACHE_BYTES 64
 
 #define GOLDEN_RATIO_32 0x61C88647UL
@@ -28,4 +32,63 @@ int insert_inode(struct super_block *sb, struct inode *inode)
 {
 
 	return 0;
+}
+
+struct inode *lookup_inode(struct super_block *sb, unsigned long hashval)
+{
+	return NULL;
+}
+
+
+extern struct dentry *root_dentry;
+
+static int name_len(const char *path, int n_pos)
+{
+    int i = 0;
+    while (path[n_pos] != '/' && path[n_pos] != '\0') {
+        i++; n_pos++;
+    }
+    return i;
+}
+
+struct inode *lookup_path(const char *path)
+{
+	int n_pos = 0;
+	int n_len = strlen(path);
+	struct inode *parent;
+	struct dentry *current = root_dentry;
+	struct dentry *find;
+
+
+    if (path[n_pos] != '/')
+        return NULL;
+
+    while (path[n_pos++] != '\0') {
+        int len = name_len(path, n_pos);
+        char *name = kzmalloc(len+1);
+        strncpy(name, path + n_pos, len);
+        name[len] = '\0';
+
+        find = dlookup(current, name);
+        if (find == NULL) {
+
+            find = kzmalloc(sizeof(*find));
+
+            parent = current->d_inode;
+            find->d_parent = current;
+            find->d_name = name;
+
+            parent->i_op->lookup(parent, find, 0);
+            dcache_add(find);
+
+            if (find->d_inode == NULL)
+                return NULL;
+        }
+        else
+            kfree(name);
+        current = find;
+        n_pos += len;
+    }
+
+	return current->d_inode;
 }
