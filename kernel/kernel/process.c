@@ -13,6 +13,7 @@
 #include <lilac/sched.h>
 #include <lilac/timer.h>
 #include <lilac/log.h>
+#include <lilac/syscall.h>
 #include <lilac/mm.h>
 #include <mm/kmm.h>
 #include <mm/kmalloc.h>
@@ -41,7 +42,7 @@ static void start_process(void)
     struct mm_info *mem = current->mm;
     klog(LOG_INFO, "Process %d started\n", current->pid);
 
-    const char *path = current->info->path;
+    const char *path = current->info.path;
     int fd = open(path, 0, 0);
     if (fd < 0) {
         klog(LOG_ERROR, "Failed to open file %s\n", path);
@@ -113,8 +114,10 @@ struct task* create_process(const char *path)
     new_task->pc = (u32)(start_process);
     new_task->stack = (void*)INIT_STACK(mem->kstack);
     new_task->state = TASK_SLEEPING;
-    new_task->info = kzmalloc(sizeof(*new_task->info));
-    memcpy(new_task->info->path, path, strlen(path) + 1);
+    new_task->info.path = kzmalloc(strlen(path) + 1);
+    memcpy(new_task->info.path, path, strlen(path) + 1);
+    new_task->files.fdarray = kcalloc(4, sizeof(struct file));
+    new_task->files.max = 4;
 
     num_tasks++;
     return new_task;
@@ -133,15 +136,17 @@ struct task *init_process(void)
     this->stack = (void*)INIT_STACK(mem->kstack);
     this->pc = (u32)(start_process);
     this->state = TASK_RUNNING;
-    this->info = kzmalloc(sizeof(*this->info));
-    this->info->path = "/bin/init";
+    this->files.fdarray = kcalloc(4, sizeof(struct file));
+    this->files.max = 4;
+    this->info.path = "/sbin/init";
     memcpy(this->name, "init", 5);
 
     return this;
 }
 
-void __do_fork(void)
+int fork(void)
 {
     printf("Forking process\n");
     asm("hlt");
 }
+SYSCALL_DECL0(fork)

@@ -22,6 +22,7 @@ int ls_main()
 void main(void)
 {
     printf("Starting init task\n");
+    
 
     ls_main();
 }

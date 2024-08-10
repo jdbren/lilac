@@ -37,6 +37,7 @@ string/strcpy.o \
 string/strcmp.o \
 string/strcat.o \
 string/strlen.o \
+string/strchr.o \
 math/log2.o \
 ctype/ctype.o
 
@@ -89,9 +90,11 @@ install-headers:
 	mkdir -p $(DESTDIR)$(INCLUDEDIR)
 	cp -Rp include/. $(DESTDIR)$(INCLUDEDIR)/.
 
-install-libs: $(BINARIES)
+install-libs: libc.a libk.a
 	mkdir -p $(DESTDIR)$(LIBDIR)
-	cp $(BINARIES) $(DESTDIR)$(LIBDIR)
+	mkdir -p $(DESTDIR)$(BOOTDIR)
+	cp libc.a $(DESTDIR)$(LIBDIR)
+	cp libk.a $(DESTDIR)$(BOOTDIR)
 
 -include $(OBJS:.o=.d)
 -include $(LIBK_OBJS:.o=.d)

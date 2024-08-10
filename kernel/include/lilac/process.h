@@ -4,6 +4,7 @@
 #define _KERNEL_PROCESS_H
 
 #include <lilac/types.h>
+#include <lilac/file.h>
 
 #define TASK_RUNNING 0
 #define TASK_SLEEPING 1
@@ -15,10 +16,6 @@ struct task_info {
     char **envp;
 };
 
-struct file_info {
-    struct fdtable *fdt;
-};
-
 struct task {
     u16 pid;
     u16 ppid;
@@ -28,8 +25,8 @@ struct task {
     void *stack;
     u32 time_slice;
     struct task *parent;
-    struct file_info *files;
-    struct task_info *info;
+    struct fdtable files;
+    struct task_info info;
     u8 priority;
     volatile u8 state;
     char name[32];

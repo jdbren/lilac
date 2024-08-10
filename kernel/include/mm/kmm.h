@@ -28,6 +28,9 @@ void *map_phys(void *phys, int size, int flags);
 void unmap_phys(void *addr, int size);
 u32 virt_to_phys(void *vaddr);
 
+void *map_virt(void *virt, int size, int flags);
+void unmap_virt(void *virt, int size);
+
 u32 arch_get_pgd(void);
 
 #endif

@@ -35,17 +35,18 @@ $(patsubst %.c,%.o,$(wildcard drivers/acpi/acpica/*.c))
 KERNEL_OBJS=\
 $(KERNEL_ARCH_OBJS) \
 kernel/kmain.o \
+kernel/device.o \
 kernel/log.o \
 kernel/process.o \
 kernel/sched.o \
 kernel/sync.o \
-kernel/open.o \
-kernel/write.o \
 mm/kmalloc.o \
 mm/mm.o \
 fs/fat32.o \
 fs/vfs.o \
 fs/gpt.o \
+fs/inode.o \
+fs/dcache.o \
 drivers/blkdev.o \
 drivers/pci.o \
 drivers/ahci.o

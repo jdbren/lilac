@@ -87,4 +87,7 @@ static inline struct device *device_alloc(void)
     return kzmalloc(sizeof(struct device));
 }
 
+int dev_files_init(void);
+
+
 #endif

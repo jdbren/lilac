@@ -44,7 +44,7 @@ void kernel_early(unsigned int multiboot)
 	acpi_early((void*)mbd.new_acpi->rsdp, &acpi);
 	apic_init(acpi.madt);
 	keyboard_init();
-	timer_init(10, acpi.hpet); // 1ms interval
+	timer_init(1, acpi.hpet); // 1ms interval
 	acpi_early_cleanup(&acpi);
 
 	//ap_init(acpi.madt->core_cnt);

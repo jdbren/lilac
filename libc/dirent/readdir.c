@@ -5,7 +5,7 @@ int getdents(unsigned int fd, struct dirent *dirp, unsigned int count)
     int ret;
     asm volatile ("int $0x80"
                   : "=a" (ret)
-                  : "a" (7), "b" (fd), "d" (dirp), "c" (count)
+                  : "a" (7), "b" (fd), "c" (dirp), "d" (count)
                   : "memory");
     return ret;
 }

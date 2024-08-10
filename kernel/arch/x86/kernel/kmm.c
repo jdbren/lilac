@@ -98,7 +98,6 @@ void* kvirtual_alloc(int size, int flags)
     return ptr;
 }
 
-
 void kvirtual_free(void* addr, int size)
 {
     int num_pages = PAGE_ROUND_UP(size) / PAGE_SIZE;
@@ -132,6 +131,21 @@ void unmap_phys(void *addr, int size)
     addr = (void*)((u32)addr & 0xFFFFF000);
     free_vaddr(addr, num_pages);
     unmap_pages(addr, num_pages);
+}
+
+void *map_virt(void *virt, int size, int flags)
+{
+    int num_pages = PAGE_ROUND_UP(size) / PAGE_SIZE;
+    void *phys = alloc_frames(num_pages);
+    map_pages(phys, virt, flags, num_pages);
+    return phys;
+}
+
+void unmap_virt(void *virt, int size)
+{
+    int num_pages = PAGE_ROUND_UP(size) / PAGE_SIZE;
+    free_frames(get_physaddr(virt), num_pages);
+    unmap_pages(virt, num_pages);
 }
 
 u32 virt_to_phys(void *vaddr)

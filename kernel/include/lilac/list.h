@@ -8,7 +8,7 @@
 /**
  * Linux kernel linked list implementation
  *
- * Used under the terms of the GNU General Public License v2
+ * GNU General Public License v2
 */
 
 /*

@@ -176,6 +176,25 @@ ACPI_STATUS detect_top_level_device(ACPI_HANDLE ObjHandle, UINT32 Level,
     return AE_OK;
 }
 
+ACPI_STATUS acpi_print_info(ACPI_HANDLE ObjHandle, UINT32 Level,
+    void *Context, void **ReturnValue)
+{
+    ACPI_STATUS Status;
+    ACPI_DEVICE_INFO *Info = kzmalloc(sizeof(*Info));
+    ACPI_BUFFER Path;
+    char Buffer[256];
+    Path.Length = sizeof(Buffer);
+    Path.Pointer = Buffer;
+
+    /* Get the full path of this device and print it */
+    Status = AcpiGetName(ObjHandle, ACPI_FULL_PATHNAME, &Path);
+    if (ACPI_SUCCESS(Status))
+        klog(LOG_INFO, "%s\n", Path.Pointer);
+
+    kfree(Info);
+    return AE_OK;
+}
+
 // TODO: Add PCI support w/ no PCI-E
 void scan_sys_bus(void)
 {

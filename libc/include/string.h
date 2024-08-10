@@ -25,6 +25,9 @@ size_t strlen(const char *str);
 
 char *strstr(const char *haystack, const char *needle);
 
+char *strchr(const char *str, int c);
+char *strrchr(const char *str, int c);
+
 #ifdef __cplusplus
 }
 #endif

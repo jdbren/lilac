@@ -15,17 +15,17 @@
 __no_ret __no_stack_chk
 void start_kernel(void)
 {
-	kstatus(STATUS_OK, "Starting kernel\n");
+    kstatus(STATUS_OK, "Starting kernel\n");
 
-	acpi_full_init();
-	scan_sys_bus();
+    acpi_full_init();
+    scan_sys_bus();
 
-	fs_init();
+    fs_init();
 
     sched_init();
-	arch_enable_interrupts();
-	sched_clock_init();
+    arch_enable_interrupts();
+    sched_clock_init();
 
-	arch_idle();
-	__builtin_unreachable();
+    arch_idle();
+    __builtin_unreachable();
 }
