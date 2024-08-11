@@ -3,7 +3,20 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-static int log_level;
+
+#if defined DEBUG_LOG
+#define LOG_LEVEL LOG_DEBUG
+#elif defined WARN_LOG
+#define LOG_LEVEL LOG_WARN
+#elif defined ERROR_LOG
+#define LOG_LEVEL LOG_ERROR
+#elif defined FATAL_LOG
+#define LOG_LEVEL LOG_FATAL
+#else
+#define LOG_LEVEL LOG_INFO
+#endif
+
+static int log_level = LOG_LEVEL;
 
 int log_init(int level)
 {

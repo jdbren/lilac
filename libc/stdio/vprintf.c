@@ -241,6 +241,15 @@ int vprintf(const char *restrict format, va_list args)
 						return -1;
 					written += len;
 				}
+				else if (*format == 'u') {
+					format++;
+					unsigned long long i = va_arg(args, unsigned long long);
+					char *s = convert(i, 10);
+					unsigned len = strlen(s);
+					if (!print(s, len))
+						return -1;
+					written += len;
+				}
 			}
 			else if (*format == 'd') {
 				format++;

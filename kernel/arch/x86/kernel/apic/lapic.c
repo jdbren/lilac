@@ -6,7 +6,7 @@
 #include <lilac/log.h>
 #include <lilac/panic.h>
 #include <lilac/timer.h>
-#include "cpuid.h"
+#include "mycpuid.h"
 #include "msr.h"
 #include "paging.h"
 #include "timer.h"

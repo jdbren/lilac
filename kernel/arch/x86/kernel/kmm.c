@@ -33,6 +33,7 @@ extern const int _kernel_start;
 #define HEAP_MANAGE_BYTES PAGE_ROUND_UP(KHEAP_BITMAP_SIZE)
 
 static u32 kheap_bitmap[HEAP_MANAGE_BYTES / 4];
+u32 memory_size_kb;
 
 // TODO: Add support for greater than 4GB memory
 void mm_init(struct multiboot_tag_efi_mmap *mmap)
@@ -41,6 +42,11 @@ void mm_init(struct multiboot_tag_efi_mmap *mmap)
     __parse_mmap(mmap);
 
     kstatus(STATUS_OK, "Kernel virtual address allocation enabled\n");
+}
+
+u32 arch_get_mem_sz(void)
+{
+    return memory_size_kb;
 }
 
 static void *find_vaddr(int num_pages)
@@ -201,9 +207,11 @@ static void __parse_mmap(struct multiboot_tag_efi_mmap *mmap)
     void *vaddr = NULL;
     for (u32 i = 0; i < mmap->size; i += mmap->descr_size,
             entry = (efi_memory_desc_t*)((u32)entry + mmap->descr_size)) {
-        // klog(LOG_DEBUG, "Type: %d\n", entry->type);
-        // klog(LOG_DEBUG, "Phys addr: %x\n", entry->phys_addr);
-        // klog(LOG_DEBUG, "Num pages: %d\n", entry->num_pages);
+        if (entry->type != EFI_RESERVED_TYPE)
+            memory_size_kb += entry->num_pages * PAGE_SIZE / 1024;
+        klog(LOG_DEBUG, "Type: %d\n", entry->type);
+        klog(LOG_DEBUG, "Phys addr: %x\n", entry->phys_addr);
+        klog(LOG_DEBUG, "Num pages: %d\n", entry->num_pages);
         switch (entry->type) {
             case EFI_BOOT_SERVICES_CODE:
             case EFI_BOOT_SERVICES_DATA:

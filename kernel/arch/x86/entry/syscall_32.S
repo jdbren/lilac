@@ -33,15 +33,6 @@ sys_restart:
 sys_exit:
     ret
 
-read:
-    ret
-
-close:
-    ret
-
-getdents:
-    ret
-
 .data
 syscall_table:
     .long sys_restart
@@ -52,3 +43,4 @@ syscall_table:
     .long sys_open
     .long sys_close
     .long sys_getdents
+    .long sys_getcwd

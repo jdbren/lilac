@@ -32,8 +32,8 @@ static struct vfsmount disks[8];
 
 static int get_fd(void)
 {
-    if (current->files.size < 256)
-        return current->files.size++;
+    if (current->fs.files.size < 256)
+        return current->fs.files.size++;
     return -1;
 }
 
@@ -82,6 +82,11 @@ int fs_init(void)
     return 0;
 }
 
+struct inode *get_root_inode(void)
+{
+    return root_dentry->d_inode;
+}
+
 // struct dentry *mount_bdev(struct block_device *bdev)
 // {
 //     struct vfsmount *mnt = &disks[numdisks++];
@@ -100,7 +105,7 @@ int fs_init(void)
 
 int lseek(int fd, int offset, int whence)
 {
-    struct file *file = current->files.fdarray[fd];
+    struct file *file = current->fs.files.fdarray[fd];
     if (whence == SEEK_SET)
         file->f_pos = offset;
     else if (whence == SEEK_CUR)
@@ -134,7 +139,7 @@ int open(const char *path, int flags, int mode)
         return -1;
 
     fd = get_fd();
-    current->files.fdarray[fd] = new_file;
+    current->fs.files.fdarray[fd] = new_file;
 
     return fd;
 }
@@ -143,7 +148,7 @@ SYSCALL_DECL3(open, const char*, path, int, flags, int, mode)
 
 ssize_t read(int fd, void *buf, size_t count)
 {
-    struct file *file = current->files.fdarray[fd];
+    struct file *file = current->fs.files.fdarray[fd];
     return file->f_op->read(file, buf, count);
 }
 SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
@@ -153,7 +158,7 @@ ssize_t write(int fd, const void *buf, size_t count)
 {
     printf("%c", *(char*)buf);
     return 1;
-    struct file *file = current->files.fdarray[fd];
+    struct file *file = current->fs.files.fdarray[fd];
     return file->f_op->write(file, buf, count);
 }
 SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
@@ -161,7 +166,7 @@ SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
 
 int close(int fd)
 {
-    struct file *file = current->files.fdarray[fd];
+    struct file *file = current->fs.files.fdarray[fd];
     file->f_op->flush(file);
     if (--file->f_count)
         return 0;
@@ -169,7 +174,7 @@ int close(int fd)
     file->f_op->release(file->f_inode, file);
     kfree(file->f_path);
     kfree(file);
-    current->files.fdarray[fd] = NULL;
+    current->fs.files.fdarray[fd] = NULL;
     return 0;
 }
 SYSCALL_DECL1(close, int, fd)
@@ -177,7 +182,7 @@ SYSCALL_DECL1(close, int, fd)
 
 int getdents(unsigned int fd, struct dirent *dirp, unsigned int buf_size)
 {
-    struct file *file = current->files.fdarray[fd];
+    struct file *file = current->fs.files.fdarray[fd];
     struct inode *inode = file->f_inode;
 
     if (inode->i_type != TYPE_DIR)

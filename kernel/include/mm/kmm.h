@@ -32,5 +32,6 @@ void *map_virt(void *virt, int size, int flags);
 void unmap_virt(void *virt, int size);
 
 u32 arch_get_pgd(void);
+u32 arch_get_mem_sz(void);
 
 #endif

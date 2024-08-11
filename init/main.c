@@ -6,9 +6,17 @@
 
 const char *pwd = "/usr";
 
+#define SHELL_PROMPT "[root@lilacOS %s] # "
+
+int prompt()
+{
+    char cwd[32];
+    getcwd(cwd, 32);
+    printf(SHELL_PROMPT, cwd);
+}
+
 int ls_main()
 {
-    printf("Listing directory %s\n", pwd);
     dirent buf[12];
     int fd = open(pwd, 0);
     printf("fd: %d\n", fd);
@@ -21,8 +29,7 @@ int ls_main()
 
 void main(void)
 {
-    printf("Starting init task\n");
-    
+    char cmd[256];
+    prompt();
 
-    ls_main();
 }

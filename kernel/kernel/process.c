@@ -40,7 +40,7 @@ u32 get_pid(void)
 static void start_process(void)
 {
     struct mm_info *mem = current->mm;
-    klog(LOG_INFO, "Process %d started\n", current->pid);
+    klog(LOG_DEBUG, "Process %d started\n", current->pid);
 
     const char *path = current->info.path;
     int fd = open(path, 0, 0);
@@ -55,7 +55,7 @@ static void start_process(void)
         bytes += 0x1000;
         hdr = krealloc(hdr, bytes + 0x1000);
     }
-    klog(LOG_INFO, "Read %d bytes from %s\n", bytes, path);
+    klog(LOG_DEBUG, "Read %d bytes from %s\n", bytes, path);
 
     void *jmp = elf32_load(hdr, mem);
     if (!jmp)
@@ -86,15 +86,15 @@ static void start_process(void)
     vma_list_insert(heap_desc, &mem->mmap);
 
     struct vm_desc *desc = mem->mmap;
-    while (desc) {
-        klog(LOG_DEBUG, "Start: %x\n", desc->start);
-        klog(LOG_DEBUG, "End: %x\n", desc->end);
-        klog(LOG_DEBUG, "Prot: %x\n", desc->vm_prot);
-        klog(LOG_DEBUG, "Flags: %x\n", desc->vm_flags);
-        desc = desc->vm_next;
-    }
+    // while (desc) {
+    //     klog(LOG_DEBUG, "Start: %x\n", desc->start);
+    //     klog(LOG_DEBUG, "End: %x\n", desc->end);
+    //     klog(LOG_DEBUG, "Prot: %x\n", desc->vm_prot);
+    //     klog(LOG_DEBUG, "Flags: %x\n", desc->vm_flags);
+    //     desc = desc->vm_next;
+    // }
 
-    klog(LOG_INFO, "Going to user mode\n");
+    klog(LOG_DEBUG, "Going to user mode\n");
     jump_usermode((u32)jmp, __USER_STACK - 4);
 }
 
@@ -116,8 +116,8 @@ struct task* create_process(const char *path)
     new_task->state = TASK_SLEEPING;
     new_task->info.path = kzmalloc(strlen(path) + 1);
     memcpy(new_task->info.path, path, strlen(path) + 1);
-    new_task->files.fdarray = kcalloc(4, sizeof(struct file));
-    new_task->files.max = 4;
+    new_task->fs.files.fdarray = kcalloc(4, sizeof(struct file));
+    new_task->fs.files.max = 4;
 
     num_tasks++;
     return new_task;
@@ -136,8 +136,11 @@ struct task *init_process(void)
     this->stack = (void*)INIT_STACK(mem->kstack);
     this->pc = (u32)(start_process);
     this->state = TASK_RUNNING;
-    this->files.fdarray = kcalloc(4, sizeof(struct file));
-    this->files.max = 4;
+    this->fs.files.fdarray = kcalloc(4, sizeof(struct file));
+    this->fs.files.max = 4;
+    this->fs.cwd = kzmalloc(2);
+    this->fs.cwd[0] = '/';
+    this->fs.cwd[1] = '\0';
     this->info.path = "/sbin/init";
     memcpy(this->name, "init", 5);
 
@@ -146,7 +149,16 @@ struct task *init_process(void)
 
 int fork(void)
 {
-    printf("Forking process\n");
     asm("hlt");
 }
 SYSCALL_DECL0(fork)
+
+int getcwd(char *buf, size_t size)
+{
+    if (size < strlen(current->fs.cwd) + 1)
+        return -1;
+
+    strcpy(buf, current->fs.cwd);
+    return 0;
+}
+SYSCALL_DECL2(getcwd, char*, buf, size_t, size)

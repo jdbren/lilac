@@ -150,4 +150,6 @@ struct inode * lookup_path(const char *path);
 struct dentry * dlookup(struct dentry *parent, const char *name);
 void dcache_add(struct dentry *d);
 
+struct inode * get_root_inode(void);
+
 #endif

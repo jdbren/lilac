@@ -16,6 +16,12 @@ struct task_info {
     char **envp;
 };
 
+struct fs_info {
+    char *root;
+    char *cwd;
+    struct fdtable files;
+};
+
 struct task {
     u16 pid;
     u16 ppid;
@@ -25,7 +31,7 @@ struct task {
     void *stack;
     u32 time_slice;
     struct task *parent;
-    struct fdtable files;
+    struct fs_info fs;
     struct task_info info;
     u8 priority;
     volatile u8 state;

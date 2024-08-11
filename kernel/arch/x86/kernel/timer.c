@@ -105,11 +105,11 @@ void sleep(u32 millis)
 }
 
 // Get system timer in 1 ns intervals
-u32 get_sys_time(void)
+u64 get_sys_time(void)
 {
 	u32 counter = hpet_read();
-	u32 frq = hpet_frq / 100000U;
-	u32 time = counter / frq;
+	u32 frq = hpet_frq / 100000000U;
+	u64 time = counter / frq * 10;
 	return time;
 }
 

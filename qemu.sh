@@ -2,7 +2,7 @@
 set -e
 . ./scripts/image.sh
 
-qemu-system-x86_64 -machine q35,firmware=./resources/OVMF-pure-efi.fd -m 1G \
+qemu-system-x86_64 -machine q35,firmware=./resources/OVMF-pure-efi.fd -m 512M \
     -cpu max -no-reboot \
     -drive file=./uefi.img,format=raw \
     -net none \

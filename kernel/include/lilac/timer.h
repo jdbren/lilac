@@ -3,7 +3,7 @@
 
 #include <lilac/types.h>
 
-extern void sleep(u32 ms);
-extern u32 get_sys_time(void);
+void sleep(u32 ms);
+u64 get_sys_time(void);
 
 #endif

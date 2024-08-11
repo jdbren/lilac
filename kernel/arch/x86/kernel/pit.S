@@ -25,6 +25,13 @@ timer_handler:
 	// add [system_timer_fractions], eax     # Update system timer tick fractions
 	// adc [system_timer_ms], ebx            # Update system timer tick milli-seconds
 
+	movl (timer_cnt), %eax
+	cmpl $-1, %eax
+	je .no_tick
+	decl %eax
+	movl %eax, (timer_cnt)
+
+.no_tick:
     xorl %eax, %eax
     movl (lapic_base), %ebx
     movl %eax, 0xb0(%ebx)                # Acknowledge the interrupt

@@ -79,7 +79,6 @@ void schedule(void)
         i++;
     }
     if (task_queue[current_task] == prev) {
-        klog(LOG_INFO, "Running task %s\n", prev->name);
         return;
     }
     struct task *next = task_queue[current_task];
@@ -96,6 +95,6 @@ void sched_tick()
         return;
     }
     sched_timer = timer_reset;
-    //klog(LOG_INFO, "Running scheduler\n");
+
     schedule();
 }

@@ -17,6 +17,8 @@
 #define RGB_DARK_GRAY 0x404040
 #define RGB_LIGHT_GRAY 0xC0C0C0
 
+void console_init(void);
+
 void terminal_init(void);
 void terminal_putchar(char c);
 void terminal_write(const char *data, size_t size);

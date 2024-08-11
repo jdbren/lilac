@@ -10,6 +10,7 @@
 #include <lilac/sched.h>
 #include <lilac/timer.h>
 #include <lilac/elf.h>
+#include <lilac/tty.h>
 #include <mm/kmalloc.h>
 
 __no_ret __no_stack_chk
@@ -21,9 +22,11 @@ void start_kernel(void)
     scan_sys_bus();
 
     fs_init();
-
     sched_init();
+    kstatus(STATUS_OK, "Kernel initialized...\n");
+
     arch_enable_interrupts();
+    console_init();
     sched_clock_init();
 
     arch_idle();

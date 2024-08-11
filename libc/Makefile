@@ -45,6 +45,7 @@ HOSTEDOBJS=\
 $(ARCH_HOSTEDOBJS) \
 unistd/fork.o \
 unistd/write.o \
+unistd/getcwd.o \
 fcntl/open.o \
 dirent/readdir.o
 

@@ -12,7 +12,7 @@ EXEC_PREFIX?=$(PREFIX)
 BOOTDIR?=$(EXEC_PREFIX)/boot
 INCLUDEDIR?=$(PREFIX)/include
 
-CFLAGS:=$(CFLAGS) -D __lilac__ -D __is_kernel -I include \
+CFLAGS:=$(CFLAGS) -D__lilac__ -D__is_kernel -Iinclude \
 -ffreestanding -Wall -Wextra -mno-red-zone
 LDFLAGS:=$(LDFLAGS)
 LIBS:=$(LIBS) -nostdlib -lgcc
@@ -35,6 +35,7 @@ $(patsubst %.c,%.o,$(wildcard drivers/acpi/acpica/*.c))
 KERNEL_OBJS=\
 $(KERNEL_ARCH_OBJS) \
 kernel/kmain.o \
+kernel/console.o \
 kernel/device.o \
 kernel/log.o \
 kernel/process.o \

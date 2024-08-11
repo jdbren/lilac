@@ -10,6 +10,8 @@
 #include <mm/kmm.h>
 #include <utility/vga.h>
 
+#define WINDOW_BORDER 16
+
 // #define SSFN_IMPLEMENTATION
 #define SSFN_CONSOLEBITMAP_TRUECOLOR /* renderer for 32 bit truecolor */
 // #define SSFN_CONSOLEBITMAP_CONTROL
@@ -27,24 +29,24 @@ static void graphics_scroll(void);
 void graphics_putchar(char c)
 {
 	if (c == '\n') {
-		ssfn_dst.x = 0;
-		if ((ssfn_dst.y += ssfn_src->height) >= ssfn_dst.h)
+		ssfn_dst.x = WINDOW_BORDER;
+		if ((ssfn_dst.y += ssfn_src->height) >= ssfn_dst.h - WINDOW_BORDER)
 			graphics_scroll();
 		return;
 	}
 	else if (c == '\t') {
 		ssfn_dst.x += 4 * ssfn_src->width;
-		if (ssfn_dst.x >= ssfn_dst.w) {
-			ssfn_dst.x = 0;
-			if ((ssfn_dst.y += ssfn_src->height) >= ssfn_dst.h)
+		if (ssfn_dst.x >= ssfn_dst.w - WINDOW_BORDER) {
+			ssfn_dst.x = WINDOW_BORDER;
+			if ((ssfn_dst.y += ssfn_src->height) >= ssfn_dst.h - WINDOW_BORDER)
 				graphics_scroll();
 		}
 		return;
 	}
     ssfn_putc(c);
-	if (ssfn_dst.x >= ssfn_dst.w) {
-		ssfn_dst.x = 0;
-		if ((ssfn_dst.y += ssfn_src->height) >= ssfn_dst.h)
+	if (ssfn_dst.x >= ssfn_dst.w - WINDOW_BORDER) {
+		ssfn_dst.x = WINDOW_BORDER;
+		if ((ssfn_dst.y += ssfn_src->height) >= ssfn_dst.h - WINDOW_BORDER)
 			graphics_scroll();
 	}
 }
@@ -72,8 +74,8 @@ void graphics_init(struct multiboot_tag_framebuffer *fb)
 	ssfn_dst.w = fb->common.framebuffer_width;     /* width */
 	ssfn_dst.h = fb->common.framebuffer_height;    /* height */
 	ssfn_dst.p = fb->common.framebuffer_pitch;     /* bytes per line */
-	ssfn_dst.x = 0;                					/* pen position */
-    ssfn_dst.y = 0;
+	ssfn_dst.x = WINDOW_BORDER;                	   /* pen position */
+    ssfn_dst.y = WINDOW_BORDER;
 	ssfn_dst.fg = RGB_LIGHT_GRAY;                  /* foreground color */
 	ssfn_dst.bg = RGB_BLACK;                       /* background color */
 
@@ -102,8 +104,8 @@ static void graphics_scroll(void)
 void graphics_clear(void)
 {
 	memset(ssfn_dst.ptr, 0, ssfn_dst.p * ssfn_dst.h);
-	ssfn_dst.x = 0;
-	ssfn_dst.y = 0;
+	ssfn_dst.x = WINDOW_BORDER;
+	ssfn_dst.y = WINDOW_BORDER;
 }
 
 void graphics_setcolor(u32 fg, u32 bg)
