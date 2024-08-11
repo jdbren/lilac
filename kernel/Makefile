@@ -43,7 +43,11 @@ kernel/sched.o \
 kernel/sync.o \
 mm/kmalloc.o \
 mm/mm.o \
-fs/fat32.o \
+fs/fat32/fat32.o \
+fs/fat32/dir.o \
+fs/fat32/file.o \
+fs/fat32/inode.o \
+fs/fat32/open.o \
 fs/vfs.o \
 fs/gpt.o \
 fs/inode.o \
