@@ -12,7 +12,7 @@
 
 static inline bool check_entry(struct fat_file *entry, const char *cur)
 {
-    if (entry->attributes != LONG_FNAME && entry->name[0] != (char)UNUSED) {
+    if (entry->attributes != LONG_FNAME && entry->name[0] != (char)FAT_UNUSED) {
         if (!memcmp(entry->name, cur, strlen(cur)))
             return true;
     }

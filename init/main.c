@@ -4,27 +4,29 @@
 #include <dirent.h>
 #include <string.h>
 
-const char *pwd = "/usr";
-
 #define SHELL_PROMPT "[root@lilacOS %s] # "
+
+int ls_main(const char *pwd);
 
 int prompt()
 {
     char cwd[32];
     getcwd(cwd, 32);
     printf(SHELL_PROMPT, cwd);
+    putchar('\n');
+    ls_main(cwd);
 }
 
-int ls_main()
+int ls_main(const char *pwd)
 {
     dirent buf[12];
     int fd = open(pwd, 0);
-    printf("fd: %d\n", fd);
-    getdents(fd, (void*)buf, sizeof(buf));
+    int err = getdents(fd, (void*)buf, sizeof(buf));
     for (int i = 0; i < 12; i++)
     {
-        printf("%s\n", buf[i].d_name);
+        printf("%s\t", buf[i].d_name);
     }
+    putchar('\n');
 }
 
 void main(void)

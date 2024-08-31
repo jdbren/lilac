@@ -70,8 +70,13 @@ struct fat_file {
 } __packed;
 
 #define LONG_FNAME 0x0F
+#define FAT_RO_ATTR 0x01
+#define FAT_HIDDEN_ATTR 0x02
+#define FAT_SYSTEM_ATTR 0x04
+#define FAT_VOL_LABEL 0x08
 #define FAT_DIR_ATTR 0x10
-#define UNUSED 0xE5
+#define FAT_ARCHIVE_ATTR 0x20
+#define FAT_UNUSED 0xE5
 #define MAX_SECTOR_READS 64
 #define BYTES_PER_SECTOR 512
 #define FAT_BUFFER_SIZE (BYTES_PER_SECTOR * MAX_SECTOR_READS)
@@ -123,7 +128,6 @@ extern const struct file_operations fat_fops;
 extern const struct super_operations fat_sops;
 extern const struct inode_operations fat_iops;
 
-void print_fat32_data(struct fat_BS*);
 extern inline struct inode *fat_alloc_inode(struct super_block *sb);
 extern inline void fat_destroy_inode(struct inode *inode);
 struct inode *fat_build_inode(struct super_block *sb, struct fat_file *info);
@@ -135,7 +139,7 @@ u32 __fat_get_clst_num(struct file *file, struct fat_disk *disk);
 u32 __fat_find_free_clst(struct fat_disk *disk);
 
 int __must_check fat32_write_fs_info(struct fat_disk *fat_disk, struct gendisk *gd);
-int fat_write_FAT(struct fat_disk *fat_disk, struct gendisk *gd);
+int __must_check fat_write_FAT(struct fat_disk *fat_disk, struct gendisk *gd);
 
 int __do_fat32_read(const struct file *file, u32 clst, volatile u8 *buffer, size_t num_clst);
 int __do_fat32_write(const struct file *file, u32 clst, const u8 *buffer, size_t num_clst);

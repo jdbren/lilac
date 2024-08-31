@@ -59,6 +59,7 @@ static void root_init(struct block_device *bdev)
 
     root_dentry->d_parent = root_dentry;
     root_dentry->d_name = "/";
+    dcache_add(root_dentry);
 
     klog(LOG_INFO, "%s mounted on /\n", bdev->name);
 }
@@ -121,6 +122,7 @@ int lseek(int fd, int offset, int whence)
 // Need to implement dcache, currently leaks memory
 int open(const char *path, int flags, int mode)
 {
+    klog(LOG_DEBUG, "VFS: Opening %s\n", path);
     int n_pos = 0;
     int n_len = strlen(path);
     int fd;
@@ -188,6 +190,7 @@ int getdents(unsigned int fd, struct dirent *dirp, unsigned int buf_size)
     if (inode->i_type != TYPE_DIR)
         return -1;
 
+    klog(LOG_DEBUG, "VFS: Reading directory %s\n", file->f_path);
     memset(dirp, 0, buf_size);
     return file->f_op->readdir(file, dirp, buf_size);
 }

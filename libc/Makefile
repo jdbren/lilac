@@ -28,6 +28,8 @@ stdio/printf.o \
 stdio/vprintf.o \
 stdio/putchar.o \
 stdio/puts.o \
+stdio/sscanf.o \
+stdio/vsscanf.o \
 stdlib/abort.o \
 string/memcmp.o \
 string/memcpy.o \

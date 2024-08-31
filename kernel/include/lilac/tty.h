@@ -6,7 +6,7 @@
 #include <lilac/types.h>
 
 #define RGB_WHITE 0xFFFFFFFF
-#define RGB_BLACK 0x00000000
+#define RGB_BLACK 0xFF000000
 #define RGB_RED 0xFF0000
 #define RGB_GREEN 0x00FF00
 #define RGB_BLUE 0x0000FF

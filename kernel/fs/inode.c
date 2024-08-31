@@ -2,6 +2,7 @@
 
 #include <string.h>
 
+#include <lilac/log.h>
 #include <mm/kmalloc.h>
 
 #define L1_CACHE_BYTES 64
@@ -65,10 +66,13 @@ struct inode *lookup_path(const char *path)
 
     while (path[n_pos++] != '\0') {
         int len = name_len(path, n_pos);
+        if (len == 0)
+            break;
         char *name = kzmalloc(len+1);
         strncpy(name, path + n_pos, len);
         name[len] = '\0';
 
+        klog(LOG_DEBUG, "VFS: Looking up %s\n", name);
         find = dlookup(current, name);
         if (find == NULL) {
 

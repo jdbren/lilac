@@ -11,63 +11,6 @@
 
 #include "internal.h"
 
-// Read from a file into a buffer (always multiples of cluster size)
-int __do_fat32_read(const struct file *file, u32 clst, volatile u8 *buffer,
-    size_t num_clst)
-{
-    if (num_clst == 0)
-        return -1;
-
-    size_t clst_read = 0;
-    const struct inode *inode = file->f_inode;
-    const struct gendisk *gd = inode->i_sb->s_bdev->disk;
-    struct fat_disk *fat_disk = (struct fat_disk*)inode->i_sb->private;
-
-    while (clst < 0x0FFFFFF8 && clst_read < num_clst) {
-        __fat_read_clst(fat_disk, gd, clst, buffer);
-        clst = __get_FAT_val(clst, fat_disk);
-        buffer += fat_disk->bytes_per_clst;
-        clst_read++;
-    }
-
-    return 0;
-}
-
-// Write to a file from a buffer (always multiples of cluster size)
-int __do_fat32_write(const struct file *file, u32 clst,
-    const u8 *buffer, size_t num_clst)
-{
-    if (num_clst == 0)
-        return -1;
-
-    size_t clst_writ = 0;
-    u32 next_val;
-    const struct inode *inode = file->f_inode;
-    const struct gendisk *gd = inode->i_sb->s_bdev->disk;
-    struct fat_disk *fat_disk = (struct fat_disk*)inode->i_sb->private;
-
-    while (clst_writ < num_clst) {
-        __fat_write_clst(fat_disk, gd, clst, buffer);
-        clst_writ++;
-
-        clst = __get_FAT_val(clst, fat_disk);
-        if (clst >= 0x0FFFFFF8 && clst_writ < num_clst) {
-            next_val = __fat_find_free_clst(fat_disk);
-            if (next_val == -1)
-                kerror("No free clusters\n");
-            fat_disk->FAT.buf[clst] &= 0xF0000000;
-            fat_disk->FAT.buf[clst] |= next_val & 0x0FFFFFFF;
-            fat_disk->FAT.buf[next_val] |= 0x0FFFFFFF;
-            clst = next_val;
-        }
-
-        buffer += fat_disk->bytes_per_clst;
-    }
-
-    return 0;
-}
-
-
 ssize_t fat32_read(struct file *file, void *file_buf, size_t count)
 {
     ssize_t bytes_read;
@@ -132,4 +75,60 @@ ssize_t fat32_write(struct file *file, const void *file_buf, size_t count)
 out:
     kvirtual_free(buffer, disk->bytes_per_clst * num_clst);
     return bytes_written;
+}
+
+// Read from a file into a buffer (always multiples of cluster size)
+int __do_fat32_read(const struct file *file, u32 clst, volatile u8 *buffer,
+    size_t num_clst)
+{
+    if (num_clst == 0)
+        return -1;
+
+    size_t clst_read = 0;
+    const struct inode *inode = file->f_inode;
+    const struct gendisk *gd = inode->i_sb->s_bdev->disk;
+    struct fat_disk *fat_disk = (struct fat_disk*)inode->i_sb->private;
+
+    while (clst < 0x0FFFFFF8 && clst_read < num_clst) {
+        __fat_read_clst(fat_disk, gd, clst, buffer);
+        clst = __get_FAT_val(clst, fat_disk);
+        buffer += fat_disk->bytes_per_clst;
+        clst_read++;
+    }
+
+    return 0;
+}
+
+// Write to a file from a buffer (always multiples of cluster size)
+int __do_fat32_write(const struct file *file, u32 clst,
+    const u8 *buffer, size_t num_clst)
+{
+    if (num_clst == 0)
+        return -1;
+
+    size_t clst_writ = 0;
+    u32 next_val;
+    const struct inode *inode = file->f_inode;
+    const struct gendisk *gd = inode->i_sb->s_bdev->disk;
+    struct fat_disk *fat_disk = (struct fat_disk*)inode->i_sb->private;
+
+    while (clst_writ < num_clst) {
+        __fat_write_clst(fat_disk, gd, clst, buffer);
+        clst_writ++;
+
+        clst = __get_FAT_val(clst, fat_disk);
+        if (clst >= 0x0FFFFFF8 && clst_writ < num_clst) {
+            next_val = __fat_find_free_clst(fat_disk);
+            if (next_val == -1)
+                kerror("No free clusters\n");
+            fat_disk->FAT.buf[clst] &= 0xF0000000;
+            fat_disk->FAT.buf[clst] |= next_val & 0x0FFFFFFF;
+            fat_disk->FAT.buf[next_val] |= 0x0FFFFFFF;
+            clst = next_val;
+        }
+
+        buffer += fat_disk->bytes_per_clst;
+    }
+
+    return 0;
 }

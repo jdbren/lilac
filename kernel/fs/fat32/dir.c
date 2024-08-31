@@ -33,6 +33,13 @@ int fat32_readdir(struct file *file, struct dirent *dir_buf, unsigned int count)
     int i = 0;
     struct fat_file *entry = (struct fat_file*)buffer;
     while (i < num_dirents && entry->name[0] != 0) {
+        if (entry->name[0] == FAT_UNUSED ||
+            entry->attributes & FAT_VOL_LABEL ||
+            entry->attributes == LONG_FNAME)
+        {
+            entry++;
+            continue;
+        }
         strncpy(dir_buf->d_name, entry->name, 8);
         entry++;
         dir_buf++;

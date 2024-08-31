@@ -34,9 +34,10 @@ const struct inode_operations fat_iops = {
 };
 
 
-/***
+/**
  *  Utility functions
-*/
+**/
+static void print_fat32_data(struct fat_BS*);
 
 static inline int __must_check
 fat_read_bpb(struct fat_disk *fat_disk, struct gendisk *gd)
@@ -66,8 +67,8 @@ fat32_write_fs_info(struct fat_disk *fat_disk, struct gendisk *gd)
         fat_disk->bpb.extended_section.fs_info, &fat_disk->fs_info, 1);
 }
 
-static int fat_read_FAT(struct fat_disk *fat_disk, struct gendisk *hd,
-    u32 clst_off)
+static int __must_check
+fat_read_FAT(struct fat_disk *fat_disk, struct gendisk *hd, u32 clst_off)
 {
     const u32 lba = fat_disk->fat_begin_lba + clst_off * fat_disk->sect_per_clst;
     const u32 FAT_sz = fat_disk->bpb.extended_section.FAT_size_32;
@@ -86,7 +87,8 @@ static int fat_read_FAT(struct fat_disk *fat_disk, struct gendisk *hd,
     return ret;
 }
 
-int fat_write_FAT(struct fat_disk *fat_disk, struct gendisk *gd)
+int __must_check
+fat_write_FAT(struct fat_disk *fat_disk, struct gendisk *gd)
 {
     const u32 lba = fat_disk->fat_begin_lba +
         ((fat_disk->FAT.first_clst - fat_disk->clst_begin_lba)
@@ -201,6 +203,7 @@ struct dentry *fat32_init(struct block_device *bdev, struct super_block *sb)
     root_inode = fat_alloc_inode(sb);
     root_inode->i_ino = 1;
     root_inode->i_private = fat_file;
+    root_inode->i_type = TYPE_DIR;
     fat_file->cl_low = fat_disk->root_start & 0xFFFF;
     fat_file->cl_high = fat_disk->root_start >> 16;
 
@@ -243,8 +246,7 @@ error:
     return NULL;
 }
 
-
-void print_fat32_data(struct fat_BS *ptr)
+static void print_fat32_data(struct fat_BS *ptr)
 {
     klog(LOG_DEBUG, "FAT32 data:\n");
     klog(LOG_DEBUG, "Bytes per sector: %x\n", ptr->bytes_per_sector);
