@@ -1,10 +1,10 @@
 #include <lilac/fs.h>
-
+#include <lilac/log.h>
 #include <string.h>
 
 struct dentry *dlookup(struct dentry *parent, const char *name)
 {
-    struct dentry *d;
+    struct dentry *d = NULL;
     hlist_for_each_entry(d, &parent->d_children, d_sib) {
         if (strcmp(d->d_name, name) == 0)
             return d;

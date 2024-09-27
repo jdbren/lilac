@@ -5,7 +5,6 @@
 #include <lilac/types.h>
 #include <lilac/panic.h>
 #include <lilac/fs.h>
-#include <lilac/file.h>
 #include <lilac/list.h>
 #include <drivers/blkdev.h>
 #include <mm/kmm.h>
@@ -80,9 +79,12 @@ fat_read_FAT(struct fat_disk *fat_disk, struct gendisk *hd, u32 clst_off)
     int ret = hd->ops->disk_read(hd, lba, fat_disk->FAT.buf, cnt);
 
     fat_disk->FAT.first_clst = fat_disk->clst_begin_lba + clst_off;
-    fat_disk->FAT.last_clst = fat_disk->clst_begin_lba + (clst_off +
-        cnt / fat_disk->sect_per_clst) * FAT_ent_per_sec;
+    fat_disk->FAT.last_clst = fat_disk->clst_begin_lba + clst_off + sizeof(fat_disk->FAT.buf) / 4;
     fat_disk->FAT.sectors = cnt;
+
+    klog(LOG_DEBUG, "FAT ptr: %p\n", fat_disk->FAT.buf);
+    klog(LOG_DEBUG, "FAT first: %x\n", fat_disk->FAT.first_clst);
+    klog(LOG_DEBUG, "FAT last: %x\n", fat_disk->FAT.last_clst);
 
     return ret;
 }
@@ -154,7 +156,7 @@ u32 __fat_find_free_clst(struct fat_disk *disk)
         return -1;
 
     while (1) {
-        if (clst > disk->FAT.last_clst)
+        if (clst > disk->FAT.last_clst - disk->clst_begin_lba)
             kerror("clst out of fat bounds\n");
         if (disk->FAT.buf[clst] == 0)
             return clst;
@@ -180,10 +182,11 @@ static void disk_init(struct fat_disk *disk)
  *  FAT32 functions
 */
 
-struct dentry *fat32_init(struct block_device *bdev, struct super_block *sb)
+struct dentry *fat32_init(void *dev, struct super_block *sb)
 {
     klog(LOG_INFO, "Initializing FAT32 filesystem\n");
 
+    struct block_device *bdev = (struct block_device*)dev;
     volatile struct fat_disk *fat_disk = kzmalloc(sizeof(*fat_disk));
     struct fat_file *fat_file = kzmalloc(sizeof(*fat_file));
     struct disk_operations *disk_ops = bdev->disk->ops;

@@ -4,7 +4,8 @@
 enum fs_type {
     NONE = -1,
     MSDOS,
-    NTFS
+    EXT2,
+    TMPFS
 };
 
 #endif

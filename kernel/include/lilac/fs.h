@@ -6,6 +6,7 @@
 #include <lilac/list.h>
 #include <lilac/list_bl.h>
 #include <lilac/sync.h>
+#include <lilac/file.h>
 #include <fs/types.h>
 
 /**
@@ -47,13 +48,16 @@ struct inode {
     struct hlist_node	i_hash;
     struct hlist_head	i_dentry;
 
+    dev_t i_rdev;
+    struct file_operations *i_fop;
+
     void *i_private; /* fs or device private pointer */
 };
 
 struct inode_operations {
     struct dentry *(*lookup)(struct inode *, struct dentry *, unsigned int);
     int (*open)(struct inode *, struct file *);
-    int (*create)(struct inode *, struct dentry *, umode_t, bool);
+    int (*create)(struct inode *, struct dentry *, umode_t);
     int (*mkdir)(struct inode *, struct dentry *, umode_t);
     int (*rmdir)(struct inode *, struct dentry *);
     int (*mknod)(struct inode *, struct dentry *, umode_t, dev_t);
@@ -79,6 +83,8 @@ struct dentry {
 
     struct hlist_node d_sib;	/* child of parent list */
     struct hlist_head d_children;	/* our children */
+
+    struct vfsmount *d_mount;
 };
 
 struct dentry_operations {
@@ -127,7 +133,7 @@ struct vfsmount {
     struct dentry *mnt_root;	/* root of the mounted tree */
     struct super_block *mnt_sb;	/* pointer to superblock */
     int mnt_flags;
-    struct dentry *(*init_fs)(struct block_device *, struct super_block *);
+    struct dentry *(*init_fs)(void*, struct super_block *);
 };
 
 int lseek(int fd, int offset, int whence);
@@ -135,21 +141,22 @@ int open(const char *path, int flags, int mode);
 ssize_t read(int fd, void *buf, size_t count);
 ssize_t write(int fd, const void *buf, size_t count);
 int close(int fd);
-int getdents(unsigned int fd, struct dirent *dirp, unsigned int buf_size);
+ssize_t getdents(unsigned int fd, struct dirent *dirp, unsigned int buf_size);
+int create(const char *path, umode_t mode);
+int mkdir(const char *path, umode_t mode);
 
 int mount(const char *source, const char *target,
         const char *filesystemtype, unsigned long mountflags,
         const void *data);
 
-int fs_init(void);
-struct dentry *mount_bdev(struct block_device *bdev,
-    int (*fill_super)(struct super_block*));
+void fs_init(void);
+struct dentry *mount_bdev(struct block_device *bdev, int (*fill_super)(struct super_block*));
 
-
-struct inode * lookup_path(const char *path);
+struct dentry * lookup_path_from(struct dentry *parent, const char *path);
+struct dentry * lookup_path(const char *path);
 struct dentry * dlookup(struct dentry *parent, const char *name);
 void dcache_add(struct dentry *d);
 
-struct inode * get_root_inode(void);
+inline struct inode * get_root_inode(void);
 
 #endif

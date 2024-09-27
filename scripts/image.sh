@@ -2,6 +2,7 @@
 set -e
 
 sh build.sh
+sh scripts/init.sh
 
 disk=$(hdiutil attach uefi.img)
 disk="${disk%% *}"

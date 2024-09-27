@@ -104,7 +104,7 @@ static void *__fat32_read_dir(struct fat_file *entry, struct fat_disk *disk,
 static int fat32_find(struct inode *dir, const char *name,
     struct fat_file *info)
 {
-    int ret = 0;
+    int ret = -1;
     struct fat_file *entry = (struct fat_file*)dir->i_private;
     struct fat_disk *disk = (struct fat_disk*)dir->i_sb->private;
     volatile unsigned char *buffer;
@@ -115,6 +115,7 @@ static int fat32_find(struct inode *dir, const char *name,
     while (entry->name[0]) {
         if (check_entry(entry, name)) {
             memcpy(info, entry, sizeof(*info));
+            ret = 0;
             break;
         }
         entry++;

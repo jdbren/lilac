@@ -1,7 +1,6 @@
 #include <fs/fat32.h>
 
 #include <lilac/fs.h>
-#include <lilac/file.h>
 #include <lilac/log.h>
 #include <lilac/panic.h>
 #include <drivers/blkdev.h>
@@ -68,6 +67,7 @@ int fat32_mkdir(struct inode *dir, struct dentry *new, unsigned short mode)
     while (clst < 0x0FFFFFF8) {
         __fat_read_clst(disk, hd, clst, buffer);
         for (entry = (struct fat_file*)buffer;
+            entry < (struct fat_file*)(buffer + disk->bytes_per_clst) &&
             !(entry->name[0] == 0 || entry->name[0] == 0xe5);
             entry++)
         {
@@ -96,10 +96,10 @@ int fat32_mkdir(struct inode *dir, struct dentry *new, unsigned short mode)
     entry->cl_low = new_clst & 0xFFFF;
     entry->cl_high = new_clst >> 16;
     entry->file_size = 0;
-    entry->creation_date = FAT_SET_DATE(1980, 1, 1);
-    entry->creation_time = FAT_SET_TIME(0, 0, 0);
-    entry->last_write_date = FAT_SET_DATE(1980, 1, 1);
-    entry->last_write_time = FAT_SET_TIME(0, 0, 0);
+    entry->creation_date = FAT_SET_DATE(2024, 9, 5);
+    entry->creation_time = FAT_SET_TIME(12, 23, 0);
+    entry->last_write_date = FAT_SET_DATE(2024, 9, 5);
+    entry->last_write_time = FAT_SET_TIME(12, 23, 0);
 
     strncpy(entry->name, name, 8);
     strncpy(entry->ext, "   ", 3);
@@ -107,6 +107,7 @@ int fat32_mkdir(struct inode *dir, struct dentry *new, unsigned short mode)
     __fat_write_clst(disk, hd, clst, buffer);
 
     new->d_inode = fat_build_inode(dir->i_sb, entry);
+    new->d_inode->i_type = TYPE_DIR;
 
     memset(buffer, 0, disk->bytes_per_clst);
     entry = (struct fat_file*)buffer;
@@ -116,10 +117,10 @@ int fat32_mkdir(struct inode *dir, struct dentry *new, unsigned short mode)
     entry->attributes = FAT_DIR_ATTR;
     entry->cl_low = new_clst & 0xFFFF;
     entry->cl_high = new_clst >> 16;
-    entry->creation_date = FAT_SET_DATE(1980, 1, 1);
-    entry->creation_time = FAT_SET_TIME(0, 0, 0);
-    entry->last_write_date = FAT_SET_DATE(1980, 1, 1);
-    entry->last_write_time = FAT_SET_TIME(0, 0, 0);
+    entry->creation_date = FAT_SET_DATE(2024, 9, 5);
+    entry->creation_time = FAT_SET_TIME(12, 23, 0);
+    entry->last_write_date = FAT_SET_DATE(2024, 9, 5);
+    entry->last_write_time = FAT_SET_TIME(12, 23, 0);
 
     entry++;
     entry->name[0] = '.'; entry->name[1] = '.';
@@ -128,10 +129,10 @@ int fat32_mkdir(struct inode *dir, struct dentry *new, unsigned short mode)
     entry->attributes = FAT_DIR_ATTR;
     entry->cl_low = clst & 0xFFFF;
     entry->cl_high = clst >> 16;
-    entry->creation_date = FAT_SET_DATE(1980, 1, 1);
-    entry->creation_time = FAT_SET_TIME(0, 0, 0);
-    entry->last_write_date = FAT_SET_DATE(1980, 1, 1);
-    entry->last_write_time = FAT_SET_TIME(0, 0, 0);
+    entry->creation_date = parent_dir->creation_date;
+    entry->creation_time = parent_dir->creation_time;
+    entry->last_write_date = parent_dir->last_write_date;
+    entry->last_write_time = parent_dir->last_write_time;
 
     disk->fs_info.free_clst_cnt--;
     disk->fs_info.next_free_clst = __fat_find_free_clst(disk);

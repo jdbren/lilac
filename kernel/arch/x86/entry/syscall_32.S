@@ -44,3 +44,6 @@ syscall_table:
     .long sys_close
     .long sys_getdents
     .long sys_getcwd
+    .long sys_mkdir
+    .long sys_mount
+    .long sys_create

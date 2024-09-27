@@ -48,10 +48,15 @@ fs/fat32/dir.o \
 fs/fat32/file.o \
 fs/fat32/inode.o \
 fs/fat32/open.o \
+fs/tmpfs/tmpfs.o \
+fs/tmpfs/dir.o \
+fs/tmpfs/file.o \
+fs/tmpfs/sb.o \
 fs/vfs.o \
 fs/gpt.o \
 fs/inode.o \
 fs/dcache.o \
+fs/name_utils.o \
 drivers/blkdev.o \
 drivers/pci.o \
 drivers/ahci.o

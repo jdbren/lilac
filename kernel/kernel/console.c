@@ -1,9 +1,17 @@
+#include <lilac/console.h>
 #include <lilac/tty.h>
 
+#include <lilac/fs.h>
 #include <mm/kmm.h>
 #include <lilac/timer.h>
 #include <cpuid.h>
 #include <string.h>
+
+static const char *buffer_path = "/dev/console";
+int console_fd;
+
+static char line_buf[256];
+static char *pos = line_buf;
 
 void console_init(void)
 {
@@ -51,4 +59,17 @@ void console_init(void)
     u64 sys_time_ms = get_sys_time() / 1000000;
     printf("System clock running for %llu ms\n\n", sys_time_ms);
     graphics_setcolor(RGB_WHITE, RGB_BLACK);
+}
+
+void console_write_char(char c)
+{
+    *pos++ = c;
+
+    // if (c == '\n') {
+    //     *pos = '\0';
+    //     write(console_fd, line_buf, strlen(line_buf));
+    //     pos = line_buf;
+    // }
+
+    graphics_putchar(c);
 }

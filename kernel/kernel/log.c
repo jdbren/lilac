@@ -16,7 +16,7 @@
 #define LOG_LEVEL LOG_INFO
 #endif
 
-static int log_level = LOG_LEVEL;
+static int log_level = LOG_DEBUG;
 
 int log_init(int level)
 {

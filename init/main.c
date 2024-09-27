@@ -4,7 +4,7 @@
 #include <dirent.h>
 #include <string.h>
 
-#define SHELL_PROMPT "[root@lilacOS %s] # "
+#define SHELL_PROMPT "lilacOS %s # "
 
 int ls_main(const char *pwd);
 
@@ -12,9 +12,7 @@ int prompt()
 {
     char cwd[32];
     getcwd(cwd, 32);
-    printf(SHELL_PROMPT, cwd);
-    putchar('\n');
-    ls_main(cwd);
+    ls_main("/dev");
 }
 
 int ls_main(const char *pwd)

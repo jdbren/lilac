@@ -12,12 +12,20 @@ int __must_check device_register(struct device *dev)
 
 int dev_files_init(void)
 {
-    struct inode *dev_inode = lookup_path("/dev");
+    struct dentry *dev_dentry = lookup_path("/dev");
+    if (!dev_dentry) {
+        klog(LOG_WARN, "Failed to find /dev\n");
+        return -1;
+    }
+    struct inode *dev_inode = dev_dentry->d_inode;
+    if (!dev_inode) {
+        klog(LOG_WARN, "Failed to find /dev inode\n");
+        return -1;
+    }
     extern struct dentry *root_dentry;
 
-    struct dentry *dev_dir = dlookup(root_dentry, "dev");
     struct dentry *fd_dir = kzmalloc(sizeof(*fd_dir));
-    fd_dir->d_parent = dev_dir;
+    fd_dir->d_parent = dev_dentry;
     fd_dir->d_name = "fd";
     dcache_add(fd_dir);
 

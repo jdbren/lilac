@@ -46,6 +46,7 @@ ctype/ctype.o
 HOSTEDOBJS=\
 $(ARCH_HOSTEDOBJS) \
 unistd/fork.o \
+unistd/read.o \
 unistd/write.o \
 unistd/getcwd.o \
 fcntl/open.o \
