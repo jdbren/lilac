@@ -1,6 +1,9 @@
 #!/bin/sh
-set -e
-. ./scripts/image.sh
+set -eux
+
+make install
+sh ./scripts/init.sh
+sudo ./scripts/image.sh
 
 qemu-system-x86_64 -machine q35,firmware=./resources/OVMF-pure-efi.fd -m 512M \
     -cpu max -no-reboot \

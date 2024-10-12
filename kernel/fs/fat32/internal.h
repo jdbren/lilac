@@ -108,6 +108,7 @@ struct fat_file_buf {
 };
 
 struct fat_disk {
+    struct block_device *bdev;
     u32 base_lba;
     u32 fat_begin_lba;
     u32 clst_begin_lba;

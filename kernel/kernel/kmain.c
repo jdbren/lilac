@@ -11,6 +11,7 @@
 #include <lilac/timer.h>
 #include <lilac/elf.h>
 #include <lilac/tty.h>
+#include <lilac/console.h>
 #include <mm/kmalloc.h>
 
 __no_ret __no_stack_chk

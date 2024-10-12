@@ -71,9 +71,7 @@ fat_read_FAT(struct fat_disk *fat_disk, struct gendisk *hd, u32 clst_off)
 {
     const u32 lba = fat_disk->fat_begin_lba + clst_off * fat_disk->sect_per_clst;
     const u32 FAT_sz = fat_disk->bpb.extended_section.FAT_size_32;
-    const u32 FAT_ent_per_sec = fat_disk->bpb.bytes_per_sector / 4;
-    const u32 buf_no_sec = sizeof(fat_disk->FAT.buf) /
-        fat_disk->bpb.bytes_per_sector;
+    const u32 buf_no_sec = sizeof(fat_disk->FAT.buf) / fat_disk->bpb.bytes_per_sector;
     const u32 cnt = clst_off + buf_no_sec > FAT_sz ? FAT_sz - clst_off : buf_no_sec;
 
     int ret = hd->ops->disk_read(hd, lba, fat_disk->FAT.buf, cnt);
@@ -82,7 +80,6 @@ fat_read_FAT(struct fat_disk *fat_disk, struct gendisk *hd, u32 clst_off)
     fat_disk->FAT.last_clst = fat_disk->clst_begin_lba + clst_off + sizeof(fat_disk->FAT.buf) / 4;
     fat_disk->FAT.sectors = cnt;
 
-    klog(LOG_DEBUG, "FAT ptr: %p\n", fat_disk->FAT.buf);
     klog(LOG_DEBUG, "FAT first: %x\n", fat_disk->FAT.first_clst);
     klog(LOG_DEBUG, "FAT last: %x\n", fat_disk->FAT.last_clst);
 
@@ -138,8 +135,9 @@ u32 __fat_get_clst_num(struct file *file, struct fat_disk *disk)
             return 0;
         if (clst_num > disk->FAT.last_clst) {
             klog(LOG_DEBUG, "clst: %x\n", clst_num);
-            klog(LOG_DEBUG, "last clst: %x\n", disk->FAT.last_clst);
-            kerror("clst out of fat bounds\n");
+            klog(LOG_DEBUG, "old last clst: %x\n", disk->FAT.last_clst);
+            fat_write_FAT(disk, disk->bdev->disk);
+            fat_read_FAT(disk, disk->bdev->disk, clst_num);
         }
         clst_num = disk->FAT.buf[clst_num] & 0x0FFFFFFF;
     }
@@ -169,8 +167,8 @@ u32 __fat_find_free_clst(struct fat_disk *disk)
 static void disk_init(struct fat_disk *disk)
 {
     struct fat_BS *id = &disk->bpb;
-    disk->fat_begin_lba = id->hidden_sector_count + id->reserved_sector_count;
-    disk->clst_begin_lba = id->hidden_sector_count + id->reserved_sector_count
+    disk->fat_begin_lba = disk->base_lba + id->reserved_sector_count;
+    disk->clst_begin_lba = disk->base_lba + id->reserved_sector_count
         + (id->num_FATs * id->extended_section.FAT_size_32);
     disk->sect_per_clst = id->sectors_per_cluster;
     disk->bytes_per_clst = id->sectors_per_cluster * id->bytes_per_sector;
@@ -196,6 +194,7 @@ struct dentry *fat32_init(void *dev, struct super_block *sb)
 
     // Initialize the FAT32 disk info
     fat_disk->base_lba = bdev->first_sector_lba;
+    fat_disk->bdev = bdev;
     if(fat_read_bpb(fat_disk, bdev->disk))
         goto error;
     if(fat32_read_fs_info(fat_disk, bdev->disk))
@@ -239,6 +238,9 @@ struct dentry *fat32_init(void *dev, struct super_block *sb)
     klog(LOG_DEBUG, "Free clst cnt: %x\n", fat_disk->fs_info.free_clst_cnt);
     klog(LOG_DEBUG, "Next free clst: %x\n", fat_disk->fs_info.next_free_clst);
     klog(LOG_DEBUG, "Trail sig: %x\n", fat_disk->fs_info.trail_sig);
+    klog(LOG_DEBUG, "Root start: %x\n", fat_disk->root_start);
+    klog(LOG_DEBUG, "FAT begin: %x\n", fat_disk->fat_begin_lba);
+    klog(LOG_DEBUG, "Clst begin: %x\n", fat_disk->clst_begin_lba);
 #endif
 
     return root_dentry;
