@@ -27,35 +27,35 @@ typedef union Alloc {
     void *data;
 } alloc_t;
 
-struct SBList {
-    struct SBHeader *head;
-    u32 allocSize;
-    u32 freeCount;
-    u32 numSB;
+struct sb_list {
+    struct sb_header *head;
+    u32 alloc_size;
+    u32 free_count;
+    u32 num_sb;
 };
 
-struct SBHeader {
-    struct SBHeader *nextSB;
-    struct SBHeader *prevSB;
+struct sb_header {
+    struct sb_header *next;
+    struct sb_header *prev;
     alloc_t *free;
     union {
-        u16 allocSize;
-        u16 numPages;
+        u16 alloc_size;
+        u16 num_pages;
     };
-    u16 freeCount;
-    bool isLarge;
+    u16 free_count;
+    bool is_large;
 } __attribute__((aligned(32)));
 
 
-static struct SBList allLists[BUCKETS];
+static struct sb_list buckets[BUCKETS];
 
 static void *malloc_small(size_t);
 static void *malloc_large(size_t);
-static void initSuper(struct SBHeader*, size_t, int);
-static struct SBHeader* manageEmptySuperblock(struct SBHeader*, int);
-static void moveToFront(struct SBHeader*, int);
-static void addToFront(struct SBHeader*, int);
-static size_t nextPowerOfTwo(size_t);
+static void init_super(struct sb_header*, size_t, int);
+static struct sb_header* manage_empty_sb(struct sb_header*, int);
+static void sb_mtf(struct sb_header*, int);
+static void sb_atf(struct sb_header*, int);
+static size_t next_pow_2(size_t);
 
 
 void *kmalloc(size_t size)
@@ -95,29 +95,31 @@ void *krealloc(void *addr, size_t size)
 
     // get superblock header using bitmask
     u32 base = (u32)addr & PAGE_MASK;
-    struct SBHeader *header = (struct SBHeader*)base;
+    struct sb_header *header = (struct sb_header*)base;
     assert(is_aligned(header, PAGE_SIZE));
 
     // check if large allocation
-    if (header->isLarge) {
-        void *newAddr = kmalloc(size);
-        memcpy(newAddr, addr, size);
+    if (header->is_large) {
+        if (size <= header->num_pages * PAGE_SIZE)
+            return addr;
+        void *new = kmalloc(size);
+        memcpy(new, addr, size);
         kfree(addr);
-        return newAddr;
+        return new;
     }
 
     // get bucket index and step size
-    u32 step = header->allocSize;
+    u32 step = header->alloc_size;
 
-    // check if new size is in same bucket
-    if (size <= header->allocSize)
+    // check if new size is in same bucket or smaller
+    if (size <= step)
         return addr;
 
     // allocate new memory
-    void *newAddr = kmalloc(size);
-    memcpy(newAddr, addr, step);
+    void *new = kmalloc(size);
+    memcpy(new, addr, step);
     kfree(addr);
-    return newAddr;
+    return new;
 }
 
 void *kcalloc(size_t num, size_t size)
@@ -131,80 +133,80 @@ void kfree(void *ptr)
 
     // get superblock header using bitmask
     u32 base = (u32)ptr & PAGE_MASK;
-    struct SBHeader *header = (struct SBHeader*)base;
+    struct sb_header *header = (struct sb_header*)base;
     assert(is_aligned(header, PAGE_SIZE));
 
     // check if large allocation
-    if (header->isLarge) {
-        kvirtual_free(header, header->numPages * PAGE_SIZE);
+    if (header->is_large) {
+        kvirtual_free(header, header->num_pages * PAGE_SIZE);
         return;
     }
 
     // get bucket index and step size
-    int step = header->allocSize;
-    int bucketIndex = log2(step) - MIN_ALLOC_POWER;
+    int step = header->alloc_size;
+    int bucket_idx = log2(step) - MIN_ALLOC_POWER;
 
     // return alloc to free list
     alloc_t *alloc = (alloc_t*)ptr;
     alloc->data = header->free;
     header->free = alloc;
-    header->freeCount++;
-    allLists[bucketIndex].freeCount++;
+    header->free_count++;
+    buckets[bucket_idx].free_count++;
 
-    assert(header->freeCount <= (SUPERBLOCKSIZE - sizeof(struct SBHeader)) / step);
+    assert(header->free_count <= (SUPERBLOCKSIZE - sizeof(struct sb_header)) / step);
 
     // check if superblock is empty
-    if (header->freeCount == (SUPERBLOCKSIZE - sizeof(struct SBHeader)) / step)
-        header = manageEmptySuperblock(header, bucketIndex);
+    if (header->free_count == (SUPERBLOCKSIZE - sizeof(struct sb_header)) / step)
+        header = manage_empty_sb(header, bucket_idx);
     // move superblock to front of list
-    if (header != NULL && !(header == allLists[bucketIndex].head))
-        moveToFront(header, bucketIndex);
+    if (header != NULL && !(header == buckets[bucket_idx].head))
+        sb_mtf(header, bucket_idx);
 }
 
 static void* malloc_small(size_t size)
 {
     // round up to next power of 2
-    size = size < MIN_ALLOC ? MIN_ALLOC : nextPowerOfTwo(size);
+    size = size < MIN_ALLOC ? MIN_ALLOC : next_pow_2(size);
     assert(size <= SUPERBLOCKSIZE/2);
 
-    int bucketIndex = log2(size) - MIN_ALLOC_POWER;
+    int bucket_idx = log2(size) - MIN_ALLOC_POWER;
     alloc_t *alloc = NULL;
-    struct SBHeader *header = NULL;
+    struct sb_header *header = NULL;
 
     // check if there is any memory available
-    if (allLists[bucketIndex].freeCount == 0) {
+    if (buckets[bucket_idx].free_count == 0) {
         // allocate new superblock
         void *block = kvirtual_alloc(SUPERBLOCKPAGES * PAGE_SIZE, PG_WRITE);
         assert(block != NULL);
 
-        header = (struct SBHeader*)block;
+        header = (struct sb_header*)block;
         // initialize superblock stats and free list
-        initSuper(header, size, bucketIndex);
+        init_super(header, size, bucket_idx);
 
         // add superblock to front of list
-        addToFront(header, bucketIndex);
+        sb_atf(header, bucket_idx);
     }
     else {
         // use existing superblock
-        header = (struct SBHeader*)allLists[bucketIndex].head;
-        while (header->freeCount == 0)
-            header = header->nextSB;
+        header = (struct sb_header*)buckets[bucket_idx].head;
+        while (header->free_count == 0)
+            header = header->next;
         // move superblock to front of list if it has room
         // trying to improve locality, I think Hoard does something similar
-        if (header->freeCount > 1 && header != allLists[bucketIndex].head)
-            moveToFront(header, bucketIndex);
+        if (header->free_count > 1 && header != buckets[bucket_idx].head)
+            sb_mtf(header, bucket_idx);
     }
 
-    assert(header->freeCount > 0);
-    assert(allLists[bucketIndex].allocSize == size);
+    assert(header->free_count > 0);
+    assert(buckets[bucket_idx].alloc_size == size);
 
     // get alloc from free list
     alloc = header->free;
 
     // update free list
     header->free = alloc->next;
-    header->freeCount--;
-    allLists[bucketIndex].freeCount--;
+    header->free_count--;
+    buckets[bucket_idx].free_count--;
 
     assert(is_aligned(alloc, size));
     return (void*)alloc;
@@ -214,40 +216,40 @@ static void* malloc_small(size_t size)
 static void* malloc_large(size_t size)
 {
     alloc_t *alloc = NULL;
-    int pages = (size + sizeof(struct SBHeader))/PAGE_SIZE + 1;
+    int pages = (size + sizeof(struct sb_header))/PAGE_SIZE + 1;
     size = pages * PAGE_SIZE;
 
     void *block = kvirtual_alloc(size, PG_WRITE);
     assert(block != NULL);
 
     // set up superblock header
-    struct SBHeader *header = (struct SBHeader*)block;
-    header->isLarge = true;
-    header->numPages = pages;
-    header->free = (alloc_t*)((u8*)header + sizeof(struct SBHeader));
+    struct sb_header *header = (struct sb_header*)block;
+    header->is_large = true;
+    header->num_pages = pages;
+    header->free = (alloc_t*)((u8*)header + sizeof(struct sb_header));
     alloc = header->free;
 
     return (void*)alloc;
 }
 
 // Initialize a superblock and its free list
-static void initSuper(struct SBHeader *header, size_t size, int bucketIndex)
+static void init_super(struct sb_header *header, size_t size, int bucket_idx)
 {
     // make superblock header
-    if (size > sizeof(struct SBHeader))
+    if (size > sizeof(struct sb_header))
         header->free = (alloc_t*)((u8*)header + size);
     else
         header->free = (alloc_t*)(header + 1);
-    header->allocSize = size;
-    header->freeCount = (SUPERBLOCKSIZE - sizeof(struct SBHeader)) / size;
+    header->alloc_size = size;
+    header->free_count = (SUPERBLOCKSIZE - sizeof(struct sb_header)) / size;
     // update bucket info
-    allLists[bucketIndex].freeCount += header->freeCount;
-    allLists[bucketIndex].numSB++;
-    allLists[bucketIndex].allocSize = size;
+    buckets[bucket_idx].free_count += header->free_count;
+    buckets[bucket_idx].num_sb++;
+    buckets[bucket_idx].alloc_size = size;
 
     // make free list
     alloc_t *current = header->free, *next = 0;
-    for (int i = 1; i < header->freeCount; i++) {
+    for (int i = 1; i < header->free_count; i++) {
         next = (alloc_t*)((u8*)(current) + size);
         current->next = next;
         current = next;
@@ -255,49 +257,49 @@ static void initSuper(struct SBHeader *header, size_t size, int bucketIndex)
 }
 
 // Move superblock to front of list
-static void moveToFront(struct SBHeader *header, int bucketIndex)
+static void sb_mtf(struct sb_header *header, int bucket_idx)
 {
-    if (header->prevSB != NULL)
-        header->prevSB->nextSB = header->nextSB;
-    if (header->nextSB != NULL)
-        header->nextSB->prevSB = header->prevSB;
-    header->nextSB = allLists[bucketIndex].head;
-    if (header->nextSB != NULL)
-        header->nextSB->prevSB = header;
-    header->prevSB = NULL;
-    allLists[bucketIndex].head = header;
+    if (header->prev != NULL)
+        header->prev->next = header->next;
+    if (header->next != NULL)
+        header->next->prev = header->prev;
+    header->next = buckets[bucket_idx].head;
+    if (header->next != NULL)
+        header->next->prev = header;
+    header->prev = NULL;
+    buckets[bucket_idx].head = header;
 }
 
 // Add superblock to front of list
-static void addToFront(struct SBHeader *header, int bucketIndex)
+static void sb_atf(struct sb_header *header, int bucket_idx)
 {
-    header->nextSB = allLists[bucketIndex].head;
-    if (header->nextSB != NULL)
-        header->nextSB->prevSB = header;
-    header->prevSB = NULL;
+    header->next = buckets[bucket_idx].head;
+    if (header->next != NULL)
+        header->next->prev = header;
+    header->prev = NULL;
 
-    allLists[bucketIndex].head = header;
+    buckets[bucket_idx].head = header;
 }
 
 // Keeps or frees an empty superblock
-static struct SBHeader* manageEmptySuperblock(struct SBHeader *header, int bucketIndex)
+static struct sb_header* manage_empty_sb(struct sb_header *header, int bucket_idx)
 {
-    if (allLists[bucketIndex].numSB > RETAIN_FREE_SUPERBLOCK_COUNT) {
+    if (buckets[bucket_idx].num_sb > RETAIN_FREE_SUPERBLOCK_COUNT) {
         // remove superblock from list
-        if (header == allLists[bucketIndex].head) {
+        if (header == buckets[bucket_idx].head) {
             // list front block is empty
-            allLists[bucketIndex].head = header->nextSB;
-            allLists[bucketIndex].head->prevSB = NULL;
+            buckets[bucket_idx].head = header->next;
+            buckets[bucket_idx].head->prev = NULL;
         }
         else {
             // remove superblock from list
-            if (header->prevSB != NULL)
-                header->prevSB->nextSB = header->nextSB;
-            if (header->nextSB != NULL)
-                header->nextSB->prevSB = header->prevSB;
+            if (header->prev != NULL)
+                header->prev->next = header->next;
+            if (header->next != NULL)
+                header->next->prev = header->prev;
         }
-        allLists[bucketIndex].numSB--;
-        allLists[bucketIndex].freeCount -= header->freeCount;
+        buckets[bucket_idx].num_sb--;
+        buckets[bucket_idx].free_count -= header->free_count;
         // free superblock
         kvirtual_free(header, SUPERBLOCKPAGES * PAGE_SIZE);
 
@@ -306,7 +308,7 @@ static struct SBHeader* manageEmptySuperblock(struct SBHeader *header, int bucke
     return header;
 }
 
-static size_t nextPowerOfTwo(size_t nextPow2)
+static size_t next_pow_2(size_t nextPow2)
 {
     nextPow2--;
     nextPow2 |= nextPow2 >> 1;
