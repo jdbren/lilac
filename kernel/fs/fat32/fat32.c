@@ -76,8 +76,8 @@ fat_read_FAT(struct fat_disk *fat_disk, struct gendisk *hd, u32 clst_off)
 
     int ret = hd->ops->disk_read(hd, lba, fat_disk->FAT.buf, cnt);
 
-    fat_disk->FAT.first_clst = fat_disk->clst_begin_lba + clst_off;
-    fat_disk->FAT.last_clst = fat_disk->clst_begin_lba + clst_off + sizeof(fat_disk->FAT.buf) / 4;
+    fat_disk->FAT.first_clst = clst_off;
+    fat_disk->FAT.last_clst = clst_off + sizeof(fat_disk->FAT.buf) / 4;
     fat_disk->FAT.sectors = cnt;
 
     klog(LOG_DEBUG, "FAT first: %x\n", fat_disk->FAT.first_clst);
@@ -90,8 +90,7 @@ int __must_check
 fat_write_FAT(struct fat_disk *fat_disk, struct gendisk *gd)
 {
     const u32 lba = fat_disk->fat_begin_lba +
-        ((fat_disk->FAT.first_clst - fat_disk->clst_begin_lba)
-        * fat_disk->sect_per_clst);
+        (fat_disk->FAT.first_clst * fat_disk->sect_per_clst);
 
     return gd->ops->disk_write(gd, lba, fat_disk->FAT.buf, fat_disk->FAT.sectors);
 }
@@ -103,7 +102,7 @@ inline u32 __get_FAT_val(u32 clst, struct fat_disk *disk)
         klog(LOG_DEBUG, "last clst: %x\n", disk->FAT.last_clst);
         kerror("clst out of fat bounds\n");
     }
-    return disk->FAT.buf[clst] & 0x0FFFFFFF;
+    return FAT_VALUE(disk->FAT, clst);
 }
 
 #define LBA_ADDR(cluster_num, disk) \
@@ -139,7 +138,7 @@ u32 __fat_get_clst_num(struct file *file, struct fat_disk *disk)
             fat_write_FAT(disk, disk->bdev->disk);
             fat_read_FAT(disk, disk->bdev->disk, clst_num);
         }
-        clst_num = disk->FAT.buf[clst_num] & 0x0FFFFFFF;
+        clst_num = FAT_VALUE(disk->FAT, clst_num);
     }
 
     return clst_num;
@@ -154,9 +153,9 @@ u32 __fat_find_free_clst(struct fat_disk *disk)
         return -1;
 
     while (1) {
-        if (clst > disk->FAT.last_clst - disk->clst_begin_lba)
+        if (clst > disk->FAT.last_clst)
             kerror("clst out of fat bounds\n");
-        if (disk->FAT.buf[clst] == 0)
+        if (FAT_VALUE(disk->FAT, clst) == 0)
             return clst;
         clst++;
     }

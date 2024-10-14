@@ -120,6 +120,9 @@ struct fat_disk {
     struct fat_FAT_buf FAT;
 };
 
+#define FAT_VALUE(FAT, clst) \
+    ((FAT).buf[(clst) - (FAT).first_clst] & 0x0FFFFFFF)
+
 struct super_block;
 struct inode;
 struct file;

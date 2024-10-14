@@ -90,7 +90,7 @@ int fat32_mkdir(struct inode *dir, struct dentry *new, unsigned short mode)
     u32 new_clst = __fat_find_free_clst(disk);
     if (new_clst == -1)
         kerror("No free clusters\n");
-    disk->FAT.buf[new_clst] |= 0x0fffffffUL;
+    disk->FAT.buf[new_clst - disk->FAT.first_clst] |= 0x0fffffffUL;
 
     entry->attributes = FAT_DIR_ATTR;
     entry->cl_low = new_clst & 0xFFFF;

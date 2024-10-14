@@ -104,6 +104,8 @@ struct dentry *lookup_path_from(struct dentry *parent, const char *path)
         n_pos += len;
     }
 
+    klog(LOG_DEBUG, "VFS: Found %s\n", current->d_name);
+
     return current;
 }
 
