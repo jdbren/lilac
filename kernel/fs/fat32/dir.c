@@ -10,7 +10,7 @@
 #include <string.h>
 #include <ctype.h>
 
-#include "internal.h"
+#include "fat_internal.h"
 
 // count is the size of the buffer
 int fat32_readdir(struct file *file, struct dirent *dir_buf, unsigned int count)

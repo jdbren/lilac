@@ -3,7 +3,7 @@
 #include <lilac/log.h>
 #include <lilac/file.h>
 
-#include "internal.h"
+#include "fat_internal.h"
 
 int fat32_open(struct inode *inode, struct file *file)
 {

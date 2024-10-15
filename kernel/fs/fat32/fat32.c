@@ -13,7 +13,7 @@
 #include <string.h>
 #include <stdbool.h>
 
-#include "internal.h"
+#include "fat_internal.h"
 
 const struct file_operations fat_fops = {
     .read = fat32_read,

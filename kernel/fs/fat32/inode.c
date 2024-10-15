@@ -8,7 +8,7 @@
 #include <string.h>
 #include <ctype.h>
 
-#include "internal.h"
+#include "fat_internal.h"
 
 static inline bool check_entry(struct fat_file *entry, const char *cur)
 {

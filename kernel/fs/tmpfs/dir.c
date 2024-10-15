@@ -2,7 +2,7 @@
 #include <mm/kmalloc.h>
 #include <string.h>
 
-#include "internal.h"
+#include "tmpfs_internal.h"
 
 struct dentry *tmpfs_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags)
 {

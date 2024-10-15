@@ -8,7 +8,7 @@
 
 #include <string.h>
 
-#include "internal.h"
+#include "fat_internal.h"
 
 ssize_t fat32_read(struct file *file, void *file_buf, size_t count)
 {

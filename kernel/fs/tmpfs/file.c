@@ -2,7 +2,7 @@
 #include <lilac/log.h>
 #include <mm/kmalloc.h>
 
-#include "internal.h"
+#include "tmpfs_internal.h"
 
 #include <string.h>
 
