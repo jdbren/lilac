@@ -24,7 +24,6 @@ void start_kernel(void)
 
     fs_init();
     sched_init();
-    kstatus(STATUS_OK, "Kernel initialized...\n");
 
     arch_enable_interrupts();
     console_init();

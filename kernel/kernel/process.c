@@ -93,7 +93,7 @@ static void start_process(void)
     //     klog(LOG_DEBUG, "Flags: %x\n", desc->vm_flags);
     //     desc = desc->vm_next;
     // }
-
+    close(fd);
     klog(LOG_DEBUG, "Going to user mode\n");
     jump_usermode((u32)jmp, __USER_STACK - 4);
 }
@@ -152,6 +152,14 @@ int fork(void)
     asm("hlt");
 }
 SYSCALL_DECL0(fork)
+
+int exit(int status)
+{
+    current->state = TASK_DEAD;
+    klog(LOG_INFO, "Process %d exited with status %d\n", current->pid, status);
+    schedule();
+}
+SYSCALL_DECL1(exit, int, status)
 
 int getcwd(char *buf, size_t size)
 {

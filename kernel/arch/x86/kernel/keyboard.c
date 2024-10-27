@@ -11,18 +11,16 @@
 #include "pic.h"
 #include "apic.h"
 
-#include <stdbool.h>
-
 #define KEYBOARD_DATA_PORT 0x60
 
-static bool console = true;
+static int console = 0;
 
 inline u8 keyboard_read(void)
 {
     return inb(KEYBOARD_DATA_PORT);
 }
 
-inline void set_console(bool value)
+inline void set_console(int value)
 {
     console = value;
 }
@@ -36,7 +34,7 @@ void keyboard_int(struct interrupt_frame *frame)
 
     if (keycode >= 0 && keyboard_map[keycode]) {
         if (console)
-            console_write_char(keyboard_map[keycode]);
+            console_intr(keyboard_map[keycode]);
         else
             graphics_putchar(keyboard_map[keycode]);
     }

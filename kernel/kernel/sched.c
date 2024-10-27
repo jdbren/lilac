@@ -7,8 +7,9 @@
 
 static struct task* task_queue[16];
 static struct task root = {
-    .state = TASK_DEAD,
-    .name = "root"
+    .state = TASK_RUNNING,
+    .name = "root",
+    .priority = 20
 };
 static int back;
 static int current_task;
@@ -39,7 +40,7 @@ void sched_init(void)
     task_queue[0] = &root;
     struct task *pid1 = init_process();
     schedule_task(pid1);
-    timer_reset = 1000;
+    timer_reset = 3000;
     kstatus(STATUS_OK, "Scheduler initialized\n");
 }
 
@@ -65,13 +66,16 @@ void schedule(void)
     if (back == 0)
         return;
 
+    // klog(LOG_DEBUG, "Running scheduler\n");
+
     struct task *prev = task_queue[current_task];
 
     int i = 0;
     while (i < 16) {
         current_task = (current_task + 1) % 16;
-        if (task_queue[current_task] != NULL) {
-            if (task_queue[current_task]->state == TASK_RUNNING)
+        if (task_queue[current_task]) {
+            if (task_queue[current_task]->state == TASK_RUNNING &&
+                task_queue[current_task]->priority < prev->priority)
                 break;
             else if (task_queue[current_task]->state == TASK_DEAD)
                 task_queue[current_task] = NULL;

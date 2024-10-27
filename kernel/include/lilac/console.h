@@ -3,7 +3,11 @@
 
 #include <lilac/types.h>
 
+struct file;
+
 void console_init(void);
-void console_write_char(char c);
+void console_intr(char);
+ssize_t console_read(struct file*, void *, size_t);
+ssize_t console_write(struct file*, const void *, size_t);
 
 #endif

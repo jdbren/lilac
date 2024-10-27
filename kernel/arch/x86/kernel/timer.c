@@ -100,7 +100,7 @@ void sleep(u32 millis)
 {
     timer_cnt = millis;
     while (timer_cnt > 0) {
-        asm("hlt");
+        asm volatile("nop");
     }
 }
 

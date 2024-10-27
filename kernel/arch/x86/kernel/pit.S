@@ -14,6 +14,7 @@
 // .globl system_timer_ms
 
 .text
+.extern timer_cnt
 .global timer_handler
 timer_handler:
     pushf
@@ -26,7 +27,7 @@ timer_handler:
 	// adc [system_timer_ms], ebx            # Update system timer tick milli-seconds
 
 	movl (timer_cnt), %eax
-	cmpl $-1, %eax
+	cmpl $(-1), %eax
 	je .no_tick
 	decl %eax
 	movl %eax, (timer_cnt)

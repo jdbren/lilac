@@ -1,5 +1,9 @@
 #include <lilac/console.h>
 #include <lilac/tty.h>
+#include <lilac/keyboard.h>
+#include <lilac/log.h>
+#include <lilac/lilac.h>
+#include <lilac/device.h>
 
 #include <lilac/fs.h>
 #include <mm/kmm.h>
@@ -7,14 +11,27 @@
 #include <cpuid.h>
 #include <string.h>
 
-static const char *buffer_path = "/dev/console";
-int console_fd;
+#define INPUT_BUF_SIZE 256
 
-static char line_buf[256];
-static char *pos = line_buf;
+struct console {
+    char buf[INPUT_BUF_SIZE];
+    int rpos;
+    int wpos;
+    int epos;
+};
+
+static struct console con;
+
+struct file_operations console_fops = {
+    .read = console_read,
+    .write = console_write
+};
 
 void console_init(void)
 {
+    add_device("/dev/console", &console_fops);
+    set_console(1);
+
     sleep(1000);
     graphics_clear();
     graphics_setcolor(RGB_MAGENTA, RGB_BLACK);
@@ -61,15 +78,88 @@ void console_init(void)
     graphics_setcolor(RGB_WHITE, RGB_BLACK);
 }
 
-void console_write_char(char c)
+ssize_t console_read(struct file *file, void *buf, size_t count)
 {
-    *pos++ = c;
+    u32 target;
+    int c;
+    char cbuf;
+
+    target = count;
+    while(count > 0){
+        // wait until interrupt handler has put some
+        // input into cons.buffer.
+        while(con.rpos == con.wpos) {
+            arch_enable_interrupts();
+            sleep(1000);
+        }
+
+        c = con.buf[con.rpos++ % INPUT_BUF_SIZE];
+
+        // if(c == C('D')){  // end-of-file
+        //     if(count < target){
+        //         // Save ^D for next time, to make sure
+        //         // caller gets a 0-byte result.
+        //         con.rpos--;
+        //     }
+        //     break;
+        // }
+
+        // copy the input byte to the user-space buffer.
+        cbuf = c;
+        if(memcpy(buf, &cbuf, 1) == -1)
+            break;
+
+        buf++;
+        --count;
+
+        if(c == '\n')
+            break;
+    }
+
+    return target - count;
+}
+
+ssize_t console_write(struct file *file, const void *buf, size_t count)
+{
+    char c = *(char*)buf;
+    // *pos++ = c;
 
     // if (c == '\n') {
-    //     *pos = '\0';
-    //     write(console_fd, line_buf, strlen(line_buf));
+    //     memset(line_buf, 0, sizeof(line_buf));
     //     pos = line_buf;
     // }
 
     graphics_putchar(c);
+    return 1;
+}
+
+void console_intr(char c)
+{
+    switch(c) {
+    // case C('H'): // Backspace
+    // case '\x7f': // Delete key
+    //     if(cons.e != cons.w){
+    //         cons.e--;
+    //         consputc(BACKSPACE);
+    //     }
+    // break;
+    default:
+        if(c != 0 && con.epos-con.rpos < INPUT_BUF_SIZE){
+            c = (c == '\r') ? '\n' : c;
+
+            // echo back to the user.
+            graphics_putchar(c);
+
+            // store for consumption by consoleread().
+            con.buf[con.epos++ % INPUT_BUF_SIZE] = c;
+
+            if(c == '\n' || con.epos-con.rpos == INPUT_BUF_SIZE){
+                // wake up consoleread() if a whole line (or end-of-file)
+                // has arrived.
+                con.wpos = con.epos;
+                // wakeup(&con.rpos);
+            }
+        }
+    break;
+    }
 }

@@ -9,6 +9,7 @@
 #include <lilac/process.h>
 #include <lilac/sched.h>
 #include <lilac/device.h>
+#include <lilac/timer.h>
 #include <drivers/blkdev.h>
 #include <fs/fat32.h>
 #include <fs/tmpfs.h>
@@ -224,6 +225,18 @@ SYSCALL_DECL3(open, const char*, path, int, flags, int, mode)
 ssize_t read(int fd, void *buf, size_t count)
 {
     struct file *file = current->fs.files.fdarray[fd];
+
+    if (file->f_inode->i_type == TYPE_DEV) {
+        return file->f_inode->i_fop->read(file, buf, count);
+    }
+
+    // while (file->f_pos >= file->f_inode->i_size) {
+    //     klog(LOG_DEBUG, "VFS: Blocking read on file %s\n", file->f_path);
+    //     // current->state = TASK_SLEEPING;
+    //     // schedule();
+    //     sleep(1000);
+    // }
+
     ssize_t bytes = file->f_op->read(file, buf, count);
     if (bytes > 0)
         file->f_pos += bytes;
@@ -234,11 +247,12 @@ SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
 
 ssize_t write(int fd, const void *buf, size_t count)
 {
-    printf("%c", *(char*)buf);
-    return 1;
-    // return 1;
-    // klog(LOG_DEBUG, "VFS: Writing to fd %d\n", fd);
     struct file *file = current->fs.files.fdarray[fd];
+
+    if (file->f_inode->i_type == TYPE_DEV) {
+        return file->f_inode->i_fop->write(file, buf, count);
+    }
+
     ssize_t bytes = file->f_op->write(file, buf, count);
     if (bytes > 0)
         file->f_pos += bytes;
@@ -250,14 +264,15 @@ SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
 int close(int fd)
 {
     struct file *file = current->fs.files.fdarray[fd];
-    file->f_op->flush(file);
+    //file->f_op->flush(file);
+    current->fs.files.fdarray[fd] = NULL;
+    current->fs.files.size--;
     if (--file->f_count)
         return 0;
 
-    file->f_op->release(file->f_inode, file);
+    //file->f_op->release(file->f_inode, file);
     kfree(file->f_path);
     kfree(file);
-    current->fs.files.fdarray[fd] = NULL;
     return 0;
 }
 SYSCALL_DECL1(close, int, fd)
@@ -344,3 +359,9 @@ int create(const char *path, umode_t mode)
     return parent_inode->i_op->create(parent_inode, new_dentry, mode);
 }
 SYSCALL_DECL2(create, const char*, path, umode_t, mode)
+
+int mknod(const char *pathname, int mode, dev_t dev)
+{
+    return -1;
+}
+SYSCALL_DECL3(mknod, const char*, pathname, int, mode, dev_t, dev)

@@ -7,5 +7,6 @@
 
 u8 keyboard_read(void);
 void keyboard_init(void);
+void set_console(int value);
 
 #endif

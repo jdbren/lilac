@@ -30,9 +30,6 @@ sys_call_handler:
 sys_restart:
     ret
 
-sys_exit:
-    ret
-
 .data
 syscall_table:
     .long sys_restart

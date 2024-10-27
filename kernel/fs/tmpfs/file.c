@@ -16,6 +16,7 @@ int tmpfs_create(struct inode *parent, struct dentry *new_dentry, umode_t mode)
     new_inode->i_mode = mode;
     new_inode->i_type = TYPE_FILE;
     file_info->data = kmalloc(4096);
+    new_inode->i_size = 4096;
     new_dentry->d_inode = new_inode;
 
     struct tmpfs_dir *parent_dir = (struct tmpfs_dir*)parent->i_private;
@@ -63,8 +64,11 @@ ssize_t tmpfs_write(struct file *file, const void *buf, size_t cnt)
     struct tmpfs_file *tmp_inode = (struct tmpfs_file*)inode->i_private;
     size_t written = 0;
 
-    if (file->f_pos + cnt > inode->i_size)
-        cnt = inode->i_size - file->f_pos;
+    if (file->f_pos + cnt > inode->i_size) {
+        tmp_inode->data = krealloc(tmp_inode->data, file->f_pos + cnt);
+        inode->i_size = file->f_pos + cnt;
+    }
+
     memcpy(tmp_inode->data + file->f_pos, buf, cnt);
 
     written = cnt;

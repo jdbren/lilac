@@ -10,6 +10,26 @@ int __must_check device_register(struct device *dev)
 
 }
 
+int add_device(const char *path, struct file_operations *fops)
+{
+    if (create(path, 0)) {
+        klog(LOG_ERROR, "Failed to create %s\n", path);
+        return -1;
+    }
+    struct dentry *dentry = lookup_path(path);
+    if (!dentry)
+        return -1;
+
+    struct inode *inode = dentry->d_inode;
+    inode->i_fop = fops;
+    inode->i_type = TYPE_DEV;
+
+    return 0;
+}
+
+
+
+/*
 int dev_files_init(void)
 {
     struct dentry *dev_dentry = lookup_path("/dev");
@@ -52,3 +72,4 @@ int dev_mknod(struct inode *parent_dir, struct dentry *node, umode_t mode, dev_t
 
     return 0;
 }
+*/

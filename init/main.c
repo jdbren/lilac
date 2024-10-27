@@ -10,9 +10,14 @@ int ls_main(const char *pwd);
 
 int prompt()
 {
-    char cwd[32];
+    char dirname[128];
+    const char cwd[32];
     getcwd(cwd, 32);
-    ls_main("/dev");
+    printf(SHELL_PROMPT, cwd);
+
+    unsigned int r = read(0, dirname, 128);
+    dirname[r-1] = 0; // remove newline
+    ls_main(dirname);
 }
 
 int ls_main(const char *pwd)
@@ -27,9 +32,12 @@ int ls_main(const char *pwd)
     putchar('\n');
 }
 
-void main(void)
+int main(void)
 {
-    char cmd[256];
+    open("/dev/console", 0);
+    open("/dev/console", 0);
+    open("/dev/console", 0);
     prompt();
 
+    return 0;
 }
