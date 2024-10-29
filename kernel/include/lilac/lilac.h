@@ -7,10 +7,11 @@
 #include <lilac/boot.h>
 #include <acpi/acpi.h>
 
-#define KERNEL_VERSION "0.0.1"
+#define KERNEL_VERSION "0.1.0"
 
 #define __no_ret __attribute__((noreturn))
 #define __no_stack_chk __attribute__((no_stack_protector))
+#define __always_inline __attribute__((always_inline)) inline
 
 struct boot_info {
 	struct multiboot_info mbd;
