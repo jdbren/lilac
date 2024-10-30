@@ -1,4 +1,5 @@
 #include <acpi/acpica.h>
+#include <lilac/panic.h>
 
 void arch_shutdown(void)
 {

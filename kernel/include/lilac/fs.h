@@ -31,7 +31,7 @@ struct inode {
     struct list_head 	i_list;
     umode_t				i_mode;
     unsigned short 		i_type;
-    atomic_ulong 		i_count;
+    atomic_uint 		i_count;
     const struct inode_operations *i_op;
     struct super_block *i_sb;
 

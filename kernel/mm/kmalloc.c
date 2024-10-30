@@ -13,12 +13,12 @@
 
 #define MIN_ALLOC 4
 #define MIN_ALLOC_POWER 2
-#define RETAIN_FREE_SUPERBLOCK_COUNT 4
+#define RETAIN_FREE_SUPERBLOCK_COUNT 10
 #define PAGE_MASK (~(PAGE_SIZE - 1))
 #define is_aligned(POINTER, BYTE_COUNT) \
     (((uintptr_t)(POINTER)) % (BYTE_COUNT) == 0)
 
-#define SUPERBLOCKSIZE PAGE_SIZE
+#define SUPERBLOCKSIZE (PAGE_SIZE)
 #define SUPERBLOCKPAGES (SUPERBLOCKSIZE / PAGE_SIZE)
 #define BUCKETS 13
 
@@ -44,7 +44,7 @@ struct sb_header {
     };
     u16 free_count;
     bool is_large;
-} __attribute__((aligned(32)));
+} __align(32);
 
 
 static struct sb_list buckets[BUCKETS];
@@ -176,7 +176,7 @@ static void* malloc_small(size_t size)
     // check if there is any memory available
     if (buckets[bucket_idx].free_count == 0) {
         // allocate new superblock
-        void *block = kvirtual_alloc(SUPERBLOCKPAGES * PAGE_SIZE, PG_WRITE);
+        void *block = kvirtual_alloc(SUPERBLOCKSIZE, PG_WRITE);
         assert(block != NULL);
 
         header = (struct sb_header*)block;

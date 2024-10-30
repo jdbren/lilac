@@ -77,9 +77,8 @@ struct fat_file {
 #define FAT_DIR_ATTR 0x10
 #define FAT_ARCHIVE_ATTR 0x20
 #define FAT_UNUSED 0xE5
-#define MAX_SECTOR_READS 128
 #define BYTES_PER_SECTOR 512
-#define FAT_BUFFER_SIZE (BYTES_PER_SECTOR * MAX_SECTOR_READS)
+#define FAT_BUFFER_SIZE (BYTES_PER_SECTOR * 128)
 
 #define ROUND_UP(x,bps)    ((((uintptr_t)(x)) + (u32)bps-1) & (~((u32)bps-1)))
 

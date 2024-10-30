@@ -28,35 +28,6 @@ int add_device(const char *path, struct file_operations *fops)
 }
 
 
-
-/*
-int dev_files_init(void)
-{
-    struct dentry *dev_dentry = lookup_path("/dev");
-    if (!dev_dentry) {
-        klog(LOG_WARN, "Failed to find /dev\n");
-        return -1;
-    }
-    struct inode *dev_inode = dev_dentry->d_inode;
-    if (!dev_inode) {
-        klog(LOG_WARN, "Failed to find /dev inode\n");
-        return -1;
-    }
-    extern struct dentry *root_dentry;
-
-    struct dentry *fd_dir = kzmalloc(sizeof(*fd_dir));
-    fd_dir->d_parent = dev_dentry;
-    fd_dir->d_name = "fd";
-    dcache_add(fd_dir);
-
-    if (dev_inode->i_op->mkdir(dev_inode, fd_dir, 0)) {
-        klog(LOG_WARN, "Failed to create /dev/fd\n");
-        return -1;
-    }
-
-    return 0;
-}
-
 int dev_mknod(struct inode *parent_dir, struct dentry *node, umode_t mode, dev_t dev)
 {
     struct inode *inode = kzmalloc(sizeof(*inode));
@@ -72,4 +43,3 @@ int dev_mknod(struct inode *parent_dir, struct dentry *node, umode_t mode, dev_t
 
     return 0;
 }
-*/

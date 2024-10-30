@@ -74,7 +74,10 @@ void console_init(void)
     printf("Memory: %u MB\n", mem_sz_mb);
 
     u64 sys_time_ms = get_sys_time() / 1000000;
-    printf("System clock running for %llu ms\n\n", sys_time_ms);
+    printf("System clock running for %llu ms\n", sys_time_ms);
+    struct timestamp ts = get_timestamp();
+    printf("Current time: " TIME_FORMAT "\n\n",
+        ts.year, ts.month, ts.day, ts.hour, ts.minute, ts.second);
     graphics_setcolor(RGB_WHITE, RGB_BLACK);
 }
 

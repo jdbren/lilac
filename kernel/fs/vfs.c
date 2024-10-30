@@ -28,7 +28,7 @@ static struct dentry *
 
 struct dentry *root_dentry = NULL;
 static u32 numdisks = 0;
-static struct vfsmount disks[8];
+static struct vfsmount disks[16];
 
 static int get_fd(void)
 {
