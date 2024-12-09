@@ -1,7 +1,6 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/lilac.h>
-#include <lilac/types.h>
 #include <lilac/tty.h>
 #include <lilac/panic.h>
 #include <lilac/keyboard.h>
@@ -28,10 +27,10 @@ struct multiboot_info mbd;
 static struct acpi_info acpi;
 //static struct efi_info efi;
 
-static void parse_multiboot(u32, struct multiboot_info*);
+static void parse_multiboot(uintptr_t, struct multiboot_info*);
 //extern int _fpu_init(void);
 
-void kernel_early(unsigned int multiboot)
+void kernel_early(uintptr_t multiboot)
 {
     gdt_init();
     idt_init();
@@ -62,7 +61,7 @@ __always_inline void arch_enable_interrupts(void)
     asm volatile ("sti");
 }
 
-static void parse_multiboot(u32 addr, struct multiboot_info *mbd)
+static void parse_multiboot(uintptr_t addr, struct multiboot_info *mbd)
 {
     if (addr & 7)
         kerror("Unaligned mbi:\n");

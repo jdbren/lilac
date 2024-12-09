@@ -163,6 +163,5 @@ void console_intr(char c)
                 // wakeup(&con.rpos);
             }
         }
-    break;
     }
 }

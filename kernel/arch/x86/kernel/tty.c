@@ -25,7 +25,7 @@
 // ssfn_buf_t buf;
 
 static void graphics_scroll(void);
-static void graphics_delchar(void);
+//static void graphics_delchar(void);
 
 void graphics_putchar(char c)
 {

@@ -114,7 +114,6 @@ static void __mark_frames(size_t index, size_t offset, size_t pg_cnt)
 static void __init_bitmap(struct multiboot_tag_efi_mmap *mmap)
 {
     efi_memory_desc_t *entry = (efi_memory_desc_t*)mmap->efi_mmap;
-    u32 index, offset;
     for (u32 i = 0; i < mmap->size; i += mmap->descr_size) {
         if (entry->type != EFI_CONVENTIONAL_MEMORY && entry->type != EFI_RESERVED_TYPE) {
             __mark_frames(get_index(entry->phys_addr),

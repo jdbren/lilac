@@ -1,10 +1,7 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <mm/kmm.h>
-
 #include <string.h>
-#include <stdbool.h>
-
 #include <lilac/panic.h>
 #include <utility/multiboot2.h>
 #include <utility/efi.h>
@@ -38,7 +35,7 @@ u32 memory_size_kb;
 // TODO: Add support for greater than 4GB memory
 void mm_init(struct multiboot_tag_efi_mmap *mmap)
 {
-    int phys_map_sz = phys_mem_init(mmap);
+    phys_mem_init(mmap);
     __parse_mmap(mmap);
 
     kstatus(STATUS_OK, "Kernel virtual address allocation enabled\n");
@@ -204,7 +201,7 @@ static void __free_page(u8 *page)
 static void __parse_mmap(struct multiboot_tag_efi_mmap *mmap)
 {
     efi_memory_desc_t *entry = (efi_memory_desc_t*)mmap->efi_mmap;
-    void *vaddr = NULL;
+    //void *vaddr = NULL;
     for (u32 i = 0; i < mmap->size; i += mmap->descr_size,
             entry = (efi_memory_desc_t*)((u32)entry + mmap->descr_size)) {
         if (entry->type != EFI_RESERVED_TYPE)
@@ -218,7 +215,7 @@ static void __parse_mmap(struct multiboot_tag_efi_mmap *mmap)
                 if (entry->phys_addr < (u32)&_kernel_start)
                     continue;
                 else
-                    free_frames((void*)entry->phys_addr, entry->num_pages);
+                    free_frames((void*)((uintptr_t)entry->phys_addr), entry->num_pages);
             break;
             case EFI_RUNTIME_SERVICES_DATA:
                 // vaddr = find_vaddr(entry->num_pages);

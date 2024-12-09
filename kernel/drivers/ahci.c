@@ -196,7 +196,6 @@ static void ahci_install_device(struct ahci_device *dev)
 	new_disk->private = dev;
 
 	add_gendisk(new_disk);
-	// scan_partitions(new_disk);
 }
 
 // Start command engine

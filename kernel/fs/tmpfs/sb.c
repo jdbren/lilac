@@ -10,7 +10,6 @@ struct inode* tmpfs_alloc_inode(struct super_block *sb)
     inode->i_sb = sb;
     inode->i_op = &tmpfs_iops;
     inode->i_count = 1;
-    inode->i_type = TYPE_DIR;
     list_add_tail(&inode->i_list, &sb->s_inodes);
 
     return inode;
@@ -33,6 +32,7 @@ struct dentry* tmpfs_init(void *device, struct super_block *sb)
     struct tmpfs_dir *root_dir = kzmalloc(sizeof(struct tmpfs_dir));
 
     root_inode->i_private = root_dir;
+    root_inode->i_type = TYPE_DIR;
 
     root_dentry->d_sb = sb;
     root_dentry->d_inode = root_inode;

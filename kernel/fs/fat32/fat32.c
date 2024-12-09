@@ -186,8 +186,6 @@ struct dentry *fat32_init(void *dev, struct super_block *sb)
     struct block_device *bdev = (struct block_device*)dev;
     volatile struct fat_disk *fat_disk = kzmalloc(sizeof(*fat_disk));
     struct fat_file *fat_file = kzmalloc(sizeof(*fat_file));
-    struct disk_operations *disk_ops = bdev->disk->ops;
-    int fat_sectors;
     struct inode *root_inode;
     struct dentry *root_dentry;
 

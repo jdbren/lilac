@@ -60,8 +60,8 @@ void hpet_init(u32 time, struct hpet_info *info)
 
     u32 desired_freq = 1000 / time; // in Hz
 
-    hpet_base = (volatile u64*)info->address;
-    map_to_self(hpet_base, 0x1000, PG_WRITE | PG_CACHE_DISABLE);
+    hpet_base = (volatile u64*)(uintptr_t)info->address;
+    map_to_self((void*)hpet_base, 0x1000, PG_WRITE | PG_CACHE_DISABLE);
 
     struct hpet_id_reg *id = (struct hpet_id_reg*)hpet_base;
     hpet_clk_period = id->counter_clk_period;

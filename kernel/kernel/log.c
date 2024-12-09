@@ -55,7 +55,7 @@ void klog(int level, const char *data, ...)
     graphics_setcolor(RGB_LIGHT_GRAY, RGB_BLACK);
     printf("] ");
 
-    va_start(args, level);
+    va_start(args, data);
     vprintf(data, args);
     va_end(args);
 }

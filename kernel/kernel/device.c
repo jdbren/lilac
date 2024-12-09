@@ -7,7 +7,7 @@
 int __must_check device_register(struct device *dev)
 {
     mutex_init(&dev->mutex);
-
+    return 0;
 }
 
 int add_device(const char *path, struct file_operations *fops)

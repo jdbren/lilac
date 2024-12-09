@@ -48,6 +48,7 @@ static inline u8 get_lapic_id(void)
         : "=b"(bspid)
         : : "eax", "ecx", "edx"
     );
+    return bspid;
 }
 
 /**

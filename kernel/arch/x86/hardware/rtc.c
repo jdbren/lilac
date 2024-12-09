@@ -13,7 +13,7 @@ static unsigned char day;
 static unsigned char month;
 static unsigned int year;
 
-static enum {
+enum {
     cmos_address = 0x70,
     cmos_data    = 0x71
 };

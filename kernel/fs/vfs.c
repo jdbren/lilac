@@ -61,7 +61,8 @@ static void root_init(struct block_device *bdev)
     root_disk->mnt_root = root_dentry;
 
     root_dentry->d_parent = NULL;
-    root_dentry->d_name = "/";
+    root_dentry->d_name = kmalloc(2);
+    strcpy(root_dentry->d_name, "/");
     root_dentry->d_mount = root_disk;
     INIT_HLIST_HEAD(&root_dentry->d_children);
     INIT_HLIST_NODE(&root_dentry->d_sib);
