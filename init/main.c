@@ -30,6 +30,8 @@ int ls_main(const char *pwd)
         printf("%s\t", buf[i].d_name);
     }
     putchar('\n');
+    close(fd);
+    return 0;
 }
 
 int main(void)
@@ -37,7 +39,8 @@ int main(void)
     open("/dev/console", 0);
     open("/dev/console", 0);
     open("/dev/console", 0);
-    prompt();
+    while (1)
+        prompt();
 
     return 0;
 }
