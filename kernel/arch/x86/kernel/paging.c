@@ -100,6 +100,16 @@ int unmap_pages(void *virtualaddr, int num_pages)
     return 0;
 }
 
+// Allocate mem for kernel page tables
+int kernel_pt_init(void)
+{
+    for (int i = PG_DIR_INDEX(0xC0000000UL); i < PAGE_DIR_SIZE; i++) {
+        if (!(pd[i] & 1))
+            pde(i, PG_WRITE);
+    }
+    return 0;
+}
+
 static int pde(int index, u16 flags)
 {
     static const u8 default_flags = PG_WRITE | 1;

@@ -7,12 +7,17 @@
 
 #define PAGE_BYTES 4096
 
+#define PG_DIR_INDEX(x) (((x) >> 22) & 0x3FF)
+#define PG_TABLE_INDEX(x) (((x) >> 12) & 0x3FF)
+
 #define PG_READ            0x0
 #define PG_WRITE           0x2
 #define PG_SUPER           0x0
 #define PG_USER            0x4
 #define PG_WRITE_THROUGH   0x8
 #define PG_CACHE_DISABLE   0x10
+
+int kernel_pt_init(void);
 
 void *get_physaddr(void *virtualaddr);
 int map_pages(void *physaddr, void *virtualaddr, u16 flags, int num_pages);

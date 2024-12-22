@@ -69,12 +69,14 @@ struct dentry *lookup_path_from(struct dentry *parent, const char *path)
         char *name = kzmalloc(len+1);
         strncpy(name, path + n_pos, len);
         name[len] = '\0';
-
+#ifdef DEBUG_VFS
         klog(LOG_DEBUG, "VFS: Looking up %s\n", name);
+#endif
         find = dlookup(current, name);
         if (find == NULL) {
+#ifdef DEBUG_VFS
             klog(LOG_DEBUG, "VFS: %s not in cache\n", name);
-
+#endif
             find = kzmalloc(sizeof(*find));
 
             inode = current->d_inode;
@@ -96,16 +98,18 @@ struct dentry *lookup_path_from(struct dentry *parent, const char *path)
                 return find;
 
             if (find->d_mount) {
+#ifdef DEBUG_VFS
                 klog(LOG_DEBUG, "VFS: Found mount point\n");
+#endif
                 find = find->d_mount->mnt_root;
             }
         }
         current = find;
         n_pos += len;
     }
-
+#ifdef DEBUG_VFS
     klog(LOG_DEBUG, "VFS: Found %s\n", current->d_name);
-
+#endif
     return current;
 }
 

@@ -4,6 +4,10 @@
 #include <stddef.h>
 #include <sys/types.h>
 
+#define STDIN_FILENO  0
+#define STDOUT_FILENO 1
+#define STDERR_FILENO 2
+
 int          close(int);
 void         _exit(int);
 int          execl(const char *, const char *, ...);

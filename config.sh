@@ -9,7 +9,7 @@ fi
 
 PROJECTS="libc kernel"
 
-MAKE="make -j $(nproc)"
+MAKE="make"
 HOST=${HOST:-$(./scripts/default-host.sh)}
 
 AR=${HOST}-ar

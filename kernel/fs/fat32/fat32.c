@@ -80,9 +80,10 @@ fat_read_FAT(struct fat_disk *fat_disk, struct gendisk *hd, u32 clst_off)
     fat_disk->FAT.last_clst = clst_off + sizeof(fat_disk->FAT.buf) / 4;
     fat_disk->FAT.sectors = cnt;
 
+#ifdef DEBUG_FAT
     klog(LOG_DEBUG, "FAT first: %x\n", fat_disk->FAT.first_clst);
     klog(LOG_DEBUG, "FAT last: %x\n", fat_disk->FAT.last_clst);
-
+#endif
     return ret;
 }
 

@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <string.h>
+#include <sys/wait.h>
 
 #define SHELL_PROMPT "lilacOS %s # "
 
@@ -10,14 +11,25 @@ int ls_main(const char *pwd);
 
 int prompt()
 {
-    char dirname[128];
+    char command[256];
     const char cwd[32];
     getcwd(cwd, 32);
     printf(SHELL_PROMPT, cwd);
 
-    unsigned int r = read(0, dirname, 128);
-    dirname[r-1] = 0; // remove newline
-    ls_main(dirname);
+    unsigned int r = read(0, command, 256);
+    command[r-1] = 0; // remove newline
+
+    pid_t pid = fork();
+
+    if (pid == 0) {
+        printf("child %d\n", pid);
+        _exit(0);
+    }
+    else {
+        printf("parent: pid %d\n", pid);
+        waitpid(pid, 0, 0);
+    }
+    return 0;
 }
 
 int ls_main(const char *pwd)

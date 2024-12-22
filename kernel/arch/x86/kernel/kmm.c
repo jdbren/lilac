@@ -38,6 +38,9 @@ void mm_init(struct multiboot_tag_efi_mmap *mmap)
     phys_mem_init(mmap);
     __parse_mmap(mmap);
 
+    // Allocate page tables for all kernel space
+    kernel_pt_init();
+
     kstatus(STATUS_OK, "Kernel virtual address allocation enabled\n");
 }
 

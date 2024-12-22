@@ -14,4 +14,6 @@ struct task *get_current_task(void);
 
 #define current get_current_task()
 
+int do_fork(void);
+
 #endif

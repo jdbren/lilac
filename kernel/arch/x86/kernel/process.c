@@ -2,25 +2,46 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <string.h>
 #include <lilac/process.h>
+#include <lilac/sched.h>
 #include <lilac/types.h>
 #include <lilac/panic.h>
 #include <lilac/config.h>
+#include <lilac/mm.h>
 #include <mm/kmm.h>
 #include <mm/kmalloc.h>
 #include "pgframe.h"
 #include "paging.h"
-
-#define PG_DIR_INDEX(x) (((x) >> 22) & 0x3FF)
-#define PG_TABLE_INDEX(x) (((x) >> 12) & 0x3FF)
+#include "regs.h"
 
 extern const u32 _kernel_end;
 static const int KERNEL_FIRST_PT = PG_DIR_INDEX(0xc0000000);
 
-static u32 *const pd = (u32*)0xFFFFF000;
+static u32 *const pd = (u32*)0xFFFFF000UL;
+
+static void load_cr3(u32 cr3)
+{
+    asm volatile ("mov %0, %%cr3" : : "r"(cr3));
+}
+
+static void print_page_structs(u32 *cr3)
+{
+    for (int i = 0; i < 1024; i++) {
+        klog(LOG_DEBUG, "PD[%d]: %x\n", i, cr3[i]);
+        if (cr3[i] & 1) {
+            u32 *pt = map_phys((void*)(cr3[i] & ~0xFFF), PAGE_BYTES, PG_WRITE);
+            for (int j = 0; j < 1024; j++) {
+                if (pt[j] & 1) {
+                    klog(LOG_DEBUG, "PT[%d]: %x\n", j, pt[j]);
+                }
+            }
+            unmap_phys(pt, PAGE_BYTES);
+        }
+    }
+}
 
 struct mm_info * arch_process_mmap()
 {
-    u32 *cr3 = map_phys(alloc_frame(), PAGE_BYTES, PG_WRITE);
+    volatile u32 *cr3 = map_phys(alloc_frame(), PAGE_BYTES, PG_WRITE);
     memset(cr3, 0, PAGE_SIZE);
 
     // Do recursive mapping
@@ -36,6 +57,7 @@ struct mm_info * arch_process_mmap()
     struct mm_info *info = kzmalloc(sizeof *info);
     info->pgd = virt_to_phys(cr3);
     info->kstack = kstack;
+    cr3[1023] = virt_to_phys(cr3) | PG_WRITE | PG_SUPER | 1;
     unmap_phys(cr3, PAGE_BYTES);
 
     return info;
@@ -47,4 +69,72 @@ void * arch_user_stack(void)
     void *stack = (void*)(__USER_STACK - __USER_STACK_SZ);
     map_pages(alloc_frames(num_pgs), stack, PG_USER | PG_WRITE, num_pgs);
     return stack;
+}
+
+struct mm_info *arch_copy_mmap(struct mm_info *parent)
+{
+    struct mm_info *child = arch_process_mmap();
+    child->start_code = parent->start_code;
+    child->end_code = parent->end_code;
+    child->start_data = parent->start_data;
+    child->end_data = parent->end_data;
+    child->start_brk = parent->start_brk;
+    child->brk = parent->brk;
+    child->start_stack = parent->start_stack;
+    child->total_vm = parent->total_vm;
+    u32 *cr3 = map_phys((void*)child->pgd, PAGE_BYTES, PG_WRITE);
+
+    struct vm_desc *desc = parent->mmap;
+    while (desc) {
+        struct vm_desc *new_desc = kzmalloc(sizeof *new_desc);
+        memcpy(new_desc, desc, sizeof *desc);
+        new_desc->mm = child;
+        new_desc->vm_next = NULL;
+        vma_list_insert(new_desc, &child->mmap);
+        desc = desc->vm_next;
+
+        int num_pages = PAGE_ROUND_UP(new_desc->end - new_desc->start) / PAGE_SIZE;
+        void *phys = alloc_frames(num_pages);
+
+        // Copy data
+        void *tmp_virt = map_phys(phys, num_pages * PAGE_SIZE, PG_WRITE);
+        memcpy(tmp_virt, (void*)new_desc->start, num_pages * PAGE_SIZE);
+        unmap_phys(tmp_virt, num_pages * PAGE_SIZE);
+
+        for (int i = 0; i < num_pages; i++) {
+            u32 pdindex = PG_DIR_INDEX(new_desc->start + i * PAGE_SIZE);
+            u32 ptindex = PG_TABLE_INDEX(new_desc->start + i * PAGE_SIZE);
+
+            if (!(cr3[pdindex] & 1)) {
+                u32 *pt = map_phys(alloc_frame(), PAGE_BYTES, PG_WRITE);
+                memset(pt, 0, PAGE_SIZE);
+                cr3[pdindex] = virt_to_phys(pt) | PG_WRITE | PG_USER | 1;
+                unmap_phys(pt, PAGE_BYTES);
+            }
+
+            u32 *pt = map_phys((void*)(cr3[pdindex] & ~0xFFF), PAGE_BYTES, PG_WRITE);
+            pt[ptindex] = ((uintptr_t)phys + i * PAGE_SIZE) | PG_WRITE | PG_USER | 1;
+            unmap_phys(pt, PAGE_BYTES);
+        }
+    }
+
+    unmap_phys(cr3, PAGE_BYTES);
+
+    return child;
+}
+
+int ia32_do_fork(struct sc32_regs *regs)
+{
+    klog(LOG_DEBUG, "Forking process\n");
+    klog(LOG_DEBUG, "IP: %x\n", regs->ip);
+    klog(LOG_DEBUG, "SP: %x\n", regs->sp);
+    current->regs = (void*)regs;
+    return do_fork();
+}
+
+void *arch_copy_regs(void *src)
+{
+    struct sc32_regs *regs = kzmalloc(sizeof *regs);
+    *regs = *(struct sc32_regs*)src;
+    return regs;
 }

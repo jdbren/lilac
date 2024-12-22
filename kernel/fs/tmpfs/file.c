@@ -34,7 +34,6 @@ int tmpfs_create(struct inode *parent, struct dentry *new_dentry, umode_t mode)
 
 int tmpfs_open(struct inode *inode, struct file *file)
 {
-    klog(LOG_DEBUG, "tmpfs_open: %s\n", file->f_path);
     file->f_inode = inode;
     file->f_op = &tmpfs_fops;
     return 0;

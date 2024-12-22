@@ -4,6 +4,7 @@
 #include <lilac/log.h>
 #include <lilac/lilac.h>
 #include <lilac/device.h>
+#include <lilac/sched.h>
 
 #include <lilac/fs.h>
 #include <mm/kmm.h>
@@ -32,11 +33,10 @@ void console_init(void)
     add_device("/dev/console", &console_fops);
     set_console(1);
 
-    sleep(1000);
+    sleep(500);
     graphics_clear();
     graphics_setcolor(RGB_MAGENTA, RGB_BLACK);
     graphics_writestring("LilacOS v0.1.0\n\n");
-    sleep(1000);
 
     graphics_setcolor(RGB_CYAN, RGB_BLACK);
     unsigned int regs[12];
@@ -79,6 +79,7 @@ void console_init(void)
     printf("Current time: " TIME_FORMAT "\n\n",
         ts.year, ts.month, ts.day, ts.hour, ts.minute, ts.second);
     graphics_setcolor(RGB_WHITE, RGB_BLACK);
+    sleep(500);
 }
 
 ssize_t console_read(struct file *file, void *buf, size_t count)
@@ -93,7 +94,7 @@ ssize_t console_read(struct file *file, void *buf, size_t count)
         // input into cons.buffer.
         while(con.rpos == con.wpos) {
             arch_enable_interrupts();
-            sleep(1000);
+            yield();
         }
 
         c = con.buf[con.rpos++ % INPUT_BUF_SIZE];

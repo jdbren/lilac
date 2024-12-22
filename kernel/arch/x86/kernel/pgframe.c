@@ -126,9 +126,9 @@ static void __init_bitmap(struct multiboot_tag_efi_mmap *mmap)
     __mark_frames(get_index(get_phys_addr(pg_frame_bitmap)),
                 get_offset(get_phys_addr(pg_frame_bitmap)),
                 BITMAP_SIZE / PAGE_SIZE + 1);
-    __mark_frames(get_index(0xb0000),
-                get_offset(0xb0000),
-                ((u32)&_kernel_start - 0xb0000) / PAGE_SIZE);
+    __mark_frames(get_index(0x0),
+                get_offset(0x0),
+                ((u32)&_kernel_start - 0) / PAGE_SIZE);
 }
 
 static void* __check_bitmap(int i, int num_pages, int *count, int *start)

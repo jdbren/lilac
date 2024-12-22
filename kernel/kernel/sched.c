@@ -4,6 +4,7 @@
 #include <lilac/log.h>
 #include <lilac/process.h>
 #include <lilac/sched.h>
+#include <lilac/syscall.h>
 
 static struct task* task_queue[16];
 static struct task root = {
@@ -32,7 +33,7 @@ void yield(void)
 void schedule_task(struct task *new_task)
 {
     task_queue[++back] = new_task;
-    // klog(LOG_INFO, "Task_queue[%d] = %s\n", back, new_task->name);
+    klog(LOG_DEBUG, "Task_queue[%d] = %s\n", back, new_task->name);
 }
 
 void sched_init(void)
@@ -46,7 +47,7 @@ void sched_init(void)
 
 void sched_clock_init(void)
 {
-    sched_timer = timer_reset;
+    yield();
 }
 
 static void context_switch(struct task *prev, struct task *next)
@@ -66,8 +67,6 @@ void schedule(void)
     if (back == 0)
         return;
 
-    // klog(LOG_DEBUG, "Running scheduler\n");
-
     struct task *prev = task_queue[current_task];
 
     int i = 0;
@@ -75,10 +74,8 @@ void schedule(void)
         current_task = (current_task + 1) % 16;
         if (task_queue[current_task]) {
             if (task_queue[current_task]->state == TASK_RUNNING &&
-                task_queue[current_task]->priority < prev->priority)
+                task_queue[current_task]->priority <= prev->priority)
                 break;
-            else if (task_queue[current_task]->state == TASK_DEAD)
-                task_queue[current_task] = NULL;
         }
         i++;
     }
@@ -102,3 +99,27 @@ void sched_tick()
 
     schedule();
 }
+
+int find_by_pid(int pid)
+{
+    for (int i = 0; i < 16; i++) {
+        if (task_queue[i] && task_queue[i]->pid == pid)
+            return i;
+    }
+    return -1;
+}
+
+long waitpid(int pid)
+{
+    int i = find_by_pid(pid);
+    if (i == -1)
+        return -1;
+    struct task *task = task_queue[i];
+    klog(LOG_DEBUG, "Waiting for task %d\n", pid);
+    if (task == NULL)
+        return -1;
+    while (task->state != TASK_DEAD)
+        yield();
+    return 0;
+}
+SYSCALL_DECL1(waitpid, int, pid)

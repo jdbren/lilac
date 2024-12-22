@@ -286,8 +286,9 @@ ssize_t getdents(unsigned int fd, struct dirent *dirp, unsigned int buf_size)
 
     if (inode->i_type != TYPE_DIR)
         return -1;
-
+#ifdef DEBUG_VFS
     klog(LOG_DEBUG, "VFS: Reading directory %s\n", file->f_path);
+#endif
     memset(dirp, 0, buf_size);
     int cnt = file->f_op->readdir(file, dirp, buf_size);
     file->f_pos += cnt;
@@ -354,9 +355,9 @@ int create(const char *path, umode_t mode)
     new_dentry->d_parent = parent;
     new_dentry->d_sb = sb;
     dcache_add(new_dentry);
-
+#ifdef DEBUG_VFS
     klog(LOG_DEBUG, "Creating %s\n", new_dentry->d_name);
-
+#endif
     return parent_inode->i_op->create(parent_inode, new_dentry, mode);
 }
 SYSCALL_DECL2(create, const char*, path, umode_t, mode)

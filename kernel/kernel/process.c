@@ -86,13 +86,15 @@ static void start_process(void)
     vma_list_insert(heap_desc, &mem->mmap);
 
     struct vm_desc *desc = mem->mmap;
-    // while (desc) {
-    //     klog(LOG_DEBUG, "Start: %x\n", desc->start);
-    //     klog(LOG_DEBUG, "End: %x\n", desc->end);
-    //     klog(LOG_DEBUG, "Prot: %x\n", desc->vm_prot);
-    //     klog(LOG_DEBUG, "Flags: %x\n", desc->vm_flags);
-    //     desc = desc->vm_next;
-    // }
+    /*
+    while (desc) {
+        klog(LOG_DEBUG, "Start: %x\n", desc->start);
+        klog(LOG_DEBUG, "End: %x\n", desc->end);
+        klog(LOG_DEBUG, "Prot: %x\n", desc->vm_prot);
+        klog(LOG_DEBUG, "Flags: %x\n", desc->vm_flags);
+        desc = desc->vm_next;
+    }
+    */
     close(fd);
     klog(LOG_DEBUG, "Going to user mode\n");
     jump_usermode((u32)jmp, __USER_STACK - 4);
@@ -147,11 +149,50 @@ struct task *init_process(void)
     return this;
 }
 
-int fork(void)
+void clone_process(struct task *parent, struct task *child)
 {
-    asm("hlt");
+    child->ppid = parent->pid;
+    child->parent = parent;
+    child->mm = arch_copy_mmap(parent->mm);
+    child->pgd = child->mm->pgd;
+    child->pc = parent->pc;
+    child->stack = (void*)INIT_STACK(child->mm->kstack);
+    child->state = TASK_SLEEPING;
+    child->info.path = parent->info.path;
+    child->fs.cwd = kzmalloc(strlen(parent->fs.cwd) + 1);
+    strcpy(child->fs.cwd, parent->fs.cwd);
+    child->fs.files.fdarray = kcalloc(parent->fs.files.max, sizeof(struct file));
+    child->fs.files.max = parent->fs.files.max;
+    child->fs.files.size = parent->fs.files.size;
+    for (int i = 0; i < parent->fs.files.size; i++) {
+        child->fs.files.fdarray[i] = parent->fs.files.fdarray[i];
+        child->fs.files.fdarray[i]->f_count++;
+    }
+    memcpy(child->name, parent->name, strlen(parent->name) + 1);
+    strcat(child->name, " (clone)");
 }
-SYSCALL_DECL0(fork)
+
+static void return_from_fork(void)
+{
+    klog(LOG_DEBUG, "Returning from fork\n");
+    arch_return_from_fork(current->regs);
+}
+
+int do_fork(void)
+{
+    u32 pid = ++num_tasks;
+    struct task *parent = current;
+    struct task *child = &tasks[pid];
+
+    child->pid = pid;
+    clone_process(parent, child);
+    child->pc = (u32)return_from_fork;
+    child->regs = arch_copy_regs(parent->regs);
+    child->state = TASK_RUNNING;
+    schedule_task(child);
+
+    return pid;
+}
 
 int exit(int status)
 {

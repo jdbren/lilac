@@ -172,7 +172,7 @@ void ahci_port_rebase(hba_port_t *port, int portno)
 	memset(get_fb(portno), 0, 256);
 
 	// Command table size = 256*32 = 8K per port
-	hba_cmd_header_t *cmdheader = (hba_cmd_header_t*)(port->clb);
+	hba_cmd_header_t *cmdheader = (hba_cmd_header_t*)(get_clb(portno));
 	for (int i = 0; i < NUM_CMD_SLOTS; i++) {
 		cmdheader[i].prdtl = NUM_PRDT_ENTRIES;
 		// 256 bytes per command table, 64+16+48+16*8

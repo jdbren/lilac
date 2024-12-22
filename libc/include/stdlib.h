@@ -7,8 +7,12 @@
 extern "C" {
 #endif
 
-__attribute__((__noreturn__))
-void abort(void);
+#define EXIT_FAILURE 1
+#define EXIT_SUCCESS 0
+
+__attribute__((__noreturn__)) void abort(void);
+__attribute__((__noreturn__)) void exit(int status);
+__attribute__((__noreturn__)) void _Exit(int status);
 
 #ifdef __cplusplus
 }

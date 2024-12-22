@@ -10,17 +10,6 @@
 #endif
 
 
-syscall long sys_restart(void);
-syscall long sys_exit(int status);
-syscall long sys_fork(void);
-syscall long sys_read(int fd, void *buf, size_t count);
-syscall long sys_write(int fd, const void *buf, size_t count);
-syscall long sys_open(const char *path, int flags, int mode);
-syscall long sys_close(int fd);
-syscall long sys_getdents(unsigned int fd, struct dirent *dirp, size_t count);
-syscall long sys_getcwd(char *buf, size_t size);
-
-
 #define __SC_DECL(t, a)	t a
 #define __SC_TYPE(t, a)	t
 #define __SC_ARGS(t, a)	a
