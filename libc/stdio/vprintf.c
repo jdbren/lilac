@@ -288,6 +288,15 @@ int vprintf(const char *restrict format, va_list args)
                     return -1;
                 written += len;
             }
+            else if (*format == 'u') {
+                format++;
+                unsigned long i = va_arg(args, unsigned long);
+                char *s = convert(i, 10);
+                unsigned len = strlen(s);
+                if (!print(s, len))
+                    return -1;
+                written += len;
+            }
         }
         else {
             format = format_begun_at;

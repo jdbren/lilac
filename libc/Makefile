@@ -44,6 +44,7 @@ ctype/ctype.o
 HOSTEDOBJS=\
 $(ARCH_HOSTEDOBJS) \
 unistd/fork.o \
+unistd/exec.o \
 unistd/_exit.o \
 unistd/read.o \
 unistd/write.o \

@@ -26,6 +26,7 @@ int log_init(int level)
 
 void klog(int level, const char *data, ...)
 {
+    u32 text_color = graphics_getcolor().fg;
     va_list args;
     if (!data || log_level > level) return;
     putchar('[');
@@ -52,7 +53,7 @@ void klog(int level, const char *data, ...)
         printf(" FATAL ");
         break;
     }
-    graphics_setcolor(RGB_LIGHT_GRAY, RGB_BLACK);
+    graphics_setcolor(text_color, RGB_BLACK);
     printf("] ");
 
     va_start(args, data);

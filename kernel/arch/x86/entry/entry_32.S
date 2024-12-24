@@ -84,11 +84,9 @@ arch_context_switch:
 	ret
 
 1:	popf
-	add    $0x10, %esp
-	leal   -0x8(%ebp),%esp
-	pop    %ebx
-	pop    %esi
-	pop    %ebp
+	popl    %ebx
+	popl    %esi
+	popl   	%ebp
 	ret
 
 .ct_string:

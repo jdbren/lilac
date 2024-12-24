@@ -1,8 +1,6 @@
 .text
 .globl sys_call_handler
 sys_call_handler:
-    cmpl $12, %eax
-    jg .Lerror
     # already on stack: ss, sp, flags, cs, ip.
     pushl %gs
     pushl %fs
@@ -79,6 +77,11 @@ arch_return_from_fork:
     movl $0, %eax
     iret
 
+sys_link:
+    ret
+sys_unlink:
+    ret
+
 .data
 syscall_table:
     .long sys_restart
@@ -90,8 +93,11 @@ syscall_table:
     .long sys_close
     .long sys_waitpid
     .long sys_create
-
-    .long sys_getdents
+    .long sys_link
+    .long sys_unlink
+    .long sys_execve
+    # ...
+    .long sys_getdents # 12
     .long sys_getcwd
     .long sys_mkdir
     .long sys_mount

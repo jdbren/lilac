@@ -144,6 +144,12 @@ void graphics_clear(void)
     ssfn_dst.y = WINDOW_BORDER;
 }
 
+struct console_color graphics_getcolor(void)
+{
+    struct console_color color = {ssfn_dst.fg, ssfn_dst.bg};
+    return color;
+}
+
 void graphics_setcolor(u32 fg, u32 bg)
 {
     ssfn_dst.fg = fg;
