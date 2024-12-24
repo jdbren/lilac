@@ -6,7 +6,6 @@
 
 void pic_initialize(void)
 {
-    pic_disable();
     pic_remap(0x20, 0x28);
 }
 

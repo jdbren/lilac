@@ -20,17 +20,9 @@
 
 #define MAX_TASKS 1024
 #define INIT_STACK(KSTACK) ((u32)KSTACK + __KERNEL_STACK_SZ - sizeof(size_t))
-#define current get_current_task()
 
 static struct task tasks[MAX_TASKS];
 static int num_tasks;
-
-void idle(void)
-{
-    printf("Idle process started\n");
-    while (1)
-        asm("hlt");
-}
 
 u32 get_pid(void)
 {
@@ -55,13 +47,12 @@ static void start_process(void)
         bytes += 0x1000;
         hdr = krealloc(hdr, bytes + 0x1000);
     }
-    klog(LOG_DEBUG, "Read %d bytes from %s\n", bytes, path);
 
     void *jmp = elf32_load(hdr, mem);
     if (!jmp)
         kerror("Failed to load ELF file\n");
 
-    // close(fd);
+    klog(LOG_DEBUG, "ELF loaded\n");
 
     mem->start_stack = (uintptr_t)arch_user_stack();
 
@@ -85,8 +76,8 @@ static void start_process(void)
     heap_desc->vm_flags = MAP_PRIVATE | MAP_ANONYMOUS;
     vma_list_insert(heap_desc, &mem->mmap);
 
-    struct vm_desc *desc = mem->mmap;
     /*
+    struct vm_desc *desc = mem->mmap;
     while (desc) {
         klog(LOG_DEBUG, "Start: %x\n", desc->start);
         klog(LOG_DEBUG, "End: %x\n", desc->end);
@@ -96,10 +87,39 @@ static void start_process(void)
     }
     */
     close(fd);
+
+    volatile u32 *stack = (u32*)(__USER_STACK - 4);
+    if (!current->info.argv) {
+        *stack = 0;
+        *--stack = 0;
+        goto skip;
+    }
+    // Write args to user stack
+    u32 argc = 0;
+    char **argv = (char**)(__USER_STACK - 0x4000);
+    for (; current->info.argv[argc]; argc++) {
+        u32 len = strlen(current->info.argv[argc]) + 1;
+        len = (len + 3) & ~3; // Align stack
+        stack = (u32*)((uintptr_t)stack - len);
+        strcpy((char*)stack, current->info.argv[argc]);
+        argv[argc] = (char*)stack;
+    }
+    argv[argc+1] = NULL;
+
+    // Print the arguments
+    for (int i = 0; i < argc; i++) {
+        klog(LOG_DEBUG, "Arg %d: %s\n", i, argv[i]);
+    }
+
+    *--stack = (u32)argv;
+    *--stack = argc;
+
+skip:
     klog(LOG_DEBUG, "Going to user mode\n");
-    jump_usermode((u32)jmp, __USER_STACK - 4);
+    jump_usermode((u32)jmp, (u32)stack);
 }
 
+/*
 struct task* create_process(const char *path)
 {
     static int pid = 1;
@@ -113,7 +133,7 @@ struct task* create_process(const char *path)
     new_task->parent = current;
     new_task->mm = mem;
     new_task->pgd = mem->pgd;
-    new_task->pc = (u32)(start_process);
+    new_task->pc = (uintptr_t)(start_process);
     new_task->stack = (void*)INIT_STACK(mem->kstack);
     new_task->state = TASK_SLEEPING;
     new_task->info.path = kzmalloc(strlen(path) + 1);
@@ -124,6 +144,7 @@ struct task* create_process(const char *path)
     num_tasks++;
     return new_task;
 }
+*/
 
 struct task *init_process(void)
 {
@@ -136,7 +157,7 @@ struct task *init_process(void)
     this->mm = mem;
     this->pgd = mem->pgd;
     this->stack = (void*)INIT_STACK(mem->kstack);
-    this->pc = (u32)(start_process);
+    this->pc = (uintptr_t)(start_process);
     this->state = TASK_RUNNING;
     this->fs.files.fdarray = kcalloc(4, sizeof(struct file));
     this->fs.files.max = 4;
@@ -158,7 +179,8 @@ void clone_process(struct task *parent, struct task *child)
     child->pc = parent->pc;
     child->stack = (void*)INIT_STACK(child->mm->kstack);
     child->state = TASK_SLEEPING;
-    child->info.path = parent->info.path;
+    child->info.path = kzmalloc(strlen(parent->info.path) + 1);
+    strcpy(child->info.path, parent->info.path);
     child->fs.cwd = kzmalloc(strlen(parent->fs.cwd) + 1);
     strcpy(child->fs.cwd, parent->fs.cwd);
     child->fs.files.fdarray = kcalloc(parent->fs.files.max, sizeof(struct file));
@@ -186,12 +208,87 @@ int do_fork(void)
 
     child->pid = pid;
     clone_process(parent, child);
-    child->pc = (u32)return_from_fork;
+    child->pc = (uintptr_t)return_from_fork;
     child->regs = arch_copy_regs(parent->regs);
     child->state = TASK_RUNNING;
     schedule_task(child);
 
     return pid;
+}
+
+int exec_and_return(void)
+{
+    klog(LOG_DEBUG, "Entering exec_and_return, pid = %d\n", current->pid);
+    // Fix memory leaks
+    struct mm_info *mem = arch_process_mmap();
+    struct task *task = current;
+
+    task->mm = mem;
+    task->pgd = mem->pgd;
+    task->stack = (void*)INIT_STACK(mem->kstack);
+    task->pc = (uintptr_t)start_process;
+    task->state = TASK_RUNNING;
+
+    jump_new_proc(task);
+
+    return -1;
+}
+
+int execve(const char *path, char *const argv[], char *const envp[])
+{
+    struct task_info *info = &current->info;
+    int i;
+    int fd = 0;
+
+    // if ((fd = open(path, 0, 0)) == -1) {
+    //     klog(LOG_ERROR, "file %s not found\n", path);
+    //     return -1;
+    // } else {
+    //     close(0);
+    // }
+
+    if (info->path)
+        kfree(info->path);
+    info->path = kzmalloc(strlen(path) + 1);
+    strcpy(info->path, path);
+
+    if (info->argv) {
+        for (i = 0; info->argv[i]; i++)
+            kfree(info->argv[i]);
+        kfree(info->argv);
+    }
+    for (i = 0; argv[i]; i++) {
+        klog(LOG_DEBUG, "Arg %d: %s\n", i, argv[i]);
+        info->argv = krealloc(info->argv, (i + 1) * sizeof(char*));
+        info->argv[i] = kzmalloc(strlen(argv[i]) + 1);
+        strcpy(info->argv[i], argv[i]);
+    }
+    info->argv = krealloc(info->argv, (i + 1) * sizeof(char*));
+    info->argv[i] = 0;
+
+    klog(LOG_INFO, "Executing %s\n", info->path);
+
+    int err = exec_and_return();
+    return err;
+}
+SYSCALL_DECL3(execve, const char*, path, char* const*, argv, char* const*, envp)
+
+void cleanup_task(struct task *task)
+{
+    klog(LOG_DEBUG, "Cleaning up task %d\n", task->pid);
+    kfree(task->info.path);
+    for (int i = 0; task->info.argv[i]; i++)
+        kfree(task->info.argv[i]);
+    kfree(task->info.argv);
+    kfree(task->fs.cwd);
+    kfree(task->fs.files.fdarray); // TODO: File management
+    struct vm_desc *desc = task->mm->mmap;
+    while (desc) {
+        struct vm_desc *next = desc->vm_next;
+        kfree(desc);
+        desc = next;
+    }
+    kfree(task->mm);
 }
 
 int exit(int status)

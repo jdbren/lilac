@@ -22,7 +22,24 @@ struct boot_info {
 
 __no_ret __no_stack_chk
 void start_kernel(void);
-extern inline void arch_idle(void);
-extern inline void arch_enable_interrupts(void);
+inline void arch_idle(void);
+inline void arch_enable_interrupts(void);
+
+#ifdef ARCH_x86
+static inline void arch_idle(void)
+{
+    while (1) {
+        asm volatile (
+            "sti\n\t"
+            "hlt"
+        );
+    }
+}
+
+static __always_inline void arch_enable_interrupts(void)
+{
+    asm volatile ("sti");
+}
+#endif
 
 #endif

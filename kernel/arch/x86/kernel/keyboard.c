@@ -32,15 +32,15 @@ void keyboard_int(struct interrupt_frame *frame)
 
     keycode = inb(KEYBOARD_DATA_PORT);
 
+    /* Send End of Interrupt (EOI) */
+    apic_eoi();
+
     if (keycode >= 0 && keyboard_map[keycode]) {
         if (console)
             console_intr(keyboard_map[keycode]);
         else
             graphics_putchar(keyboard_map[keycode]);
     }
-
-    /* Send End of Interrupt (EOI) */
-    apic_eoi();
 }
 
 void keyboard_init(void)

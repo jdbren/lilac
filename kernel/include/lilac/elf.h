@@ -49,9 +49,9 @@ struct elf64_header {
     u16 type;
     u16 mach;
     u32 elfv;
-    uint64_t entry;
-    uint64_t p_tbl;
-    uint64_t s_tbl;
+    u64 entry;
+    u64 p_tbl;
+    u64 s_tbl;
     u32 flg;
     u16 hd_sz;
     u16 p_entrysz;
@@ -88,12 +88,12 @@ struct elf32_pheader {
 struct elf64_pheader {
     u32 type;
     u32 flags;
-    uint64_t p_offset;
-    uint64_t p_vaddr;
-    uint64_t p_paddr;
-    uint64_t p_filesz;
-    uint64_t p_memsz;
-    uint64_t align;
+    u64 p_offset;
+    u64 p_vaddr;
+    u64 p_paddr;
+    u64 p_filesz;
+    u64 p_memsz;
+    u64 align;
 } __packed;
 
 struct mm_info;

@@ -1,13 +1,12 @@
-#include <stdio.h>
-#include <fcntl.h>
-#include <unistd.h>
 #include <dirent.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/wait.h>
 
 #define SHELL_PROMPT "lilacOS %s # "
-
-int ls_main(const char *pwd);
 
 int prompt()
 {
@@ -15,34 +14,31 @@ int prompt()
     const char cwd[32];
     getcwd(cwd, 32);
     printf(SHELL_PROMPT, cwd);
+    char *args[8] = {0};
 
-    unsigned int r = read(0, command, 256);
+    unsigned int r = read(STDIN_FILENO, command, 256);
     command[r-1] = 0; // remove newline
+
+    args[0] = command;
+    for (int i = 0, c = 1; i < r && c < 7; i++) {
+        if (command[i] == ' ') {
+            command[i] = 0;
+            args[c++] = &command[i+1];
+        }
+    }
 
     pid_t pid = fork();
 
     if (pid == 0) {
         printf("child %d\n", pid);
-        _exit(0);
+        execv(command, args);
+        printf("exec failed\n");
+        _Exit(EXIT_FAILURE);
     }
     else {
         printf("parent: pid %d\n", pid);
         waitpid(pid, 0, 0);
     }
-    return 0;
-}
-
-int ls_main(const char *pwd)
-{
-    dirent buf[12];
-    int fd = open(pwd, 0);
-    int err = getdents(fd, (void*)buf, sizeof(buf));
-    for (int i = 0; i < 12; i++)
-    {
-        printf("%s\t", buf[i].d_name);
-    }
-    putchar('\n');
-    close(fd);
     return 0;
 }
 

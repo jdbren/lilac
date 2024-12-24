@@ -5,6 +5,7 @@
 #include <lilac/lilac.h>
 #include <lilac/device.h>
 #include <lilac/sched.h>
+#include <lilac/process.h>
 
 #include <lilac/fs.h>
 #include <mm/kmm.h>
@@ -82,6 +83,27 @@ void console_init(void)
     sleep(500);
 }
 
+static u32 io_queue[8];
+
+static void add_to_io_queue(u32 pid)
+{
+    for (int i = 0; i < 8; i++) {
+        if (io_queue[i] == 0) {
+            io_queue[i] = pid;
+            return;
+        }
+    }
+}
+
+static u32 pop_io_queue(void)
+{
+    u32 pid = io_queue[0];
+    for (int i = 0; i < 7; i++)
+        io_queue[i] = io_queue[i+1];
+    io_queue[7] = 0;
+    return pid;
+}
+
 ssize_t console_read(struct file *file, void *buf, size_t count)
 {
     u32 target;
@@ -92,8 +114,10 @@ ssize_t console_read(struct file *file, void *buf, size_t count)
     while(count > 0){
         // wait until interrupt handler has put some
         // input into cons.buffer.
-        while(con.rpos == con.wpos) {
+        if (con.rpos == con.wpos) {
             arch_enable_interrupts();
+            current->state = TASK_SLEEPING;
+            add_to_io_queue(current->pid);
             yield();
         }
 
@@ -148,7 +172,7 @@ void console_intr(char c)
     //     }
     // break;
     default:
-        if(c != 0 && con.epos-con.rpos < INPUT_BUF_SIZE){
+        if (c != 0 && con.epos-con.rpos < INPUT_BUF_SIZE) {
             c = (c == '\r') ? '\n' : c;
 
             // echo back to the user.
@@ -157,11 +181,12 @@ void console_intr(char c)
             // store for consumption by consoleread().
             con.buf[con.epos++ % INPUT_BUF_SIZE] = c;
 
-            if(c == '\n' || con.epos-con.rpos == INPUT_BUF_SIZE){
+            if (c == '\n' || con.epos-con.rpos == INPUT_BUF_SIZE) {
                 // wake up consoleread() if a whole line (or end-of-file)
                 // has arrived.
                 con.wpos = con.epos;
-                // wakeup(&con.rpos);
+                u32 pid = pop_io_queue();
+                wakeup(pid);
             }
         }
     }

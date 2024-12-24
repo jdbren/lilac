@@ -5,6 +5,7 @@
 #include "cpufaults.h"
 #include "idt.h"
 #include "pic.h"
+#include "asm/segments.h"
 
 #define IDT_SIZE 256
 #define DPL_3 0x60
@@ -31,14 +32,15 @@ static struct IDT idtptr = {
 
 void idt_init(void)
 {
-    extern void sys_call_handler(void);
-    idt_entry(0, (u32)div0, 0x08, TRAP_GATE);
-    idt_entry(6, (u32)invldop, 0x08, TRAP_GATE);
-    idt_entry(13, (u32)gpflt, 0x08, TRAP_GATE);
-    idt_entry(14, (u32)pgflt, 0x08, TRAP_GATE);
-    idt_entry(0x80, (u32)sys_call_handler, 0x08, INT_GATE | DPL_3);
+    extern void syscall_handler(void);
+    idt_entry(0, (u32)div0, __KERNEL_CS, TRAP_GATE);
+    idt_entry(6, (u32)invldop, __KERNEL_CS, TRAP_GATE);
+    idt_entry(8, (u32)dblflt, __KERNEL_CS, TRAP_GATE);
+    idt_entry(13, (u32)gpflt, __KERNEL_CS, TRAP_GATE);
+    idt_entry(14, (u32)pgflt, __KERNEL_CS, TRAP_GATE);
+    idt_entry(0x80, (u32)syscall_handler, __KERNEL_CS, INT_GATE | DPL_3);
 
-    pic_disable();
+    pic_initialize();
 
     asm volatile("lidt %0" : : "m"(idtptr));
     printf("Loaded IDT\n");

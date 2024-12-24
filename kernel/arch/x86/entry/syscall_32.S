@@ -1,6 +1,6 @@
 .text
-.globl sys_call_handler
-sys_call_handler:
+.globl syscall_handler
+syscall_handler:
     # already on stack: ss, sp, flags, cs, ip.
     pushl %gs
     pushl %fs

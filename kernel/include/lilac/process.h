@@ -63,7 +63,9 @@ struct task *create_process(const char *path);
 u32 get_pid(void);
 
 struct mm_info *arch_process_mmap();
+struct mm_info *arch_process_remap(struct mm_info *existing);
 void *arch_user_stack(void);
+void jump_new_proc(struct task *next);
 extern void jump_usermode(u32 addr, u32 stack);
 extern int arch_return_from_fork(void *regs);
 void *arch_copy_regs(void *src);

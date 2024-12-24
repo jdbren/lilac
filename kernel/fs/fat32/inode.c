@@ -10,10 +10,10 @@
 
 #include "fat_internal.h"
 
-static inline bool check_entry(struct fat_file *entry, const char *cur)
+static inline bool check_entry(struct fat_file *entry, const char *name)
 {
     if (entry->attributes != LONG_FNAME && entry->name[0] != (char)FAT_UNUSED) {
-        if (!memcmp(entry->name, cur, strlen(cur)))
+        if (!memcmp(entry->name, name, 8))
             return true;
     }
     return false;
@@ -131,9 +131,15 @@ struct dentry *fat32_lookup(struct inode *parent, struct dentry *find,
     struct inode *inode;
     struct fat_file *info = kzmalloc(sizeof(*info));
     char name[9];
+    int i;
 
-    for (int i = 0; i < 8; i++)
+    for (i = 0; i < 8; i++) {
+        if (find->d_name[i] == '\0')
+            break;
         name[i] = toupper(find->d_name[i]);
+    }
+    for (; i < 8; i++)
+        name[i] = ' ';
     name[8] = '\0';
 
     if (fat32_find(parent, name, info) == 0) {

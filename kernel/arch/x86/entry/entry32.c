@@ -28,3 +28,20 @@ void arch_context_switch(struct task *prev, struct task *next)
     );
 }
 */
+
+void jump_new_proc(struct task *next)
+{
+    set_tss_esp0((u32)next->stack);
+    asm volatile (
+        "movl %[next_pg], %%eax\n\t"
+        "movl %%eax, %%cr3\n\t"
+        "movl %[next_sp], %%esp\n\t"
+        "pushl %[next_ip]\n\t"
+        "ret\n"
+        :
+        :   [next_sp] "m" (next->stack),
+            [next_ip] "m" (next->pc),
+            [next_pg] "m" (next->pgd)
+        :   "memory"
+    );
+}

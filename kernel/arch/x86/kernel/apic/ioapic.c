@@ -8,6 +8,7 @@
 #include <mm/kmalloc.h>
 #include "apic.h"
 #include "paging.h"
+#include "pic.h"
 
 #define IOAPIC_REGSEL     0x0
 #define IOAPIC_DATA       0x10
@@ -55,6 +56,7 @@ static inline u32 read_reg(const u8 offset)
 
 void ioapic_init(struct ioapic *ioapic, struct int_override *over, u8 num_over)
 {
+    pic_disable();
     ioapic_base = ioapic->address;
     ioapic_gsi_base = ioapic->gsi_base;
     num_overrides = num_over;

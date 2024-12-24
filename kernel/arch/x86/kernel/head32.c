@@ -50,16 +50,6 @@ void kernel_early(uintptr_t multiboot)
     start_kernel();
 }
 
-inline void arch_idle(void)
-{
-    while (1)
-        asm("hlt");
-}
-
-__always_inline void arch_enable_interrupts(void)
-{
-    asm volatile ("sti");
-}
 
 static void parse_multiboot(uintptr_t addr, struct multiboot_info *mbd)
 {
