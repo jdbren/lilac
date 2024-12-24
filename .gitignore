@@ -1,6 +1,6 @@
 /.vscode
 /sysroot
-lilac.kernel
+lilac.ker
 lilac.iso
 *.o
 *.d
