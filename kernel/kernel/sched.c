@@ -22,9 +22,7 @@ static struct task root = {
     .priority = 20,
     .pid = 0,
     .ppid = 0,
-    .pc = (uintptr_t)&idle,
     .pgd = pa((uintptr_t)&page_directory),
-    .stack = (void*)&stack_top,
 };
 static int back;
 volatile static int current_task;
@@ -98,10 +96,8 @@ void schedule(void)
     if (task_queue[current_task] == prev) {
         if (prev->state == TASK_RUNNING)
             return;
-        else {
+        else
             current_task = 0; // idle
-            task_queue[0]->pc = (uintptr_t)&idle;
-        }
     }
     struct task *next = task_queue[current_task];
 
@@ -136,7 +132,7 @@ long waitpid(int pid)
     if (i == -1)
         return -1;
     struct task *task = task_queue[i];
-    klog(LOG_DEBUG, "Waiting for task %d\n", pid);
+    klog(LOG_DEBUG, "Process %d: Waiting for task %d\n", get_pid(), pid);
     if (task == NULL)
         return -1;
     while (task->state != TASK_DEAD)

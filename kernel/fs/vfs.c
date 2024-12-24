@@ -82,10 +82,10 @@ void fs_init(void)
 
     root_init(bdev);
 
-    mount("tmpfs", "/tmp", "tmpfs", 0, NULL);
-    mount("tmpfs", "/dev", "tmpfs", 0, NULL);
-    create("/dev/null", 0);
-    create("/dev/zero", 0);
+    vfs_mount("tmpfs", "/tmp", "tmpfs", 0, NULL);
+    vfs_mount("tmpfs", "/dev", "tmpfs", 0, NULL);
+    vfs_create("/dev/null", 0);
+    vfs_create("/dev/zero", 0);
 
     kstatus(STATUS_OK, "Filesystem initialized\n");
 }
@@ -107,7 +107,7 @@ inline struct inode *get_root_inode(void)
 //     return 0;
 // }
 
-int mount(const char *source, const char *target,
+int vfs_mount(const char *source, const char *target,
         const char *filesystemtype, unsigned long mountflags,
         const void *data)
 {
@@ -174,7 +174,7 @@ SYSCALL_DECL5(mount, const char*, source, const char*, target,
     const char*, filesystemtype, unsigned long, mountflags,
     const void*, data)
 {
-    return mount(source, target, filesystemtype, mountflags, data);
+    return vfs_mount(source, target, filesystemtype, mountflags, data);
 }
 
 #define SEEK_SET 0
@@ -196,12 +196,11 @@ int lseek(int fd, int offset, int whence)
     return file->f_pos;
 }
 
-int open(const char *path, int flags, int mode)
+struct file *vfs_open(const char *path, int flags, int mode)
 {
     klog(LOG_DEBUG, "VFS: Opening %s\n", path);
     int n_pos = 0;
     int n_len = strlen(path);
-    int fd;
     struct inode *inode;
     struct file *new_file;
 
@@ -212,39 +211,32 @@ int open(const char *path, int flags, int mode)
     // Is this all open is supposed to do?
     struct dentry *dentry = lookup_path(path);
     if (!dentry)
-        return -1;
+        return NULL;
     inode = dentry->d_inode;
     if (!inode)
-        return -1;
+        return NULL;
     if(inode->i_op->open(inode, new_file))
-        return -1;
+        return NULL;
 
-    fd = get_fd();
-    current->fs.files.fdarray[fd] = new_file;
-
-    return fd;
+    return new_file;
 }
 
 SYSCALL_DECL3(open, const char*, path, int, flags, int, mode)
 {
-    return open(path, flags, mode);
+    struct file *f = vfs_open(path, flags, mode);
+    if (!f)
+        return -1;
+    int fd = get_fd();
+    current->fs.files.fdarray[fd] = f;
+    return fd;
 }
 
 
-ssize_t read(int fd, void *buf, size_t count)
+ssize_t vfs_read(struct file *file, void *buf, size_t count)
 {
-    struct file *file = current->fs.files.fdarray[fd];
-
     if (file->f_inode->i_type == TYPE_DEV) {
         return file->f_inode->i_fop->read(file, buf, count);
     }
-
-    // while (file->f_pos >= file->f_inode->i_size) {
-    //     klog(LOG_DEBUG, "VFS: Blocking read on file %s\n", file->f_path);
-    //     // current->state = TASK_SLEEPING;
-    //     // schedule();
-    //     sleep(1000);
-    // }
 
     ssize_t bytes = file->f_op->read(file, buf, count);
     if (bytes > 0)
@@ -254,14 +246,13 @@ ssize_t read(int fd, void *buf, size_t count)
 
 SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
 {
-    return read(fd, buf, count);
+    struct file *file = current->fs.files.fdarray[fd];
+    return vfs_read(file, buf, count);
 }
 
 
-ssize_t write(int fd, const void *buf, size_t count)
+ssize_t vfs_write(struct file *file, const void *buf, size_t count)
 {
-    struct file *file = current->fs.files.fdarray[fd];
-
     if (file->f_inode->i_type == TYPE_DEV) {
         return file->f_inode->i_fop->write(file, buf, count);
     }
@@ -274,16 +265,14 @@ ssize_t write(int fd, const void *buf, size_t count)
 
 SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
 {
-    return write(fd, buf, count);
+    struct file *file = current->fs.files.fdarray[fd];
+    return vfs_write(file, buf, count);
 }
 
 
-int close(int fd)
+int vfs_close(struct file *file)
 {
-    struct file *file = current->fs.files.fdarray[fd];
     //file->f_op->flush(file);
-    current->fs.files.fdarray[fd] = NULL;
-    current->fs.files.size--;
     if (--file->f_count)
         return 0;
 
@@ -294,13 +283,18 @@ int close(int fd)
 }
 SYSCALL_DECL1(close, int, fd)
 {
-    return close(fd);
+    struct file *file = current->fs.files.fdarray[fd];
+    if (!file)
+        return -1;
+    int ret = vfs_close(file);
+    current->fs.files.fdarray[fd] = NULL;
+    current->fs.files.size--;
+    return ret;
 }
 
 
-ssize_t getdents(unsigned int fd, struct dirent *dirp, unsigned int buf_size)
+ssize_t vfs_getdents(struct file *file, struct dirent *dirp, unsigned int buf_size)
 {
-    struct file *file = current->fs.files.fdarray[fd];
     struct inode *inode = file->f_inode;
 
     if (inode->i_type != TYPE_DIR)
@@ -315,10 +309,11 @@ ssize_t getdents(unsigned int fd, struct dirent *dirp, unsigned int buf_size)
 }
 SYSCALL_DECL3(getdents, unsigned int, fd, struct dirent*, dirp, size_t, buf_size)
 {
-    return getdents(fd, dirp, buf_size);
+    struct file *file = current->fs.files.fdarray[fd];
+    return vfs_getdents(file, dirp, buf_size);
 }
 
-int mkdir(const char *path, umode_t mode)
+int vfs_mkdir(const char *path, umode_t mode)
 {
     struct inode *parent;
     struct dentry *new_dentry;
@@ -351,11 +346,11 @@ int mkdir(const char *path, umode_t mode)
 }
 SYSCALL_DECL2(mkdir, const char*, path, umode_t, mode)
 {
-    return mkdir(path, mode);
+    return vfs_mkdir(path, mode);
 }
 
 
-int create(const char *path, umode_t mode)
+int vfs_create(const char *path, umode_t mode)
 {
     char dirname[64];
     char basename[16];
@@ -387,7 +382,7 @@ int create(const char *path, umode_t mode)
 }
 SYSCALL_DECL2(create, const char*, path, umode_t, mode)
 {
-    return create(path, mode);
+    return vfs_create(path, mode);
 }
 
 int mknod(const char *pathname, int mode, dev_t dev)

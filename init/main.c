@@ -16,6 +16,9 @@ int prompt()
     printf(SHELL_PROMPT, cwd);
     char *args[8] = {0};
 
+    memset(command, 0, 256);
+    memset(cwd, 0, 32);
+
     unsigned int r = read(STDIN_FILENO, command, 256);
     command[r-1] = 0; // remove newline
 

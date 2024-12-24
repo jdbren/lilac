@@ -12,7 +12,7 @@ int __must_check device_register(struct device *dev)
 
 int add_device(const char *path, struct file_operations *fops)
 {
-    if (create(path, 0)) {
+    if (vfs_create(path, 0)) {
         klog(LOG_ERROR, "Failed to create %s\n", path);
         return -1;
     }

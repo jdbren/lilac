@@ -115,9 +115,10 @@ ssize_t console_read(struct file *file, void *buf, size_t count)
         // wait until interrupt handler has put some
         // input into cons.buffer.
         if (con.rpos == con.wpos) {
+            klog(LOG_DEBUG, "console_read: proc %d waiting for input\n", get_pid());
             arch_enable_interrupts();
             current->state = TASK_SLEEPING;
-            add_to_io_queue(current->pid);
+            add_to_io_queue(get_pid());
             yield();
         }
 

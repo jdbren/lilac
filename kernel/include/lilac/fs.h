@@ -137,15 +137,14 @@ struct vfsmount {
 };
 
 int lseek(int fd, int offset, int whence);
-int open(const char *path, int flags, int mode);
-ssize_t read(int fd, void *buf, size_t count);
-ssize_t write(int fd, const void *buf, size_t count);
-int close(int fd);
-ssize_t getdents(unsigned int fd, struct dirent *dirp, unsigned int buf_size);
-int create(const char *path, umode_t mode);
-int mkdir(const char *path, umode_t mode);
-
-int mount(const char *source, const char *target,
+struct file* vfs_open(const char *path, int flags, int mode);
+ssize_t vfs_read(struct file *file, void *buf, size_t count);
+ssize_t vfs_write(struct file *file, const void *buf, size_t count);
+int vfs_close(struct file *file);
+ssize_t vfs_getdents(struct file *file, struct dirent *dirp, unsigned int buf_size);
+int vfs_create(const char *path, umode_t mode);
+int vfs_mkdir(const char *path, umode_t mode);
+int vfs_mount(const char *source, const char *target,
         const char *filesystemtype, unsigned long mountflags,
         const void *data);
 

@@ -35,15 +35,15 @@ static void start_process(void)
     klog(LOG_DEBUG, "Process %d started\n", current->pid);
 
     const char *path = current->info.path;
-    int fd = open(path, 0, 0);
-    if (fd < 0) {
+    struct file *file = vfs_open(path, 0, 0);
+    if (!file) {
         klog(LOG_ERROR, "Failed to open file %s\n", path);
         return;
     }
 
     struct elf_header *hdr = kzmalloc(0x1000);
     int bytes = 0;
-    while(read(fd, (u8*)hdr + bytes, 0x1000) > 0) {
+    while(vfs_read(file, (u8*)hdr + bytes, 0x1000) > 0) {
         bytes += 0x1000;
         hdr = krealloc(hdr, bytes + 0x1000);
     }
@@ -86,7 +86,7 @@ static void start_process(void)
         desc = desc->vm_next;
     }
     */
-    close(fd);
+    vfs_close(file);
 
     volatile u32 *stack = (u32*)(__USER_STACK - 128); // Will place argv entries here
     if (!current->info.argv) {
@@ -237,14 +237,14 @@ int do_execve(const char *path, char *const argv[], char *const envp[])
 {
     struct task_info *info = &current->info;
     int i;
-    int fd = 0;
+    struct file *file = vfs_open(path, 0, 0);
 
-    // if ((fd = open(path, 0, 0)) == -1) {
-    //     klog(LOG_ERROR, "file %s not found\n", path);
-    //     return -1;
-    // } else {
-    //     close(0);
-    // }
+    if (!file) {
+        klog(LOG_ERROR, "file %s not found\n", path);
+        return -1;
+    } else {
+        vfs_close(file);
+    }
 
     if (info->path)
         kfree(info->path);

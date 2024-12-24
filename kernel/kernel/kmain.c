@@ -29,6 +29,6 @@ void start_kernel(void)
     console_init();
     sched_clock_init();
 
-    arch_idle();
+    idle();
     __builtin_unreachable();
 }
