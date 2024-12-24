@@ -169,9 +169,13 @@ int mount(const char *source, const char *target,
 
     return 0;
 }
+
 SYSCALL_DECL5(mount, const char*, source, const char*, target,
     const char*, filesystemtype, unsigned long, mountflags,
     const void*, data)
+{
+    return mount(source, target, filesystemtype, mountflags, data);
+}
 
 #define SEEK_SET 0
 #define SEEK_CUR 1
@@ -220,7 +224,11 @@ int open(const char *path, int flags, int mode)
 
     return fd;
 }
+
 SYSCALL_DECL3(open, const char*, path, int, flags, int, mode)
+{
+    return open(path, flags, mode);
+}
 
 
 ssize_t read(int fd, void *buf, size_t count)
@@ -243,7 +251,11 @@ ssize_t read(int fd, void *buf, size_t count)
         file->f_pos += bytes;
     return bytes;
 }
+
 SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
+{
+    return read(fd, buf, count);
+}
 
 
 ssize_t write(int fd, const void *buf, size_t count)
@@ -259,7 +271,11 @@ ssize_t write(int fd, const void *buf, size_t count)
         file->f_pos += bytes;
     return bytes;
 }
+
 SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
+{
+    return write(fd, buf, count);
+}
 
 
 int close(int fd)
@@ -277,6 +293,9 @@ int close(int fd)
     return 0;
 }
 SYSCALL_DECL1(close, int, fd)
+{
+    return close(fd);
+}
 
 
 ssize_t getdents(unsigned int fd, struct dirent *dirp, unsigned int buf_size)
@@ -295,6 +314,9 @@ ssize_t getdents(unsigned int fd, struct dirent *dirp, unsigned int buf_size)
     return cnt > 0 ? cnt * sizeof(struct dirent) : cnt;
 }
 SYSCALL_DECL3(getdents, unsigned int, fd, struct dirent*, dirp, size_t, buf_size)
+{
+    return getdents(fd, dirp, buf_size);
+}
 
 int mkdir(const char *path, umode_t mode)
 {
@@ -328,6 +350,9 @@ int mkdir(const char *path, umode_t mode)
     return parent->i_op->mkdir(parent, new_dentry, mode);
 }
 SYSCALL_DECL2(mkdir, const char*, path, umode_t, mode)
+{
+    return mkdir(path, mode);
+}
 
 
 int create(const char *path, umode_t mode)
@@ -361,9 +386,15 @@ int create(const char *path, umode_t mode)
     return parent_inode->i_op->create(parent_inode, new_dentry, mode);
 }
 SYSCALL_DECL2(create, const char*, path, umode_t, mode)
+{
+    return create(path, mode);
+}
 
 int mknod(const char *pathname, int mode, dev_t dev)
 {
     return -1;
 }
 SYSCALL_DECL3(mknod, const char*, pathname, int, mode, dev_t, dev)
+{
+    return mknod(pathname, mode, dev);
+}

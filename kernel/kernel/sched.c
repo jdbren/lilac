@@ -145,6 +145,9 @@ long waitpid(int pid)
     return 0;
 }
 SYSCALL_DECL1(waitpid, int, pid)
+{
+    return waitpid(pid);
+}
 
 void wakeup(int pid)
 {

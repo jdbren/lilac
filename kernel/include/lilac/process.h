@@ -36,7 +36,7 @@ struct task {
     u8 priority;
     volatile u8 state;
     char name[32];
-    void *regs;
+    void *regs; // CPU registers
 };
 
 struct mm_info {

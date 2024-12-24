@@ -88,7 +88,7 @@ static void start_process(void)
     */
     close(fd);
 
-    volatile u32 *stack = (u32*)(__USER_STACK - 4);
+    volatile u32 *stack = (u32*)(__USER_STACK - 128); // Will place argv entries here
     if (!current->info.argv) {
         *stack = 0;
         *--stack = 0;
@@ -96,15 +96,15 @@ static void start_process(void)
     }
     // Write args to user stack
     u32 argc = 0;
-    char **argv = (char**)(__USER_STACK - 0x4000);
-    for (; current->info.argv[argc]; argc++) {
+    char **argv = (char**)(stack);
+    for (; current->info.argv[argc] && argc < 31; argc++) {
         u32 len = strlen(current->info.argv[argc]) + 1;
         len = (len + 3) & ~3; // Align stack
         stack = (u32*)((uintptr_t)stack - len);
         strcpy((char*)stack, current->info.argv[argc]);
         argv[argc] = (char*)stack;
     }
-    argv[argc+1] = NULL;
+    argv[argc] = NULL;
 
     // Print the arguments
     for (int i = 0; i < argc; i++) {
@@ -216,7 +216,8 @@ int do_fork(void)
     return pid;
 }
 
-int exec_and_return(void)
+__noreturn
+void exec_and_return(void)
 {
     klog(LOG_DEBUG, "Entering exec_and_return, pid = %d\n", current->pid);
     struct mm_info *mem = arch_process_remap(current->mm);
@@ -229,11 +230,10 @@ int exec_and_return(void)
     task->state = TASK_RUNNING;
 
     jump_new_proc(task);
-
-    return -1;
+    klog(LOG_FATAL, "exec_and_return: Should never be reached\n");
 }
 
-int execve(const char *path, char *const argv[], char *const envp[])
+int do_execve(const char *path, char *const argv[], char *const envp[])
 {
     struct task_info *info = &current->info;
     int i;
@@ -267,10 +267,14 @@ int execve(const char *path, char *const argv[], char *const envp[])
 
     klog(LOG_INFO, "Executing %s\n", info->path);
 
-    int err = exec_and_return();
-    return err;
+    exec_and_return();
+    return -1;
 }
+
 SYSCALL_DECL3(execve, const char*, path, char* const*, argv, char* const*, envp)
+{
+    return do_execve(path, argv, envp);
+}
 
 void cleanup_task(struct task *task)
 {
@@ -297,6 +301,9 @@ int exit(int status)
     schedule();
 }
 SYSCALL_DECL1(exit, int, status)
+{
+    return exit(status);
+}
 
 int getcwd(char *buf, size_t size)
 {
@@ -307,3 +314,6 @@ int getcwd(char *buf, size_t size)
     return 0;
 }
 SYSCALL_DECL2(getcwd, char*, buf, size_t, size)
+{
+    return getcwd(buf, size);
+}

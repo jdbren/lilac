@@ -146,8 +146,8 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
 int ia32_do_fork(struct sc32_regs *regs)
 {
     klog(LOG_DEBUG, "Forking process\n");
-    klog(LOG_DEBUG, "IP: %x\n", regs->ip);
-    klog(LOG_DEBUG, "SP: %x\n", regs->sp);
+    klog(LOG_DEBUG, "\tIP: %x\n", regs->ip);
+    klog(LOG_DEBUG, "\tSP: %x\n", regs->sp);
     current->regs = (void*)regs;
     return do_fork();
 }
