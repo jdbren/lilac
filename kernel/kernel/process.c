@@ -219,8 +219,7 @@ int do_fork(void)
 int exec_and_return(void)
 {
     klog(LOG_DEBUG, "Entering exec_and_return, pid = %d\n", current->pid);
-    // Fix memory leaks
-    struct mm_info *mem = arch_process_mmap();
+    struct mm_info *mem = arch_process_remap(current->mm);
     struct task *task = current;
 
     task->mm = mem;

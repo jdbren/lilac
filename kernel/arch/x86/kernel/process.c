@@ -63,6 +63,26 @@ struct mm_info * arch_process_mmap()
     return info;
 }
 
+void arch_unmap_all_user_vm(struct mm_info *info)
+{
+    struct vm_desc *desc = info->mmap;
+    while (desc) {
+        struct vm_desc *next = desc->vm_next;
+        uintptr_t phys = virt_to_phys((void*)desc->start);
+        unmap_pages((void*)desc->start, (desc->end - desc->start) / PAGE_SIZE);
+        free_frames((void*)phys, (desc->end - desc->start) / PAGE_SIZE);
+        kfree(desc);
+        desc = next;
+    }
+    info->mmap = NULL;
+}
+
+struct mm_info * arch_process_remap(struct mm_info *existing)
+{
+    arch_unmap_all_user_vm(existing);
+    return existing;
+}
+
 void * arch_user_stack(void)
 {
     static const int num_pgs = __USER_STACK_SZ / PAGE_SIZE;
