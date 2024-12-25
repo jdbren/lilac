@@ -33,13 +33,13 @@ startup_32:
 	leal pa(_bss_end), %ecx
 	subl %edi, %ecx
 	shrl $2, %ecx
-	rep ; stosl
+	rep ;stosl
 
 	# Copy the multiboot information.
 	leal pa(mbinfo), %edi
 	movl pa(_mbd_addr), %esi
 	movl pa(_mbd_size), %ecx
-	rep ; movsb
+	rep ;movsb
 
 	# Identity map the kernel.
 	leal pa(boot_page_table0), %edi 	# page table entry

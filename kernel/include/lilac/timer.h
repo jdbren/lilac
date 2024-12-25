@@ -13,6 +13,7 @@ struct timestamp {
 };
 
 void sleep(u32 ms);
+void usleep(u32 micros);
 u64 get_sys_time(void);
 s64 get_unix_time(void);
 struct timestamp get_timestamp(void);

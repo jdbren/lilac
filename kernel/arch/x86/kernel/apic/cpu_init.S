@@ -50,10 +50,10 @@ _L8060:
     jz      1b
     lock    incb pa(aprunning)
     # jump into C code (should never return)
-    ljmp    $8, $ap_startup
+    ljmp    $0x8, $pa(ap_startup)
 
-ap_startup:
-2:  jmp 2b
+// ap_startup:
+// 2:  jmp 2b
 
 .align 32
 stack_top:

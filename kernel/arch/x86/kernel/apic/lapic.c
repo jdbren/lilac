@@ -113,10 +113,10 @@ int ap_init(u8 numcores)
             continue;
 
         // send INIT IPI
-
         *((volatile u32*)(base + 0x280)) = 0;               // clear errors
         *ap_select = (*ap_select & 0x00ffffff) | (i << 24); // select AP
         *ipi_data = (*ipi_data & 0xfff00000) | 0x00C500;    // INIT IPI
+        sleep(10);                                          // wait
 
         do {
             asm volatile ("pause" : : : "memory");
@@ -134,7 +134,7 @@ int ap_init(u8 numcores)
         *((volatile u32*)(base + 0x280)) = 0;
         *ap_select = (*ap_select & 0x00ffffff) | (i << 24);
         *ipi_data = (*ipi_data & 0xfff0f800) | 0x000608;    // STARTUP IPI
-        sleep(1);                                           // wait 200 usec?
+        usleep(200);                                        // wait 200 usec?
 
         do {
             asm volatile ("pause" : : : "memory");
@@ -145,9 +145,17 @@ int ap_init(u8 numcores)
     bspdone = 1;
     sleep(10);
 
-    printf("APs running: %d\n", aprunning);
+    klog(LOG_INFO, "APs running: %d\n", aprunning);
     if (aprunning == numcores - 1)
         return 0;
     else
         return 1;
+}
+
+// We are still without paging here
+__noreturn
+void ap_startup(int id)
+{
+    while (1)
+        asm volatile ("hlt");
 }

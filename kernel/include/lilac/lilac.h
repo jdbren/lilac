@@ -24,6 +24,7 @@ __no_ret __no_stack_chk
 void start_kernel(void);
 inline void arch_idle(void);
 inline void arch_enable_interrupts(void);
+inline void arch_disable_interrupts(void);
 
 #ifdef ARCH_x86
 static inline void arch_idle(void)
@@ -39,6 +40,11 @@ static inline void arch_idle(void)
 static __always_inline void arch_enable_interrupts(void)
 {
     asm volatile ("sti");
+}
+
+static __always_inline void arch_disable_interrupts(void)
+{
+    asm volatile ("cli");
 }
 #endif
 

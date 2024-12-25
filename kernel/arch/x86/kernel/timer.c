@@ -107,6 +107,16 @@ void sleep(u32 millis)
     }
 }
 
+void usleep(u32 micros)
+{
+    // Get current time
+    u64 start = get_sys_time();
+    u64 end = start + micros * 1000;
+    while (get_sys_time() < end) {
+        asm volatile("nop");
+    }
+}
+
 // Get system timer in 1 ns intervals
 u64 get_sys_time(void)
 {
