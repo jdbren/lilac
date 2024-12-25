@@ -150,16 +150,12 @@ ssize_t console_read(struct file *file, void *buf, size_t count)
 
 ssize_t console_write(struct file *file, const void *buf, size_t count)
 {
-    char c = *(char*)buf;
-    // *pos++ = c;
+    char *bufp = (char*)buf;
+    int i;
+    for(i = 0; i < count; i++)
+        graphics_putchar(bufp[i] & 0xff);
 
-    // if (c == '\n') {
-    //     memset(line_buf, 0, sizeof(line_buf));
-    //     pos = line_buf;
-    // }
-
-    graphics_putchar(c);
-    return 1;
+    return count;
 }
 
 void console_intr(char c)

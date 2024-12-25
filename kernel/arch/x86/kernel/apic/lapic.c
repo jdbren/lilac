@@ -145,7 +145,7 @@ int ap_init(u8 numcores)
     bspdone = 1;
     sleep(10);
 
-    klog(LOG_INFO, "APs running: %d\n", aprunning);
+    kstatus(STATUS_OK, "APs running: %d\n", aprunning);
     if (aprunning == numcores - 1)
         return 0;
     else

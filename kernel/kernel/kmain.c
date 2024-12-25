@@ -27,7 +27,8 @@ void start_kernel(void)
 
     arch_enable_interrupts();
     console_init();
-    sched_clock_init();
+    log_init(LOG_INFO);
+    sched_clock_init(); // kernel is live, will jmp to init task
 
     idle();
     __builtin_unreachable();

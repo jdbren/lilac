@@ -33,13 +33,11 @@ int prompt()
     pid_t pid = fork();
 
     if (pid == 0) {
-        printf("child %d\n", pid);
         execv(command, args);
-        printf("exec failed\n");
+        write(STDERR_FILENO, "Exec failed\n", 12);
         _Exit(EXIT_FAILURE);
     }
     else {
-        printf("parent: pid %d\n", pid);
         waitpid(pid, 0, 0);
     }
     return 0;
