@@ -11,7 +11,10 @@ lilac.ker: libk.a
 libk.a: install-headers
 	$(MAKE) -C libc
 
-install: lilac.ker libk.a
+user: install-headers
+	$(MAKE) -C user
+
+install: lilac.ker libk.a user
 	$(MAKE) -C libc install-libs
 	$(MAKE) -C kernel install
 

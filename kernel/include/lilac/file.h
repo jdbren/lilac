@@ -24,12 +24,12 @@ struct file {
 } __align(4);
 
 struct file_operations {
-    int (*lseek)(struct file *, int, int);
+    int     (*lseek)(struct file *, int, int);
     ssize_t (*read)(struct file *, void *, size_t);
     ssize_t (*write)(struct file *, const void *, size_t);
-    int (*readdir) (struct file *, struct dirent *, unsigned int);
-    int (*flush) (struct file *);
-    int (*release) (struct inode *, struct file *);
+    int     (*readdir)(struct file *, struct dirent *, unsigned int);
+    int     (*flush)(struct file *);
+    int     (*release)(struct inode *, struct file *);
 };
 
 struct fdtable {

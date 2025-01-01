@@ -25,12 +25,12 @@ u32 lapic_base;
 
 static inline void write_reg(u32 reg, u32 value)
 {
-    *(u32*)(lapic_base + reg) = value;
+    *(volatile u32*)(lapic_base + reg) = value;
 }
 
 static inline u32 read_reg(u32 reg)
 {
-    return *(u32*)(lapic_base + reg);
+    return *(volatile u32*)(lapic_base + reg);
 }
 
 inline void apic_eoi(void)

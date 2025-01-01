@@ -21,10 +21,6 @@ extern FILE *stdin;
 extern FILE *stdout;
 extern FILE *stderr;
 
-#define stdin stdin
-#define stdout stdout
-#define stderr stderr
-
 FILE *fopen(const char *restrict filename, const char *restrict mode);
 int fclose(FILE *stream);
 int fflush(FILE *stream);
