@@ -82,7 +82,7 @@ void lapic_enable(uintptr_t addr) {
 
     cpu_set_apic_base(addr);
 
-    map_page((void*)lapic_base, (void*)lapic_base, PG_CACHE_DISABLE | PG_WRITE);
+    map_page((void*)lapic_base, (void*)lapic_base, PG_STRONG_UC | PG_WRITE);
 
     /* Set the Spurious Interrupt Vector Register bit 8 to start receiving interrupts */
     write_reg(0xF0, read_reg(0xF0) | 0x100);

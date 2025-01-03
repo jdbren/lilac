@@ -75,7 +75,7 @@ void ahci_init(hba_mem_t *abar_phys)
 	u32 pi;
 	int i = 0;
 
-	map_to_self(abar_phys, PAGE_SIZE, PG_WRITE | PG_CACHE_DISABLE);
+	map_to_self(abar_phys, PAGE_SIZE, PG_WRITE | PG_STRONG_UC);
 	abar = abar_phys;
 
 	pi = abar->pi;
@@ -109,7 +109,7 @@ void ahci_init(hba_mem_t *abar_phys)
 	size = num_ports * sizeof(hba_port_t) + sizeof(*abar);
 	if (size > PAGE_SIZE) {
 		unmap_from_self(abar, PAGE_SIZE);
-		map_to_self(abar_phys, size, PG_WRITE | PG_CACHE_DISABLE);
+		map_to_self(abar_phys, size, PG_WRITE | PG_STRONG_UC);
 	}
 
 	port_mem_init(num_ports);
@@ -154,7 +154,7 @@ static void port_mem_init(int num_ports)
 		+ sizeof(struct HBA_CMD_TBL) * CMD_LIST_SZ * num_ports
 		+ sizeof(struct HBA_PRDT_ENTRY) * NUM_PRDT_ENTRIES * CMD_LIST_SZ * num_ports;
 
-	ahci_base = (uintptr_t)kvirtual_alloc(size, PG_WRITE | PG_CACHE_DISABLE);
+	ahci_base = (uintptr_t)kvirtual_alloc(size, PG_WRITE | PG_STRONG_UC);
 }
 
 void ahci_port_rebase(hba_port_t *port, int portno)

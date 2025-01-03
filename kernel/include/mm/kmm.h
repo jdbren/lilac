@@ -14,6 +14,8 @@
 #define PG_WRITE_THROUGH   0x8
 #define PG_CACHE_DISABLE   0x10
 
+#define PG_STRONG_UC (PG_CACHE_DISABLE | PG_WRITE_THROUGH)
+
 #define PAGE_ROUND_DOWN(x)  (((uintptr_t)(x)) & (~(PAGE_SIZE-1)))
 #define PAGE_ROUND_UP(x)    ((((uintptr_t)(x)) + PAGE_SIZE-1) & (~(PAGE_SIZE-1)))
 

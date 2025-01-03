@@ -65,7 +65,7 @@ void ioapic_init(struct ioapic *ioapic, struct int_override *over, u8 num_over)
         memcpy(overrides + i, over, sizeof(struct int_override));
         overrides[i].next = 0;
     }
-    map_page((void*)ioapic_base, (void*)ioapic_base, PG_CACHE_DISABLE | PG_WRITE);
+    map_page((void*)ioapic_base, (void*)ioapic_base, PG_STRONG_UC | PG_WRITE);
     kstatus(STATUS_OK, "IOAPIC initialized\n");
 }
 

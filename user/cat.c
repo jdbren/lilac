@@ -9,7 +9,7 @@ int main(int argc, char *argv[])
     char buf[512];
     if (argc != 2)
     {
-        printf("Usage: %s\n", argv[0], " [message]");
+        printf("Usage: %s %s\n", "cat", "<filename>");
         return 1;
     }
 
