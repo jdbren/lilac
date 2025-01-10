@@ -22,8 +22,8 @@ static void *__check_bitmap(int i, int num_pages, int *count, int *start);
 static void __free_page(u8 *page);
 static void __parse_mmap(struct multiboot_tag_efi_mmap *mmap);
 
-extern const int _kernel_end;
-extern const int _kernel_start;
+extern const uintptr_t _kernel_end;
+extern const uintptr_t _kernel_start;
 
 #define KHEAP_PAGES ((KHEAP_MAX_ADDR - KHEAP_START_ADDR) / PAGE_SIZE)
 #define KHEAP_BITMAP_SIZE (KHEAP_PAGES / 8)

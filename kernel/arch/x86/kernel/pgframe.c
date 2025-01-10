@@ -46,6 +46,8 @@ int phys_mem_init(struct multiboot_tag_efi_mmap *mmap)
     BITMAP_SIZE = phys_map_pgcnt / 8 + 8;
     FIRST_PAGE = 0;
 
+    assert((uintptr_t)&_kernel_end + BITMAP_SIZE < __KERNEL_MAX_ADDR);
+
     map_pages((void*)get_phys_addr(&_kernel_end),
             (void*)pg_frame_bitmap,
             PG_WRITE,

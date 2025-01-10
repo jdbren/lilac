@@ -1,4 +1,5 @@
 #include <lilac/config.h>
+#include <lilac/log.h>
 #include <acpi/acpica.h>
 
 __noreturn void kernel_shutdown(void)

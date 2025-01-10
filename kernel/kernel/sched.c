@@ -137,7 +137,7 @@ long waitpid(int pid)
         return -1;
     while (task->state != TASK_DEAD)
         yield();
-    klog(LOG_DEBUG, "Task %d exited, continuing task %d\n", pid, get_pid());
+    klog(LOG_DEBUG, "Task %d has exited, continuing task %d\n", pid, get_pid());
     return 0;
 }
 SYSCALL_DECL1(waitpid, int, pid)
