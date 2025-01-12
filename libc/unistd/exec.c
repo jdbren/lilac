@@ -1,12 +1,7 @@
 #include <unistd.h>
+#include <sys/syscall.h>
 
 int execv(const char *pathname, char *const argv[])
 {
-    int ret;
-    asm volatile (
-        "int $0x80"
-        : "=a" (ret)
-        : "a" (11), "b" (pathname), "c" (argv), "d" (NULL)
-    );
-    return ret;
+    return syscall2(SYS_execve, (long)pathname, (long)argv);
 }

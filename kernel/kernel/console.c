@@ -161,13 +161,13 @@ ssize_t console_write(struct file *file, const void *buf, size_t count)
 void console_intr(char c)
 {
     switch(c) {
-    // case C('H'): // Backspace
-    // case '\x7f': // Delete key
-    //     if(cons.e != cons.w){
-    //         cons.e--;
-    //         consputc(BACKSPACE);
-    //     }
-    // break;
+    case '\b': // Backspace
+    //case '\x7f': // Delete key
+        if(con.epos > con.wpos){
+            con.epos--;
+            graphics_putchar('\b');
+        }
+    break;
     default:
         if (c != 0 && con.epos-con.rpos < INPUT_BUF_SIZE) {
             c = (c == '\r') ? '\n' : c;

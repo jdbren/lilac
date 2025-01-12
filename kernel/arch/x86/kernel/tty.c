@@ -25,7 +25,7 @@
 // ssfn_buf_t buf;
 
 static void graphics_scroll(void);
-//static void graphics_delchar(void);
+static void graphics_delchar(void);
 
 void graphics_putchar(char c)
 {
@@ -110,17 +110,9 @@ static void graphics_scroll(void)
     ssfn_dst.y -= ssfn_src->height;
 }
 
-/*
 void graphics_delchar(void)
 {
-    if (ssfn_dst.x == WINDOW_BORDER) {
-        if (ssfn_dst.y == WINDOW_BORDER)
-            return;
-        ssfn_dst.x = ssfn_dst.w - WINDOW_BORDER - ssfn_src->width;
-        ssfn_dst.y -= ssfn_src->height;
-    }
-    else
-        ssfn_dst.x -= ssfn_src->width;
+    ssfn_dst.x -= ssfn_src->width;
     // Clear the character
     u32 color = ssfn_dst.fg;
     ssfn_dst.fg = ssfn_dst.bg;
@@ -135,7 +127,6 @@ void graphics_delchar(void)
     else
         ssfn_dst.x -= ssfn_src->width;
 }
-*/
 
 void graphics_clear(void)
 {

@@ -8,10 +8,12 @@
 #define STDOUT_FILENO 1
 #define STDERR_FILENO 2
 
+// extern long int syscall(long number, ...);
+
 int          close(int);
 void         _exit(int);
 int          execl(const char *, const char *, ...);
-int          execv(const char *, char *const []);
+int          execv(const char *, char *const[]);
 pid_t        fork(void);
 ssize_t      read(int, void *, size_t);
 ssize_t      write(int, const void *, size_t);

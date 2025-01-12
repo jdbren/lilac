@@ -52,6 +52,7 @@ unistd/close.o \
 unistd/getcwd.o \
 fcntl/open.o \
 dirent/readdir.o \
+sys/syscall.o \
 sys/wait.o \
 stdio/sscanf.o \
 stdio/vsscanf.o \
