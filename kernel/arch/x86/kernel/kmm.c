@@ -97,6 +97,9 @@ void* kvirtual_alloc(int size, int flags)
 
     if (ptr) {
         void *phys = alloc_frames(num_pages);
+        if (!phys) {
+            kerror("OUT OF PHYSICAL MEMORY");
+        }
         map_pages(phys, ptr, flags, num_pages);
         memset(ptr, 0, num_pages * PAGE_SIZE);
     }

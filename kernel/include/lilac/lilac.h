@@ -3,9 +3,13 @@
 #ifndef _LILAC_LILAC_H
 #define _LILAC_LILAC_H
 
+#include <lilac/config.h>
+#include <lilac/err.h>
+#include <lilac/log.h>
+#include <lilac/panic.h>
 #include <lilac/types.h>
-#include <lilac/boot.h>
-#include <acpi/acpi.h>
+#include <lilac/uaccess.h>
+#include <mm/kmalloc.h>
 
 #define KERNEL_VERSION "0.1.0"
 
@@ -13,15 +17,7 @@
 #define __no_stack_chk __attribute__((no_stack_protector))
 #define __always_inline __attribute__((always_inline)) inline
 
-struct boot_info {
-	struct multiboot_info mbd;
-	struct acpi_info acpi;
-	struct efi_info efi;
-	u64 rsdp;
-};
 
-__no_ret __no_stack_chk
-void start_kernel(void);
 inline void arch_idle(void);
 inline void arch_enable_interrupts(void);
 inline void arch_disable_interrupts(void);

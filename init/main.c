@@ -8,10 +8,10 @@
 
 #define SHELL_PROMPT "lilacOS %s # "
 
-int prompt()
+int prompt(void)
 {
     char command[256];
-    const char cwd[32];
+    char cwd[32];
     getcwd(cwd, 32);
     printf(SHELL_PROMPT, cwd);
     char *args[8] = {0};
@@ -19,7 +19,11 @@ int prompt()
     memset(command, 0, 256);
     memset(cwd, 0, 32);
 
-    unsigned int r = read(STDIN_FILENO, command, 256);
+    int r = read(STDIN_FILENO, command, 256);
+    if (r < 0) {
+        printf("Error reading command\n");
+        exit(1);
+    }
     command[r-1] = 0; // remove newline
 
     args[0] = command;

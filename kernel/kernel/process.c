@@ -115,7 +115,7 @@ static void start_process(void)
     *--stack = argc;
 
 skip:
-    klog(LOG_DEBUG, "Going to user mode\n");
+    klog(LOG_DEBUG, "Going to user mode, jmp = %x\n", jmp);
     jump_usermode((u32)jmp, (u32)stack);
 }
 

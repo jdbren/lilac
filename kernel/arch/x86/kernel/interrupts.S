@@ -2,28 +2,37 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 
 .macro isr_err name
-    .extern \name\()_handler
-    .global \name
-    \name:
-    popl %eax
-    pushal
-    cld
-    pushl %eax
+	.extern \name\()_handler
+	.global \name
+	\name:
+	push %ebp
+	mov %esp, %ebp
+	pushal
+	lea 8(%ebp), %eax
+	push %eax
+	mov 4(%ebp), %eax
+	push %eax
 	call \name\()_handler
-    addl  $4, %esp
-    popal
-    iret
+	addl  $12, %esp # err code and vals
+	popal
+	pop %ebp
+	iret
 .endm
 
 .macro isr_no_err name
-    .extern \name\()_handler
-    .global \name
-    \name:
-    pushal
-    cld
+	.extern \name\()_handler
+	.global \name
+	\name:
+	push %ebp
+	mov %esp, %ebp
+	pushal
+	mov 4(%ebp), %eax
+	push %eax
 	call \name\()_handler
-    popal
-    iret
+	addl  $4, %esp
+	popal
+	pop %ebp
+	iret
 .endm
 
 isr_no_err div0

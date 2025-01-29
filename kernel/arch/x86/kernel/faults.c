@@ -2,20 +2,58 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/panic.h>
 #include <lilac/log.h>
+#include <lilac/types.h>
+#include <lilac/config.h>
+
+#include "idt.h"
+
+struct exception_entry {
+    uintptr_t err_addr;
+    void *handler;
+};
+
+#define EXCEPTION_TABLE_SIZE(start, end) \
+    ((uintptr_t)(end) - (uintptr_t)(start)) / sizeof(struct exception_entry)
+
+extern const u32 _exception_start, _exception_end;
+static struct exception_entry *const
+    exception_table = (struct exception_entry*)&_exception_start;
+
+static void * find_exception(uintptr_t err_ip)
+{
+    const int num_entries = EXCEPTION_TABLE_SIZE(&_exception_start, &_exception_end);
+    for (int i = 0; i < num_entries; i++) {
+        klog(LOG_DEBUG, "Checking %x against %x\n", err_ip, exception_table[i].err_addr);
+        if (exception_table[i].err_addr == err_ip)
+            return exception_table[i].handler;
+    }
+    return NULL;
+}
 
 void div0_handler(void)
 {
     kerror("Divide by zero int\n");
 }
 
-void pgflt_handler(int error_code)
+void pgflt_handler(int error_code, struct interrupt_frame *frame)
 {
     int addr = 0;
-	asm volatile("mov %%cr2,%0\n\t" : "=r"(addr));
+    asm volatile ("mov %%cr2,%0\n\t" : "=r"(addr));
 
-	klog(LOG_WARN, "Fault address: %x\n", addr);
+    klog(LOG_WARN, "Fault address: %x\n", addr);
     klog(LOG_WARN, "Error code: %x\n", error_code);
-    kerror("Page fault detected\n");
+
+    void *handler = find_exception(frame->ip);
+    if (handler && addr < __KERNEL_BASE) {
+        klog(LOG_WARN, "Page fault at %x handled by %p\n", frame->ip, handler);
+        asm (
+            "movl (%%ebp), %%eax\n\t"   // Get previous fp
+            "movl %0, 8(%%eax)\n\t"  // Overwrite return address with handler
+            ::"r"(handler) : "eax", "memory"
+        );
+    } else {
+        kerror("Page fault detected\n");
+    }
 }
 
 void gpflt_handler(int error_code)

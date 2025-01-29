@@ -3,7 +3,7 @@
 #ifndef _KERNEL_SCHED_H
 #define _KERNEL_SCHED_H
 
-struct task;
+#include <lilac/process.h>
 
 void sched_init(void);
 void sched_clock_init(void);

@@ -2,9 +2,9 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/fs.h>
 
+#include <lilac/lilac.h>
+#include <lilac/libc.h>
 #include <lilac/syscall.h>
-#include <lilac/log.h>
-#include <lilac/panic.h>
 #include <lilac/device.h>
 #include <lilac/process.h>
 #include <lilac/sched.h>
@@ -14,10 +14,6 @@
 #include <fs/fat32.h>
 #include <fs/tmpfs.h>
 #include <mm/kmalloc.h>
-
-#include <stdbool.h>
-#include <string.h>
-#include <ctype.h>
 
 #include "utils.h"
 
@@ -95,17 +91,6 @@ inline struct inode *get_root_inode(void)
     return root_dentry->d_inode;
 }
 
-// struct dentry *mount_bdev(struct block_device *bdev)
-// {
-//     struct vfsmount *mnt = &disks[numdisks++];
-//     struct super_block *sb = kzmalloc(sizeof(struct super_block));
-//     mnt->init_fs = init_ops[bdev->type];
-//     mnt->mnt_sb = sb;
-
-//     mnt->init_fs(bdev, sb);
-
-//     return 0;
-// }
 
 int vfs_mount(const char *source, const char *target,
         const char *filesystemtype, unsigned long mountflags,
@@ -169,7 +154,6 @@ int vfs_mount(const char *source, const char *target,
 
     return 0;
 }
-
 SYSCALL_DECL5(mount, const char*, source, const char*, target,
     const char*, filesystemtype, unsigned long, mountflags,
     const void*, data)
@@ -179,54 +163,76 @@ SYSCALL_DECL5(mount, const char*, source, const char*, target,
 
 #define SEEK_SET 0
 #define SEEK_CUR 1
-// #define SEEK_END 2
+#define SEEK_END 2
 
-int lseek(int fd, int offset, int whence)
+int vfs_lseek(struct file *file, int offset, int whence)
 {
-    struct file *file = current->fs.files.fdarray[fd];
     if (whence == SEEK_SET)
         file->f_pos = offset;
     else if (whence == SEEK_CUR)
         file->f_pos += offset;
-    // else if (whence == SEEK_END)
-    //     file->f_pos = file->f_inode->i_size + offset;
+    else if (whence == SEEK_END)
+        file->f_pos = file->f_inode->i_size + offset;
     else
-        return -1;
+        return -EINVAL;
 
     return file->f_pos;
+}
+SYSCALL_DECL3(lseek, int, fd, int, offset, int, whence)
+{
+    if (fd < 0 || fd >= current->fs.files.max)
+        return -EBADF;
+    struct file *file = current->fs.files.fdarray[fd];
+    if (!file)
+        return -EBADF;
+    return vfs_lseek(file, offset, whence);
 }
 
 struct file *vfs_open(const char *path, int flags, int mode)
 {
     klog(LOG_DEBUG, "VFS: Opening %s\n", path);
-    int n_pos = 0;
     int n_len = strlen(path);
     struct inode *inode;
     struct file *new_file;
+
+    struct dentry *dentry = lookup_path(path);
+    if (IS_ERR(dentry))
+        return ERR_CAST(dentry);
+    inode = dentry->d_inode;
+    if (!inode)
+        return ERR_PTR(-ENOENT);
 
     new_file = kzmalloc(sizeof(*new_file));
     new_file->f_path = kzmalloc(n_len+1);
     strcpy(new_file->f_path, path);
 
-    // Is this all open is supposed to do?
-    struct dentry *dentry = lookup_path(path);
-    if (!dentry)
-        return NULL;
-    inode = dentry->d_inode;
-    if (!inode)
-        return NULL;
-    if(inode->i_op->open(inode, new_file))
-        return NULL;
+    if(inode->i_op->open(inode, new_file)) {
+        kfree(new_file->f_path);
+        kfree(new_file);
+        return ERR_PTR(-ENOENT);
+    }
 
     return new_file;
 }
-
 SYSCALL_DECL3(open, const char*, path, int, flags, int, mode)
 {
-    struct file *f = vfs_open(path, flags, mode);
-    if (!f)
-        return -1;
-    int fd = get_fd();
+    char path_buf[128];
+    struct file *f;
+    int fd;
+
+    if (strncpy_from_user(path_buf, path, 128) < 0)
+        return -EFAULT;
+    f = vfs_open(path, flags, mode);
+    if (IS_ERR(f)) {
+        klog(LOG_DEBUG, "Failed to open %s\n", path);
+        return PTR_ERR(f);
+    }
+
+    fd = get_fd();
+    if (fd < 0) {
+        vfs_close(f);
+        return -EMFILE;
+    }
     current->fs.files.fdarray[fd] = f;
     return fd;
 }
@@ -234,20 +240,38 @@ SYSCALL_DECL3(open, const char*, path, int, flags, int, mode)
 
 ssize_t vfs_read(struct file *file, void *buf, size_t count)
 {
-    if (file->f_inode->i_type == TYPE_DEV) {
+    if (file->f_inode->i_type == TYPE_DIR)
+        return -EISDIR;
+
+    if (file->f_inode->i_type == TYPE_DEV)
         return file->f_inode->i_fop->read(file, buf, count);
-    }
+
+    if (file->f_pos >= file->f_inode->i_size)
+        return 0;
 
     ssize_t bytes = file->f_op->read(file, buf, count);
     if (bytes > 0)
         file->f_pos += bytes;
     return bytes;
 }
-
 SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
 {
-    struct file *file = current->fs.files.fdarray[fd];
-    return vfs_read(file, buf, count);
+    struct file *file;
+    unsigned char *kbuf;
+    ssize_t bytes;
+    int err;
+
+    if (fd < 0 || fd >= current->fs.files.max)
+        return -EBADF;
+    file = current->fs.files.fdarray[fd];
+    if (!file)
+        return -EBADF;
+    kbuf = kmalloc(count);
+    bytes = vfs_read(file, kbuf, count);
+    if (bytes > 0)
+        err = copy_to_user(buf, kbuf, bytes);
+    kfree(kbuf);
+    return err ? err : bytes;
 }
 
 
@@ -262,11 +286,30 @@ ssize_t vfs_write(struct file *file, const void *buf, size_t count)
         file->f_pos += bytes;
     return bytes;
 }
-
 SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
 {
-    struct file *file = current->fs.files.fdarray[fd];
-    return vfs_write(file, buf, count);
+    struct file *file;
+    unsigned char *kbuf;
+    ssize_t bytes;
+    int err;
+
+    if (fd < 0 || fd >= current->fs.files.max)
+        return -EBADF;
+    file = current->fs.files.fdarray[fd];
+    if (!file)
+        return -EBADF;
+
+    kbuf = kmalloc(count);
+    if (!kbuf)
+        return -ENOMEM;
+
+    err = copy_from_user(kbuf, buf, count);
+    if (err)
+        return err;
+
+    bytes = vfs_write(file, buf, count);
+    kfree(kbuf);
+    return bytes;
 }
 
 
@@ -283,9 +326,12 @@ int vfs_close(struct file *file)
 }
 SYSCALL_DECL1(close, int, fd)
 {
-    struct file *file = current->fs.files.fdarray[fd];
+    struct fdtable *files = &current->fs.files;
+    if (fd < 0 || fd >= files->max)
+        return -EBADF;
+    struct file *file = files->fdarray[fd];
     if (!file)
-        return -1;
+        return -EBADF;
     int ret = vfs_close(file);
     current->fs.files.fdarray[fd] = NULL;
     current->fs.files.size--;
@@ -298,7 +344,7 @@ ssize_t vfs_getdents(struct file *file, struct dirent *dirp, unsigned int buf_si
     struct inode *inode = file->f_inode;
 
     if (inode->i_type != TYPE_DIR)
-        return -1;
+        return -ENOTDIR;
 #ifdef DEBUG_VFS
     klog(LOG_DEBUG, "VFS: Reading directory %s\n", file->f_path);
 #endif
@@ -309,7 +355,11 @@ ssize_t vfs_getdents(struct file *file, struct dirent *dirp, unsigned int buf_si
 }
 SYSCALL_DECL3(getdents, unsigned int, fd, struct dirent*, dirp, size_t, buf_size)
 {
+    if (fd < 0 || fd >= current->fs.files.max)
+        return -EBADF;
     struct file *file = current->fs.files.fdarray[fd];
+    if (!file)
+        return -EBADF;
     return vfs_getdents(file, dirp, buf_size);
 }
 

@@ -89,9 +89,6 @@ sys_time:
 sys_stat:
 	ret
 
-sys_lseek:
-	ret
-
 sys_getpid:
 	ret
 
@@ -121,6 +118,6 @@ syscall_table:
 	.long sys_getcwd 	# 18
 	// .long sys_mkdir 	# 19
 	// .long sys_rmdir 	# 20
-	// .long sys_dup 		# 21
-	// .long sys_pipe 		# 22
+	// .long sys_dup 	# 21
+	// .long sys_pipe 	# 22
 syscall_table_end:

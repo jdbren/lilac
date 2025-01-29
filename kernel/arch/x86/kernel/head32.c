@@ -1,19 +1,16 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/lilac.h>
+#include <lilac/boot.h>
 #include <lilac/tty.h>
-#include <lilac/panic.h>
 #include <lilac/keyboard.h>
 #include <lilac/timer.h>
-#include <acpi/acpi.h>
 #include <mm/kmm.h>
 
 #include "apic.h"
 #include "gdt.h"
 #include "idt.h"
 #include "timer.h"
-
-#include <string.h>
 
 #if UINT32_MAX == UINTPTR_MAX
 #define STACK_CHK_GUARD 0xe2dee396

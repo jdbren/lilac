@@ -2,13 +2,10 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/elf.h>
 
-#include <string.h>
-
-#include <lilac/panic.h>
-#include <lilac/log.h>
+#include <lilac/lilac.h>
+#include <lilac/libc.h>
 #include <lilac/process.h>
 #include <lilac/mm.h>
-#include <mm/kmalloc.h>
 #include "paging.h"
 #include "pgframe.h"
 

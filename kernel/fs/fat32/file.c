@@ -1,24 +1,24 @@
 #include <fs/fat32.h>
 
 #include <lilac/fs.h>
-#include <lilac/log.h>
-#include <lilac/panic.h>
+#include <lilac/lilac.h>
+#include <lilac/libc.h>
 #include <drivers/blkdev.h>
 #include <mm/kmm.h>
-
-#include <string.h>
 
 #include "fat_internal.h"
 
 ssize_t fat32_read(struct file *file, void *file_buf, size_t count)
 {
-    ssize_t bytes_read;
+    ssize_t bytes_read = -1;
     u32 start_clst;
     struct fat_disk *disk = (struct fat_disk*)file->f_inode->i_sb->private;
     struct fat_file *fat_file = (struct fat_file*)file->f_inode->i_private;
-    if (fat_file->cl_low == 0)
+    if (fat_file->cl_low == 0 || file->f_pos >= fat_file->file_size)
         return 0;
     u32 offset = file->f_pos % disk->bytes_per_clst;
+    count = MIN(count, fat_file->file_size - file->f_pos);
+
     u32 num_clst = ROUND_UP(count + offset, disk->bytes_per_clst) /
         disk->bytes_per_clst;
     volatile unsigned char *buffer = kvirtual_alloc(disk->bytes_per_clst * num_clst, PG_WRITE);
@@ -27,12 +27,9 @@ ssize_t fat32_read(struct file *file, void *file_buf, size_t count)
     if (start_clst == 0)
         goto out;
 
-    bytes_read = __do_fat32_read(file, start_clst, buffer, num_clst);
-    if (bytes_read < 0)
+    if (__do_fat32_read(file, start_clst, buffer, num_clst))
         goto out;
 
-    if (file->f_pos + count > fat_file->file_size)
-        count = fat_file->file_size - file->f_pos;
     memcpy(file_buf, buffer + offset, count);
     bytes_read = count;
 
@@ -61,14 +58,17 @@ ssize_t fat32_write(struct file *file, const void *file_buf, size_t count)
             goto out;
     }
 
-    if (file->f_pos + count > fat_file->file_size)
-        fat_file->file_size = file->f_pos + count;
     memcpy(buffer + offset, file_buf, count);
 
     bytes_written = __do_fat32_write(file, start_clst, buffer, num_clst);
     if (bytes_written < 0)
         goto out;
     bytes_written = count;
+
+    if (file->f_pos + count > fat_file->file_size) {
+        fat_file->file_size = file->f_pos + count;
+        file->f_inode->i_size = fat_file->file_size;
+    }
 
 out:
     kvirtual_free(buffer, disk->bytes_per_clst * num_clst);

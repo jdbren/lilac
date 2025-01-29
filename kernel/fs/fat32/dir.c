@@ -3,6 +3,7 @@
 #include <lilac/fs.h>
 #include <lilac/log.h>
 #include <lilac/panic.h>
+#include <lilac/timer.h>
 #include <drivers/blkdev.h>
 #include <mm/kmm.h>
 #include <mm/kmalloc.h>
@@ -65,6 +66,7 @@ int fat32_mkdir(struct inode *dir, struct dentry *new, unsigned short mode)
     struct fat_file *parent_dir = (struct fat_file*)dir->i_private;
     u32 clst = parent_dir->cl_low + (u32)(parent_dir->cl_high << 16);
     volatile unsigned char *buffer = kzmalloc(disk->bytes_per_clst);
+    struct timestamp cur_time = get_timestamp();
     char name[8];
     int ret = 0;
 
@@ -100,14 +102,18 @@ int fat32_mkdir(struct inode *dir, struct dentry *new, unsigned short mode)
         kerror("No free clusters\n");
     disk->FAT.buf[new_clst - disk->FAT.first_clst] |= 0x0fffffffUL;
 
+    u16 fat_date = FAT_SET_DATE(cur_time.year, cur_time.month, cur_time.day);
+    u16 fat_time = FAT_SET_TIME(cur_time.hour, cur_time.minute, cur_time.second);
+
     entry->attributes = FAT_DIR_ATTR;
     entry->cl_low = new_clst & 0xFFFF;
     entry->cl_high = new_clst >> 16;
     entry->file_size = 0;
-    entry->creation_date = FAT_SET_DATE(2024, 9, 5);
-    entry->creation_time = FAT_SET_TIME(12, 23, 0);
-    entry->last_write_date = FAT_SET_DATE(2024, 9, 5);
-    entry->last_write_time = FAT_SET_TIME(12, 23, 0);
+    entry->creation_date = fat_date;
+    entry->creation_time = fat_time;
+    entry->last_write_date = fat_date;
+    entry->last_write_time = fat_time;
+    entry->last_access_date = fat_date;
 
     strncpy(entry->name, name, 8);
     strncpy(entry->ext, "   ", 3);
@@ -125,10 +131,11 @@ int fat32_mkdir(struct inode *dir, struct dentry *new, unsigned short mode)
     entry->attributes = FAT_DIR_ATTR;
     entry->cl_low = new_clst & 0xFFFF;
     entry->cl_high = new_clst >> 16;
-    entry->creation_date = FAT_SET_DATE(2024, 9, 5);
-    entry->creation_time = FAT_SET_TIME(12, 23, 0);
-    entry->last_write_date = FAT_SET_DATE(2024, 9, 5);
-    entry->last_write_time = FAT_SET_TIME(12, 23, 0);
+    entry->creation_date = fat_date;
+    entry->creation_time = fat_time;
+    entry->last_write_date = fat_date;
+    entry->last_write_time = fat_time;
+    entry->last_access_date = fat_date;
 
     entry++;
     entry->name[0] = '.'; entry->name[1] = '.';
@@ -141,6 +148,7 @@ int fat32_mkdir(struct inode *dir, struct dentry *new, unsigned short mode)
     entry->creation_time = parent_dir->creation_time;
     entry->last_write_date = parent_dir->last_write_date;
     entry->last_write_time = parent_dir->last_write_time;
+    entry->last_access_date = parent_dir->last_access_date;
 
     disk->fs_info.free_clst_cnt--;
     disk->fs_info.next_free_clst = __fat_find_free_clst(disk);

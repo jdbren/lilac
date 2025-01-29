@@ -22,6 +22,7 @@ int strcmp(const char *__s1, const char *__s2);
 int strncmp(const char *__s1, const char *__s2, size_t __n);
 
 size_t strlen(const char *str);
+size_t strnlen(const char *str, size_t max);
 
 char *strstr(const char *haystack, const char *needle);
 

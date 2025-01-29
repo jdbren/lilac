@@ -4,6 +4,7 @@
 #ifndef _LILAC_TYPES_H
 #define _LILAC_TYPES_H
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stddef.h>

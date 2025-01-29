@@ -136,7 +136,7 @@ struct vfsmount {
     struct dentry *(*init_fs)(void*, struct super_block *);
 };
 
-int lseek(int fd, int offset, int whence);
+int vfs_lseek(struct file *file, int offset, int whence);
 struct file* vfs_open(const char *path, int flags, int mode);
 ssize_t vfs_read(struct file *file, void *buf, size_t count);
 ssize_t vfs_write(struct file *file, const void *buf, size_t count);

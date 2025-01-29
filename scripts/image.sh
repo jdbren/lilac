@@ -1,5 +1,5 @@
 #!/bin/sh
-set -eux
+set -eu
 
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     losetup --offset 1048576 --sizelimit 46934528 /dev/loop0 uefi.img

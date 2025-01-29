@@ -4,8 +4,6 @@
 #define KERNEL_PANIC_H
 
 #include <lilac/log.h>
-#include <stdio.h>
-#include <stdint.h>
 
 #define assert(x) if (!(x)) kerror("Assertion failed: " #x)
 

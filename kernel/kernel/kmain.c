@@ -1,18 +1,10 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include <string.h>
 #include <lilac/lilac.h>
-#include <lilac/types.h>
-#include <lilac/log.h>
-#include <lilac/panic.h>
 #include <lilac/fs.h>
-#include <lilac/process.h>
 #include <lilac/sched.h>
-#include <lilac/timer.h>
-#include <lilac/elf.h>
-#include <lilac/tty.h>
 #include <lilac/console.h>
-#include <mm/kmalloc.h>
+#include <acpi/acpi.h>
 
 __no_ret __no_stack_chk
 void start_kernel(void)
@@ -27,7 +19,7 @@ void start_kernel(void)
 
     arch_enable_interrupts();
     console_init();
-    log_init(LOG_INFO);
+    log_init(LOG_DEBUG);
     sched_clock_init(); // kernel is live, will jmp to init task
 
     idle();

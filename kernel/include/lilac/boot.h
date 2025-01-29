@@ -1,9 +1,10 @@
 #ifndef _KERNEL_BOOT_H
 #define _KERNEL_BOOT_H
 
-#include <lilac/types.h>
+#include <lilac/lilac.h>
 #include <utility/efi.h>
 #include <utility/multiboot2.h>
+#include <acpi/acpi.h>
 
 struct multiboot_info {
 	char *cmdline;
@@ -28,6 +29,16 @@ struct efi_info {
     u32 tables;
 };
 
+struct boot_info {
+	struct multiboot_info mbd;
+	struct acpi_info acpi;
+	struct efi_info efi;
+	u64 rsdp;
+};
+
 uintptr_t get_rsdp(void);
+
+__no_ret __no_stack_chk
+void start_kernel(void);
 
 #endif

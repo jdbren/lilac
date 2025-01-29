@@ -13,6 +13,12 @@ SECTIONS
 
 	.text ALIGN (4K) : AT (ADDR (.text) - 0xC0000000) { *(.text) }
 
+	.exception ALIGN (4K) : AT (ADDR (.exception) - 0xC0000000) {
+		_exception_start = .;
+		*(.exception)
+		_exception_end = .;
+	}
+
 	.rodata ALIGN (4K) : AT (ADDR (.rodata) - 0xC0000000) { *(.rodata) }
 
 	.data ALIGN (4K) : AT (ADDR (.data) - 0xC0000000) {

@@ -74,7 +74,7 @@ struct inode *fat_build_inode(struct super_block *sb, struct fat_file *info)
     inode->i_ino = unique_ino();
     inode->i_size = info->file_size;
     inode->i_private = info;
-    inode->i_type = info->attributes == FAT_DIR_ATTR ? TYPE_DIR : TYPE_FILE;
+    inode->i_type = info->attributes & FAT_DIR_ATTR ? TYPE_DIR : TYPE_FILE;
 
     list_add_tail(&inode->i_list, &sb->s_inodes);
 

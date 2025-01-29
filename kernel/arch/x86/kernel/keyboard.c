@@ -68,7 +68,7 @@ void keyboard_int(struct interrupt_frame *frame)
             break;
     }
 
-    if (keycode >= 0 && keycode < sizeof keyboard_map && keyboard_map[keycode]) {
+    if (keycode < sizeof keyboard_map && keyboard_map[keycode]) {
         char c = keyboard_map[keycode];
         if (key_status_map[SHIFT_PRESSED])
             c = c - 32;
