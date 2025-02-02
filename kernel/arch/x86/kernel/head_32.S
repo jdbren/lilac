@@ -42,7 +42,7 @@ startup_32:
 	rep ;movsb
 
 	# Identity map the kernel.
-	leal pa(boot_page_table0), %edi 	# page table entry
+	leal pa(boot_page_table0), %edi		# page table entry
 	xorl %eax, %eax				 		# start addr = 0
 
 1:	movl %eax, %esi
