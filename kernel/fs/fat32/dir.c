@@ -18,7 +18,7 @@ int fat32_readdir(struct file *file, struct dirent *dir_buf, unsigned int count)
 {
     int num_dirents = count / sizeof(struct dirent);
     u32 start_clst;
-    struct fat_disk *disk = (struct fat_disk*)file->f_inode->i_sb->private;
+    struct fat_disk *disk = (struct fat_disk*)file->f_dentry->d_inode->i_sb->private;
     u32 offset = file->f_pos % disk->bytes_per_clst;
     u32 num_clst = ROUND_UP(count + offset, disk->bytes_per_clst) /
         disk->bytes_per_clst;

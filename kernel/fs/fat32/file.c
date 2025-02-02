@@ -12,8 +12,8 @@ ssize_t fat32_read(struct file *file, void *file_buf, size_t count)
 {
     ssize_t bytes_read = -1;
     u32 start_clst;
-    struct fat_disk *disk = (struct fat_disk*)file->f_inode->i_sb->private;
-    struct fat_file *fat_file = (struct fat_file*)file->f_inode->i_private;
+    struct fat_disk *disk = (struct fat_disk*)file->f_dentry->d_inode->i_sb->private;
+    struct fat_file *fat_file = (struct fat_file*)file->f_dentry->d_inode->i_private;
     if (fat_file->cl_low == 0 || file->f_pos >= fat_file->file_size)
         return 0;
     u32 offset = file->f_pos % disk->bytes_per_clst;
@@ -42,8 +42,8 @@ ssize_t fat32_write(struct file *file, const void *file_buf, size_t count)
 {
     ssize_t bytes_written;
     u32 start_clst;
-    struct fat_disk *disk = (struct fat_disk*)file->f_inode->i_sb->private;
-    struct fat_file *fat_file = (struct fat_file*)file->f_inode->i_private;
+    struct fat_disk *disk = (struct fat_disk*)file->f_dentry->d_inode->i_sb->private;
+    struct fat_file *fat_file = (struct fat_file*)file->f_dentry->d_inode->i_private;
     u32 offset = file->f_pos % disk->bytes_per_clst;
     u32 num_clst = ROUND_UP(count + offset, disk->bytes_per_clst) /
         disk->bytes_per_clst;
@@ -67,7 +67,7 @@ ssize_t fat32_write(struct file *file, const void *file_buf, size_t count)
 
     if (file->f_pos + count > fat_file->file_size) {
         fat_file->file_size = file->f_pos + count;
-        file->f_inode->i_size = fat_file->file_size;
+        file->f_dentry->d_inode->i_size = fat_file->file_size;
     }
 
 out:
@@ -83,7 +83,7 @@ int __do_fat32_read(const struct file *file, u32 clst, volatile u8 *buffer,
         return -1;
 
     size_t clst_read = 0;
-    const struct inode *inode = file->f_inode;
+    const struct inode *inode = file->f_dentry->d_inode;
     const struct gendisk *gd = inode->i_sb->s_bdev->disk;
     struct fat_disk *fat_disk = (struct fat_disk*)inode->i_sb->private;
 
@@ -106,7 +106,7 @@ int __do_fat32_write(const struct file *file, u32 clst,
 
     size_t clst_writ = 0;
     u32 next_val;
-    const struct inode *inode = file->f_inode;
+    const struct inode *inode = file->f_dentry->d_inode;
     const struct gendisk *gd = inode->i_sb->s_bdev->disk;
     struct fat_disk *fat_disk = (struct fat_disk*)inode->i_sb->private;
 

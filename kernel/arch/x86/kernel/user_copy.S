@@ -35,7 +35,7 @@ x86_strncpy_from_user_asm:
 2:	cmpb $0, (%esi)
 	movsb
 	loopnz 2b
-	xor %eax, %eax
+	mov %ecx, %eax
 	popf
 	pop %ebp
 	ret

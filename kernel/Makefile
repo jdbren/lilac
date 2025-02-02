@@ -54,8 +54,11 @@ fs/tmpfs/file.o \
 fs/tmpfs/sb.o \
 fs/vfs.o \
 fs/gpt.o \
+fs/sb.o \
+fs/file.o \
 fs/inode.o \
 fs/dcache.o \
+fs/mount.o \
 fs/name_utils.o \
 drivers/blkdev.o \
 drivers/pci.o \

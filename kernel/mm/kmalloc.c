@@ -71,7 +71,9 @@ void *kmalloc(size_t size)
         alloc = malloc_small(size);
 
     assert(is_aligned(alloc, MIN_ALLOC));
-    assert(alloc != NULL);
+
+    if (unlikely(alloc == NULL))
+        klog(LOG_ERROR, "kmalloc failed\n");
 
     return alloc;
 }
@@ -103,6 +105,7 @@ void *krealloc(void *addr, size_t size)
         if (size <= header->num_pages * PAGE_SIZE)
             return addr;
         void *new = kmalloc(size);
+        if (new == NULL) return NULL;
         memcpy(new, addr, size);
         kfree(addr);
         return new;
@@ -117,6 +120,7 @@ void *krealloc(void *addr, size_t size)
 
     // allocate new memory
     void *new = kmalloc(size);
+    if (new == NULL) return NULL;
     memcpy(new, addr, step);
     kfree(addr);
     return new;

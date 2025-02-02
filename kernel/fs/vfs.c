@@ -6,50 +6,71 @@
 #include <lilac/libc.h>
 #include <lilac/syscall.h>
 #include <lilac/device.h>
-#include <lilac/process.h>
 #include <lilac/sched.h>
-#include <lilac/device.h>
 #include <lilac/timer.h>
 #include <drivers/blkdev.h>
 #include <fs/fat32.h>
 #include <fs/tmpfs.h>
-#include <mm/kmalloc.h>
 
 #include "utils.h"
 
-static struct dentry *
-(*init_ops[4])(void*, struct super_block*) = {
+static fs_init_func_t init_ops[4] = {
     fat32_init, NULL, tmpfs_init, NULL
 };
 
 struct dentry *root_dentry = NULL;
-static u32 numdisks = 0;
-static struct vfsmount disks[16];
+
+fs_init_func_t get_fs_init(enum fs_type type)
+{
+    return init_ops[type];
+}
+
+inline struct dentry * get_root_dentry(void)
+{
+    return root_dentry;
+}
 
 static int get_fd(void)
 {
-    if (current->fs.files.size < 256)
-        return current->fs.files.size++;
-    return -1;
+    struct fdtable *files = &current->fs.files;
+    for (int i = 0; i < files->max; i++) {
+        if (!files->fdarray[i]) {
+            files->size++;
+            return i;
+        }
+    }
+
+    if (files->max < 256) {
+        void *tmp = krealloc(files->fdarray, files->max * 2);
+        if (!tmp)
+            return -ENOMEM;
+        files->fdarray = tmp;
+        files->max *= 2;
+        return files->size++;
+    } else {
+        return -EMFILE;
+    }
 }
 
-static enum fs_type str_to_fs(const char *fs_type)
+static struct file * get_file_handle(int fd)
 {
-    if (!strcmp(fs_type, "msdos"))
-        return MSDOS;
-    else if (!strcmp(fs_type, "tmpfs"))
-        return TMPFS;
-    else
-        return -1;
+    struct file *file;
+    struct fdtable *files = &current->fs.files;
+
+    if (fd < 0 || fd >= files->max)
+        return ERR_PTR(-EBADF);
+    file = files->fdarray[fd];
+    if (!file)
+        return ERR_PTR(-EBADF);
+    return file;
 }
 
 static void root_init(struct block_device *bdev)
 {
     struct super_block *sb = kzmalloc(sizeof(struct super_block));
-    struct vfsmount *root_disk = &disks[numdisks++];
+    struct vfsmount *root_disk = get_empty_vfsmount(bdev->type);
 
     root_disk->mnt_sb = sb;
-    root_disk->init_fs = init_ops[bdev->type];
 
     root_dentry = root_disk->init_fs(bdev, sb);
     if (!root_dentry)
@@ -86,80 +107,6 @@ void fs_init(void)
     kstatus(STATUS_OK, "Filesystem initialized\n");
 }
 
-inline struct inode *get_root_inode(void)
-{
-    return root_dentry->d_inode;
-}
-
-
-int vfs_mount(const char *source, const char *target,
-        const char *filesystemtype, unsigned long mountflags,
-        const void *data)
-{
-    void *device = NULL; // str_to_device(source);
-    struct super_block *sb;
-    struct dentry *dentry;
-    struct vfsmount *mnt;
-    char dirname[64];
-    char basename[16];
-    enum fs_type type = str_to_fs(filesystemtype);
-    if (type == -1 || numdisks >= 8)
-        return -1;
-
-    memset(dirname, 0, 64);
-    memset(basename, 0, 16);
-    get_dirname(dirname, target);
-    get_basename(basename, target);
-
-    // Check that the target's parent directory exists
-    struct dentry *parent = lookup_path(dirname);
-    if (!parent)
-        return -1;
-
-    // Check that the target is a valid directory, or create it
-    struct dentry *new_dentry = lookup_path_from(parent, basename);
-    struct inode *new_inode = new_dentry->d_inode;
-    if (new_inode && new_inode->i_type != TYPE_DIR) {
-        klog(LOG_ERROR, "Target is not a directory\n");
-        return -1;
-    }
-    if (!new_dentry->d_inode) {
-        klog(LOG_DEBUG, "Creating new dir %s\n", new_dentry->d_name);
-        parent->d_inode->i_op->mkdir(parent->d_inode, new_dentry, 0);
-    }
-
-    sb = kzmalloc(sizeof(struct super_block));
-    dentry = init_ops[type](device, sb);
-    if (!dentry) {
-        kfree(sb);
-        return -1;
-    }
-    sb->s_type = type;
-    sb->s_root = dentry;
-    sb->s_active = true;
-    sb->s_count = 1;
-
-    dentry->d_name = kzmalloc(strlen(basename)+1);
-    strcpy(dentry->d_name, basename);
-    dentry->d_parent = parent;
-    dentry->d_sb = sb;
-
-    mnt = &disks[numdisks++];
-    mnt->mnt_sb = sb;
-    mnt->mnt_root = dentry;
-    mnt->init_fs = init_ops[type];
-    new_dentry->d_mount = mnt;
-
-    klog(LOG_DEBUG, "Mounted %s on %s\n", source, target);
-
-    return 0;
-}
-SYSCALL_DECL5(mount, const char*, source, const char*, target,
-    const char*, filesystemtype, unsigned long, mountflags,
-    const void*, data)
-{
-    return vfs_mount(source, target, filesystemtype, mountflags, data);
-}
 
 #define SEEK_SET 0
 #define SEEK_CUR 1
@@ -172,7 +119,7 @@ int vfs_lseek(struct file *file, int offset, int whence)
     else if (whence == SEEK_CUR)
         file->f_pos += offset;
     else if (whence == SEEK_END)
-        file->f_pos = file->f_inode->i_size + offset;
+        file->f_pos = file->f_dentry->d_inode->i_size + offset;
     else
         return -EINVAL;
 
@@ -180,11 +127,9 @@ int vfs_lseek(struct file *file, int offset, int whence)
 }
 SYSCALL_DECL3(lseek, int, fd, int, offset, int, whence)
 {
-    if (fd < 0 || fd >= current->fs.files.max)
-        return -EBADF;
-    struct file *file = current->fs.files.fdarray[fd];
-    if (!file)
-        return -EBADF;
+    struct file *file = get_file_handle(fd);
+    if (IS_ERR(file))
+        return PTR_ERR(file);
     return vfs_lseek(file, offset, whence);
 }
 
@@ -203,11 +148,9 @@ struct file *vfs_open(const char *path, int flags, int mode)
         return ERR_PTR(-ENOENT);
 
     new_file = kzmalloc(sizeof(*new_file));
-    new_file->f_path = kzmalloc(n_len+1);
-    strcpy(new_file->f_path, path);
+    new_file->f_dentry = dentry;
 
     if(inode->i_op->open(inode, new_file)) {
-        kfree(new_file->f_path);
         kfree(new_file);
         return ERR_PTR(-ENOENT);
     }
@@ -216,37 +159,48 @@ struct file *vfs_open(const char *path, int flags, int mode)
 }
 SYSCALL_DECL3(open, const char*, path, int, flags, int, mode)
 {
-    char path_buf[128];
+    char *path_buf = kmalloc(256);
     struct file *f;
-    int fd;
+    long fd;
 
-    if (strncpy_from_user(path_buf, path, 128) < 0)
-        return -EFAULT;
-    f = vfs_open(path, flags, mode);
+    if (!path_buf)
+        return -ENOMEM;
+
+    fd = strncpy_from_user(path_buf, path, 255);
+    if (fd < 0)
+        goto error;
+
+    f = vfs_open(path_buf, flags, mode);
     if (IS_ERR(f)) {
-        klog(LOG_DEBUG, "Failed to open %s\n", path);
-        return PTR_ERR(f);
+        klog(LOG_DEBUG, "Failed to open %s\n", path_buf);
+        fd = PTR_ERR(f);
+        goto error;
     }
 
     fd = get_fd();
     if (fd < 0) {
         vfs_close(f);
-        return -EMFILE;
+        fd = -EMFILE;
+        goto error;
     }
+
     current->fs.files.fdarray[fd] = f;
+error:
+    kfree(path_buf);
     return fd;
 }
 
 
 ssize_t vfs_read(struct file *file, void *buf, size_t count)
 {
-    if (file->f_inode->i_type == TYPE_DIR)
+    struct inode *inode = file->f_dentry->d_inode;
+    if (inode->i_type == TYPE_DIR)
         return -EISDIR;
 
-    if (file->f_inode->i_type == TYPE_DEV)
-        return file->f_inode->i_fop->read(file, buf, count);
+    if (inode->i_type == TYPE_DEV)
+        return inode->i_fop->read(file, buf, count);
 
-    if (file->f_pos >= file->f_inode->i_size)
+    if (file->f_pos >= inode->i_size)
         return 0;
 
     ssize_t bytes = file->f_op->read(file, buf, count);
@@ -259,17 +213,20 @@ SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
     struct file *file;
     unsigned char *kbuf;
     ssize_t bytes;
-    int err;
+    long err;
 
-    if (fd < 0 || fd >= current->fs.files.max)
-        return -EBADF;
-    file = current->fs.files.fdarray[fd];
-    if (!file)
-        return -EBADF;
+    file = get_file_handle(fd);
+    if (IS_ERR(file))
+        return PTR_ERR(file);
+
     kbuf = kmalloc(count);
+    if (!kbuf)
+        return -ENOMEM;
+
     bytes = vfs_read(file, kbuf, count);
     if (bytes > 0)
         err = copy_to_user(buf, kbuf, bytes);
+
     kfree(kbuf);
     return err ? err : bytes;
 }
@@ -277,8 +234,9 @@ SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
 
 ssize_t vfs_write(struct file *file, const void *buf, size_t count)
 {
-    if (file->f_inode->i_type == TYPE_DEV) {
-        return file->f_inode->i_fop->write(file, buf, count);
+    struct inode *inode = file->f_dentry->d_inode;
+    if (inode->i_type == TYPE_DEV) {
+        return inode->i_fop->write(file, buf, count);
     }
 
     ssize_t bytes = file->f_op->write(file, buf, count);
@@ -291,13 +249,11 @@ SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
     struct file *file;
     unsigned char *kbuf;
     ssize_t bytes;
-    int err;
+    long err;
 
-    if (fd < 0 || fd >= current->fs.files.max)
-        return -EBADF;
-    file = current->fs.files.fdarray[fd];
-    if (!file)
-        return -EBADF;
+    file = get_file_handle(fd);
+    if (IS_ERR(file))
+        return PTR_ERR(file);
 
     kbuf = kmalloc(count);
     if (!kbuf)
@@ -315,115 +271,131 @@ SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
 
 int vfs_close(struct file *file)
 {
-    //file->f_op->flush(file);
-    if (--file->f_count)
-        return 0;
+    if (file->f_op->flush)
+        file->f_op->flush(file);
 
-    //file->f_op->release(file->f_inode, file);
-    kfree(file->f_path);
-    kfree(file);
+    fput(file);
+
     return 0;
 }
 SYSCALL_DECL1(close, int, fd)
 {
-    struct fdtable *files = &current->fs.files;
-    if (fd < 0 || fd >= files->max)
-        return -EBADF;
-    struct file *file = files->fdarray[fd];
-    if (!file)
-        return -EBADF;
-    int ret = vfs_close(file);
+    struct file *file;
+    long err;
+
+    file = get_file_handle(fd);
+    if (IS_ERR(file))
+        return PTR_ERR(file);
+    err = vfs_close(file);
+
     current->fs.files.fdarray[fd] = NULL;
     current->fs.files.size--;
-    return ret;
+    return err;
 }
 
 
 ssize_t vfs_getdents(struct file *file, struct dirent *dirp, unsigned int buf_size)
 {
-    struct inode *inode = file->f_inode;
+    struct inode *inode = file->f_dentry->d_inode;
+    int dir_cnt;
 
     if (inode->i_type != TYPE_DIR)
         return -ENOTDIR;
 #ifdef DEBUG_VFS
-    klog(LOG_DEBUG, "VFS: Reading directory %s\n", file->f_path);
+    klog(LOG_DEBUG, "VFS: Reading directory %s\n", file->f_dentry->d_name);
 #endif
-    memset(dirp, 0, buf_size);
-    int cnt = file->f_op->readdir(file, dirp, buf_size);
-    file->f_pos += cnt;
-    return cnt > 0 ? cnt * sizeof(struct dirent) : cnt;
+    dir_cnt = file->f_op->readdir(file, dirp, buf_size);
+    file->f_pos += dir_cnt;
+    return dir_cnt > 0 ? dir_cnt * sizeof(struct dirent) : dir_cnt;
 }
 SYSCALL_DECL3(getdents, unsigned int, fd, struct dirent*, dirp, size_t, buf_size)
 {
-    if (fd < 0 || fd >= current->fs.files.max)
-        return -EBADF;
-    struct file *file = current->fs.files.fdarray[fd];
-    if (!file)
-        return -EBADF;
-    return vfs_getdents(file, dirp, buf_size);
+    struct file *file = get_file_handle(fd);
+    unsigned char *buf;
+    ssize_t bytes;
+
+    if (IS_ERR(file))
+        return PTR_ERR(file);
+
+    if (buf_size > 0x8000)
+        return -EINVAL;
+
+    buf = kzmalloc(buf_size);
+    if (!buf)
+        return -ENOMEM;
+
+    bytes = vfs_getdents(file, (struct dirent *)buf, buf_size);
+    if (bytes > 0)
+        bytes = copy_to_user(dirp, buf, bytes);
+
+    kfree(buf);
+    return bytes;
 }
 
+// No relative path yet
 int vfs_mkdir(const char *path, umode_t mode)
 {
     struct inode *parent;
     struct dentry *new_dentry;
-
-    char name[16];
+    char *name = kmalloc(16);
     char dir_path[64];
-    char *p = strrchr(path, '/');
-    if (!p)
-        return -1;
-    if (!*(p+1))
-        p = strrchr(p-1, '/');
 
-    strcpy(name, p+1);
-    strncpy(dir_path, path, (uintptr_t)p - (uintptr_t)path);
+    get_dirname(dir_path, path, 64);
+    get_basename(name, path, 16);
 
     struct dentry *parent_dentry = lookup_path(dir_path);
-    if (!parent_dentry)
-        return -1;
+    if (IS_ERR(parent_dentry))
+        return PTR_ERR(parent_dentry);
+
     parent = parent_dentry->d_inode;
     if (!parent)
-        return -1;
+        return -ENOENT;
 
-    new_dentry = kzmalloc(sizeof(*new_dentry));
-    new_dentry->d_parent = parent_dentry;
-    new_dentry->d_sb = parent->i_sb;
-    strcpy(new_dentry->d_name, name);
+    new_dentry = alloc_dentry(parent_dentry, name);
+    if (IS_ERR(new_dentry))
+        return PTR_ERR(new_dentry);
     dcache_add(new_dentry);
 
     return parent->i_op->mkdir(parent, new_dentry, mode);
 }
 SYSCALL_DECL2(mkdir, const char*, path, umode_t, mode)
 {
-    return vfs_mkdir(path, mode);
+    char *path_buf = kmalloc(256);
+    long err = -EFAULT;
+
+    err = strncpy_from_user(path_buf, path, 255);
+    if (err > 0)
+        err = -ENAMETOOLONG;
+    else if (err == 0)
+        err = vfs_mkdir(path_buf, mode);
+
+    kfree(path_buf);
+    return err;
 }
 
 
 int vfs_create(const char *path, umode_t mode)
 {
     char dirname[64];
-    char basename[16];
+    char *basename = kmalloc(16);
     struct inode *parent_inode;
-    struct super_block *sb;
+    struct dentry *parent;
 
-    memset(dirname, 0, 64);
-    memset(basename, 0, 16);
-    get_dirname(dirname, path);
-    get_basename(basename, path);
-    struct dentry *parent = lookup_path(dirname);
-    if (!parent)
-        return -1;
+    get_dirname(dirname, path, 64);
+    get_basename(basename, path, 16);
+
+    parent = lookup_path(dirname);
+    if (IS_ERR(parent)) {
+        klog(LOG_DEBUG, "Failed to find parent %s\n", dirname);
+        return PTR_ERR(parent);
+    }
     parent_inode = parent->d_inode;
-    if (!parent_inode)
-        return -1;
-    sb = parent_inode->i_sb;
+    if (!parent_inode) {
+        klog(LOG_DEBUG, "Parent inode not found\n");
+        return -ENOENT;
+    }
 
-    struct dentry *new_dentry = kzmalloc(sizeof(*new_dentry));
-    new_dentry->d_name = kzmalloc(strlen(basename)+1);
-    strcpy(new_dentry->d_name, basename);
-    new_dentry->d_parent = parent;
-    new_dentry->d_sb = sb;
+    struct dentry *new_dentry = alloc_dentry(parent, basename);
     dcache_add(new_dentry);
 #ifdef DEBUG_VFS
     klog(LOG_DEBUG, "Creating %s\n", new_dentry->d_name);
@@ -432,12 +404,19 @@ int vfs_create(const char *path, umode_t mode)
 }
 SYSCALL_DECL2(create, const char*, path, umode_t, mode)
 {
-    return vfs_create(path, mode);
+    char *path_buf = kmalloc(256);
+    long err = -EFAULT;
+
+    err = strncpy_from_user(path_buf, path, 255);
+    if (err >= 0)
+        err = vfs_create(path, mode);
+    kfree(path_buf);
+    return err;
 }
 
 int mknod(const char *pathname, int mode, dev_t dev)
 {
-    return -1;
+    return -ENOSYS;
 }
 SYSCALL_DECL3(mknod, const char*, pathname, int, mode, dev_t, dev)
 {

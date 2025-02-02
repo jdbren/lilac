@@ -16,8 +16,7 @@ struct file {
     struct mutex	f_pos_lock;
     unsigned long	f_pos;
     // struct fown_struct	f_owner;
-    char 			*f_path;
-    struct inode 	*f_inode;
+    struct dentry   *f_dentry;
     const struct file_operations *f_op;
     void *f_info; // fs specific data
     // struct vfsmount *f_disk;

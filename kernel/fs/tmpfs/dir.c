@@ -48,7 +48,7 @@ int tmpfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 int tmpfs_readdir(struct file *file, struct dirent *dirp, unsigned int count)
 {
     u32 num_dirents = count / sizeof(*dirp);
-    struct inode *inode = file->f_inode;
+    struct inode *inode = file->f_dentry->d_inode;
     struct tmpfs_dir *dir = (struct tmpfs_dir*)inode->i_private;
     struct tmpfs_entry *entry = (struct tmpfs_entry*)dir->children;
     size_t i = file->f_pos;

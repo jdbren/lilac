@@ -32,6 +32,8 @@ inline struct inode *fat_alloc_inode(struct super_block *sb)
 
 inline void fat_destroy_inode(struct inode *inode)
 {
+    if (inode->i_private)
+        kfree(inode->i_private);
     kfree(inode);
 }
 

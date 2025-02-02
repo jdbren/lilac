@@ -39,7 +39,8 @@ string/strcat.o \
 string/strlen.o \
 string/strchr.o \
 math/log2.o \
-ctype/ctype.o
+ctype/ctype.o \
+errno.o
 
 HOSTEDOBJS=\
 $(ARCH_HOSTEDOBJS) \

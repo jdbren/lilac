@@ -18,7 +18,8 @@
 const struct file_operations fat_fops = {
     .read = fat32_read,
     .write = fat32_write,
-    .readdir = fat32_readdir
+    .readdir = fat32_readdir,
+    .release = fat32_close,
 };
 
 const struct super_operations fat_sops = {
@@ -126,7 +127,7 @@ inline void __fat_write_clst(struct fat_disk *fat_disk,
 
 u32 __fat_get_clst_num(struct file *file, struct fat_disk *disk)
 {
-    struct fat_file *fat_file = (struct fat_file*)file->f_inode->i_private;
+    struct fat_file *fat_file = (struct fat_file*)file->f_dentry->d_inode->i_private;
     u32 clst_num = (u32)fat_file->cl_low + ((u32)fat_file->cl_high << 16);
     u32 clst_off = file->f_pos / disk->bytes_per_clst;
 
@@ -211,6 +212,7 @@ struct dentry *fat32_init(void *dev, struct super_block *sb)
     root_dentry = kzmalloc(sizeof(struct dentry));
     root_dentry->d_sb = sb;
     root_dentry->d_inode = root_inode;
+    root_dentry->d_count = 1;
 
     // Initialize the super block
     sb->s_blocksize = fat_disk->bytes_per_clst;

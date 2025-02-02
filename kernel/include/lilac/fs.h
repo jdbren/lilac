@@ -70,6 +70,7 @@ struct inode_operations {
 #define d_lock	d_lockref.lock
 
 struct dentry {
+    atomic_uint d_count;
     // struct hlist_bl_node d_hash; /* lookup hash list */
     struct dentry *d_parent;	/* parent directory */
     char *d_name;
@@ -151,11 +152,30 @@ int vfs_mount(const char *source, const char *target,
 void fs_init(void);
 struct dentry *mount_bdev(struct block_device *bdev, int (*fill_super)(struct super_block*));
 
+struct super_block * alloc_sb(enum fs_type type);
+void destroy_sb(struct super_block *sb);
+
 struct dentry * lookup_path_from(struct dentry *parent, const char *path);
 struct dentry * lookup_path(const char *path);
 struct dentry * dlookup(struct dentry *parent, const char *name);
-void dcache_add(struct dentry *d);
 
-inline struct inode * get_root_inode(void);
+void dget(struct dentry *d);
+void dput(struct dentry *d);
+struct dentry * alloc_dentry(struct dentry *d_parent, const char *name);
+void destroy_dentry(struct dentry *d);
+void dcache_add(struct dentry *d);
+void dcache_remove(struct dentry *d);
+
+void iget(struct inode *inode);
+void iput(struct inode *inode);
+
+void fget(struct file *file);
+void fput(struct file *file);
+
+typedef struct dentry *(*fs_init_func_t)(void*, struct super_block*);
+
+extern inline struct dentry * get_root_dentry(void);
+struct vfsmount * get_empty_vfsmount(enum fs_type type);
+fs_init_func_t get_fs_init(enum fs_type type);
 
 #endif

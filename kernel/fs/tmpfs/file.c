@@ -34,14 +34,19 @@ int tmpfs_create(struct inode *parent, struct dentry *new_dentry, umode_t mode)
 
 int tmpfs_open(struct inode *inode, struct file *file)
 {
-    file->f_inode = inode;
+    file->f_dentry->d_inode = inode;
     file->f_op = &tmpfs_fops;
+    return 0;
+}
+
+int tmpfs_close(struct inode *inode, struct file *file)
+{
     return 0;
 }
 
 ssize_t tmpfs_read(struct file *file, void *buf, size_t cnt)
 {
-    struct inode *inode = file->f_inode;
+    struct inode *inode = file->f_dentry->d_inode;
     struct tmpfs_file *tmp_inode = (struct tmpfs_file*)inode->i_private;
     size_t read = 0;
 
@@ -59,7 +64,7 @@ ssize_t tmpfs_read(struct file *file, void *buf, size_t cnt)
 
 ssize_t tmpfs_write(struct file *file, const void *buf, size_t cnt)
 {
-    struct inode *inode = file->f_inode;
+    struct inode *inode = file->f_dentry->d_inode;
     struct tmpfs_file *tmp_inode = (struct tmpfs_file*)inode->i_private;
     size_t written = 0;
 

@@ -1,4 +1,5 @@
 #include <lilac/fs.h>
+#include <lilac/log.h>
 #include "tmpfs_internal.h"
 
 #include <mm/kmalloc.h>
@@ -17,15 +18,17 @@ struct inode* tmpfs_alloc_inode(struct super_block *sb)
 
 void tmpfs_destroy_inode(struct inode *inode)
 {
+    if (inode->i_private)
+        kfree(inode->i_private);
     kfree(inode);
 }
 
 struct dentry* tmpfs_init(void *device, struct super_block *sb)
 {
+    klog(LOG_DEBUG, "Initializing tmpfs\n");
     sb->s_op = &tmpfs_sops;
     sb->s_blocksize = 0x1000;
     sb->s_maxbytes = 0xfffff;
-    INIT_LIST_HEAD(&sb->s_inodes);
 
     struct dentry *root_dentry = kzmalloc(sizeof(struct dentry));
     struct inode *root_inode = tmpfs_alloc_inode(sb);
@@ -34,13 +37,10 @@ struct dentry* tmpfs_init(void *device, struct super_block *sb)
     root_inode->i_private = root_dir;
     root_inode->i_type = TYPE_DIR;
 
+    root_dentry->d_count = 1;
     root_dentry->d_sb = sb;
     root_dentry->d_inode = root_inode;
+    sb->s_root = root_dentry;
 
     return root_dentry;
 }
-
-const struct super_operations tmpfs_sops = {
-    .alloc_inode = tmpfs_alloc_inode,
-    .destroy_inode = tmpfs_destroy_inode
-};

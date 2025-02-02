@@ -1,7 +1,5 @@
 #include <lilac/fs.h>
 
-#include <string.h>
-
 #include <lilac/log.h>
 #include <mm/kmalloc.h>
 
@@ -29,93 +27,53 @@ static unsigned long hash(struct super_block *sb, unsigned long hashval)
     return tmp & i_hash_mask;
 }
 
+void iget(struct inode *inode)
+{
+    struct super_block *sb = inode->i_sb;
+
+    acquire_lock(&sb->s_lock);
+
+    if (inode->i_count == 0) {
+        list_add_tail(&inode->i_list, &sb->s_inodes);
+    }
+
+    inode->i_count++;
+    release_lock(&sb->s_lock);
+}
+
+void iput(struct inode *inode)
+{
+    struct super_block *sb = inode->i_sb;
+
+    acquire_lock(&sb->s_lock);
+
+    if (inode->i_count > 1) {
+        inode->i_count--;
+        release_lock(&sb->s_lock);
+        return;
+    }
+
+    list_del(&inode->i_list);
+    release_lock(&sb->s_lock);
+
+    if (sb->s_op->destroy_inode) {
+        sb->s_op->destroy_inode(inode);
+    } else {
+        kfree(inode);
+    }
+}
+
 int insert_inode(struct super_block *sb, struct inode *inode)
 {
+    return 0;
+}
 
+int release_inode(struct super_block *sb, struct inode *inode)
+{
     return 0;
 }
 
 struct inode *lookup_inode(struct super_block *sb, unsigned long hashval)
 {
     return NULL;
-}
-
-extern struct dentry *root_dentry;
-
-static int name_len(const char *path, int n_pos)
-{
-    int i = 0;
-    while (path[n_pos] != '/' && path[n_pos] != '\0') {
-        i++; n_pos++;
-    }
-    return i;
-}
-
-struct dentry *lookup_path_from(struct dentry *parent, const char *path)
-{
-    int n_pos = 0;
-    struct inode *inode;
-    struct dentry *current = parent;
-    struct dentry *find;
-
-    while (path[n_pos] != '\0') {
-        if (path[n_pos] == '/') {
-            n_pos++;
-            continue;
-        }
-        int len = name_len(path, n_pos);
-        if (len == 0)
-            break;
-        char *name = kzmalloc(len+1);
-        strncpy(name, path + n_pos, len);
-        name[len] = '\0';
-#ifdef DEBUG_VFS
-        klog(LOG_DEBUG, "VFS: Looking up %s\n", name);
-#endif
-        find = dlookup(current, name);
-        if (find == NULL) {
-#ifdef DEBUG_VFS
-            klog(LOG_DEBUG, "VFS: %s not in cache\n", name);
-#endif
-            find = kzmalloc(sizeof(*find));
-
-            inode = current->d_inode;
-            find->d_parent = current;
-            find->d_name = name;
-            find->d_sb = inode->i_sb;
-
-            inode->i_op->lookup(inode, find, 0);
-
-            dcache_add(find);
-
-            // If the inode is NULL, we've reached a dead end (negative dentry)
-            if (find->d_inode == NULL)
-                return find;
-        }
-        else {
-            kfree(name);
-            if (find->d_inode == NULL)
-                return find;
-
-            if (find->d_mount) {
-#ifdef DEBUG_VFS
-                klog(LOG_DEBUG, "VFS: Found mount point\n");
-#endif
-                find = find->d_mount->mnt_root;
-            }
-        }
-        current = find;
-        n_pos += len;
-    }
-#ifdef DEBUG_VFS
-    klog(LOG_DEBUG, "VFS: Found %s\n", current->d_name);
-#endif
-    return current;
-}
-
-struct dentry *lookup_path(const char *path)
-{
-    if (strcmp(path, "/") == 0)
-        return root_dentry;
-    return lookup_path_from(root_dentry, path);
 }

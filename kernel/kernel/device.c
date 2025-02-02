@@ -1,8 +1,7 @@
 #include <lilac/device.h>
 
 #include <lilac/fs.h>
-#include <lilac/log.h>
-#include <lilac/panic.h>
+#include <lilac/lilac.h>
 
 int __must_check device_register(struct device *dev)
 {
@@ -12,15 +11,18 @@ int __must_check device_register(struct device *dev)
 
 int add_device(const char *path, struct file_operations *fops)
 {
-    if (vfs_create(path, 0)) {
-        klog(LOG_ERROR, "Failed to create %s\n", path);
-        return -1;
+    int err = 0;
+    if ((err = vfs_create(path, 0))) {
+        klog(LOG_ERROR, "Failed to create %s with %d\n", path, -err);
+        return err;
     }
     struct dentry *dentry = lookup_path(path);
-    if (!dentry)
-        return -1;
+    if (IS_ERR(dentry))
+        return PTR_ERR(dentry);
 
     struct inode *inode = dentry->d_inode;
+    if (!inode)
+        return -ENOENT;
     inode->i_fop = fops;
     inode->i_type = TYPE_DEV;
 

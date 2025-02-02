@@ -64,11 +64,20 @@ static inline __must_check int check_user_string(const char *str, size_t maxlen)
 static inline __must_check int strncpy_from_user(char *dst, const char *src, size_t max_size)
 {
     struct mm_info *mm = current->mm;
+    int ret;
     if (!access_ok(src, 1, mm)) {
         klog(LOG_WARN, "strncpy_from_user: src (%x) not accessible\n", src);
         return -EFAULT;
     }
-    return arch_strncpy_from_user(dst, src, max_size);
+    ret = arch_strncpy_from_user(dst, src, max_size);
+    if (ret < 0) {
+        klog(LOG_WARN, "strncpy_from_user: failed to copy string\n");
+        return ret;
+    } else if (ret == 0 && dst[max_size] != '\0') {
+        klog(LOG_WARN, "strncpy_from_user: string too long\n");
+        return -ENAMETOOLONG;
+    }
+    return 0;
 }
 
 #endif
