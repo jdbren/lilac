@@ -104,7 +104,7 @@ startup_32:
 	# Switch to the higher half.
 	ljmp $__KERNEL_CS,$4f
 
-    # Unmap the kernel identity mapping as it is now unnecessary.
+	# Unmap the kernel identity mapping as it is now unnecessary.
 4: 	leal boot_page_table0+1024, %edi
 	movl $(0xc00), %ecx
 	xorl %eax, %eax

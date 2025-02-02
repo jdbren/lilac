@@ -17,8 +17,8 @@
 .extern timer_cnt
 .global timer_handler
 timer_handler:
-    pushf
-    cld
+	pushf
+	cld
 	pusha
 
 	// mov eax, [IRQ0_fractions]
@@ -33,11 +33,11 @@ timer_handler:
 	movl %eax, (timer_cnt)
 
 .no_tick:
-    xorl %eax, %eax
-    movl (lapic_base), %ebx
-    movl %eax, 0xb0(%ebx)                # Acknowledge the interrupt
+	xorl %eax, %eax
+	movl (lapic_base), %ebx
+	movl %eax, 0xb0(%ebx)                # Acknowledge the interrupt
 
-    call sched_tick
+	call sched_tick
 
 	popa
 	popf
