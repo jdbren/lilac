@@ -38,7 +38,11 @@ void kernel_early(uintptr_t multiboot)
     apic_init(acpi.madt);
     keyboard_init();
     timer_init(1, acpi.hpet); // 1ms interval
-    // ap_init(acpi.madt->core_cnt);
+
+    arch_enable_interrupts();
+    ap_init(acpi.madt->core_cnt);
+    arch_disable_interrupts();
+
     acpi_early_cleanup(&acpi);
 
     start_kernel();

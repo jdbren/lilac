@@ -14,6 +14,13 @@ static int num_disks;
 static int __must_check create_block_dev(struct gendisk *disk,
    const struct gpt_part_entry *part_entry, int num);
 
+int gpt_validate(struct GPT *gpt) {
+    if (gpt->signature != GPT_SIGNATURE) {
+        return -1;
+    }
+    return 0;
+}
+
 static int __must_check get_part_type(struct gendisk *disk,
     const struct gpt_part_entry *part)
 {

@@ -70,7 +70,7 @@ static void context_switch(struct task *prev, struct task *next)
     klog(LOG_DEBUG, "\tPPID: %d\n", next->ppid);
     klog(LOG_DEBUG, "\tPGD: %x\n", next->pgd);
     klog(LOG_DEBUG, "\tPC: %x\n", next->pc);
-    klog(LOG_DEBUG, "\tStack: %x\n", next->stack);
+    klog(LOG_DEBUG, "\tStack: %x\n", next->kstack);
     */
 
     arch_context_switch(prev, next);

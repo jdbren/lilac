@@ -100,6 +100,9 @@ int ap_init(u8 numcores)
     u8 bspid;
     extern void ap_tramp(void);
 
+    if (numcores == 1)
+        return 0;
+
     bspid = get_lapic_id();
     // copy the AP trampoline code to a fixed address in low memory
     memcpy((void*)0x8000, (void*)ap_tramp, 4096);
@@ -115,6 +118,7 @@ int ap_init(u8 numcores)
         // send INIT IPI
         *((volatile u32*)(base + 0x280)) = 0;               // clear errors
         *ap_select = (*ap_select & 0x00ffffff) | (i << 24); // select AP
+        klog(LOG_DEBUG, "Sending INIT IPI to AP %d\n", i);
         *ipi_data = (*ipi_data & 0xfff00000) | 0x00C500;    // INIT IPI
         sleep(10);                                          // wait
 
@@ -132,9 +136,11 @@ int ap_init(u8 numcores)
 
         // send STARTUP IPI
         *((volatile u32*)(base + 0x280)) = 0;
-        *ap_select = (*ap_select & 0x00ffffff) | (i << 24);
-        *ipi_data = (*ipi_data & 0xfff0f800) | 0x000608;    // STARTUP IPI
-        usleep(200);                                        // wait 200 usec?
+        for (int j = 0; j < 2; j++) {
+            *ap_select = (*ap_select & 0x00ffffff) | (i << 24);
+            *ipi_data = (*ipi_data & 0xfff0f800) | 0x000608;    // STARTUP IPI
+            usleep(200);                                        // wait 200 usec?
+        }
 
         do {
             asm volatile ("pause" : : : "memory");

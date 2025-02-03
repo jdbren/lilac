@@ -28,7 +28,7 @@ struct task {
     struct mm_info *mm;
     uintptr_t pgd; // 8
     uintptr_t pc; // 12
-    void *stack; // 16
+    void *kstack; // 16
     u32 time_slice;
     struct task *parent;
     struct fs_info fs;

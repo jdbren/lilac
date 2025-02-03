@@ -134,7 +134,7 @@ struct task* create_process(const char *path)
     new_task->mm = mem;
     new_task->pgd = mem->pgd;
     new_task->pc = (uintptr_t)(start_process);
-    new_task->stack = (void*)INIT_STACK(mem->kstack);
+    new_task->kstack = (void*)INIT_STACK(mem->kstack);
     new_task->state = TASK_SLEEPING;
     new_task->info.path = kzmalloc(strlen(path) + 1);
     memcpy(new_task->info.path, path, strlen(path) + 1);
@@ -156,7 +156,7 @@ struct task *init_process(void)
     this->ppid = 0;
     this->mm = mem;
     this->pgd = mem->pgd;
-    this->stack = (void*)INIT_STACK(mem->kstack);
+    this->kstack = (void*)INIT_STACK(mem->kstack);
     this->pc = (uintptr_t)(start_process);
     this->state = TASK_RUNNING;
     this->fs.files.fdarray = kcalloc(4, sizeof(struct file));
@@ -177,7 +177,7 @@ void clone_process(struct task *parent, struct task *child)
     child->mm = arch_copy_mmap(parent->mm);
     child->pgd = child->mm->pgd;
     child->pc = parent->pc;
-    child->stack = (void*)INIT_STACK(child->mm->kstack);
+    child->kstack = (void*)INIT_STACK(child->mm->kstack);
     child->state = TASK_SLEEPING;
     child->info.path = kzmalloc(strlen(parent->info.path) + 1);
     strcpy(child->info.path, parent->info.path);
@@ -216,8 +216,7 @@ int do_fork(void)
     return pid;
 }
 
-__noreturn
-void exec_and_return(void)
+__noreturn void exec_and_return(void)
 {
     klog(LOG_DEBUG, "Entering exec_and_return, pid = %d\n", current->pid);
     struct mm_info *mem = arch_process_remap(current->mm);
@@ -225,7 +224,7 @@ void exec_and_return(void)
 
     task->mm = mem;
     task->pgd = mem->pgd;
-    task->stack = (void*)INIT_STACK(mem->kstack);
+    task->kstack = (void*)INIT_STACK(mem->kstack);
     task->pc = (uintptr_t)start_process;
     task->state = TASK_RUNNING;
 

@@ -53,7 +53,6 @@ fs/tmpfs/dir.o \
 fs/tmpfs/file.o \
 fs/tmpfs/sb.o \
 fs/vfs.o \
-fs/gpt.o \
 fs/sb.o \
 fs/file.o \
 fs/inode.o \
