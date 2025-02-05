@@ -8,6 +8,7 @@ sudo ./scripts/image.sh
 qemu-system-x86_64 \
     -machine q35,firmware=./resources/OVMF-pure-efi.fd \
     -cpu max -no-reboot -smp 2 -m 512M \
+    -display cocoa,full-grab=on \
     -drive file=./uefi.img,format=raw \
     -net none \
     -monitor stdio -debugcon file:debug.txt -d int,cpu_reset,guest_errors -D log.txt

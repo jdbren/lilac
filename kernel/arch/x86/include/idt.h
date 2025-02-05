@@ -19,6 +19,5 @@ struct interrupt_frame {
 
 void idt_init(void);
 void idt_entry(int num, u32 offset, u16 selector, u8 attr);
-void enable_interrupts(void);
 
 #endif

@@ -12,8 +12,9 @@ EXEC_PREFIX?=$(PREFIX)
 BOOTDIR?=$(EXEC_PREFIX)/boot
 INCLUDEDIR?=$(PREFIX)/include
 
-CFLAGS:=$(CFLAGS) -D__lilac__ -D__is_kernel -Iinclude \
--ffreestanding -Wall -Wextra -mno-red-zone
+FLAGS:= -D__lilac__ -D__is_kernel -Iinclude -ffreestanding -Wall -Wextra
+CFLAGS:=$(CFLAGS) $(FLAGS) -mno-red-zone
+CXXFLAGS:=$(CXXFLAGS) $(FLAGS) -fno-exceptions -fno-rtti
 LDFLAGS:=$(LDFLAGS)
 LIBS:=$(LIBS) -nostdlib -lgcc
 
@@ -61,7 +62,8 @@ fs/mount.o \
 fs/name_utils.o \
 drivers/blkdev.o \
 drivers/pci.o \
-drivers/ahci.o
+drivers/ahci.o \
+lib/icxxabi.o
 
 OBJS=\
 $(ARCHDIR)/boot/crti.o \
@@ -80,7 +82,7 @@ $(ARCHDIR)/crtend.o \
 $(ARCHDIR)/boot/crtn.o \
 
 .PHONY: all clean install install-headers install-kernel acpi
-.SUFFIXES: .o .c .S
+.SUFFIXES: .o .c .S .cpp
 
 all: lilac.ker
 
@@ -96,6 +98,9 @@ $(ARCHDIR)/crtbegin.o $(ARCHDIR)/crtend.o:
 
 .S.o:
 	$(CC) -MD -c $< -o $@ $(CFLAGS)
+
+.cpp.o:
+	$(CXX) -MD -c $< -o $@ $(CXXFLAGS)
 
 clean:
 	rm -f lilac.ker
