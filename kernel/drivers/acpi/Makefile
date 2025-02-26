@@ -8,8 +8,7 @@ EXEC_PREFIX?=$(PREFIX)
 BOOTDIR?=$(EXEC_PREFIX)/boot
 INCLUDEDIR?=$(PREFIX)/include
 
-CFLAGS:=$(CFLAGS) -D__lilac__ -D__is_kernel -I ../../include \
--ffreestanding -mgeneral-regs-only -mno-red-zone -Wno-unused-parameter
+CFLAGS:=$(CFLAGS) -I../../include -Wno-unused-parameter
 LDFLAGS:=$(LDFLAGS)
 LIBS:=$(LIBS) -nostdlib -lk -lgcc
 

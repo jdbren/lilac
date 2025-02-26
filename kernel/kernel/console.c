@@ -1,47 +1,91 @@
 #include <lilac/console.h>
-#include <lilac/tty.h>
-#include <lilac/keyboard.h>
-#include <lilac/log.h>
 #include <lilac/lilac.h>
+#include <lilac/keyboard.h>
+#include <lilac/timer.h>
 #include <lilac/device.h>
 #include <lilac/sched.h>
-#include <lilac/process.h>
-
 #include <lilac/fs.h>
+#include <drivers/framebuffer.h>
 #include <mm/kmm.h>
-#include <lilac/timer.h>
+#include <utility/keymap.h>
+
 #include <cpuid.h>
 #include <string.h>
+#include <ctype.h>
 
-#define INPUT_BUF_SIZE 256
 
-struct console {
-    char buf[INPUT_BUF_SIZE];
-    int rpos;
-    int wpos;
-    int epos;
-};
-
-static struct console con;
+static struct console consoles[5] = {0};
+static unsigned active_console = 0;
 
 struct file_operations console_fops = {
     .read = console_read,
     .write = console_write
 };
 
+void init_con(int num)
+{
+    struct console *con = &consoles[num];
+    con->cx = 0;
+    con->cy = 0;
+    con->height = 30;
+    con->width = 80;
+}
+
+void console_newline(struct console *con)
+{
+    con->cx = 0;
+    if ((con->cy += 1) >= con->height) {
+        graphics_scroll();
+        con->cy = con->height - 1;
+    }
+}
+
+void console_putchar(struct console *con, int c)
+{
+    if (c == '\n') {
+        console_newline(con);
+        return;
+    } else if (c == '\t') {
+        do {
+            console_putchar(con, ' ');
+        } while (con->cx % 8);
+        return;
+    }
+    graphics_putc((u16)c, con->cx, con->cy);
+    if (++(con->cx) >= con->width) {
+        console_newline(con);
+    }
+}
+
+void console_writestring(struct console *con, const char *data)
+{
+    while (*data) {
+        console_putchar(con, *data++);
+    }
+}
+
+void console_clear(struct console *con)
+{
+    graphics_clear();
+    con->cx = 0;
+    con->cy = 0;
+}
+
 void console_init(void)
 {
     add_device("/dev/console", &console_fops);
     set_console(1);
 
+    struct console *con = &consoles[active_console];
+
     sleep(500);
-    graphics_clear();
+    console_clear(con);
     graphics_setcolor(RGB_MAGENTA, RGB_BLACK);
-    graphics_writestring("LilacOS v0.1.0\n\n");
+    console_writestring(con, "LilacOS v0.1.0\n\n");
 
     graphics_setcolor(RGB_CYAN, RGB_BLACK);
     unsigned int regs[12];
-    char str[sizeof(regs)+1];
+    char str[sizeof(regs) + 1];
     memset(str, 0, sizeof(str));
 
     __cpuid(0, regs[0], regs[1], regs[2], regs[3]);
@@ -109,12 +153,13 @@ ssize_t console_read(struct file *file, void *buf, size_t count)
     u32 target;
     int c;
     char cbuf;
+    struct console *con = &consoles[active_console];
 
     target = count;
-    while(count > 0){
+    while(count > 0) {
         // wait until interrupt handler has put some
         // input into cons.buffer.
-        if (con.rpos == con.wpos) {
+        if (con->input.rpos == con->input.wpos) {
             klog(LOG_DEBUG, "console_read: proc %d waiting for input\n", get_pid());
             arch_enable_interrupts();
             current->state = TASK_SLEEPING;
@@ -122,7 +167,7 @@ ssize_t console_read(struct file *file, void *buf, size_t count)
             yield();
         }
 
-        c = con.buf[con.rpos++ % INPUT_BUF_SIZE];
+        c = con->input.buf[con->input.rpos++ % INPUT_BUF_SIZE];
 
         // if(c == C('D')){  // end-of-file
         //     if(count < target){
@@ -133,10 +178,9 @@ ssize_t console_read(struct file *file, void *buf, size_t count)
         //     break;
         // }
 
-        // copy the input byte to the user-space buffer.
+        // copy the input byte to the buffer.
         cbuf = c;
-        if(memcpy(buf, &cbuf, 1) == -1)
-            break;
+        memcpy(buf, &cbuf, 1);
 
         buf++;
         --count;
@@ -151,37 +195,61 @@ ssize_t console_read(struct file *file, void *buf, size_t count)
 ssize_t console_write(struct file *file, const void *buf, size_t count)
 {
     char *bufp = (char*)buf;
-    int i;
-    for(i = 0; i < count; i++)
-        graphics_putchar(bufp[i] & 0xff);
+    struct console *con = &consoles[active_console];
+    for (int i = 0; i < count; i++)
+        console_putchar(con, bufp[i] & 0xff);
 
     return count;
 }
 
-void console_intr(char c)
+void console_intr(struct kbd_event event)
 {
+    char c = keyboard_map[event.keycode];
+    struct console *con = &consoles[active_console];
+    if (c == '\b') {
+        // graphics_delchar();
+        return;
+    }
+    if (event.status & KB_ALT) {
+        if (c == '1')
+            graphics_setfb(0);
+        else if (c == '2')
+            graphics_setfb(1);
+        return;
+    } else if (event.status & KB_CTRL) {
+        switch(c) {
+        case 'c':
+            console_writestring(con, "^C\n");
+            break;
+        case 'd':
+            console_writestring(con, "^D\n");
+            break;
+        }
+        return;
+    } else if (event.status & KB_SHIFT) {
+        c = c - 32;
+    }
     switch(c) {
     case '\b': // Backspace
     //case '\x7f': // Delete key
-        if(con.epos > con.wpos){
-            con.epos--;
-            graphics_putchar('\b');
-        }
+        // if(con->input.epos > con->input.wpos) {
+        //     con->input.epos--;
+        // }
     break;
     default:
-        if (c != 0 && con.epos-con.rpos < INPUT_BUF_SIZE) {
+        if (c != 0 && con->input.epos - con->input.rpos < INPUT_BUF_SIZE) {
             c = (c == '\r') ? '\n' : c;
 
-            // echo back to the user.
-            graphics_putchar(c);
-
             // store for consumption by consoleread().
-            con.buf[con.epos++ % INPUT_BUF_SIZE] = c;
+            con->input.buf[con->input.epos++ % INPUT_BUF_SIZE] = c;
 
-            if (c == '\n' || con.epos-con.rpos == INPUT_BUF_SIZE) {
+            // echo back to the user.
+            console_putchar(con, c);
+
+            if (c == '\n' || con->input.epos - con->input.rpos == INPUT_BUF_SIZE) {
                 // wake up consoleread() if a whole line (or end-of-file)
                 // has arrived.
-                con.wpos = con.epos;
+                con->input.wpos = con->input.epos;
                 u32 pid = pop_io_queue();
                 wakeup(pid);
             }

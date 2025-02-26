@@ -12,7 +12,8 @@ EXEC_PREFIX?=$(PREFIX)
 BOOTDIR?=$(EXEC_PREFIX)/boot
 INCLUDEDIR?=$(PREFIX)/include
 
-FLAGS:= -D__lilac__ -D__is_kernel -Iinclude -ffreestanding -Wall -Wextra
+FLAGS:= -D__lilac__ -D__is_kernel -Iinclude -ffreestanding -Wall -Wextra \
+	-Wno-unused-parameter -Wno-unused-variable -Wno-unused-function
 CFLAGS:=$(CFLAGS) $(FLAGS) -mno-red-zone
 CXXFLAGS:=$(CXXFLAGS) $(FLAGS) -fno-exceptions -fno-rtti
 LDFLAGS:=$(LDFLAGS)
@@ -63,6 +64,8 @@ fs/name_utils.o \
 drivers/blkdev.o \
 drivers/pci.o \
 drivers/ahci.o \
+drivers/framebuffer.o \
+drivers/vga.o \
 lib/icxxabi.o
 
 OBJS=\
@@ -79,7 +82,7 @@ $(ARCHDIR)/crtbegin.o \
 $(KERNEL_OBJS) \
 $(LIBS) \
 $(ARCHDIR)/crtend.o \
-$(ARCHDIR)/boot/crtn.o \
+$(ARCHDIR)/boot/crtn.o
 
 .PHONY: all clean install install-headers install-kernel acpi
 .SUFFIXES: .o .c .S .cpp

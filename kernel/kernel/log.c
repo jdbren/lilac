@@ -1,5 +1,5 @@
-#include <lilac/tty.h>
 #include <lilac/log.h>
+#include <drivers/framebuffer.h>
 #include <stdio.h>
 #include <stdarg.h>
 
@@ -29,7 +29,7 @@ void klog(int level, const char *data, ...)
     u32 text_color = graphics_getcolor().fg;
     va_list args;
     if (!data || log_level > level) return;
-    putchar('[');
+    printf("[");
     switch (level)
     {
     case LOG_DEBUG:
@@ -66,7 +66,7 @@ void kstatus(int status, const char *message, ...)
     va_list args;
     if (!message) return;
 
-    putchar('[');
+    printf("[");
     switch (status)
     {
     case STATUS_OK:
@@ -78,7 +78,7 @@ void kstatus(int status, const char *message, ...)
         printf(" ERROR ");
         break;
     }
-    graphics_setcolor(RGB_LIGHT_GRAY, RGB_BLACK);
+    graphics_setcolor(RGB_WHITE, RGB_BLACK);
     printf("] ");
 
     va_start(args, message);

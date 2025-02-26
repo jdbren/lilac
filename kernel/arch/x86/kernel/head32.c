@@ -2,10 +2,10 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/lilac.h>
 #include <lilac/boot.h>
-#include <lilac/tty.h>
 #include <lilac/keyboard.h>
 #include <lilac/timer.h>
 #include <mm/kmm.h>
+#include <drivers/framebuffer.h>
 
 #include "apic.h"
 #include "gdt.h"

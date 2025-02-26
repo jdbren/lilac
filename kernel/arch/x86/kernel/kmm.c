@@ -40,8 +40,6 @@ void mm_init(struct multiboot_tag_efi_mmap *mmap)
 
     // Allocate page tables for all kernel space
     kernel_pt_init();
-
-    kstatus(STATUS_OK, "Kernel virtual address allocation enabled\n");
 }
 
 u32 arch_get_mem_sz(void)
@@ -134,6 +132,13 @@ void *map_phys(void *to_map, int size, int flags)
     return virt;
 }
 
+void *map_phys_at(void *phys, void *virt, int size, int flags)
+{
+    int num_pages = PAGE_ROUND_UP(size) / PAGE_SIZE;
+    map_pages(phys, virt, flags, num_pages);
+    return virt;
+}
+
 void unmap_phys(void *addr, int size)
 {
     int num_pages = PAGE_ROUND_UP(size) / PAGE_SIZE;
@@ -212,9 +217,6 @@ static void __parse_mmap(struct multiboot_tag_efi_mmap *mmap)
             entry = (efi_memory_desc_t*)((u32)entry + mmap->descr_size)) {
         if (entry->type != EFI_RESERVED_TYPE)
             memory_size_kb += entry->num_pages * PAGE_SIZE / 1024;
-        klog(LOG_DEBUG, "Type: %d\n", entry->type);
-        klog(LOG_DEBUG, "Phys addr: %x\n", entry->phys_addr);
-        klog(LOG_DEBUG, "Num pages: %d\n", entry->num_pages);
         switch (entry->type) {
             case EFI_BOOT_SERVICES_CODE:
             case EFI_BOOT_SERVICES_DATA:

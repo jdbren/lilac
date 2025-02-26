@@ -18,10 +18,6 @@
 #define __always_inline __attribute__((always_inline)) inline
 
 
-inline void arch_idle(void);
-inline void arch_enable_interrupts(void);
-inline void arch_disable_interrupts(void);
-
 #ifdef ARCH_x86
 static inline void arch_idle(void)
 {
