@@ -37,7 +37,7 @@ void div0_handler(void)
 
 void pgflt_handler(int error_code, struct interrupt_frame *frame)
 {
-    int addr = 0;
+    uintptr_t addr = 0;
     asm volatile ("mov %%cr2,%0\n\t" : "=r"(addr));
 
     klog(LOG_WARN, "Fault address: %x\n", addr);

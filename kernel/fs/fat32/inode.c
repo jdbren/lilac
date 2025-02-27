@@ -12,14 +12,14 @@
 
 static inline bool check_entry(struct fat_file *entry, const char *name)
 {
-    if (entry->attributes != LONG_FNAME && entry->name[0] != (char)FAT_UNUSED) {
+    if (entry->attributes != LONG_FNAME && entry->name[0] != FAT_UNUSED) {
         if (!memcmp(entry->name, name, 8))
             return true;
     }
     return false;
 }
 
-inline struct inode *fat_alloc_inode(struct super_block *sb)
+struct inode *fat_alloc_inode(struct super_block *sb)
 {
     struct inode *new_node = kzmalloc(sizeof(struct inode));
 
@@ -30,7 +30,7 @@ inline struct inode *fat_alloc_inode(struct super_block *sb)
     return new_node;
 }
 
-inline void fat_destroy_inode(struct inode *inode)
+void fat_destroy_inode(struct inode *inode)
 {
     if (inode->i_private)
         kfree(inode->i_private);
@@ -89,18 +89,18 @@ static void *__fat32_read_dir(struct fat_file *entry, struct fat_disk *disk,
 {
     size_t bytes_read = 0;
     u32 clst = (u32)entry->cl_low + (u32)entry->cl_high;
-    unsigned char *current;
+    volatile unsigned char *current;
     volatile unsigned char *buffer = NULL;
 
     while (clst < 0x0FFFFFF8) {
-        buffer = krealloc(buffer, bytes_read + disk->bytes_per_clst);
+        buffer = krealloc((void*)buffer, bytes_read + disk->bytes_per_clst);
         current = buffer + bytes_read;
-        __fat_read_clst(disk, hd, clst, current);
+        __fat_read_clst(disk, hd, clst, (void*)current);
         clst = __get_FAT_val(clst, disk);
         bytes_read += disk->bytes_per_clst;
     }
 
-    return buffer;
+    return (void*)buffer;
 }
 
 static int fat32_find(struct inode *dir, const char *name,
@@ -123,7 +123,7 @@ static int fat32_find(struct inode *dir, const char *name,
         entry++;
     }
 
-    kfree(buffer);
+    kfree((void*)buffer);
     return ret;
 }
 

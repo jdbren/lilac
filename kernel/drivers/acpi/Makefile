@@ -33,6 +33,6 @@ acpi.lib: $(OBJS)
 	$(CC) -MD -c $< -o $@ $(CFLAGS)
 
 clean:
-	rm -f $(OBJS) $(OBJS:.o=.d)
+	rm -f $(OBJS) $(OBJS:.o=.d) acpi.lib
 
 -include $(OBJS:.o=.d)

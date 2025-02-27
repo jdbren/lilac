@@ -33,7 +33,7 @@ int fat32_readdir(struct file *file, struct dirent *dir_buf, unsigned int count)
     int i = 0;
     struct fat_file *entry = (struct fat_file*)buffer;
     while (i < num_dirents && entry->name[0] != 0) {
-        if (entry->name[0] == FAT_UNUSED ||
+        if ((u8)entry->name[0] == FAT_UNUSED ||
             entry->name[0] == 0x0 ||
             entry->attributes & FAT_VOL_LABEL ||
             entry->attributes == LONG_FNAME)
@@ -54,13 +54,13 @@ int fat32_readdir(struct file *file, struct dirent *dir_buf, unsigned int count)
         i++;
     }
 
-    kvirtual_free(buffer, disk->bytes_per_clst * num_clst);
+    kvirtual_free((void*)buffer, disk->bytes_per_clst * num_clst);
     return i;
 }
 
 int fat32_mkdir(struct inode *dir, struct dentry *new, unsigned short mode)
 {
-    struct fat_file *entry;
+    struct fat_file *entry = NULL;
     struct fat_disk *disk = (struct fat_disk*)dir->i_sb->private;
     struct gendisk *hd = dir->i_sb->s_bdev->disk;
     struct fat_file *parent_dir = (struct fat_file*)dir->i_private;
@@ -75,20 +75,20 @@ int fat32_mkdir(struct inode *dir, struct dentry *new, unsigned short mode)
         name[i] = toupper(new->d_name[i]);
 
     while (clst < 0x0FFFFFF8) {
-        __fat_read_clst(disk, hd, clst, buffer);
+        __fat_read_clst(disk, hd, clst, (void*)buffer);
         for (entry = (struct fat_file*)buffer;
             entry < (struct fat_file*)(buffer + disk->bytes_per_clst) &&
-            !(entry->name[0] == 0 || entry->name[0] == 0xe5);
+            !(entry->name[0] == 0 || (u8)entry->name[0] == FAT_UNUSED);
             entry++)
         {
-            if (!strncmp(entry->name, name, 8)) {
+            if (!strncmp((char*)entry->name, name, 8)) {
                 klog(LOG_INFO, "Directory %-8s already exists\n", name);
                 ret = -1;
                 goto error;
             }
         }
 
-        if (entry->name[0] == 0 || entry->name[0] == 0xe5)
+        if (entry->name[0] == 0 || (u8)entry->name[0] == FAT_UNUSED)
             break;
 
         clst = __get_FAT_val(clst, disk);
@@ -97,13 +97,16 @@ int fat32_mkdir(struct inode *dir, struct dentry *new, unsigned short mode)
     if (clst >= 0x0FFFFFF8)
         kerror("Need to allocate new cluster\n");
 
-    u32 new_clst = __fat_find_free_clst(disk);
+    int new_clst = __fat_find_free_clst(disk);
     if (new_clst == -1)
         kerror("No free clusters\n");
     disk->FAT.buf[new_clst - disk->FAT.first_clst] |= 0x0fffffffUL;
 
     u16 fat_date = FAT_SET_DATE(cur_time.year, cur_time.month, cur_time.day);
     u16 fat_time = FAT_SET_TIME(cur_time.hour, cur_time.minute, cur_time.second);
+
+    if (!entry)
+        kerror("entry is NULL\n");
 
     entry->attributes = FAT_DIR_ATTR;
     entry->cl_low = new_clst & 0xFFFF;
@@ -115,15 +118,15 @@ int fat32_mkdir(struct inode *dir, struct dentry *new, unsigned short mode)
     entry->last_write_time = fat_time;
     entry->last_access_date = fat_date;
 
-    strncpy(entry->name, name, 8);
-    strncpy(entry->ext, "   ", 3);
+    strncpy((char*)entry->name, name, 8);
+    strncpy((char*)entry->ext, "   ", 3);
 
-    __fat_write_clst(disk, hd, clst, buffer);
+    __fat_write_clst(disk, hd, clst, (void*)buffer);
 
     new->d_inode = fat_build_inode(dir->i_sb, entry);
     new->d_inode->i_type = TYPE_DIR;
 
-    memset(buffer, 0, disk->bytes_per_clst);
+    memset((void*)buffer, 0, disk->bytes_per_clst);
     entry = (struct fat_file*)buffer;
     entry->name[0] = '.';
     memset(entry->name + 1, ' ', 7 + 3);
@@ -152,11 +155,11 @@ int fat32_mkdir(struct inode *dir, struct dentry *new, unsigned short mode)
 
     disk->fs_info.free_clst_cnt--;
     disk->fs_info.next_free_clst = __fat_find_free_clst(disk);
-    __fat_write_clst(disk, hd, new_clst, buffer);
+    __fat_write_clst(disk, hd, new_clst, (void*)buffer);
     fat_write_FAT(disk, hd);
     fat32_write_fs_info(disk, hd);
 
 error:
-    kfree(buffer);
+    kfree((void*)buffer);
     return ret;
 }

@@ -107,7 +107,7 @@ static void start_process(void)
     argv[argc] = NULL;
 
     // Print the arguments
-    for (int i = 0; i < argc; i++) {
+    for (u32 i = 0; i < argc; i++) {
         klog(LOG_DEBUG, "Arg %d: %s\n", i, argv[i]);
     }
 
@@ -180,13 +180,13 @@ void clone_process(struct task *parent, struct task *child)
     child->kstack = (void*)INIT_STACK(child->mm->kstack);
     child->state = TASK_SLEEPING;
     child->info.path = kzmalloc(strlen(parent->info.path) + 1);
-    strcpy(child->info.path, parent->info.path);
+    strcpy((char*)child->info.path, parent->info.path);
     child->fs.cwd = kzmalloc(strlen(parent->fs.cwd) + 1);
     strcpy(child->fs.cwd, parent->fs.cwd);
     child->fs.files.fdarray = kcalloc(parent->fs.files.max, sizeof(struct file));
     child->fs.files.max = parent->fs.files.max;
     child->fs.files.size = parent->fs.files.size;
-    for (int i = 0; i < parent->fs.files.size; i++) {
+    for (size_t i = 0; i < parent->fs.files.size; i++) {
         child->fs.files.fdarray[i] = parent->fs.files.fdarray[i];
         child->fs.files.fdarray[i]->f_count++;
     }
@@ -230,6 +230,7 @@ __noreturn void exec_and_return(void)
 
     jump_new_proc(task);
     klog(LOG_FATAL, "exec_and_return: Should never be reached\n");
+    __builtin_unreachable();
 }
 
 int do_execve(const char *path, char *const argv[], char *const envp[])
@@ -246,9 +247,9 @@ int do_execve(const char *path, char *const argv[], char *const envp[])
     }
 
     if (info->path)
-        kfree(info->path);
+        kfree((void*)info->path);
     info->path = kzmalloc(strlen(path) + 1);
-    strcpy(info->path, path);
+    strcpy((char*)info->path, path);
 
     if (info->argv) {
         for (i = 0; info->argv[i]; i++)
@@ -278,7 +279,7 @@ SYSCALL_DECL3(execve, const char*, path, char* const*, argv, char* const*, envp)
 void cleanup_task(struct task *task)
 {
     klog(LOG_DEBUG, "Cleaning up task %d\n", task->pid);
-    kfree(task->info.path);
+    kfree((void*)task->info.path);
     for (int i = 0; task->info.argv[i]; i++)
         kfree(task->info.argv[i]);
     kfree(task->info.argv);
@@ -298,6 +299,7 @@ int exit(int status)
     current->state = TASK_DEAD;
     klog(LOG_INFO, "Process %d exited with status %d\n", current->pid, status);
     schedule();
+    return 0;
 }
 SYSCALL_DECL1(exit, int, status)
 {

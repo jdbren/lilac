@@ -25,13 +25,13 @@ static struct task root = {
     .pgd = pa((uintptr_t)&page_directory),
 };
 static int back;
-volatile static int current_task;
+static volatile int current_task;
 volatile int sched_timer = -1;
 int timer_reset = -1;
 
 extern void arch_context_switch(struct task *prev, struct task *next);
 
-extern inline struct task* get_current_task(void)
+struct task* get_current_task(void)
 {
     return task_queue[current_task];
 }

@@ -50,7 +50,7 @@ static ACPI_STATUS pcie_init_device(ACPI_HANDLE ObjHandle, UINT32 Level,
     Path.Pointer = Buffer;
     ACPI_DEVICE_INFO *Info = kzmalloc(sizeof(*Info));
 
-    // Status = AcpiGetName(ObjHandle, ACPI_FULL_PATHNAME, &Path);
+    Status = AcpiGetName(ObjHandle, ACPI_FULL_PATHNAME, &Path);
     // if (ACPI_SUCCESS(Status))
     //     printf(" %s\n", Path.Pointer);
 
@@ -83,10 +83,6 @@ void pcie_read_device(ACPI_DEVICE_INFO *Info)
 void pci_read_device(ACPI_DEVICE_INFO *Info)
 {
     ACPI_STATUS Status;
-    ACPI_BUFFER Path;
-    char Buffer[256];
-    Path.Length = sizeof(Buffer);
-    Path.Pointer = Buffer;
 
     struct pci_device *pci_dev = kzmalloc(sizeof(*pci_dev));
     u32 *pci_reg = (u32*)pci_dev;

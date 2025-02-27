@@ -34,14 +34,14 @@ void graphics_putc(u16 c, u32 cx, u32 cy)
         c = termius_font.unicode[c];
     }
     /* get the glyph for the character */
-    unsigned char *glyph = Lat2_Terminus16 + font->headersize +
+    const unsigned char *glyph = Lat2_Terminus16 + font->headersize +
         (c > 0 && c < font->numglyph ? c : 0) * font->bytesperglyph;
     /* upper left corner on screen where we want to display */
-    int offs =
+    u32 offs =
         (cy * font->height * fb->fb_pitch) +
         (cx * (font->width + 1) * sizeof(PIXEL));
     /* display pixels according to the bitmap */
-    int x, y, line, mask;
+    u32 x, y, line, mask;
     for(y = 0; y < font->height; y++) {
         /* save the starting position of the line */
         line = offs;
@@ -126,53 +126,8 @@ typedef struct {
 
 void psf_init_font()
 {
-    u16 glyph = 0;
-    /* cast the address to PSF header struct */
     termius_font.font = (PSF_font*)Lat2_Terminus16;
-    PSF_font *font = termius_font.font;
-    return; // no unicode yet
-
-
-    /* is there a unicode table? */
-    if (font->flags == 0) {
-        termius_font.unicode = NULL;
-        return;
-    }
-
-    /* get the offset of the table */
-    char *s = (char *)(
-    (unsigned char*)Lat2_Terminus16 +
-      font->headersize +
-      font->numglyph * font->bytesperglyph
-    );
-    /* allocate memory for translation table */
-    termius_font.unicode = kcalloc(UINT16_MAX, 2);
-    while(s < (unsigned char*)Lat2_Terminus16 + sizeof(Lat2_Terminus16)) {
-        u16 uc = (u16)((unsigned char *)s[0]);
-        if(uc == 0xFF) {
-            glyph++;
-            s++;
-            continue;
-        } else if(uc & 128) {
-            /* UTF-8 to unicode */
-            if((uc & 32) == 0 ) {
-                uc = ((s[0] & 0x1F)<<6)+(s[1] & 0x3F);
-                s++;
-            } else
-            if((uc & 16) == 0 ) {
-                uc = ((((s[0] & 0xF)<<6)+(s[1] & 0x3F))<<6)+(s[2] & 0x3F);
-                s+=2;
-            } else
-            if((uc & 8) == 0 ) {
-                uc = ((((((s[0] & 0x7)<<6)+(s[1] & 0x3F))<<6)+(s[2] & 0x3F))<<6)+(s[3] & 0x3F);
-                s+=3;
-            } else
-                uc = 0;
-        }
-        /* save translation */
-        termius_font.unicode[uc] = glyph;
-        s++;
-    }
+    // no unicode yet
 }
 
 static void print_font_info(struct font *terminal_font)
@@ -185,9 +140,9 @@ static void print_font_info(struct font *terminal_font)
     printf("Font unicode table: %s\n", terminal_font->unicode ? "yes" : "no");
 
     // Print raw bitmap for all characters
-    for (int i = 0; i < terminal_font->font->numglyph; i++) {
+    for (u32 i = 0; i < terminal_font->font->numglyph; i++) {
         printf("Glyph %d\n", i);
-        for (int j = 0; j < terminal_font->font->bytesperglyph; j++) {
+        for (u32 j = 0; j < terminal_font->font->bytesperglyph; j++) {
             unsigned char byte = Lat2_Terminus16[terminal_font->font->headersize + i * terminal_font->font->bytesperglyph + j];
             for (int k = 7; k >= 0; k--) {
                 printf("%c", (byte & (1 << k)) ? '1' : '0');

@@ -35,7 +35,7 @@ void dget(struct dentry *d)
 
 void dput(struct dentry *d)
 {
-    struct inode *i = d->d_inode;
+    //struct inode *i = d->d_inode;
     if (--d->d_count)
         return;
 
@@ -60,7 +60,7 @@ struct dentry * alloc_dentry(struct dentry *d_parent, const char *name)
     new_dentry->d_count = 1;
     new_dentry->d_parent = d_parent;
     new_dentry->d_sb = i_parent->i_sb;
-    new_dentry->d_name = name;
+    new_dentry->d_name = (char*)name;
 
     return new_dentry;
 }

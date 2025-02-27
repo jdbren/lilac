@@ -42,10 +42,10 @@ static void print_page_structs(u32 *cr3)
 struct mm_info * arch_process_mmap()
 {
     volatile u32 *cr3 = map_phys(alloc_frame(), PAGE_BYTES, PG_WRITE);
-    memset(cr3, 0, PAGE_SIZE);
+    memset((void*)cr3, 0, PAGE_SIZE);
 
     // Do recursive mapping
-    cr3[1023] = virt_to_phys(cr3) | PG_WRITE | PG_SUPER | 1;
+    cr3[1023] = virt_to_phys((void*)cr3) | PG_WRITE | PG_SUPER | 1;
 
     // Allocate kernel stack
     void *kstack = kvirtual_alloc(__KERNEL_STACK_SZ, PG_WRITE);
@@ -55,10 +55,10 @@ struct mm_info * arch_process_mmap()
         cr3[i] = pd[i];
 
     struct mm_info *info = kzmalloc(sizeof *info);
-    info->pgd = virt_to_phys(cr3);
+    info->pgd = virt_to_phys((void*)cr3);
     info->kstack = kstack;
-    cr3[1023] = virt_to_phys(cr3) | PG_WRITE | PG_SUPER | 1;
-    unmap_phys(cr3, PAGE_BYTES);
+    cr3[1023] = virt_to_phys((void*)cr3) | PG_WRITE | PG_SUPER | 1;
+    unmap_phys((void*)cr3, PAGE_BYTES);
 
     return info;
 }

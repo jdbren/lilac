@@ -54,8 +54,8 @@ struct FSInfo {
 } __packed;
 
 struct fat_file {
-    char name[8];
-    char ext[3];
+    unsigned char name[8];
+    unsigned char ext[3];
     u8 attributes;
     u8 reserved;
     u8 creation_time_tenths;
@@ -131,18 +131,18 @@ extern const struct file_operations fat_fops;
 extern const struct super_operations fat_sops;
 extern const struct inode_operations fat_iops;
 
-extern inline struct inode *fat_alloc_inode(struct super_block *sb);
-extern inline void fat_destroy_inode(struct inode *inode);
+struct inode *fat_alloc_inode(struct super_block *sb);
+void fat_destroy_inode(struct inode *inode);
 struct inode *fat_build_inode(struct super_block *sb, struct fat_file *info);
 
-extern inline void __fat_read_clst(struct fat_disk *fat_disk, struct gendisk *hd, u32 clst, void *buf);
-extern inline void __fat_write_clst(struct fat_disk *fat_disk, struct gendisk *hd, u32 clst, const void *buf);
-extern inline u32 __get_FAT_val(u32 clst, struct fat_disk *disk);
+void __fat_read_clst(struct fat_disk *fat_disk, struct gendisk *hd, u32 clst, void *buf);
+void __fat_write_clst(struct fat_disk *fat_disk, struct gendisk *hd, u32 clst, const void *buf);
+u32 __get_FAT_val(u32 clst, struct fat_disk *disk);
 u32 __fat_get_clst_num(struct file *file, struct fat_disk *disk);
-u32 __fat_find_free_clst(struct fat_disk *disk);
+int __fat_find_free_clst(struct fat_disk *disk);
 
-int __must_check fat32_write_fs_info(struct fat_disk *fat_disk, struct gendisk *gd);
-int __must_check fat_write_FAT(struct fat_disk *fat_disk, struct gendisk *gd);
+int fat32_write_fs_info(struct fat_disk *fat_disk, struct gendisk *gd);
+int fat_write_FAT(struct fat_disk *fat_disk, struct gendisk *gd);
 
 int __do_fat32_read(const struct file *file, u32 clst, volatile u8 *buffer, size_t num_clst);
 int __do_fat32_write(const struct file *file, u32 clst, const u8 *buffer, size_t num_clst);

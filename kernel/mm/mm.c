@@ -12,12 +12,12 @@ void* mmap_internal(void *addr, unsigned long len, u32 prot, u32 flags,
     struct mm_info *mm = current->mm;
     struct vm_desc *vma_list = mm->mmap;
 
-    while (vma_list->vm_next != NULL && vma_list->vm_next->start < addr) {
+    while (vma_list->vm_next != NULL && vma_list->vm_next->start < (uintptr_t)addr) {
         vma_list = vma_list->vm_next;
     }
 
     struct vm_desc *vma = kmalloc(sizeof(struct vm_desc));
-
+    return NULL;
 }
 
 void vma_list_insert(struct vm_desc *vma, struct vm_desc **list)

@@ -25,7 +25,7 @@ fs_init_func_t get_fs_init(enum fs_type type)
     return init_ops[type];
 }
 
-inline struct dentry * get_root_dentry(void)
+struct dentry * get_root_dentry(void)
 {
     return root_dentry;
 }
@@ -33,7 +33,7 @@ inline struct dentry * get_root_dentry(void)
 static int get_fd(void)
 {
     struct fdtable *files = &current->fs.files;
-    for (int i = 0; i < files->max; i++) {
+    for (size_t i = 0; i < files->max; i++) {
         if (!files->fdarray[i]) {
             files->size++;
             return i;
@@ -57,7 +57,7 @@ static struct file * get_file_handle(int fd)
     struct file *file;
     struct fdtable *files = &current->fs.files;
 
-    if (fd < 0 || fd >= files->max)
+    if (fd < 0 || (unsigned)fd >= files->max)
         return ERR_PTR(-EBADF);
     file = files->fdarray[fd];
     if (!file)
@@ -136,7 +136,6 @@ SYSCALL_DECL3(lseek, int, fd, int, offset, int, whence)
 struct file *vfs_open(const char *path, int flags, int mode)
 {
     klog(LOG_DEBUG, "VFS: Opening %s\n", path);
-    int n_len = strlen(path);
     struct inode *inode;
     struct file *new_file;
 
@@ -213,7 +212,7 @@ SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
     struct file *file;
     unsigned char *kbuf;
     ssize_t bytes;
-    long err;
+    long err = -1;
 
     file = get_file_handle(fd);
     if (IS_ERR(file))
@@ -306,7 +305,7 @@ ssize_t vfs_getdents(struct file *file, struct dirent *dirp, unsigned int buf_si
 #endif
     dir_cnt = file->f_op->readdir(file, dirp, buf_size);
     file->f_pos += dir_cnt;
-    return dir_cnt > 0 ? dir_cnt * sizeof(struct dirent) : dir_cnt;
+    return dir_cnt > 0 ? dir_cnt * (int)sizeof(struct dirent) : dir_cnt;
 }
 SYSCALL_DECL3(getdents, unsigned int, fd, struct dirent*, dirp, size_t, buf_size)
 {

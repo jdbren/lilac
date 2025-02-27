@@ -2,6 +2,7 @@
 #include <string.h>
 #include <lilac/log.h>
 #include <lilac/device.h>
+#include <lilac/panic.h>
 #include <drivers/ahci.h>
 #include <drivers/blkdev.h>
 #include <mm/kmm.h>
@@ -75,7 +76,7 @@ void ahci_init(hba_mem_t *abar_phys)
 	u32 pi;
 	int i = 0;
 
-	map_to_self(abar_phys, PAGE_SIZE, PG_WRITE | PG_STRONG_UC);
+	map_to_self((void*)abar_phys, PAGE_SIZE, PG_WRITE | PG_STRONG_UC);
 	abar = abar_phys;
 
 	pi = abar->pi;
@@ -108,8 +109,8 @@ void ahci_init(hba_mem_t *abar_phys)
 
 	size = num_ports * sizeof(hba_port_t) + sizeof(*abar);
 	if (size > PAGE_SIZE) {
-		unmap_from_self(abar, PAGE_SIZE);
-		map_to_self(abar_phys, size, PG_WRITE | PG_STRONG_UC);
+		unmap_from_self((void*)abar, PAGE_SIZE);
+		map_to_self((void*)abar_phys, size, PG_WRITE | PG_STRONG_UC);
 	}
 
 	port_mem_init(num_ports);
@@ -195,7 +196,8 @@ static void ahci_install_device(struct ahci_device *dev)
 	new_disk->ops = &ahci_ops;
 	new_disk->private = dev;
 
-	add_gendisk(new_disk);
+	if (add_gendisk(new_disk))
+		kerror("Failed to add gendisk\n");
 }
 
 // Start command engine

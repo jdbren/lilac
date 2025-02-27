@@ -196,7 +196,7 @@ ssize_t console_write(struct file *file, const void *buf, size_t count)
 {
     char *bufp = (char*)buf;
     struct console *con = &consoles[active_console];
-    for (int i = 0; i < count; i++)
+    for (size_t i = 0; i < count; i++)
         console_putchar(con, bufp[i] & 0xff);
 
     return count;
@@ -211,11 +211,11 @@ void console_intr(struct kbd_event event)
         return;
     }
     if (event.status & KB_ALT) {
-        if (c == '1')
-            graphics_setfb(0);
-        else if (c == '2')
-            graphics_setfb(1);
-        return;
+        // if (c == '1')
+        //     graphics_setfb(0);
+        // else if (c == '2')
+        //     graphics_setfb(1);
+        // return;
     } else if (event.status & KB_CTRL) {
         switch(c) {
         case 'c':

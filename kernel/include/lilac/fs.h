@@ -174,7 +174,7 @@ void fput(struct file *file);
 
 typedef struct dentry *(*fs_init_func_t)(void*, struct super_block*);
 
-extern inline struct dentry * get_root_dentry(void);
+struct dentry * get_root_dentry(void);
 struct vfsmount * get_empty_vfsmount(enum fs_type type);
 fs_init_func_t get_fs_init(enum fs_type type);
 

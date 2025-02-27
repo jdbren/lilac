@@ -24,10 +24,7 @@
 #define __MAP(n,...) __MAP##n(__VA_ARGS__)
 
 #define SYSCALL_DECLn(n, name, ...) \
-syscall long sys_##name(__MAP(n, __SC_DECL, __VA_ARGS__))
-// { \
-//     return name(__MAP(n, __SC_ARGS, __VA_ARGS__)); \
-// }
+    syscall long sys_##name(__MAP(n, __SC_DECL, __VA_ARGS__))
 
 #define SYSCALL_DECL0(name, ...) SYSCALL_DECLn(0, name, __VA_ARGS__)
 #define SYSCALL_DECL1(name, ...) SYSCALL_DECLn(1, name, __VA_ARGS__)
