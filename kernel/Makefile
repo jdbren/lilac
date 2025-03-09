@@ -84,13 +84,19 @@ $(LIBS) \
 $(ARCHDIR)/crtend.o \
 $(ARCHDIR)/boot/crtn.o
 
+ifdef ($(ARCH_x86_64))
+LINKER_SCRIPT=$(ARCHDIR)/link64.ld
+else
+LINKER_SCRIPT=$(ARCHDIR)/link32.ld
+endif
+
 .PHONY: all clean install install-headers install-kernel acpi
 .SUFFIXES: .o .c .S .cpp
 
 all: lilac.ker
 
-lilac.ker: $(OBJS) $(ARCHDIR)/linker.ld acpi
-	$(CC) -T $(ARCHDIR)/linker.ld -o $@ $(CFLAGS) $(LINK_LIST)
+lilac.ker: $(OBJS) $(LINKER_SCRIPT) acpi
+	$(CC) -T $(LINKER_SCRIPT) -o $@ $(CFLAGS) $(LINK_LIST)
 	grub-file --is-x86-multiboot2 lilac.ker
 
 $(ARCHDIR)/crtbegin.o $(ARCHDIR)/crtend.o:

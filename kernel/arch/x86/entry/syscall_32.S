@@ -28,7 +28,6 @@ syscall_handler:
 	popl %es
 	popl %fs
 	popl %gs
-.Lerror:
 	iret
 
 sys_restart:
@@ -55,9 +54,9 @@ arch_return_from_fork:
 	movl 4(%esp), %eax
 
 	# restore registers
-	movl (%eax), %ebx
-	movl 4(%eax), %ecx
-	movl 8(%eax), %edx
+	movl   (%eax), %ebx
+	movl  4(%eax), %ecx
+	movl  8(%eax), %edx
 	movl 12(%eax), %esi
 	movl 16(%eax), %edi
 	movl 20(%eax), %ebp

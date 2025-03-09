@@ -48,6 +48,7 @@
 .global _start
 .type _start, @function
 _start:
+.code32
 	# Check the magic number.
 	cmpl $MULTIBOOT2_BOOTLOADER_MAGIC, %eax
 	jne invlboot
@@ -55,6 +56,21 @@ _start:
 	andl $7, %edx
 	jne invlboot
 
+	movl 	$0x80000000, %eax
+    cpuid
+    cmpl 	$0x80000001, %eax
+    jb 		.32_bit
+
+	movl 	$0x80000001, %eax
+    cpuid
+    test 	$(1 << 29), %edx
+    jz 		.32_bit
+
+#ifdef ARCH_x86_64
+	jmp pa(startup_64)
+#endif
+
+.32_bit:
 	jmp pa(startup_32)
 
 invlboot:

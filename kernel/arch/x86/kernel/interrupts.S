@@ -1,6 +1,40 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
+#ifdef ARCH_x86_64
+.macro isr_err name
+	.extern \name\()_handler
+	.global \name
+	\name:
+	push 	%rbp
+	mov 	%rsp, %rbp
+	pusha
+	lea 	16(%rbp), %rax
+	push 	%rax
+	mov 	8(%rbp), %rax
+	push 	%rax
+	call 	\name\()_handler
+	addl  	$24, %rsp # err code and vals
+	popa
+	pop 	%rbp
+	iretq
+.endm
 
+.macro isr_no_err name
+	.extern \name\()_handler
+	.global \name
+	\name:
+	push 	%rbp
+	mov 	%rsp, %rbp
+	pusha
+	mov 	8(%rbp), %rax
+	push 	%rax
+	call 	\name\()_handler
+	addl  	$8, %rsp
+	popa
+	pop 	%rbp
+	iretq
+.endm
+#else // ARCH_x86
 .macro isr_err name
 	.extern \name\()_handler
 	.global \name
@@ -34,6 +68,7 @@
 	pop %ebp
 	iret
 .endm
+#endif
 
 isr_no_err div0
 # isr_no_err debug
