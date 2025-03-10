@@ -12,7 +12,7 @@ EXEC_PREFIX?=$(PREFIX)
 BOOTDIR?=$(EXEC_PREFIX)/boot
 INCLUDEDIR?=$(PREFIX)/include
 
-FLAGS:= -D__lilac__ -D__is_kernel -Iinclude -ffreestanding -Wall -Wextra \
+FLAGS=-D__lilac__ -D__is_kernel -Iinclude -ffreestanding -Wall -Wextra \
 	-Wno-unused-parameter -Wno-unused-function
 CFLAGS:=$(CFLAGS) $(FLAGS) -mno-red-zone
 CXXFLAGS:=$(CXXFLAGS) $(FLAGS) -fno-exceptions -fno-rtti

@@ -2,45 +2,10 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/config.h>
 #include <asm/segments.h>
-#define __PAGE_OFFSET PAGE_SIZE
 
 .text
 .globl startup_32
 startup_32:
-	leal pa(stack_top), %ecx
-
-	# Set up the boot segment registers.
-	lgdt pa(boot_gdt_descr)
-	leal (__KERNEL_DS), %edx
-	movw %dx, %ds
-	movw %dx, %es
-	movw %dx, %fs
-	movw %dx, %gs
-	movw %dx, %ss
-
-	leal (%ecx), %esp
-
-	# Save the multiboot information.
- 	movl %ebx, pa(_mbd_addr)
- 	leal pa(_mbd_size), %ecx
- 	movl (%ebx), %eax
- 	movl %eax, (%ecx)
-
-	# Clear the bss.
-	cld
-	xorl %eax, %eax
-	leal pa(_bss_start), %edi
-	leal pa(_bss_end), %ecx
-	subl %edi, %ecx
-	shrl $2, %ecx
-	rep ;stosl
-
-	# Copy the multiboot information.
-	leal pa(mbinfo), %edi
-	movl pa(_mbd_addr), %esi
-	movl pa(_mbd_size), %ecx
-	rep ;movsb
-
 	# Identity map the kernel.
 	leal pa(boot_page_table0), %edi		# page table entry
 	xorl %eax, %eax				 		# start addr = 0
@@ -120,47 +85,104 @@ startup_32:
 
 	call _init
 
-	pushl $mbinfo
 	call kernel_early
 
 5:	hlt
 	jmp 5b
 
-.section .rodata
-.align 4
-.word 0
-boot_gdt_descr:
-	.word 0xbf
-	.long boot_gdt - __KERNEL_BASE
+.global gdt_init
+.type gdt_init, @function
+gdt_init:
+	leal gdt_descr, %eax
+	movl $gdt_entries, 2(%eax)
+	lgdt (%eax)
+	call tss_init
+	ret
 
-boot_gdt:
-	.quad 0x0000000000000000	# null descriptor
-	.quad 0x00CF9A000000FFFF	# code descriptor
-	.quad 0x00CF92000000FFFF	# data descriptor
+.get_tss:
+	movl $1, %eax
+	cpuid
+	shrl $24, %ebx
+	leal tss, %ecx
+	movl $0x68, %eax
+	mul  %ebx
+	addl %ecx, %eax
+	ret
+
+tss_init:
+	push %ebp
+	mov  %esp, %ebp
+	push %ebx
+
+	call .get_tss # eax = &tss, ebx = cpu_id
+
+	leal gdt_entries+40(, %ebx, 8), %edx   # TSS descriptor for this CPU
+	movl $0, 4(%eax)
+	movl $__KERNEL_DS, 8(%eax)
+
+	addl $2, %edx
+	movw %ax, (%edx)
+
+	addl $2, %edx
+	shrl $16, %eax
+	mov  %al, (%edx)
+
+	addl $3, %edx
+	shrl $8, %eax
+	mov  %al, (%edx)
+
+	movl $8, %eax
+	mulw %bx  		# RPL 0 selector index
+	addw $5 * 8, %ax
+	ltr  %ax
+
+	pop  %ebx
+	pop  %ebp
+	ret
+
+.global set_tss_esp0
+set_tss_esp0:
+	push %ebp
+	movl %esp, %ebp
+	push %ebx
+	call .get_tss
+	movl 8(%ebp), %ebx
+	movl %ebx, 4(%eax)
+	pop %ebx
+	pop %ebp
+	ret
 
 .data
 .align 4
-_mbd_addr:
-	.long 0
-_mbd_size:
-	.long 0
+.word 0
+gdt_descr:
+	.word 13 * 64 - 1
+	.long gdt_entries
+
+.align 8
+gdt_entries:
+	.quad 0x0
+	.quad 0x00CF9A000000FFFF
+	.quad 0x00CF92000000FFFF
+	.quad 0x00CFFA000000FFFF
+	.quad 0x00CFF2000000FFFF
+	.rept 8
+	.quad 0x0000890000000067
+	.endr
+
 
 .bss
-.align __PAGE_OFFSET
+.align PAGE_SIZE
 .global page_directory
-.global mbinfo
 page_directory:
 	.skip 4096
 boot_page_table0:
 	.skip 4096
 boot_page_table768:
 	.skip 4096
-mbinfo:
-	.skip PAGE_SIZE * 4
 
-.section .bsstack, "aw", @nobits
-.align __PAGE_OFFSET
-.global stack_top
-stack_bottom:
-	.skip 0x4000
-stack_top:
+.align 16
+tss:
+	.rept 8
+	.skip 0x68
+	.endr

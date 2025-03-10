@@ -24,13 +24,14 @@ struct multiboot_info mbd;
 static struct acpi_info acpi;
 //static struct efi_info efi;
 
+extern u32 mbinfo; // defined in boot asm
 static void parse_multiboot(uintptr_t, struct multiboot_info*);
 
-void kernel_early(uintptr_t multiboot)
+void kernel_early(void)
 {
     gdt_init();
     idt_init();
-    parse_multiboot(multiboot, &mbd);
+    parse_multiboot((uintptr_t)&mbinfo, &mbd);
     mm_init(mbd.efi_mmap);
     graphics_init(mbd.framebuffer);
 
