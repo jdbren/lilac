@@ -21,7 +21,11 @@ LIBS:=$(LIBS) -nostdlib -lgcc
 
 ARCHDIR=arch/$(HOSTARCH)
 
-include $(ARCHDIR)/make.config
+ifdef CONFIG_x86_64-elf
+include $(ARCHDIR)/make64.config
+else
+include $(ARCHDIR)/make32.config
+endif
 
 CFLAGS:=$(CFLAGS) $(KERNEL_ARCH_CFLAGS)
 LDFLAGS:=$(LDFLAGS) $(KERNEL_ARCH_LDFLAGS)
@@ -66,7 +70,8 @@ drivers/pci.o \
 drivers/ahci.o \
 drivers/framebuffer.o \
 drivers/vga.o \
-lib/icxxabi.o
+lib/icxxabi.o \
+lib/multiboot.o
 
 OBJS=\
 $(ARCHDIR)/boot/crti.o \
@@ -84,11 +89,6 @@ $(LIBS) \
 $(ARCHDIR)/crtend.o \
 $(ARCHDIR)/boot/crtn.o
 
-ifdef ($(ARCH_x86_64))
-LINKER_SCRIPT=$(ARCHDIR)/link64.ld
-else
-LINKER_SCRIPT=$(ARCHDIR)/link32.ld
-endif
 
 .PHONY: all clean install install-headers install-kernel acpi
 .SUFFIXES: .o .c .S .cpp
@@ -115,7 +115,7 @@ clean:
 	rm -f lilac.ker
 	rm -f $(OBJS)
 	rm -f $(OBJS:.o=.d)
-# 	$(MAKE) -C drivers/acpi clean
+	$(MAKE) -C drivers/acpi clean
 
 install: lilac.ker
 	mkdir -p $(DESTDIR)$(BOOTDIR)

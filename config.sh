@@ -37,6 +37,7 @@ echo "export AR=${AR}" >> kbuild.config
 echo "export AS=${AS}" >> kbuild.config
 echo "export CC=${CC}" >> kbuild.config
 echo "export CXX=${CXX}" >> kbuild.config
+echo "export CONFIG_${HOST}=y" >> kbuild.config
 echo "export PREFIX=${PREFIX}" >> kbuild.config
 echo "export EXEC_PREFIX=${EXEC_PREFIX}" >> kbuild.config
 echo "export BOOTDIR=${BOOTDIR}" >> kbuild.config

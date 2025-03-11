@@ -52,16 +52,16 @@ _start:
 .code32
 	# Check the magic number.
 	cmpl $MULTIBOOT2_BOOTLOADER_MAGIC, %eax
-	jne invlboot
+	jne .invlboot
 	movl %ebx, %edx
 	andl $7, %edx
-	jne invlboot
+	jne .invlboot
 
 	leal pa(stack_top), %ecx
 
 	# Set up the boot segment registers.
 	lgdt pa(boot_gdt_descr)
-	leal (__KERNEL_DS), %edx
+	movl $0x10, %edx
 	movw %dx, %ds
 	movw %dx, %es
 	movw %dx, %fs
@@ -91,24 +91,23 @@ _start:
 	movl pa(_mbd_size), %ecx
 	rep ;movsb
 
+#ifdef ARCH_x86_64
 	movl 	$0x80000000, %eax
     cpuid
     cmpl 	$0x80000001, %eax
-    jb 		.32_bit
+    jb 		.invlboot
 
 	movl 	$0x80000001, %eax
     cpuid
     test 	$(1 << 29), %edx
-    jz 		.32_bit
+    jz 		.invlboot
 
-#ifdef ARCH_x86_64
 	jmp pa(startup_64)
+#else
+	jmp pa(startup_32)
 #endif
 
-.32_bit:
-	jmp pa(startup_32)
-
-invlboot:
+.invlboot:
 	cli
 	hlt
 

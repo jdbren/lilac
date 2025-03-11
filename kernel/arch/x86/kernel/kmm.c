@@ -9,12 +9,21 @@
 #include "pgframe.h"
 #include "paging.h"
 
-
+#ifdef ARCH_x86_64
+#define KHEAP_START_ADDR    0xFFFFFFFF80200000
+#define KHEAP_MAX_ADDR      0xFFFFFFFFDFFF0000
+#define PT_ENTRY_SIZE       8
+#define PT_ENTRY_BITS       64
+#else
 #define KHEAP_START_ADDR    0xC0400000
 #define KHEAP_MAX_ADDR      0xEFFFF000
+#define PT_ENTRY_SIZE       4
+#define PT_ENTRY_BITS       32
+#endif
+
 #define check_bit(var,pos) ((var) & (1<<(pos)))
-#define get_index(page) ((u32)(page - KHEAP_START_ADDR)/ (32 * PAGE_SIZE))
-#define get_offset(page) (((u32)(page - KHEAP_START_ADDR) / PAGE_SIZE) % 32)
+#define get_index(page) ((u32)(page - KHEAP_START_ADDR)/ (PT_ENTRY_BITS * PAGE_SIZE))
+#define get_offset(page) (((u32)(page - KHEAP_START_ADDR) / PAGE_SIZE) % PT_ENTRY_BITS)
 
 typedef struct memory_desc memory_desc_t;
 

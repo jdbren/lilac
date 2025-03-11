@@ -18,7 +18,7 @@
 #define __always_inline __attribute__((always_inline)) inline
 
 
-#ifdef ARCH_x86
+#if defined ARCH_x86 || defined ARCH_x86_64
 static inline void arch_idle(void)
 {
     while (1) {
@@ -38,6 +38,6 @@ static __always_inline void arch_disable_interrupts(void)
 {
     asm volatile ("cli");
 }
-#endif
+#endif // ARCH_x86 || ARCH_x86_64
 
-#endif
+#endif // _LILAC_LILAC_H
