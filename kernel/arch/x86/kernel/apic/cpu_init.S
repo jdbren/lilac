@@ -5,6 +5,7 @@
 # this code will be relocated to 0x8000, sets up environment for calling a C function
 .globl  ap_tramp
 .code16
+.org 0x8000
 ap_tramp:
 	cli
 	cld

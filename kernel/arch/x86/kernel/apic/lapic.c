@@ -114,11 +114,11 @@ int ap_init(u8 numcores)
     for (int i = 0; i < numcores; i++) {
         if (i == bspid)
             continue;
+        klog(LOG_DEBUG, "Sending INIT IPI to AP %d\n", i);
 
         // send INIT IPI
         *((volatile u32*)(base + 0x280)) = 0;               // clear errors
         *ap_select = (*ap_select & 0x00ffffff) | (i << 24); // select AP
-        klog(LOG_DEBUG, "Sending INIT IPI to AP %d\n", i);
         *ipi_data = (*ipi_data & 0xfff00000) | 0x00C500;    // INIT IPI
         sleep(10);                                          // wait
 
