@@ -88,7 +88,7 @@ static void start_process(void)
     */
     vfs_close(file);
 
-    volatile u32 *stack = (u32*)(__USER_STACK - 128); // Will place argv entries here
+    volatile uintptr_t *stack = (void*)(__USER_STACK - 128); // Will place argv entries here
     if (!current->info.argv) {
         *stack = 0;
         *--stack = 0;
@@ -116,7 +116,7 @@ static void start_process(void)
 
 skip:
     klog(LOG_DEBUG, "Going to user mode, jmp = %x\n", jmp);
-    jump_usermode((u32)jmp, (u32)stack);
+    jump_usermode(jmp, stack, current->kstack);
 }
 
 /*

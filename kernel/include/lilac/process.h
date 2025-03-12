@@ -23,12 +23,12 @@ struct fs_info {
 };
 
 struct task {
-    u16 pid;
-    u16 ppid;
+    u32 pid;
+    u32 ppid;
     struct mm_info *mm;
-    uintptr_t pgd; // 8
-    uintptr_t pc; // 12
-    void *kstack; // 16
+    uintptr_t pgd;  // 12 (32-bit) or 16 (64-bit)
+    uintptr_t pc;   // 16 (32-bit) or 24 (64-bit)
+    void *kstack;   // 20 (32-bit) or 32 (64-bit)
     u32 time_slice;
     struct task *parent;
     struct fs_info fs;
@@ -66,7 +66,7 @@ struct mm_info *arch_process_mmap();
 struct mm_info *arch_process_remap(struct mm_info *existing);
 void *arch_user_stack(void);
 void jump_new_proc(struct task *next);
-extern void jump_usermode(u32 addr, u32 stack);
+extern void jump_usermode(void *addr, void *ustack, void *kstack);
 extern int arch_return_from_fork(void *regs);
 void *arch_copy_regs(void *src);
 struct mm_info *arch_copy_mmap(struct mm_info *parent);

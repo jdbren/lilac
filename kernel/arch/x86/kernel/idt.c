@@ -10,35 +10,50 @@
 #define IDT_SIZE 256
 #define DPL_3 0x60
 
-typedef struct IDTGate {
+struct IDTGate32 {
     u16 offset_low;
     u16 selector;
     u8 zero;
     u8 type_attr;
     u16 offset_high;
-} __packed idt_entry_t;
+} __packed;
+
+struct IDTGate64 {
+    u16 offset_low;
+    u16 selector;
+    u8 ist;
+    u8 type_attr;
+    u16 offset_mid;
+    u32 offset_high;
+    u32 zero;
+} __packed;
 
 struct IDT {
     u16 size;
-    u32 offset;
+    uintptr_t offset;
 } __packed;
 
+#ifdef ARCH_x86_64
+typedef struct IDTGate64 idt_entry_t;
+#else
+typedef struct IDTGate32 idt_entry_t;
+#endif
 
 static idt_entry_t idt_entries[IDT_SIZE];
 static struct IDT idtptr = {
     sizeof(idt_entry_t) * IDT_SIZE - 1,
-    (u32)&idt_entries
+    (uintptr_t)&idt_entries
 };
 
 void idt_init(void)
 {
     extern void syscall_handler(void);
-    idt_entry(0, (u32)div0, __KERNEL_CS, TRAP_GATE);
-    idt_entry(6, (u32)invldop, __KERNEL_CS, TRAP_GATE);
-    idt_entry(8, (u32)dblflt, __KERNEL_CS, TRAP_GATE);
-    idt_entry(13, (u32)gpflt, __KERNEL_CS, TRAP_GATE);
-    idt_entry(14, (u32)pgflt, __KERNEL_CS, TRAP_GATE);
-    idt_entry(0x80, (u32)syscall_handler, __KERNEL_CS, INT_GATE | DPL_3);
+    idt_entry(0, (uintptr_t)div0, __KERNEL_CS, 0, TRAP_GATE);
+    idt_entry(6, (uintptr_t)invldop, __KERNEL_CS, 0, TRAP_GATE);
+    idt_entry(8, (uintptr_t)dblflt, __KERNEL_CS, 0, TRAP_GATE);
+    idt_entry(13, (uintptr_t)gpflt, __KERNEL_CS, 0, TRAP_GATE);
+    idt_entry(14, (uintptr_t)pgflt, __KERNEL_CS, 0, TRAP_GATE);
+    idt_entry(0x80, (uintptr_t)syscall_handler, __KERNEL_CS, 0, INT_GATE | DPL_3);
 
     pic_initialize();
 
@@ -46,7 +61,21 @@ void idt_init(void)
     printf("Loaded IDT\n");
 }
 
-void idt_entry(int num, u32 offset, u16 selector, u8 attr)
+
+#ifdef ARCH_x86_64
+void idt_entry(int num, uintptr_t offset, u16 selector, u8 ist, u8 attr)
+{
+    idt_entry_t *target = idt_entries + num;
+    target->offset_low = offset & 0xFFFF;
+    target->offset_mid = (offset >> 16) & 0xFFFF;
+    target->offset_high = (offset >> 32) & 0xFFFFFFFF;
+    target->selector = selector;
+    target->ist = ist;
+    target->zero = 0;
+    target->type_attr = attr;
+}
+#else
+void idt_entry(int num, u32 offset, u16 selector, u8 unused, u8 attr)
 {
     idt_entry_t *target = idt_entries + num;
     target->offset_low = offset & 0xFFFF;
@@ -55,6 +84,7 @@ void idt_entry(int num, u32 offset, u16 selector, u8 attr)
     target->zero = 0;
     target->type_attr = attr;
 }
+#endif
 
 
 struct cpu_state {

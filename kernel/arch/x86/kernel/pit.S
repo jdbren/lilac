@@ -13,6 +13,14 @@
 // .globl system_timer_fractions
 // .globl system_timer_ms
 
+.macro ret_from_irq
+#ifdef ARCH_x86_64
+	iretq
+#else
+	iret
+#endif
+.endm
+
 .text
 .extern timer_cnt
 .global timer_handler
@@ -41,7 +49,7 @@ timer_handler:
 
 	popa
 	popf
-	iret
+	ret_from_irq
 
 
 # Input

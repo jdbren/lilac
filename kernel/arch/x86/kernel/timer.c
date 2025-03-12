@@ -92,7 +92,7 @@ u32 hpet_read(void)
 // TODO: Make sure HPET is supported
 void timer_init(u32 ms, struct hpet_info *info)
 {
-    idt_entry(0x20, (u32)timer_handler, 0x08, INT_GATE);
+    idt_entry(0x20, (uintptr_t)timer_handler, 0x08, 0, INT_GATE);
     ioapic_entry(0, 0x20, 0, 0);
     hpet_init(ms, info);
     boot_unix_time = rtc_init();

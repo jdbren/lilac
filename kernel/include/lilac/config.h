@@ -9,8 +9,8 @@
 #define PAGE_SIZE           4096
 
 #ifdef ARCH_x86_64
-#define __KERNEL_BASE       0xffffffff80000000
-#define __KERNEL_MAX_ADDR   0xffffffff80200000
+#define __KERNEL_BASE       0xffffffff80000000ULL
+#define __KERNEL_MAX_ADDR   0xffffffff80200000ULL
 #else
 #define __KERNEL_BASE       0xC0000000
 #define __KERNEL_MAX_ADDR   0xC0400000

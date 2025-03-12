@@ -2,6 +2,7 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/keyboard.h>
 
+#include <asm/segments.h>
 #include <lilac/log.h>
 #include <lilac/console.h>
 #include <drivers/framebuffer.h>
@@ -123,7 +124,7 @@ void keyboard_int(struct interrupt_frame *frame)
 
 void keyboard_init(void)
 {
-    idt_entry(0x20 + 1, (u32)keyboard_int, 0x08, INT_GATE);
+    idt_entry(0x20 + 1, (uintptr_t)keyboard_int, __KERNEL_CS, 0, INT_GATE);
     ioapic_entry(1, 0x20 + 1, 0, 0);
     kstatus(STATUS_OK, "Keyboard initialized\n");
 }

@@ -10,14 +10,14 @@
 #define TASK_GATE 0x85
 
 struct interrupt_frame {
-    u32 ip;
-    u32 cs;
-    u32 flags;
-    u32 sp;
-    u32 ss;
+    unsigned long ip;
+    unsigned long cs;
+    unsigned long flags;
+    unsigned long sp;
+    unsigned long ss;
 };
 
 void idt_init(void);
-void idt_entry(int num, u32 offset, u16 selector, u8 attr);
+void idt_entry(int num, uintptr_t offset, u16 selector, u8 ist_or_unused, u8 attr);
 
 #endif

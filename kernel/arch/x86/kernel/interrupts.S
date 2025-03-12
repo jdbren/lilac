@@ -1,7 +1,6 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #ifdef ARCH_x86_64
-/*
 .macro isr_err name
 	.extern \name\()_handler
 	.global \name
@@ -35,7 +34,6 @@
 	pop 	%rbp
 	iretq
 .endm
-*/
 #else // ARCH_x86
 .macro isr_err name
 	.extern \name\()_handler
@@ -70,7 +68,7 @@
 	pop %ebp
 	iret
 .endm
-#endif
+#endif /* ARCH_x86_64 */
 
 isr_no_err div0
 # isr_no_err debug
