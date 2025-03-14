@@ -117,7 +117,7 @@ void sched_tick()
     schedule();
 }
 
-int find_by_pid(int pid)
+int find_by_pid(u32 pid)
 {
     for (int i = 0; i < 16; i++) {
         if (task_queue[i] && task_queue[i]->pid == pid)

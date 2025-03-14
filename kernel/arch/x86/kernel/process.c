@@ -11,7 +11,7 @@
 #include <mm/kmalloc.h>
 #include "pgframe.h"
 #include "paging.h"
-#include "regs.h"
+#include "asm/regs.h"
 
 extern const u32 _kernel_end;
 static const int KERNEL_FIRST_PT = PG_DIR_INDEX(0xc0000000);
@@ -143,7 +143,7 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
     return child;
 }
 
-int ia32_do_fork(struct sc32_regs *regs)
+int arch_do_fork(struct regs_state *regs)
 {
     klog(LOG_DEBUG, "Forking process\n");
     klog(LOG_DEBUG, "\tIP: %x\n", regs->ip);
@@ -154,7 +154,7 @@ int ia32_do_fork(struct sc32_regs *regs)
 
 void *arch_copy_regs(void *src)
 {
-    struct sc32_regs *regs = kzmalloc(sizeof *regs);
-    *regs = *(struct sc32_regs*)src;
+    struct regs_state *regs = kzmalloc(sizeof *regs);
+    memcpy(regs, src, sizeof *regs);
     return regs;
 }

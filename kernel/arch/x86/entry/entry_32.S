@@ -1,6 +1,9 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
+#define __ASSEMBLY__
 #include <asm/segments.h>
+
+#include "macros.h"
 
 .equ TASK_PGD_OFFSET, 12
 .equ TASK_PC_OFFSET, 16
@@ -72,6 +75,7 @@ arch_context_switch:
 
 	movl   	0x08(%ebp), %esi
 	movl   	0x0c(%ebp), %ebx
+/*
 	leal   	0x3e(%ebx), %edx
 	leal    0x3e(%esi), %eax
 
@@ -82,6 +86,7 @@ arch_context_switch:
 	pushl  	$0x0
 	call	klog
 	addl    $0x14, %esp
+*/
 
 	pushl   TASK_KSTACK_OFFSET(%ebx)
 	call  	set_tss_esp0
@@ -120,24 +125,11 @@ arch_return_from_fork:
 	movl 4(%esp), %eax
 
 	# restore registers
-	movl   (%eax), %ebx
-	movl  4(%eax), %ecx
-	movl  8(%eax), %edx
-	movl 12(%eax), %esi
-	movl 16(%eax), %edi
-	movl 20(%eax), %ebp
-	movw 24(%eax), %ds
-	movw 28(%eax), %es
-	movw 32(%eax), %fs
-	movw 36(%eax), %gs
+	RESTORE_REGS
 
 	# restore stack
-	pushl 56(%eax) # ss
-	pushl 52(%eax) # esp
-	pushl 48(%eax) # eflags
-	pushl 44(%eax) # cs
-	pushl 40(%eax) # eip
+	SET_IRET_STACK
 
 	# return to usermode
-	movl $0, %eax
+	xor %eax, %eax
 	iret

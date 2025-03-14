@@ -21,31 +21,41 @@ sys_getpid:
 sys_umount:
 	ret
 
+#ifdef ARCH_x86_64
+.macro sc_tbl_entry name
+	.quad sys_\name
+.endm
+#else
+.macro sc_tbl_entry name
+	.long sys_\name
+.endm
+#endif
+
 .data
 .globl syscall_table
 .globl syscall_table_end
 syscall_table:
-	.long sys_restart_syscall
-	.long sys_exit		# 1
-	.long sys_fork 		# 2
-	.long sys_read		# 3
-	.long sys_write		# 4
-	.long sys_open 		# 5
-	.long sys_close 	# 6
-	.long sys_waitpid 	# 7
-	.long sys_create 	# 8
-	.long sys_execve 	# 9
-	.long sys_chdir 	# 10
-	.long sys_time 		# 11
-	.long sys_stat 		# 12
-	.long sys_lseek 	# 13
-	.long sys_getpid 	# 14
-	.long sys_mount 	# 15
-	.long sys_umount 	# 16
-	.long sys_getdents 	# 17
-	.long sys_getcwd 	# 18
-	// .long sys_mkdir 	# 19
-	// .long sys_rmdir 	# 20
-	// .long sys_dup 	# 21
-	// .long sys_pipe 	# 22
+	sc_tbl_entry restart_syscall
+	sc_tbl_entry exit		# 1
+	sc_tbl_entry fork		# 2
+	sc_tbl_entry read		# 3
+	sc_tbl_entry write		# 4
+	sc_tbl_entry open		# 5
+	sc_tbl_entry close		# 6
+	sc_tbl_entry waitpid	# 7
+	sc_tbl_entry create		# 8
+	sc_tbl_entry execve		# 9
+	sc_tbl_entry chdir		# 10
+	sc_tbl_entry time		# 11
+	sc_tbl_entry stat		# 12
+	sc_tbl_entry lseek		# 13
+	sc_tbl_entry getpid		# 14
+	sc_tbl_entry mount		# 15
+	sc_tbl_entry umount		# 16
+	sc_tbl_entry getdents	# 17
+	sc_tbl_entry getcwd		# 18
+	// sc_tbl_entry mkdir	# 19
+	// sc_tbl_entry rmdir	# 20
+	// sc_tbl_entry dup		# 21
+	// sc_tbl_entry pipe	# 22
 syscall_table_end:

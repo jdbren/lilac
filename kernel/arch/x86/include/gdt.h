@@ -17,6 +17,6 @@
 )
 
 void gdt_init(void);
-void set_tss_esp0(u32 esp0);
+void set_tss_esp0(uintptr_t esp0);
 
 #endif

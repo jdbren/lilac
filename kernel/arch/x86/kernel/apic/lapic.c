@@ -2,11 +2,11 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <stdbool.h>
 #include <string.h>
+#include <cpuid.h>
 #include <lilac/types.h>
 #include <lilac/log.h>
 #include <lilac/panic.h>
 #include <lilac/timer.h>
-#include "mycpuid.h"
 #include "msr.h"
 #include "paging.h"
 #include "timer.h"
@@ -20,6 +20,7 @@
 #define ICR_SELECT 0x310
 #define ICR_DATA 0x300
 
+#define CPUID_FEAT_EDX_APIC (1 << 9)
 
 u32 lapic_base;
 
@@ -57,8 +58,8 @@ static inline u8 get_lapic_id(void)
  */
 static bool check_apic(void)
 {
-    u32 eax, ebx, ecx, edx;
-    cpuid(1, &eax, &ebx, &ecx, &edx);
+    long eax, ebx, ecx, edx;
+    __cpuid(1, eax, ebx, ecx, edx);
     return edx & CPUID_FEAT_EDX_APIC;
 }
 

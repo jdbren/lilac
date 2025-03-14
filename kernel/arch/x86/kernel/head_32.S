@@ -1,5 +1,6 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
+#define __ASSEMBLY__
 #include <lilac/config.h>
 #include <asm/segments.h>
 

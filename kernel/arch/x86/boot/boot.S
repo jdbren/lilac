@@ -1,6 +1,6 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#define ASM_FILE 1
+#define __ASSEMBLY__ 1
 #include <utility/multiboot2.h>
 #include <lilac/config.h>
 #include <asm/segments.h>

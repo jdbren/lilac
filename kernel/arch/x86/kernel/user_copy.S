@@ -1,13 +1,29 @@
 // uaccess.S - x86 assembly code for user access functions
+#define __ASSEMBLY__
 #include <lilac/errno.h>
 
 .text
 /*
-	esi - source address
-	edi - destination address
-	ecx - number of bytes to copy
+	si - source address
+	di - destination address
+	cx - number of bytes to copy
 */
 .global x86_user_copy_asm
+#ifdef ARCH_x86_64
+x86_user_copy_asm:
+	push %rbp
+	mov  %rsp, %rbp
+	pushf
+	cld
+1:	rep movsb
+	mov %ecx, %eax
+	popf
+	pop %rbp
+	retq
+.section .exception, "a"
+	.quad 1b, .fault_handler
+.text
+#else
 x86_user_copy_asm:
 	push %ebp
 	mov %esp, %ebp
@@ -21,13 +37,31 @@ x86_user_copy_asm:
 .section .exception, "a"
 	.long 1b, .fault_handler
 .text
+#endif
+
 
 /*
-	esi - source address
-	edi - destination address
-	ecx - max number of bytes
+	si - source address
+	di - destination address
+	cx - max number of bytes
 */
 .global x86_strncpy_from_user_asm
+#ifdef ARCH_x86_64
+x86_strncpy_from_user_asm:
+	push %rbp
+	mov  %rsp, %rbp
+	pushf
+2:	cmpb $0, (%rsi)
+	movsb
+	loopnz 2b
+	mov %ecx, %eax
+	popf
+	pop %rbp
+	ret
+.section .exception, "a"
+	.quad 2b, .fault_handler
+.text
+#else
 x86_strncpy_from_user_asm:
 	push %ebp
 	mov %esp, %ebp
@@ -42,9 +76,16 @@ x86_strncpy_from_user_asm:
 .section .exception, "a"
 	.long 2b, .fault_handler
 .text
+#endif
+
 
 .fault_handler:
-	movl $-EFAULT, %eax
+	mov $-EFAULT, %eax
 	popf
+#ifdef ARCH_x86_64
+	pop %rbp
+	retq
+#else
 	pop %ebp
 	ret
+#endif

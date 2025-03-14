@@ -5,14 +5,14 @@
 
 #include <stdbool.h>
 #include <lilac/types.h>
-#include "cpuid.h"
+#include <cpuid.h>
 
-static const u32 CPUID_FLAG_MSR = 1 << 5;
+#define CPUID_FLAG_MSR (1 << 5)
 
 inline static bool cpuHasMSR()
 {
     u32 a, d, b, c;
-    cpuid(1, &a, &b, &c, &d);
+    __cpuid(1, a, b, c, d);
     return d & CPUID_FLAG_MSR;
 }
 

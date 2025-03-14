@@ -1,5 +1,6 @@
 // Copyright (C) 2025 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
+#define __ASSEMBLY__
 #include <lilac/config.h>
 #include <asm/segments.h>
 
@@ -111,6 +112,9 @@ startup_64:
 	call _init
 	call gdt_init
 	mov  $0, (boot_pml4)
+
+	call x86_64_kernel_early
+
 	cli
 	hlt
 
@@ -171,14 +175,14 @@ tss_init:
 	pop  %rbp
 	ret
 
+// rdi = stack address
 .global set_tss_esp0
 set_tss_esp0:
 	push %rbp
 	mov  %rsp, %rbp
 	push %rbx
 	call .get_tss
-	mov  16(%rbp), %rbx
-	mov  %rbx, 8(%rax)
+	mov  %rdi, 8(%rax)
 	pop  %rbx
 	pop  %rbp
 	ret

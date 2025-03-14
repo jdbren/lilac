@@ -21,9 +21,9 @@ static inline void __native_flush_tlb_single(u32 addr)
    asm volatile("invlpg (%0)" : : "r"(addr) : "memory");
 }
 
-u32 arch_get_pgd(void)
+uintptr_t arch_get_pgd(void)
 {
-    u32 cr3;
+    uintptr_t cr3;
     asm volatile("mov %%cr3, %0" : "=r"(cr3));
     return cr3;
 }

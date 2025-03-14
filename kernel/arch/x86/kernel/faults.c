@@ -46,11 +46,19 @@ void pgflt_handler(int error_code, struct interrupt_frame *frame)
     void *handler = find_exception(frame->ip);
     if (handler && addr < __KERNEL_BASE) {
         klog(LOG_WARN, "Page fault at %x handled by %p\n", frame->ip, handler);
+#ifdef ARCH_x86_64
+        asm (
+            "movq (%%rbp), %%rax\n\t"   // Get previous fp
+            "movq %0, 16(%%rax)\n\t"  // Overwrite return address with handler
+            ::"r"(handler) : "rax", "memory"
+        );
+#else
         asm (
             "movl (%%ebp), %%eax\n\t"   // Get previous fp
             "movl %0, 8(%%eax)\n\t"  // Overwrite return address with handler
             ::"r"(handler) : "eax", "memory"
         );
+#endif
     } else {
         kerror("Page fault detected\n");
     }

@@ -1,5 +1,8 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
+#define __ASSEMBLY__
+#include "macros.h"
+
 #ifdef ARCH_x86_64
 .macro isr_err name
 	.extern \name\()_handler
@@ -7,14 +10,14 @@
 	\name:
 	push 	%rbp
 	mov 	%rsp, %rbp
-	pusha
+	PUSH_REGS
 	lea 	16(%rbp), %rax
 	push 	%rax
 	mov 	8(%rbp), %rax
 	push 	%rax
 	call 	\name\()_handler
-	addl  	$24, %rsp # err code and vals
-	popa
+	add  	$24, %rsp # err code and vals
+	POP_REGS
 	pop 	%rbp
 	iretq
 .endm
@@ -25,12 +28,12 @@
 	\name:
 	push 	%rbp
 	mov 	%rsp, %rbp
-	pusha
+	PUSH_REGS
 	mov 	8(%rbp), %rax
 	push 	%rax
 	call 	\name\()_handler
-	addl  	$8, %rsp
-	popa
+	add  	$8, %rsp
+	POP_REGS
 	pop 	%rbp
 	iretq
 .endm
@@ -103,3 +106,28 @@ isr_err    pgflt
 # isr_no_err 29
 # isr_err    30
 # isr_no_err 31
+
+.text
+.extern timer_cnt
+.global timer_handler
+timer_handler:
+	pushf
+	cld
+	PUSH_REGS
+
+	movl (timer_cnt), %eax
+	cmpl $(-1), %eax
+	je .no_tick
+	decl %eax
+	movl %eax, (timer_cnt)
+
+.no_tick:
+	xor  %eax, %eax
+	mov (lapic_base), %ebx
+	movl %eax, 0xb0(%ebx)                # Acknowledge the interrupt
+
+	call sched_tick
+
+	POP_REGS
+	popf
+	ret_from_irq

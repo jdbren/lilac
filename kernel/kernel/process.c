@@ -100,7 +100,7 @@ static void start_process(void)
     for (; current->info.argv[argc] && argc < 31; argc++) {
         u32 len = strlen(current->info.argv[argc]) + 1;
         len = (len + 3) & ~3; // Align stack
-        stack = (u32*)((uintptr_t)stack - len);
+        stack = (void*)((uintptr_t)stack - len);
         strcpy((char*)stack, current->info.argv[argc]);
         argv[argc] = (char*)stack;
     }
