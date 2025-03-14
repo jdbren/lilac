@@ -11,12 +11,10 @@
 	push 	%rbp
 	mov 	%rsp, %rbp
 	PUSH_REGS
-	lea 	16(%rbp), %rax
-	push 	%rax
-	mov 	8(%rbp), %rax
-	push 	%rax
+	lea 	16(%rbp), %rsi # interrupt stack frame
+	mov 	8(%rbp), %rdi  # error code
 	call 	\name\()_handler
-	add  	$24, %rsp # err code and vals
+	addq  	$8, %rsp # pop err code
 	POP_REGS
 	pop 	%rbp
 	iretq
@@ -29,10 +27,8 @@
 	push 	%rbp
 	mov 	%rsp, %rbp
 	PUSH_REGS
-	mov 	8(%rbp), %rax
-	push 	%rax
+	mov 	8(%rbp), %rdi 	# interrupt stack frame
 	call 	\name\()_handler
-	add  	$8, %rsp
 	POP_REGS
 	pop 	%rbp
 	iretq
@@ -43,16 +39,16 @@
 	.global \name
 	\name:
 	push %ebp
-	mov %esp, %ebp
-	pushal
-	lea 8(%ebp), %eax
+	mov  %esp, %ebp
+	pusha
+	lea  8(%ebp), %eax
 	push %eax
-	mov 4(%ebp), %eax
+	mov  4(%ebp), %eax
 	push %eax
 	call \name\()_handler
-	addl  $12, %esp # err code and vals
-	popal
-	pop %ebp
+	addl $12, %esp # err code and vals
+	popa
+	pop  %ebp
 	iret
 .endm
 
@@ -62,12 +58,12 @@
 	\name:
 	push %ebp
 	mov %esp, %ebp
-	pushal
+	pusha
 	mov 4(%ebp), %eax
 	push %eax
 	call \name\()_handler
 	addl  $4, %esp
-	popal
+	popa
 	pop %ebp
 	iret
 .endm
@@ -111,15 +107,14 @@ isr_err    pgflt
 .extern timer_cnt
 .global timer_handler
 timer_handler:
-	pushf
 	cld
 	PUSH_REGS
 
 	movl (timer_cnt), %eax
 	cmpl $(-1), %eax
 	je .no_tick
-	decl %eax
-	movl %eax, (timer_cnt)
+	dec %eax
+	mov %eax, (timer_cnt)
 
 .no_tick:
 	xor  %eax, %eax
@@ -129,5 +124,4 @@ timer_handler:
 	call sched_tick
 
 	POP_REGS
-	popf
 	ret_from_irq

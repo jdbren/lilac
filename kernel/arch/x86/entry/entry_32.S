@@ -16,9 +16,6 @@ jump_usermode:
 	cli
 	pushl %ebp
 	movl %esp, %ebp
-	pushl %ebx
-	pushl %esi
-	pushl %edi
 /*
 	Params on stack:
 	kernel stack address
@@ -48,14 +45,7 @@ jump_usermode:
 	pushl $__USER_CS | 0x3 	# cs (ring 3)
 	pushl %ebx			 	# eip
 
-	# Clear registers
-	xorl %eax, %eax
-	xorl %ebx, %ebx
-	xorl %ecx, %ecx
-	xorl %edx, %edx
-	xorl %esi, %esi
-	xorl %edi, %edi
-	xorl %ebp, %ebp
+	CLEAR_REGS
 
 	iret
 
@@ -64,6 +54,7 @@ jump_usermode:
 arch_context_switch:
 	pushl   %ebp
 	movl 	%esp, %ebp
+	pushl   %edi
 	pushl   %esi
 	pushl  	%ebx
 
@@ -104,6 +95,7 @@ arch_context_switch:
 1:	popf
 	popl    %ebx
 	popl    %esi
+	popl    %edi
 	popl   	%ebp
 	ret
 

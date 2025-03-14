@@ -92,6 +92,14 @@
     movq RBP(%rax), %rbp
 .endm
 
+.macro SET_IRET_STACK
+    pushq SS(%rax)
+    pushq RSP(%rax)
+    pushq RFLAGS(%rax)
+    pushq CS(%rax)
+    pushq RIP(%rax)
+.endm
+
 #else /* 32-bit: */
 .macro PUSH_REGS
     pushl %gs

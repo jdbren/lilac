@@ -116,7 +116,8 @@ startup_64:
 	call x86_64_kernel_early
 
 	cli
-	hlt
+4:	hlt
+	jmp 4b
 
 .global gdt_init
 .type gdt_init, @function
@@ -132,8 +133,8 @@ gdt_init:
 	cpuid
 	shr  $24, %ebx
 	lea  tss, %rcx
-	movl $0x68, %eax
-	mul  %ebx
+	movq $0x68, %rax
+	mul  %rbx
 	add  %rcx, %rax
 	ret
 
@@ -182,7 +183,7 @@ set_tss_esp0:
 	mov  %rsp, %rbp
 	push %rbx
 	call .get_tss
-	mov  %rdi, 8(%rax)
+	movq  %rdi, 4(%rax)
 	pop  %rbx
 	pop  %rbp
 	ret
