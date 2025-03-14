@@ -1,9 +1,9 @@
 include kbuild.config
 export DESTDIR=$(SYSROOT)
 
-.PHONY: all clean lilac.ker libk.a install-headers
+.PHONY: all clean lilac.ker libk.a install-headers init
 
-all: lilac.ker
+all: lilac.ker init
 
 lilac.ker: libk.a
 	$(MAKE) -C kernel
@@ -11,12 +11,16 @@ lilac.ker: libk.a
 libk.a: install-headers
 	$(MAKE) -C libc
 
-user: install-headers
+user: install-headers init
 	$(MAKE) -C user
 
-install: lilac.ker libk.a user
+init:
+	$(MAKE) -C init
+
+install: lilac.ker libk.a init user
 	$(MAKE) -C libc install-libs
 	$(MAKE) -C kernel install
+	$(MAKE) -C init install
 
 install-headers:
 	mkdir -p $(SYSROOT)

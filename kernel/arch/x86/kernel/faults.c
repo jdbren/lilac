@@ -35,7 +35,7 @@ void div0_handler(void)
     kerror("Divide by zero int\n");
 }
 
-void pgflt_handler(int error_code, struct interrupt_frame *frame)
+void pgflt_handler(long error_code, struct interrupt_frame *frame)
 {
     uintptr_t addr = 0;
     asm volatile ("mov %%cr2,%0\n\t" : "=r"(addr));

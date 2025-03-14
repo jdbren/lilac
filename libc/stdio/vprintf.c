@@ -163,7 +163,7 @@ int vprintf(const char *restrict format, va_list args)
         }
         else if (*format == 'x' || *format == 'p' || *format == 'X') {
             format++;
-            unsigned int i = va_arg(args, unsigned int);
+            unsigned long i = va_arg(args, unsigned long);
             char *s = convert(i, 16);
             unsigned int len = strlen(s);
             if (use_width) {

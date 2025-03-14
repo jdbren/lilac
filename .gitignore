@@ -13,6 +13,7 @@ libc/.DS_Store
 /docs
 debug.txt
 log.txt
+dump.txt
 kbuild.config
 libc/libk.a
 kernel/l.sh
@@ -21,3 +22,4 @@ init/init
 kernel/drivers/acpi/acpi.lib
 resources/code/inodes.txt
 user/ls
+*.old
