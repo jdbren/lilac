@@ -23,6 +23,7 @@ void x86_64_kernel_early(void)
 {
     idt_init();
     parse_multiboot((uintptr_t)&mbinfo, &mbd);
+    mm_init(mbd.efi_mmap);
 
     arch_idle();
     __builtin_unreachable();

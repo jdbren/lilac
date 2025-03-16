@@ -115,7 +115,7 @@ void console_init(void)
     __cpuid(0x80000006, regs[0], regs[1], regs[2], regs[3]);
     printf("L2 Cache: %u KB\n", regs[2] >> 16);
 
-    u32 mem_sz_mb = arch_get_mem_sz() / 0x400;
+    size_t mem_sz_mb = arch_get_mem_sz() / 0x400;
     printf("Memory: %u MB\n", mem_sz_mb);
 
     u64 sys_time_ms = get_sys_time() / 1000000;

@@ -10,8 +10,8 @@
 #include "paging.h"
 
 #ifdef ARCH_x86_64
-#define KHEAP_START_ADDR    0xFFFFFFFF80200000
-#define KHEAP_MAX_ADDR      0xFFFFFFFFDFFF0000
+#define KHEAP_START_ADDR    0xFFFFFFFF81000000ULL
+#define KHEAP_MAX_ADDR      0xFFFFFFFFDFFF0000ULL
 #define PT_ENTRY_SIZE       8
 #define PT_ENTRY_BITS       64
 #else
@@ -22,8 +22,8 @@
 #endif
 
 #define check_bit(var,pos) ((var) & (1<<(pos)))
-#define get_index(page) ((u32)(page - KHEAP_START_ADDR)/ (PT_ENTRY_BITS * PAGE_SIZE))
-#define get_offset(page) (((u32)(page - KHEAP_START_ADDR) / PAGE_SIZE) % PT_ENTRY_BITS)
+#define get_index(page) ((size_t)(page - KHEAP_START_ADDR)/ (PT_ENTRY_BITS * PAGE_SIZE))
+#define get_offset(page) (((size_t)(page - KHEAP_START_ADDR) / PAGE_SIZE) % PT_ENTRY_BITS)
 
 typedef struct memory_desc memory_desc_t;
 
@@ -38,12 +38,23 @@ extern const uintptr_t _kernel_start;
 #define KHEAP_BITMAP_SIZE (KHEAP_PAGES / 8)
 #define HEAP_MANAGE_BYTES PAGE_ROUND_UP(KHEAP_BITMAP_SIZE)
 
-static u32 kheap_bitmap[HEAP_MANAGE_BYTES / 4];
-u32 memory_size_kb;
+static uintptr_t kheap_bitmap[HEAP_MANAGE_BYTES / 4];
+size_t memory_size_kb;
+
+static void __set_memory_size(struct multiboot_tag_efi_mmap *mmap)
+{
+    efi_memory_desc_t *entry = (efi_memory_desc_t*)mmap->efi_mmap;
+    for (u32 i = 0; i < mmap->size; i += mmap->descr_size,
+        entry = (efi_memory_desc_t*)((uintptr_t)entry + mmap->descr_size)) {
+        memory_size_kb += entry->num_pages * PAGE_SIZE / 1024;
+    }
+}
 
 // TODO: Add support for greater than 4GB memory
 void mm_init(struct multiboot_tag_efi_mmap *mmap)
 {
+    __set_memory_size(mmap);
+    init_phys_mem_mapping(memory_size_kb);
     phys_mem_init(mmap);
     __parse_mmap(mmap);
 
@@ -51,7 +62,7 @@ void mm_init(struct multiboot_tag_efi_mmap *mmap)
     kernel_pt_init();
 }
 
-u32 arch_get_mem_sz(void)
+size_t arch_get_mem_sz(void)
 {
     return memory_size_kb;
 }
@@ -135,7 +146,7 @@ void unmap_from_self(void *addr, int size)
 void *map_phys(void *to_map, int size, int flags)
 {
     int num_pages = PAGE_ROUND_UP(size) / PAGE_SIZE;
-    to_map = (void*)((u32)to_map & 0xFFFFF000);
+    to_map = (void*)((uintptr_t)to_map & ~0xFFF);
     void *virt = find_vaddr(num_pages);
     map_pages(to_map, virt, flags, num_pages);
     return virt;
@@ -151,7 +162,7 @@ void *map_phys_at(void *phys, void *virt, int size, int flags)
 void unmap_phys(void *addr, int size)
 {
     int num_pages = PAGE_ROUND_UP(size) / PAGE_SIZE;
-    addr = (void*)((u32)addr & 0xFFFFF000);
+    addr = (void*)((uintptr_t)addr & ~0xFFF);
     free_vaddr(addr, num_pages);
     unmap_pages(addr, num_pages);
 }
@@ -171,9 +182,9 @@ void unmap_virt(void *virt, int size)
     unmap_pages(virt, num_pages);
 }
 
-u32 virt_to_phys(void *vaddr)
+uintptr_t virt_to_phys(void *vaddr)
 {
-    return (u32)get_physaddr(vaddr);
+    return (uintptr_t)get_physaddr(vaddr);
 }
 
 
@@ -223,13 +234,11 @@ static void __parse_mmap(struct multiboot_tag_efi_mmap *mmap)
     efi_memory_desc_t *entry = (efi_memory_desc_t*)mmap->efi_mmap;
     //void *vaddr = NULL;
     for (u32 i = 0; i < mmap->size; i += mmap->descr_size,
-            entry = (efi_memory_desc_t*)((u32)entry + mmap->descr_size)) {
-        if (entry->type != EFI_RESERVED_TYPE)
-            memory_size_kb += entry->num_pages * PAGE_SIZE / 1024;
+            entry = (efi_memory_desc_t*)((uintptr_t)entry + mmap->descr_size)) {
         switch (entry->type) {
             case EFI_BOOT_SERVICES_CODE:
             case EFI_BOOT_SERVICES_DATA:
-                if (entry->phys_addr < (u32)&_kernel_start)
+                if (entry->phys_addr < (uintptr_t)&_kernel_start)
                     continue;
                 else
                     free_frames((void*)((uintptr_t)entry->phys_addr), entry->num_pages);

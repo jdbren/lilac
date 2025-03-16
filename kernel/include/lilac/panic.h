@@ -5,7 +5,7 @@
 
 #include <lilac/log.h>
 
-#define assert(x) if (!(x)) kerror("Assertion failed: " #x)
+#define assert(x) if (unlikely(!(x))) kerror("Assertion failed: " #x)
 
 static inline __attribute__((noreturn))
 void kerror(const char *msg) {

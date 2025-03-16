@@ -18,7 +18,7 @@ static const int KERNEL_FIRST_PT = PG_DIR_INDEX(0xc0000000);
 
 static u32 *const pd = (u32*)0xFFFFF000UL;
 
-static void load_cr3(u32 cr3)
+static void load_cr3(uintptr_t cr3)
 {
     asm volatile ("mov %0, %%cr3" : : "r"(cr3));
 }

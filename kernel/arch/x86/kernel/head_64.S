@@ -69,6 +69,7 @@ startup_64:
 	leal pa(boot_pml4), %edi
 	leal pa(boot_pdtp), %esi		 # Map low memory (ident)
 	orl  $3, %esi
+	# Maintain this identity mapping until the phys_mem_mapping is set up
 	movl %esi, (%edi)
 	leal pa(boot_pdtp511_high), %esi # Map high memory
 	orl  $3, %esi
@@ -111,7 +112,6 @@ startup_64:
 	add $__KERNEL_BASE, %rsp
 	call _init
 	call gdt_init
-	mov  $0, (boot_pml4)
 
 	call x86_64_kernel_early
 
@@ -212,6 +212,7 @@ gdt_entries:
 
 .bss
 .align PAGE_SIZE
+.global boot_pml4
 boot_pml4:
 	.skip 4096
 boot_pdtp:

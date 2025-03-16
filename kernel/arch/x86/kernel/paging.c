@@ -9,14 +9,11 @@
 #define PAGE_DIR_SIZE 1024
 #define PAGE_TABLE_SIZE 1024
 
-#define is_aligned(POINTER, BYTE_COUNT) \
-    (((uintptr_t)(POINTER)) % (BYTE_COUNT) == 0)
-
 typedef u32 pde_t;
 static u32* const pd = (u32*)0xFFFFF000;
 
 static int pde(int index, u16 flags);
-static inline void __native_flush_tlb_single(u32 addr)
+static inline void __native_flush_tlb_single(uintptr_t addr)
 {
    asm volatile("invlpg (%0)" : : "r"(addr) : "memory");
 }
@@ -128,3 +125,5 @@ static int pde(int index, u16 flags)
 
     return 0;
 }
+
+void init_phys_mem_mapping(size_t) {}

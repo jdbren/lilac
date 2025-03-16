@@ -28,12 +28,12 @@ void unmap_from_self(void* addr, int size);
 
 void *map_phys(void *phys, int size, int flags);
 void unmap_phys(void *addr, int size);
-u32 virt_to_phys(void *vaddr);
+uintptr_t virt_to_phys(void *vaddr);
 
 void *map_virt(void *virt, int size, int flags);
 void unmap_virt(void *virt, int size);
 
-u32 arch_get_pgd(void);
-u32 arch_get_mem_sz(void);
+uintptr_t arch_get_pgd(void);
+size_t arch_get_mem_sz(void);
 
 #endif

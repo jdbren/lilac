@@ -26,7 +26,7 @@
 #define SYS_pipe 22
 
 
-inline long syscall0(long number)
+static inline long syscall0(long number)
 {
     long ret;
     asm volatile(
@@ -37,7 +37,7 @@ inline long syscall0(long number)
     return ret;
 }
 
-inline long syscall1(long number, long arg0)
+static inline long syscall1(long number, long arg0)
 {
     long ret;
     asm volatile(
@@ -48,7 +48,7 @@ inline long syscall1(long number, long arg0)
     return ret;
 }
 
-inline long syscall2(long number, long arg0, long arg1)
+static inline long syscall2(long number, long arg0, long arg1)
 {
     long ret;
     asm volatile(
@@ -59,7 +59,7 @@ inline long syscall2(long number, long arg0, long arg1)
     return ret;
 }
 
-inline long syscall3(long number, long arg0, long arg1, long arg2)
+static inline long syscall3(long number, long arg0, long arg1, long arg2)
 {
     long ret;
     asm volatile(
@@ -70,7 +70,7 @@ inline long syscall3(long number, long arg0, long arg1, long arg2)
     return ret;
 }
 
-inline long syscall4(long number, long arg0, long arg1, long arg2, long arg3)
+static inline long syscall4(long number, long arg0, long arg1, long arg2, long arg3)
 {
     long ret;
     asm volatile(
@@ -81,7 +81,7 @@ inline long syscall4(long number, long arg0, long arg1, long arg2, long arg3)
     return ret;
 }
 
-inline long syscall5(long number, long arg0, long arg1, long arg2, long arg3, long arg4)
+static inline long syscall5(long number, long arg0, long arg1, long arg2, long arg3, long arg4)
 {
     long ret;
     asm volatile(
