@@ -98,7 +98,7 @@ int unmap_pages(void *virtualaddr, int num_pages)
 }
 
 // Allocate mem for kernel page tables
-int kernel_pt_init(void)
+int kernel_pt_init(uintptr_t u1, uintptr_t u2)
 {
     for (int i = PG_DIR_INDEX(0xC0000000UL); i < PAGE_DIR_SIZE; i++) {
         if (!(pd[i] & 1))

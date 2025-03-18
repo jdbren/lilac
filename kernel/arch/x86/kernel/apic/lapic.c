@@ -3,9 +3,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <cpuid.h>
-#include <lilac/types.h>
-#include <lilac/log.h>
-#include <lilac/panic.h>
+#include <lilac/lilac.h>
 #include <lilac/timer.h>
 #include "msr.h"
 #include "paging.h"
@@ -112,6 +110,7 @@ int ap_init(u8 numcores)
     volatile u32 *const ap_select = (volatile u32* const)(base + ICR_SELECT);
     volatile u32 *const ipi_data = (volatile u32* const)(base + ICR_DATA);
 
+    arch_enable_interrupts();
     for (int i = 0; i < numcores; i++) {
         if (i == bspid)
             continue;
@@ -151,6 +150,7 @@ int ap_init(u8 numcores)
     // release the AP spinlocks
     bspdone = 1;
     sleep(10);
+    arch_disable_interrupts();
 
     kstatus(STATUS_OK, "APs running: %d\n", aprunning);
     if (aprunning == numcores - 1)

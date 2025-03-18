@@ -6,6 +6,7 @@
 #include <lilac/log.h>
 
 #define ACPI_MACHINE_WIDTH          BITS_PER_LONG
+//#define ACPI_USE_SYSTEM_INTTYPES
 #define ACPI_USE_SYSTEM_CLIBRARY
 #define ACPI_USE_STANDARD_HEADERS
 #define ACPI_USE_NATIVE_DIVIDE

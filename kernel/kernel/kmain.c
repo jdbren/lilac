@@ -10,6 +10,7 @@ __no_ret __no_stack_chk
 void start_kernel(void)
 {
     kstatus(STATUS_OK, "Starting kernel\n");
+    log_init(LOG_DEBUG);
 
     acpi_full_init();
     scan_sys_bus();
@@ -19,9 +20,8 @@ void start_kernel(void)
 
     arch_enable_interrupts();
     console_init();
-    log_init(LOG_DEBUG);
     sched_clock_init(); // kernel is live, will jmp to init task
 
     idle();
-    __builtin_unreachable();
+    unreachable();
 }

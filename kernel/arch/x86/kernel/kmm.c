@@ -1,29 +1,18 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <mm/kmm.h>
-#include <string.h>
-#include <lilac/panic.h>
+#include <lilac/lilac.h>
 #include <utility/multiboot2.h>
 #include <utility/efi.h>
 
 #include "pgframe.h"
 #include "paging.h"
 
-#ifdef ARCH_x86_64
-#define KHEAP_START_ADDR    0xFFFFFFFF81000000ULL
-#define KHEAP_MAX_ADDR      0xFFFFFFFFDFFF0000ULL
-#define PT_ENTRY_SIZE       8
-#define PT_ENTRY_BITS       64
-#else
-#define KHEAP_START_ADDR    0xC0400000
-#define KHEAP_MAX_ADDR      0xEFFFF000
-#define PT_ENTRY_SIZE       4
-#define PT_ENTRY_BITS       32
-#endif
+// #define DEBUG_KMM 1
 
 #define check_bit(var,pos) ((var) & (1<<(pos)))
-#define get_index(page) ((size_t)(page - KHEAP_START_ADDR)/ (PT_ENTRY_BITS * PAGE_SIZE))
-#define get_offset(page) (((size_t)(page - KHEAP_START_ADDR) / PAGE_SIZE) % PT_ENTRY_BITS)
+#define get_index(page) ((size_t)(page - KHEAP_START_ADDR)/ (32 * PAGE_SIZE))
+#define get_offset(page) (((size_t)(page - KHEAP_START_ADDR) / PAGE_SIZE) % 32)
 
 typedef struct memory_desc memory_desc_t;
 
@@ -46,7 +35,8 @@ static void __set_memory_size(struct multiboot_tag_efi_mmap *mmap)
     efi_memory_desc_t *entry = (efi_memory_desc_t*)mmap->efi_mmap;
     for (u32 i = 0; i < mmap->size; i += mmap->descr_size,
         entry = (efi_memory_desc_t*)((uintptr_t)entry + mmap->descr_size)) {
-        memory_size_kb += entry->num_pages * PAGE_SIZE / 1024;
+        if (entry->type != EFI_RESERVED_TYPE)
+            memory_size_kb += entry->num_pages * PAGE_SIZE / 1024;
     }
 }
 
@@ -59,7 +49,7 @@ void mm_init(struct multiboot_tag_efi_mmap *mmap)
     __parse_mmap(mmap);
 
     // Allocate page tables for all kernel space
-    kernel_pt_init();
+    kernel_pt_init(KHEAP_START_ADDR, KHEAP_MAX_ADDR);
 }
 
 size_t arch_get_mem_sz(void)
@@ -69,8 +59,8 @@ size_t arch_get_mem_sz(void)
 
 static void *find_vaddr(int num_pages)
 {
-    if (num_pages > 0x0001000)
-        kerror("Cannot allocate more than 4MB kernel mem at a time");
+    // if (num_pages > 0x200)
+    //     kerror("Cannot allocate more than 2MB kernel mem at a time");
     if (num_pages <= 0)
         return NULL;
 

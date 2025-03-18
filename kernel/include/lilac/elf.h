@@ -54,10 +54,10 @@ struct elf64_header {
     u64 s_tbl;
     u32 flg;
     u16 hd_sz;
-    u16 p_entrysz;
-    u16 p_tblsz;
-    u16 s_entrysz;
-    u16 s_tblsz;
+    u16 p_entry_sz;
+    u16 p_tbl_sz;
+    u16 s_entry_sz;
+    u16 s_tbl_sz;
     u16 nms_idx;
 } __packed;
 

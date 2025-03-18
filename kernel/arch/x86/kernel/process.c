@@ -39,9 +39,9 @@ static void print_page_structs(u32 *cr3)
     }
 }
 
-struct mm_info * arch_process_mmap()
+static struct mm_info * make_32_bit_mmap()
 {
-    volatile u32 *cr3 = map_phys(alloc_frame(), PAGE_BYTES, PG_WRITE);
+    volatile uintptr_t *cr3 = map_phys(alloc_frame(), PAGE_BYTES, PG_WRITE);
     memset((void*)cr3, 0, PAGE_SIZE);
 
     // Do recursive mapping
@@ -61,6 +61,26 @@ struct mm_info * arch_process_mmap()
     unmap_phys((void*)cr3, PAGE_BYTES);
 
     return info;
+}
+
+#ifdef ARCH_x86_64
+static struct mm_info * make_64_bit_mmap()
+{
+    volatile uintptr_t *cr3 = map_phys(alloc_frame(), PAGE_BYTES, PG_WRITE);
+    memset((void*)cr3, 0, PAGE_SIZE);
+
+
+}
+#else
+static struct mm_info * make_64_bit_mmap() {}
+#endif
+
+struct mm_info * arch_process_mmap(bool is_64_bit)
+{
+    if (is_64_bit)
+        return make_64_bit_mmap();
+    else
+        return make_32_bit_mmap();
 }
 
 void arch_unmap_all_user_vm(struct mm_info *info)
@@ -93,7 +113,7 @@ void * arch_user_stack(void)
 
 struct mm_info *arch_copy_mmap(struct mm_info *parent)
 {
-    struct mm_info *child = arch_process_mmap();
+    struct mm_info *child = arch_process_mmap(sizeof(void*) == 8);
     child->start_code = parent->start_code;
     child->end_code = parent->end_code;
     child->start_data = parent->start_data;

@@ -9,8 +9,6 @@
 #include "paging.h"
 
 
-#define MEMORY_SPACE 0x100000000ULL // 4GB
-
 #define get_phys_addr(virt_addr) ((uintptr_t)(virt_addr) - __KERNEL_BASE)
 #define check_bit(var,pos) ((var) & (1<<(pos)))
 #define get_index(frame) ((uintptr_t)frame / (32 * PAGE_SIZE))
@@ -45,14 +43,15 @@ int phys_mem_init(struct multiboot_tag_efi_mmap *mmap)
 
     BITMAP_SIZE = phys_map_pgcnt / 8 + 8;
     FIRST_PAGE = 0;
-    pg_frame_bitmap = (void*)(((uintptr_t)(&_kernel_end) & ~0x1fffffUL) + 0x200000);
 
-    assert((uintptr_t)&_kernel_end + BITMAP_SIZE < __KERNEL_MAX_ADDR);
 #ifdef ARCH_x86_64
+    pg_frame_bitmap = (void*)(((uintptr_t)(&_kernel_end) & ~0x1fffffUL) + 0x200000);
     klog(LOG_DEBUG, "pg_frame_bitmap: %p\n", pg_frame_bitmap);
     __map_frame_bm((void*)get_phys_addr(pg_frame_bitmap),
             (void*)pg_frame_bitmap);
 #else
+    assert((uintptr_t)&_kernel_end + BITMAP_SIZE < __KERNEL_MAX_ADDR);
+    pg_frame_bitmap = (u32*)&_kernel_end;
     map_pages((void*)get_phys_addr(pg_frame_bitmap),
             (void*)pg_frame_bitmap,
             PG_WRITE,

@@ -15,6 +15,8 @@
 
 #include "fat_internal.h"
 
+// #define DEBUG_FAT 1
+
 const struct file_operations fat_fops = {
     .read = fat32_read,
     .write = fat32_write,

@@ -2,12 +2,14 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include "timer.h"
 
+#include <asm/segments.h>
 #include <lilac/timer.h>
 #include <acpi/hpet.h>
 #include <mm/kmm.h>
 #include <lilac/port.h>
 #include <lilac/panic.h>
 #include <lilac/log.h>
+
 #include "apic.h"
 #include "idt.h"
 
@@ -92,7 +94,7 @@ u32 hpet_read(void)
 // TODO: Make sure HPET is supported
 void timer_init(u32 ms, struct hpet_info *info)
 {
-    idt_entry(0x20, (uintptr_t)timer_handler, 0x08, 0, INT_GATE);
+    idt_entry(0x20, (uintptr_t)timer_handler, __KERNEL_CS, 0, INT_GATE);
     ioapic_entry(0, 0x20, 0, 0);
     hpet_init(ms, info);
     boot_unix_time = rtc_init();

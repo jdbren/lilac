@@ -23,7 +23,11 @@ typedef signed long ssize_t;
 typedef unsigned short umode_t;
 typedef u32 dev_t;
 
+#ifdef ARCH_x86_64
+#define BITS_PER_LONG 64
+#else
 #define BITS_PER_LONG 32
+#endif
 
 #define likely(x)       __builtin_expect(!!(x), 1)
 #define unlikely(x)     __builtin_expect(!!(x), 0)

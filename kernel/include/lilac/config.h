@@ -9,11 +9,16 @@
 #define PAGE_SIZE           4096
 
 #ifdef ARCH_x86_64
+#define __PHYS_MAP_ADDR     0xffff900000000000ULL
+#define KHEAP_START_ADDR    0xfffffffa00000000ULL
+#define KHEAP_MAX_ADDR      0xfffffffb00000000ULL
 #define __KERNEL_BASE       0xffffffff80000000ULL
 #define __KERNEL_MAX_ADDR   0xffffffff80200000ULL
 #else
 #define __KERNEL_BASE       0xC0000000
 #define __KERNEL_MAX_ADDR   0xC0400000
+#define KHEAP_START_ADDR    0xC0400000
+#define KHEAP_MAX_ADDR      0xEFFFF000
 #endif
 //#define __KERNEL_STACK      __KERNEL_MAX_ADDR
 #define __KERNEL_STACK_SZ   0x2000
@@ -29,5 +34,11 @@
 #define __noreturn      __attribute__((noreturn))
 
 #define __cacheline_align __attribute__((aligned(64)))
+
+#define unreachable() __builtin_unreachable()
+
+#define is_canonical(addr) \
+    (((addr) < 0x0000ffffffffffffUL) || \
+     ((addr) > 0xffff000000000000UL))
 
 #endif

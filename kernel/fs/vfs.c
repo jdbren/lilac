@@ -14,6 +14,8 @@
 
 #include "utils.h"
 
+// #define DEBUG_VFS 1
+
 static fs_init_func_t init_ops[4] = {
     fat32_init, NULL, tmpfs_init, NULL
 };

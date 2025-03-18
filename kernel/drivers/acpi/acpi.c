@@ -61,7 +61,7 @@ void read_xsdt(struct SDTHeader *xsdt, struct acpi_info *info)
     u64 *other_entries = (u64*)((u32)xsdt + sizeof(*xsdt));
     for (int i = 0; i < entries; i++) {
         struct SDTHeader *h = (struct SDTHeader*)other_entries[i];
-        map_to_self((void*)((u32)h & 0xFFFFF000), 0x1000, 0x1);
+        map_to_self((void*)((uintptr_t)h & 0xFFFFF000), 0x1000, 0x1);
         char sig[5];
         strncpy(sig, h->Signature, 4);
         sig[4] = 0;
@@ -69,7 +69,7 @@ void read_xsdt(struct SDTHeader *xsdt, struct acpi_info *info)
             info->madt = parse_madt(h);
         if (!memcmp(h->Signature, "HPET", 4))
             info->hpet = parse_hpet(h);
-        unmap_from_self((void*)((u32)h & 0xFFFFF000), 0x1000);
+        unmap_from_self((void*)((uintptr_t)h & 0xFFFFF000), 0x1000);
     }
 }
 
@@ -89,12 +89,14 @@ void acpi_early(struct RSDP *rsdp, struct acpi_info *info)
         if ((u8)(check) != 0)
             kerror("Checksum is incorrect\n");
 
-        map_to_self((void*)((u32)(xsdp->XsdtAddress) & 0xFFFFF000), 0x1000, 0x1);
-        read_xsdt((struct SDTHeader*)((u32)(xsdp->XsdtAddress)), info);
-        unmap_from_self((void*)((u32)(xsdp->XsdtAddress) & 0xFFFFF000), 0x1000);
-    }
+        klog(LOG_DEBUG, "Found XSDT at %x\n", xsdp->XsdtAddress);
 
-    //read_rsdt((struct SDTHeader*)rsdp->RsdtAddress, info);
+        map_to_self((void*)((uintptr_t)(xsdp->XsdtAddress) & ~0xfff), 0x1000, 0x1);
+        read_xsdt((struct SDTHeader*)((uintptr_t)(xsdp->XsdtAddress)), info);
+        unmap_from_self((void*)((uintptr_t)(xsdp->XsdtAddress) & ~0xfff), 0x1000);
+    } else {
+        read_rsdt((struct SDTHeader*)rsdp->RsdtAddress, info);
+    }
 }
 
 void acpi_early_cleanup(struct acpi_info *info)

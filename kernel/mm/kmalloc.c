@@ -11,8 +11,9 @@
 #include <mm/kmalloc.h>
 #include <mm/kmm.h>
 
-#define MIN_ALLOC 4
-#define MIN_ALLOC_POWER 2
+#define MIN_ALLOC sizeof(alloc_t)
+#define MIN_ALLOC_POWER (MIN_ALLOC == 4 ? 2 : \
+                        MIN_ALLOC == 8 ? 3 : -1)
 #define RETAIN_FREE_SUPERBLOCK_COUNT 10
 #define PAGE_MASK (~(PAGE_SIZE - 1))
 #define is_aligned(POINTER, BYTE_COUNT) \
@@ -96,13 +97,13 @@ void *krealloc(void *addr, size_t size)
     }
 
     // get superblock header using bitmask
-    u32 base = (u32)addr & PAGE_MASK;
+    uintptr_t base = (uintptr_t)addr & PAGE_MASK;
     struct sb_header *header = (struct sb_header*)base;
     assert(is_aligned(header, PAGE_SIZE));
 
     // check if large allocation
     if (header->is_large) {
-        if (size <= header->num_pages * PAGE_SIZE)
+        if (size <= header->num_pages * PAGE_SIZE + sizeof(struct sb_header))
             return addr;
         void *new = kmalloc(size);
         if (new == NULL) return NULL;
@@ -135,8 +136,12 @@ void kfree(void *ptr)
 {
     if (ptr == NULL) return;
 
+#ifdef ARCH_x86_64
+    assert(is_canonical(ptr));
+#endif
+
     // get superblock header using bitmask
-    u32 base = (u32)ptr & PAGE_MASK;
+    uintptr_t base = (uintptr_t)ptr & PAGE_MASK;
     struct sb_header *header = (struct sb_header*)base;
     assert(is_aligned(header, PAGE_SIZE));
 
@@ -252,7 +257,7 @@ static void init_super(struct sb_header *header, size_t size, int bucket_idx)
     buckets[bucket_idx].alloc_size = size;
 
     // make free list
-    alloc_t *current = header->free, *next = 0;
+    alloc_t *current = header->free, *next = NULL;
     for (int i = 1; i < header->free_count; i++) {
         next = (alloc_t*)((u8*)(current) + size);
         current->next = next;

@@ -132,7 +132,7 @@ void pcie_add_map(ACPI_TABLE_MCFG *mcfg)
     pcie_mmio_map_cnt = 4;
     pcie_mmio_maps = kcalloc(pcie_mmio_map_cnt, sizeof(*pcie_mmio_maps));
 
-    mcfg_alloc = (ACPI_MCFG_ALLOCATION*)((u32)mcfg + sizeof(*mcfg));
+    mcfg_alloc = (ACPI_MCFG_ALLOCATION*)((uintptr_t)mcfg + sizeof(*mcfg));
 
     for (int i = 0;
         (uintptr_t)mcfg_alloc < (uintptr_t)mcfg + mcfg->Header.Length;

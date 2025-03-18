@@ -25,7 +25,7 @@
 
 #define PG_STRONG_UC (PG_CACHE_DISABLE | PG_WRITE_THROUGH)
 
-int kernel_pt_init(void);
+int kernel_pt_init(uintptr_t start, uintptr_t end);
 
 void *get_physaddr(void *virtualaddr);
 int map_pages(void *physaddr, void *virtualaddr, u16 flags, int num_pages);

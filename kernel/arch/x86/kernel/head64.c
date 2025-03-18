@@ -1,9 +1,13 @@
 #include <lilac/lilac.h>
 #include <lilac/boot.h>
+#include <lilac/keyboard.h>
+#include <drivers/framebuffer.h>
 #include <mm/kmm.h>
 
 #include "idt.h"
 #include "paging.h"
+#include "apic.h"
+#include "timer.h"
 
 #define STACK_CHK_GUARD 0x595e9fbd94fda766
 
@@ -24,9 +28,19 @@ void x86_64_kernel_early(void)
     idt_init();
     parse_multiboot((uintptr_t)&mbinfo, &mbd);
     mm_init(mbd.efi_mmap);
+    graphics_init(mbd.framebuffer);
+
+    acpi_early((void*)mbd.new_acpi->rsdp, &acpi);
+    apic_init(acpi.madt);
+    keyboard_init();
+    timer_init(1, acpi.hpet); // 1ms interval
+    ap_init(acpi.madt->core_cnt);
+    acpi_early_cleanup(&acpi);
+
+    start_kernel();
 
     arch_idle();
-    __builtin_unreachable();
+    unreachable();
 }
 
 uintptr_t get_rsdp(void)

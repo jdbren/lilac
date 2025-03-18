@@ -26,6 +26,7 @@ static struct acpi_info acpi;
 
 extern u32 mbinfo; // defined in boot asm
 
+__no_stack_chk
 void kernel_early(void)
 {
     gdt_init();
@@ -38,11 +39,7 @@ void kernel_early(void)
     apic_init(acpi.madt);
     keyboard_init();
     timer_init(1, acpi.hpet); // 1ms interval
-
-    arch_enable_interrupts();
     ap_init(acpi.madt->core_cnt);
-    arch_disable_interrupts();
-
     acpi_early_cleanup(&acpi);
 
     start_kernel();

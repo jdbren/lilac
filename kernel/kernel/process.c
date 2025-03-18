@@ -43,11 +43,14 @@ static void start_process(void)
 
     struct elf_header *hdr = kzmalloc(0x1000);
     int bytes = 0;
+    klog(LOG_DEBUG, "Reading ELF file\n");
+    klog(LOG_DEBUG, "File size: %d\n", file->f_dentry->d_inode->i_size);
     while(vfs_read(file, (u8*)hdr + bytes, 0x1000) > 0) {
         bytes += 0x1000;
         hdr = krealloc(hdr, bytes + 0x1000);
     }
 
+    klog(LOG_DEBUG, "Parsing ELF file\n");
     void *jmp = elf32_load(hdr, mem);
     if (!jmp)
         kerror("Failed to load ELF file\n");
@@ -150,7 +153,7 @@ struct task *init_process(void)
 {
     num_tasks = 1;
     struct task *this = &tasks[1];
-    struct mm_info *mem = arch_process_mmap();
+    struct mm_info *mem = arch_process_mmap(sizeof(void*) == 8);
 
     this->pid = 1;
     this->ppid = 0;
