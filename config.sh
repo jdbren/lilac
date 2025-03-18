@@ -23,8 +23,8 @@ BOOTDIR=/boot
 LIBDIR=$EXEC_PREFIX/lib
 INCLUDEDIR=$PREFIX/include
 
-CFLAGS="-Og -std=gnu11"
-CXXFLAGS="-Og -std=gnu++11"
+CFLAGS="-g -std=gnu11"
+CXXFLAGS="-g -std=gnu++11"
 
 SYSROOT="$(pwd)/sysroot"
 CC="$CC --sysroot=$SYSROOT -isystem=$INCLUDEDIR"
