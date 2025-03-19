@@ -141,6 +141,9 @@ struct file *vfs_open(const char *path, int flags, int mode)
     struct inode *inode;
     struct file *new_file;
 
+    if (path[0] != '/')
+        return ERR_PTR(-ENOENT);
+
     struct dentry *dentry = lookup_path(path);
     if (IS_ERR(dentry))
         return ERR_CAST(dentry);

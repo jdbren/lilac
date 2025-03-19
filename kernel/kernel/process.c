@@ -33,7 +33,7 @@ static void start_process(void)
 
     const char *path = current->info.path;
     struct file *file = vfs_open(path, 0, 0);
-    if (!file) {
+    if (IS_ERR_OR_NULL(file)) {
         klog(LOG_ERROR, "Failed to open file %s\n", path);
         kerror("File not found in start_process\n");
     }
