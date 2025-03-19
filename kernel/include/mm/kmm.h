@@ -36,4 +36,6 @@ void unmap_virt(void *virt, int size);
 uintptr_t arch_get_pgd(void);
 size_t arch_get_mem_sz(void);
 
+void copy_kernel_mappings(uintptr_t phys_cr3);
+
 #endif

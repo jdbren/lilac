@@ -10,13 +10,20 @@
 syscall_handler:
 	# already on stack: ss, sp, flags, cs, ip.
 	PUSH_REGS
+
     # set up syscall
+	mov  RBX(%rsp), %rdi
+	mov  RCX(%rsp), %rsi
+	mov  RDX(%rsp), %rdx
+	mov  RSI(%rsp), %rcx
+	mov  RDI(%rsp), %r8
+
 	lea  syscall_table, %rbp
-	mov  (%rbp, %rax, 4), %rax
+	mov  (%rbp, %rax, 8), %rax
 	xor  %rbp, %rbp
 	call *%rax
     # restore registers
-	POP_REGS
+	POP_REGS pop_rax=0
 	iretq
 
 .globl sys_fork

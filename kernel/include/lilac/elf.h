@@ -98,6 +98,6 @@ struct elf64_pheader {
 
 struct mm_info;
 
-void *elf32_load(void *elf, struct mm_info *mm);
+void * elf_load(struct elf_header *elf, struct mm_info *mm);
 
 #endif

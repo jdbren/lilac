@@ -125,3 +125,17 @@ arch_return_from_fork:
 	# return to usermode
 	xor %eax, %eax
 	iret
+
+.globl jump_new_proc
+.type jump_new_proc, @function
+jump_new_proc:
+	pushl   TASK_KSTACK_OFFSET(%ebx)
+	call  	set_tss_esp0
+	addl    $0x4, %esp
+
+	mov 4(%esp), %esi
+	mov TASK_PGD_OFFSET(%esi), %eax
+	mov %eax, %cr3
+	mov TASK_KSTACK_OFFSET(%esi), %esp
+	push TASK_PC_OFFSET(%esi)
+	ret

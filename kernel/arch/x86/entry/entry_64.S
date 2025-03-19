@@ -43,6 +43,8 @@ jump_usermode:
 	iretq
 
 // void arch_context_switch(struct task *prev, struct task *next)
+// esi = next, rdi = prev
+.type arch_context_switch, @function
 .globl arch_context_switch
 arch_context_switch:
 	push   	%rbp
@@ -53,14 +55,6 @@ arch_context_switch:
 	push 	%r12
 	push  	%rbx
 
-	# Stack:
-	# next 24(%bp)
-	# prev 16(%bp)
-	# frame p
-	# ret
-
-	mov 	0x10(%rbp), %rsi
-	mov 	0x18(%rbp), %rbx
 	// leal   	0x3e(%ebx), %edx
 	// leal    0x3e(%esi), %eax
 /*
@@ -72,16 +66,18 @@ arch_context_switch:
 	call	klog
 	addl    $0x14, %esp
 */
-	mov 	TASK_KSTACK_OFFSET(%rbx), %rdi
+	mov		%rdi, %r12
+	mov 	TASK_KSTACK_OFFSET(%rdi), %rdi
 	call  	set_tss_esp0
+	mov		%r12, %rdi
 
 	pushf
-	mov 	%rsp, TASK_KSTACK_OFFSET(%rsi)
-	mov 	TASK_PGD_OFFSET(%rbx), %rax
+	mov 	%rsp, TASK_KSTACK_OFFSET(%rdi)
+	mov 	TASK_PGD_OFFSET(%rsi), %rax
 	mov 	%rax, %cr3
-	mov 	TASK_KSTACK_OFFSET(%rbx), %rsp
-	movq 	$1f, TASK_PC_OFFSET(%rsi)
-	push 	TASK_PC_OFFSET(%rbx)
+	mov 	TASK_KSTACK_OFFSET(%rsi), %rsp
+	movq 	$1f, TASK_PC_OFFSET(%rdi)
+	push 	TASK_PC_OFFSET(%rsi)
 	ret
 
 1:	popf
@@ -117,3 +113,16 @@ arch_return_from_fork:
 	# return to usermode
 	xor %rax, %rax	# return 0 to child
 	iretq
+
+.globl jump_new_proc
+.type jump_new_proc, @function
+jump_new_proc:
+	mov  %rdi, %r8
+	mov  TASK_KSTACK_OFFSET(%rdi), %rdi
+	call set_tss_esp0
+
+	mov  TASK_PGD_OFFSET(%r8), %rax
+	mov  %rax, %cr3
+	mov  TASK_KSTACK_OFFSET(%r8), %rsp
+	push TASK_PC_OFFSET(%r8)
+	ret

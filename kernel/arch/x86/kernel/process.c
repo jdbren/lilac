@@ -66,10 +66,15 @@ static struct mm_info * make_32_bit_mmap()
 #ifdef ARCH_x86_64
 static struct mm_info * make_64_bit_mmap()
 {
-    volatile uintptr_t *cr3 = map_phys(alloc_frame(), PAGE_BYTES, PG_WRITE);
-    memset((void*)cr3, 0, PAGE_SIZE);
+    uintptr_t cr3 = (uintptr_t)alloc_frame();
 
+    copy_kernel_mappings(cr3);
 
+    struct mm_info *info = kzmalloc(sizeof *info);
+    info->pgd = cr3;
+    info->kstack = kvirtual_alloc(__KERNEL_STACK_SZ, PG_WRITE);
+
+    return info;
 }
 #else
 static struct mm_info * make_64_bit_mmap() {}

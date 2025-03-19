@@ -5,6 +5,7 @@
 #include <lilac/process.h>
 #include <lilac/sched.h>
 #include <lilac/syscall.h>
+#include <mm/kmm.h>
 
 extern const u32 page_directory;
 extern const u32 stack_top;
@@ -21,8 +22,7 @@ static struct task root = {
     .name = "idle",
     .priority = 20,
     .pid = 0,
-    .ppid = 0,
-    .pgd = pa((uintptr_t)&page_directory),
+    .ppid = 0
 };
 static int back;
 static volatile int current_task;
@@ -51,6 +51,7 @@ void schedule_task(struct task *new_task)
 void sched_init(void)
 {
     task_queue[0] = &root;
+    root.pgd = arch_get_pgd();
     struct task *pid1 = init_process();
     schedule_task(pid1);
     timer_reset = 3000;
@@ -64,14 +65,12 @@ void sched_clock_init(void)
 
 static void context_switch(struct task *prev, struct task *next)
 {
-    /*
     klog(LOG_DEBUG, "Next task info: \n");
     klog(LOG_DEBUG, "\tPID: %d\n", next->pid);
     klog(LOG_DEBUG, "\tPPID: %d\n", next->ppid);
-    klog(LOG_DEBUG, "\tPGD: %x\n", next->pgd);
-    klog(LOG_DEBUG, "\tPC: %x\n", next->pc);
-    klog(LOG_DEBUG, "\tStack: %x\n", next->kstack);
-    */
+    klog(LOG_DEBUG, "\tPGD: %p\n", next->pgd);
+    klog(LOG_DEBUG, "\tPC: %p\n", next->pc);
+    klog(LOG_DEBUG, "\tStack: %p\n", next->kstack);
 
     arch_context_switch(prev, next);
 }

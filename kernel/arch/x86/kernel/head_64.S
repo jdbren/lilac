@@ -155,20 +155,20 @@ tss_init:
 	# 32..39 base
 	add  $2, %rdx
 	shr  $16, %rax
-	mov  %al, (%rdx)
+	movb  %al, (%rdx)
 
 	# 56..63 base
 	add  $3, %rdx
 	shr  $8, %rax
-	mov  %al, (%rdx)
+	movb  %al, (%rdx)
 
 	# 64..95 base high 32 bits
 	add $1, %rdx
 	shr $8, %rax
-	mov %eax, (%rdx)
+	movl %eax, (%rdx)
 
-	mov  $8, %eax
-	mul  %bx  		# RPL 0 selector index
+	mov  $16, %eax
+	mul  %ebx  		# RPL 0 selector index
 	add  $7 * 8, %ax
 	ltr  %ax
 
@@ -192,7 +192,7 @@ set_tss_esp0:
 .data
 .align 8
 gdt_descr:
-	.word 15 * 64 - 1
+	.word 7 * 64 + 8 * 128 - 1
 	.quad pa(gdt_entries)
 
 .align 16
@@ -206,7 +206,7 @@ gdt_entries:
 	.quad 0x00CFF2000000FFFF    # User data
     # TSS
 	.rept 8
-	.quad 0x0000890000000000
+	.quad 0x0000890000000067
     .quad 0x0000000000000000
 	.endr
 

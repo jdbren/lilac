@@ -118,8 +118,7 @@ timer_handler:
 
 .no_tick:
 	xor  %eax, %eax
-	mov (lapic_base), %ebx
-	movl %eax, 0xb0(%ebx)                # Acknowledge the interrupt
+	call apic_eoi
 
 	call sched_tick
 

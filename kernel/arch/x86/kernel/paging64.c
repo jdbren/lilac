@@ -29,6 +29,8 @@ typedef u32 pte_t;
 #define ENTRY_ADDR(x) (phys_mem_mapping + (((x) & ~0xffful) & MAX_PHYS_ADDR))
 #define ENTRY_PRESENT(x) ((x) & 1)
 
+#define phys_to_mapping(x) (phys_mem_mapping + (x))
+
 #define __native_flush_tlb_single(addr) \
    asm volatile("invlpg (%0)" : : "r"((uintptr_t)addr) : "memory");
 
@@ -224,4 +226,18 @@ int __map_frame_bm(void *phys, void *virt)
         PG_HUGE_PAGE | 1);
     __native_flush_tlb_single(virt);
     return 0;
+}
+
+void copy_kernel_mappings(uintptr_t phys_cr3)
+{
+    pml4e_t *new_cr3 = (pml4e_t*)phys_to_mapping(phys_cr3);
+    pml4e_t *pml4 = (pml4e_t*)ENTRY_ADDR(arch_get_pgd());
+
+    memset((void*)new_cr3, 0, 2048);
+
+    // Skip to kernel space
+    new_cr3 += 256;
+    pml4 += 256;
+
+    memcpy(new_cr3, pml4, 256 * sizeof(pml4e_t));
 }

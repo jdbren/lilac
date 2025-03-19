@@ -57,7 +57,7 @@
     CLEAR_REGS
 .endm
 
-.macro POP_REGS
+.macro POP_REGS pop_rax=1
     popq %rbx
     popq %rcx
     popq %rdx
@@ -72,7 +72,11 @@
     popq %r9
     popq %r8
     popq %rbp
+    .if \pop_rax
     popq %rax
+    .else
+    addq $8, %rsp
+    .endif
 .endm
 
 .macro RESTORE_REGS

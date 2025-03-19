@@ -9,6 +9,8 @@
 #include <mm/kmalloc.h>
 #include <utility/ata.h>
 
+#pragma GCC diagnostic ignored "-Wpointer-to-int-cast"
+
 #define	SATA_SIG_ATA	0x00000101	// SATA drive
 #define	SATA_SIG_ATAPI	0xEB140101	// SATAPI drive
 #define	SATA_SIG_SEMB	0xC33C0101	// Enclosure management bridge
@@ -76,8 +78,7 @@ void ahci_init(hba_mem_t *abar_phys)
 	u32 pi;
 	int i = 0;
 
-	map_to_self((void*)abar_phys, PAGE_SIZE, PG_WRITE | PG_STRONG_UC);
-	abar = abar_phys;
+	abar = map_phys((void*)abar_phys, PAGE_SIZE, PG_WRITE | PG_STRONG_UC);
 
 	pi = abar->pi;
 	while (i < 32) {
@@ -109,8 +110,8 @@ void ahci_init(hba_mem_t *abar_phys)
 
 	size = num_ports * sizeof(hba_port_t) + sizeof(*abar);
 	if (size > PAGE_SIZE) {
-		unmap_from_self((void*)abar, PAGE_SIZE);
-		map_to_self((void*)abar_phys, size, PG_WRITE | PG_STRONG_UC);
+		unmap_phys((void*)abar, PAGE_SIZE);
+		abar = map_phys((void*)abar_phys, size, PG_WRITE | PG_STRONG_UC);
 	}
 
 	port_mem_init(num_ports);
@@ -345,7 +346,7 @@ static int __ahci_write(struct ahci_device *dev, u32 startl, u32 starth,
 {
 	hba_port_t *port = dev->port;
 	u32 sec_rem = count;
-	port->is = ~0x0UL;		// Clear pending interrupt bits
+	port->is = UINT32_MAX;		// Clear pending interrupt bits
 	int i = 0;
 	int spin = 0; 				// Spin lock timeout counter
 	int slot = find_cmdslot(port);

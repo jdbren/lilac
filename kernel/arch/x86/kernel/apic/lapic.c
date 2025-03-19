@@ -5,8 +5,8 @@
 #include <cpuid.h>
 #include <lilac/lilac.h>
 #include <lilac/timer.h>
+#include <mm/kmm.h>
 #include "msr.h"
-#include "paging.h"
 #include "timer.h"
 #include "idt.h"
 #include "apic.h"
@@ -20,7 +20,7 @@
 
 #define CPUID_FEAT_EDX_APIC (1 << 9)
 
-u32 lapic_base;
+uintptr_t lapic_base;
 
 static inline void write_reg(u32 reg, u32 value)
 {
@@ -64,7 +64,6 @@ static bool check_apic(void)
 /* Set the physical address for local APIC registers */
 static void cpu_set_apic_base(uintptr_t apic)
 {
-    lapic_base = apic;
     u32 edx = 0;
     u32 eax = (apic & 0xfffff0000) | IA32_APIC_BASE_MSR_ENABLE;
 
@@ -81,7 +80,7 @@ void lapic_enable(uintptr_t addr) {
 
     cpu_set_apic_base(addr);
 
-    map_page((void*)lapic_base, (void*)lapic_base, PG_STRONG_UC | PG_WRITE);
+    lapic_base = (uintptr_t)map_phys((void*)addr, 0x1000, PG_STRONG_UC | PG_WRITE);
 
     /* Set the Spurious Interrupt Vector Register bit 8 to start receiving interrupts */
     write_reg(0xF0, read_reg(0xF0) | 0x100);
@@ -106,7 +105,7 @@ int ap_init(u8 numcores)
     // copy the AP trampoline code to a fixed address in low memory
     memcpy((void*)0x8000, (void*)ap_tramp, 4096);
 
-    const u32 base = lapic_base;
+    const uintptr_t base = lapic_base;
     volatile u32 *const ap_select = (volatile u32* const)(base + ICR_SELECT);
     volatile u32 *const ipi_data = (volatile u32* const)(base + ICR_DATA);
 

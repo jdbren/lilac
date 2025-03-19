@@ -5,21 +5,18 @@
 #include <stdatomic.h>
 #include <string.h>
 
-#include <lilac/types.h>
-#include <lilac/config.h>
-#include <lilac/panic.h>
+#include <lilac/lilac.h>
 #include <lilac/elf.h>
 #include <lilac/fs.h>
 #include <lilac/sched.h>
 #include <lilac/timer.h>
-#include <lilac/log.h>
 #include <lilac/syscall.h>
 #include <lilac/mm.h>
 #include <mm/kmm.h>
 #include <mm/kmalloc.h>
 
 #define MAX_TASKS 1024
-#define INIT_STACK(KSTACK) ((u32)KSTACK + __KERNEL_STACK_SZ - sizeof(size_t))
+#define INIT_STACK(KSTACK) ((uintptr_t)KSTACK + __KERNEL_STACK_SZ - sizeof(size_t))
 
 static struct task tasks[MAX_TASKS];
 static int num_tasks;
@@ -38,20 +35,20 @@ static void start_process(void)
     struct file *file = vfs_open(path, 0, 0);
     if (!file) {
         klog(LOG_ERROR, "Failed to open file %s\n", path);
-        return;
+        kerror("File not found in start_process\n");
     }
 
-    struct elf_header *hdr = kzmalloc(0x1000);
-    int bytes = 0;
+    int bytes = file->f_dentry->d_inode->i_size;
+    struct elf_header *hdr = kzmalloc(bytes);
     klog(LOG_DEBUG, "Reading ELF file\n");
-    klog(LOG_DEBUG, "File size: %d\n", file->f_dentry->d_inode->i_size);
-    while(vfs_read(file, (u8*)hdr + bytes, 0x1000) > 0) {
-        bytes += 0x1000;
-        hdr = krealloc(hdr, bytes + 0x1000);
+    klog(LOG_DEBUG, "File size: %d\n", bytes);
+    if (vfs_read(file, (void*)hdr, bytes) != bytes) {
+        klog(LOG_ERROR, "Failed to read file %s\n", path);
+        kerror("Failed to read ELF file\n");
     }
 
     klog(LOG_DEBUG, "Parsing ELF file\n");
-    void *jmp = elf32_load(hdr, mem);
+    void *jmp = elf_load(hdr, mem);
     if (!jmp)
         kerror("Failed to load ELF file\n");
 
@@ -68,8 +65,8 @@ static void start_process(void)
     vma_list_insert(stack_desc, &mem->mmap);
 
     // Set up heap
-    mem->start_brk = 0x40000000UL;
-    mem->brk = 0x40000000UL;
+    mem->start_brk = __USER_BRK;
+    mem->brk = __USER_BRK;
 
     struct vm_desc *heap_desc = kzmalloc(sizeof(*heap_desc));
     heap_desc->mm = mem;
@@ -102,7 +99,7 @@ static void start_process(void)
     char **argv = (char**)(stack);
     for (; current->info.argv[argc] && argc < 31; argc++) {
         u32 len = strlen(current->info.argv[argc]) + 1;
-        len = (len + 3) & ~3; // Align stack
+        len = (len + sizeof(void*)-1) & ~(sizeof(void*)-1); // Align stack
         stack = (void*)((uintptr_t)stack - len);
         strcpy((char*)stack, current->info.argv[argc]);
         argv[argc] = (char*)stack;
@@ -114,12 +111,13 @@ static void start_process(void)
         klog(LOG_DEBUG, "Arg %d: %s\n", i, argv[i]);
     }
 
-    *--stack = (u32)argv;
+    assert(is_aligned(stack, sizeof(void*)));
+    *--stack = (uintptr_t)argv;
     *--stack = argc;
 
 skip:
     klog(LOG_DEBUG, "Going to user mode, jmp = %x\n", jmp);
-    jump_usermode(jmp, stack, current->kstack);
+    jump_usermode(jmp, (void*)stack, current->kstack);
 }
 
 /*
@@ -233,7 +231,7 @@ __noreturn void exec_and_return(void)
 
     jump_new_proc(task);
     klog(LOG_FATAL, "exec_and_return: Should never be reached\n");
-    __builtin_unreachable();
+    unreachable();
 }
 
 int do_execve(const char *path, char *const argv[], char *const envp[])
@@ -242,17 +240,16 @@ int do_execve(const char *path, char *const argv[], char *const envp[])
     int i;
     struct file *file = vfs_open(path, 0, 0);
 
-    if (!file) {
+    if (IS_ERR_OR_NULL(file)) {
         klog(LOG_ERROR, "file %s not found\n", path);
-        return -1;
+        return PTR_ERR(file);
     } else {
         vfs_close(file);
     }
 
     if (info->path)
         kfree((void*)info->path);
-    info->path = kzmalloc(strlen(path) + 1);
-    strcpy((char*)info->path, path);
+    info->path = path;
 
     if (info->argv) {
         for (i = 0; info->argv[i]; i++)
@@ -276,7 +273,18 @@ int do_execve(const char *path, char *const argv[], char *const envp[])
 
 SYSCALL_DECL3(execve, const char*, path, char* const*, argv, char* const*, envp)
 {
-    return do_execve(path, argv, envp);
+    int err;
+    char *path_buf = kmalloc(256);
+    if (!path_buf)
+        return -ENOMEM;
+
+    err = strncpy_from_user(path_buf, path, 255);
+    if (err < 0) {
+        kfree(path_buf);
+        return err;
+    }
+
+    return do_execve(path_buf, argv, envp);
 }
 
 void cleanup_task(struct task *task)

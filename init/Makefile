@@ -1,6 +1,6 @@
 CFLAGS=-ffreestanding -I ../libc/include -nostdlib -lgcc
 ifdef CONFIG_x86_64-elf
-CFLAGS+=-DARCH_x86_64
+CFLAGS+=-DARCH_x86_64 -mgeneral-regs-only
 endif
 
 OBJS=crt0.o main.o
