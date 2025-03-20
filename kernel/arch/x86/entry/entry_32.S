@@ -3,7 +3,7 @@
 #define __ASSEMBLY__
 #include <asm/segments.h>
 
-#include "macros.h"
+#include "macros.S"
 
 .equ TASK_PGD_OFFSET, 12
 .equ TASK_PC_OFFSET, 16

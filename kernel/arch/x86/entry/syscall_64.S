@@ -4,7 +4,7 @@
 #include <asm/segments.h>
 #include <asm/gdt.h>
 
-#include "macros.h"
+#include "macros.S"
 
 .text
 .globl syscall_handler
@@ -12,14 +12,14 @@ syscall_handler:
 	# already on stack: ss, sp, flags, cs, ip.
 	PUSH_REGS
 
-    # set up syscall
+	# set up syscall
 	mov  RSI(%rsp), %rcx
 
 	lea  syscall_table, %rbp
 	mov  (%rbp, %rax, 8), %rax
 	xor  %rbp, %rbp
 	call *%rax
-    # restore registers
+	# restore registers
 	POP_REGS pop_rax=0
 	iretq
 
@@ -43,13 +43,13 @@ syscall_entry:
 	push %rcx         # rip
 	PUSH_REGS
 
-    # set up syscall
+	# set up syscall
 	mov  R10(%rsp), %rcx # C ABI expects 4th arg in rcx
 	lea  syscall_table, %rbp
 	mov  (%rbp, %rax, 8), %rax
 	xor  %rbp, %rbp
 	call *%rax
-    # restore registers
+	# restore registers
 	POP_REGS pop_rax=0
 	add $40, %rsp # remove ss, sp, flags, cs, ip since using sysret
 

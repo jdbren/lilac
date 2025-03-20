@@ -3,7 +3,7 @@
 #define __ASSEMBLY__
 #include <asm/segments.h>
 
-#include "macros.h"
+#include "macros.S"
 
 .text
 .globl syscall_handler

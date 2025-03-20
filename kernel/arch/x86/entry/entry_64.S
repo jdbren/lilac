@@ -3,7 +3,7 @@
 #define __ASSEMBLY__
 #include <asm/segments.h>
 
-#include "macros.h"
+#include "macros.S"
 
 .equ TASK_PGD_OFFSET,    16
 .equ TASK_PC_OFFSET,     24
@@ -46,34 +46,34 @@ jump_usermode:
 .type arch_context_switch, @function
 .globl arch_context_switch
 arch_context_switch:
-	push   	%rbp
-	mov		%rsp, %rbp
-	push 	%r15
-	push 	%r14
-	push 	%r13
-	push 	%r12
-	push  	%rbx
+	push %rbp
+	mov  %rsp, %rbp
+	push %r15
+	push %r14
+	push %r13
+	push %r12
+	push %rbx
 
-	mov		%rdi, %r12
-	mov 	TASK_KSTACK_OFFSET(%rsi), %rdi
-	call  	set_tss_esp0
+	mov  %rdi, %r12
+	mov  TASK_KSTACK_OFFSET(%rsi), %rdi
+	call set_tss_esp0
 
 	pushf
-	mov 	%rsp, TASK_KSTACK_OFFSET(%r12)
-	mov 	TASK_PGD_OFFSET(%rsi), %rax
-	mov 	%rax, %cr3
-	mov 	TASK_KSTACK_OFFSET(%rsi), %rsp
-	movq 	$1f, TASK_PC_OFFSET(%r12)
-	push 	TASK_PC_OFFSET(%rsi)
+	mov  %rsp, TASK_KSTACK_OFFSET(%r12)
+	mov  TASK_PGD_OFFSET(%rsi), %rax
+	mov  %rax, %cr3
+	mov  TASK_KSTACK_OFFSET(%rsi), %rsp
+	movq $1f, TASK_PC_OFFSET(%r12)
+	push TASK_PC_OFFSET(%rsi)
 	ret
 
 1:	popf
-	pop 	%rbx
-	pop 	%r12
-	pop 	%r13
-	pop 	%r14
-	pop 	%r15
-	pop 	%rbp
+	pop  %rbx
+	pop  %r12
+	pop  %r13
+	pop  %r14
+	pop  %r15
+	pop  %rbp
 	ret
 
 .section .rodata

@@ -1,22 +1,22 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #define __ASSEMBLY__
-#include "macros.h"
+#include "macros.S"
 
 #ifdef ARCH_x86_64
 .macro isr_err name
 	.extern \name\()_handler
 	.global \name
 	\name:
-	push 	%rbp
-	mov 	%rsp, %rbp
+	push %rbp
+	mov  %rsp, %rbp
 	PUSH_REGS
-	lea 	16(%rbp), %rsi # interrupt stack frame
-	mov 	8(%rbp), %rdi  # error code
-	call 	\name\()_handler
-	addq  	$8, %rsp # pop err code
+	lea  16(%rbp), %rsi # interrupt stack frame
+	mov   8(%rbp), %rdi  # error code
+	call \name\()_handler
+	addq $8, %rsp # pop err code
 	POP_REGS
-	pop 	%rbp
+	pop  %rbp
 	iretq
 .endm
 
@@ -24,13 +24,13 @@
 	.extern \name\()_handler
 	.global \name
 	\name:
-	push 	%rbp
-	mov 	%rsp, %rbp
+	push %rbp
+	mov  %rsp, %rbp
 	PUSH_REGS
-	mov 	8(%rbp), %rdi 	# interrupt stack frame
-	call 	\name\()_handler
+	mov  8(%rbp), %rdi   # interrupt stack frame
+	call \name\()_handler
 	POP_REGS
-	pop 	%rbp
+	pop  %rbp
 	iretq
 .endm
 #else // ARCH_x86
