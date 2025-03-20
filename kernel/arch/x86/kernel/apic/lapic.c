@@ -10,6 +10,7 @@
 #include "timer.h"
 #include "idt.h"
 #include "apic.h"
+#include "paging.h"
 
 #define IA32_APIC_BASE_MSR 0x1B
 #define IA32_APIC_BASE_MSR_BSP 0x100
@@ -103,7 +104,9 @@ int ap_init(u8 numcores)
 
     bspid = get_lapic_id();
     // copy the AP trampoline code to a fixed address in low memory
-    memcpy((void*)0x8000, (void*)ap_tramp, 4096);
+
+    void *tmp = map_phys((void*)0x8000, PAGE_SIZE, PG_WRITE);
+    memcpy(tmp, (void*)ap_tramp, PAGE_SIZE);
 
     const uintptr_t base = lapic_base;
     volatile u32 *const ap_select = (volatile u32* const)(base + ICR_SELECT);

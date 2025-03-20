@@ -14,7 +14,6 @@
 #include "asm/regs.h"
 
 extern const u32 _kernel_end;
-static const int KERNEL_FIRST_PT = PG_DIR_INDEX(0xc0000000);
 
 static u32 *const pd = (u32*)0xFFFFF000UL;
 
@@ -39,6 +38,7 @@ static void print_page_structs(u32 *cr3)
     }
 }
 
+#ifndef ARCH_x86_64
 static struct mm_info * make_32_bit_mmap()
 {
     volatile uintptr_t *cr3 = map_phys(alloc_frame(), PAGE_BYTES, PG_WRITE);
@@ -51,7 +51,7 @@ static struct mm_info * make_32_bit_mmap()
     void *kstack = kvirtual_alloc(__KERNEL_STACK_SZ, PG_WRITE);
 
     // Map kernel space
-    for (int i = KERNEL_FIRST_PT; i < 1023; i++)
+    for (int i = PG_DIR_INDEX(0xc0000000); i < 1023; i++)
         cr3[i] = pd[i];
 
     struct mm_info *info = kzmalloc(sizeof *info);
@@ -62,6 +62,7 @@ static struct mm_info * make_32_bit_mmap()
 
     return info;
 }
+#endif
 
 #ifdef ARCH_x86_64
 static struct mm_info * make_64_bit_mmap()
@@ -82,10 +83,11 @@ static struct mm_info * make_64_bit_mmap() {}
 
 struct mm_info * arch_process_mmap(bool is_64_bit)
 {
-    if (is_64_bit)
-        return make_64_bit_mmap();
-    else
-        return make_32_bit_mmap();
+#ifdef ARCH_x86_64
+    return make_64_bit_mmap();
+#else
+    return make_32_bit_mmap();
+#endif
 }
 
 void arch_unmap_all_user_vm(struct mm_info *info)
@@ -116,6 +118,55 @@ void * arch_user_stack(void)
     return stack;
 }
 
+#ifdef ARCH_x86_64
+struct mm_info *arch_copy_mmap(struct mm_info *parent)
+{
+    struct mm_info *child = arch_process_mmap(sizeof(void*) == 8);
+    child->start_code = parent->start_code;
+    child->end_code = parent->end_code;
+    child->start_data = parent->start_data;
+    child->end_data = parent->end_data;
+    child->start_brk = parent->start_brk;
+    child->brk = parent->brk;
+    child->start_stack = parent->start_stack;
+    child->total_vm = parent->total_vm;
+    u64 *cr3 = (void*)(phys_mem_mapping + child->pgd);
+
+    struct vm_desc *desc = parent->mmap;
+    while (desc) {
+        struct vm_desc *new_desc = kzmalloc(sizeof *new_desc);
+        memcpy(new_desc, desc, sizeof *desc);
+        new_desc->mm = child;
+        new_desc->vm_next = NULL;
+        vma_list_insert(new_desc, &child->mmap);
+        desc = desc->vm_next;
+
+        int num_pages = PAGE_ROUND_UP(new_desc->end - new_desc->start) / PAGE_SIZE;
+        void *phys = alloc_frames(num_pages);
+
+        // Copy data
+        void *tmp_virt = phys_mem_mapping + (uintptr_t)phys;
+        memcpy(tmp_virt, (void*)new_desc->start, num_pages * PAGE_SIZE);
+
+        int flags = PG_USER | PG_PRESENT;
+
+        for (int i = 0; i < num_pages; i++) {
+            void *virt = (void*)(new_desc->start + i * PAGE_SIZE);
+            pml4e_t *pml4 = (pml4e_t*)cr3;
+            pdpte_t *pdpt = get_or_alloc_pdpt(pml4, virt, flags | PG_WRITE);
+            pde_t *pd = get_or_alloc_pd(pdpt, virt, flags | PG_WRITE);
+            pte_t *pt = get_or_alloc_pt(pd, virt, flags | PG_WRITE);
+
+            if (new_desc->vm_prot & PROT_WRITE)
+                flags |= PG_WRITE;
+
+            pt[get_pt_index(virt)] = ((uintptr_t)phys + i * PAGE_SIZE) | flags;
+        }
+    }
+
+    return child;
+}
+#else
 struct mm_info *arch_copy_mmap(struct mm_info *parent)
 {
     struct mm_info *child = arch_process_mmap(sizeof(void*) == 8);
@@ -167,6 +218,7 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
 
     return child;
 }
+#endif
 
 int arch_do_fork(struct regs_state *regs)
 {

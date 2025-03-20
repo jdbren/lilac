@@ -9,23 +9,6 @@
 
 #define MAX_PHYS_ADDR 0x0000ffffffffffffUL
 
-#define get_pml4_index(x) ((uintptr_t)(x) >> 39 & 0x1FF)
-#define get_pdpt_index(x) ((uintptr_t)(x) >> 30 & 0x1FF)
-#define get_pd_index(x) ((uintptr_t)(x) >> 21 & 0x1FF)
-#define get_pt_index(x) ((uintptr_t)(x) >> 12 & 0x1FF)
-#define get_page_offset(x) ((uintptr_t)(x) & 0xfff)
-
-#ifdef ARCH_x86_64
-typedef u64 pml4e_t;
-typedef u64 pdpte_t;
-typedef u64 pde_t;
-typedef u64 pte_t;
-#else
-typedef u32 pdpte_t;
-typedef u32 pde_t;
-typedef u32 pte_t;
-#endif
-
 #define ENTRY_ADDR(x) (phys_mem_mapping + (((x) & ~0xffful) & MAX_PHYS_ADDR))
 #define ENTRY_PRESENT(x) ((x) & 1)
 
@@ -35,7 +18,7 @@ typedef u32 pte_t;
    asm volatile("invlpg (%0)" : : "r"((uintptr_t)addr) : "memory");
 
 // Maps all of physical memory
-u8 *const phys_mem_mapping = (u8*)__PHYS_MAP_ADDR;
+u8 *const phys_mem_mapping = (void*)__PHYS_MAP_ADDR;
 
 uintptr_t arch_get_pgd(void)
 {
@@ -44,49 +27,52 @@ uintptr_t arch_get_pgd(void)
     return cr3;
 }
 
+pdpte_t * get_or_alloc_pdpt(pml4e_t *pml4, void *virt, u16 flags)
+{
+    u32 pml4_ndx = get_pml4_index(virt);
+    if (!ENTRY_PRESENT(pml4[pml4_ndx])) {
+        pml4[pml4_ndx] = (uintptr_t)alloc_frame() | flags;
+        memset((void*)ENTRY_ADDR(pml4[pml4_ndx]), 0, PAGE_BYTES);
+    }
+    return (pdpte_t*)ENTRY_ADDR(pml4[pml4_ndx]);
+}
+
+pde_t * get_or_alloc_pd(pdpte_t *pdpt, void *virt, u16 flags)
+{
+    u32 pdpt_ndx = get_pdpt_index(virt);
+    if (!ENTRY_PRESENT(pdpt[pdpt_ndx])) {
+        pdpt[pdpt_ndx] = (uintptr_t)alloc_frame() | flags;
+        memset((void*)ENTRY_ADDR(pdpt[pdpt_ndx]), 0, PAGE_BYTES);
+    }
+    return (pde_t*)ENTRY_ADDR(pdpt[pdpt_ndx]);
+}
+
+pte_t * get_or_alloc_pt(pde_t *pd, void *virt, u16 flags)
+{
+    u32 pd_ndx = get_pd_index(virt);
+    if (!ENTRY_PRESENT(pd[pd_ndx])) {
+        pd[pd_ndx] = (uintptr_t)alloc_frame() | flags;
+        memset((void*)ENTRY_ADDR(pd[pd_ndx]), 0, PAGE_BYTES);
+    }
+    return (pte_t*)ENTRY_ADDR(pd[pd_ndx]);
+}
 
 int map_pages(void *phys, void *virt, u16 flags, int num_pages)
 {
-    flags |= 1;
+    flags |= PG_PRESENT;
     for (int i = 0; i < num_pages; i++, phys = (u8*)phys + PAGE_BYTES,
     virt = (u8*)virt + PAGE_BYTES) {
         pml4e_t *pml4 = (pml4e_t*)ENTRY_ADDR(arch_get_pgd());
+        pdpte_t *pdpt = get_or_alloc_pdpt(pml4, virt, flags);
+        pde_t *pd = get_or_alloc_pd(pdpt, virt, flags);
+        pte_t *pt = get_or_alloc_pt(pd, virt, flags);
 
-        u32 pml4_ndx = get_pml4_index(virt);
-        u32 pdpt_ndx = get_pdpt_index(virt);
-        u32 pd_ndx = get_pd_index(virt);
         u32 pt_ndx = get_pt_index(virt);
-
-        pdpte_t *pdpt;
-        if (!ENTRY_PRESENT(pml4[pml4_ndx])) {
-            klog(LOG_DEBUG, "allocating pdpt for %x\n", virt);
-            pml4[pml4_ndx] = (uintptr_t)alloc_frame() | flags;
-            pml4[pml4_ndx] |= flags;
-        }
-        pdpt = (pdpte_t*)ENTRY_ADDR(pml4[pml4_ndx]);
-
-        pde_t *pd;
-        if (!ENTRY_PRESENT(pdpt[pdpt_ndx])) {
-            klog(LOG_DEBUG, "allocating pd for %x\n", virt);
-            pdpt[pdpt_ndx] = (uintptr_t)alloc_frame() | flags;
-            pdpt[pdpt_ndx] |= flags;
-        }
-        pd = (pde_t*)ENTRY_ADDR(pdpt[pdpt_ndx]);
-
-        pte_t *pt;
-        if (!ENTRY_PRESENT(pd[pd_ndx])) {
-            klog(LOG_DEBUG, "allocating pt for %x\n", virt);
-            pd[pd_ndx] = (uintptr_t)alloc_frame() | flags;
-            pd[pd_ndx] |= flags;
-        }
-        pt = (pte_t*)ENTRY_ADDR(pd[pd_ndx]);
-
         if (ENTRY_PRESENT(pt[pt_ndx])) {
             klog(LOG_ERROR, "page %p already mapped\n", virt);
             kerror("");
         }
         pt[pt_ndx] = (uintptr_t)phys | flags;
-        pt[pt_ndx] |= flags;
         __native_flush_tlb_single(virt);
     }
     return 0;
@@ -177,6 +163,10 @@ int kernel_pt_init(uintptr_t start, uintptr_t end)
         }
         start += 0x40000000UL;
     }
+
+    // Unmap the identity mapping
+    pml4[0] = 0;
+    __native_flush_tlb_single(0);
 }
 
 void *get_physaddr(void *virt)

@@ -211,6 +211,7 @@ int vprintf(const char *restrict format, va_list args)
                 return -1;
             written += len;
         }
+        /*
         else if (*format == 'f') {
             format++;
             double f = va_arg(args, double);
@@ -229,7 +230,7 @@ int vprintf(const char *restrict format, va_list args)
             if (!print(s, len))
                 return -1;
             written += len;
-        }
+        } */
         else if (*format == 'l') {
             format++;
             if (*format == 'l') {

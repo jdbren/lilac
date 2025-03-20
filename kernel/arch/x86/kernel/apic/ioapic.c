@@ -6,8 +6,8 @@
 #include <lilac/log.h>
 #include <acpi/madt.h>
 #include <mm/kmalloc.h>
+#include <mm/kmm.h>
 #include "apic.h"
-#include "paging.h"
 #include "pic.h"
 
 #define IOAPIC_REGSEL     0x0
@@ -57,7 +57,8 @@ static inline u32 read_reg(const u8 offset)
 void ioapic_init(struct ioapic *ioapic, struct int_override *over, u8 num_over)
 {
     pic_disable();
-    ioapic_base = ioapic->address;
+    ioapic_base = (uintptr_t)map_phys((void*)ioapic->address, PAGE_SIZE,
+        PG_STRONG_UC | PG_WRITE);
     ioapic_gsi_base = ioapic->gsi_base;
     num_overrides = num_over;
     overrides = kcalloc(num_over, sizeof(struct int_override));
@@ -65,7 +66,6 @@ void ioapic_init(struct ioapic *ioapic, struct int_override *over, u8 num_over)
         memcpy(overrides + i, over, sizeof(struct int_override));
         overrides[i].next = 0;
     }
-    map_page((void*)ioapic_base, (void*)ioapic_base, PG_STRONG_UC | PG_WRITE);
     kstatus(STATUS_OK, "IOAPIC initialized\n");
 }
 

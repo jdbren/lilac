@@ -2,7 +2,7 @@
 .globl _start
 #ifdef ARCH_x86_64
 _start:
-	mov 	8(%rsp), %esi # argv
+	mov 	8(%rsp), %rsi # argv
 	mov 	(%rsp), %rdi  # argc
 
 	xor 	%rbp, %rbp    # mark the end of stack frames

@@ -18,10 +18,9 @@ jump_usermode:
 	cli
 	push %rbp
 	mov  %rsp, %rbp
-	push %rdi
+	mov  %rdi, %r8		# store entry address
 	mov  %rdx, %rdi
 	call set_tss_esp0
-	pop  %rdi
 	movq $(__USER_DS | 0x3), %rax 	# ring 3 data
 	mov  %ax, %ds
 	mov  %ax, %es
@@ -30,13 +29,13 @@ jump_usermode:
 
 	# set up iret stack frame
 	push %rax 			 	# ss
-	push %rsi 			 	# esp
+	push %rsi 			 	# sp
 	pushfq
 	mov  (%rsp), %rax
-	or   $0x200, %rax
-	mov  %rax, (%rsp)	 	# eflags
+	or   $0x200, %rax		# set IF
+	mov  %rax, (%rsp)	 	# flags
 	pushq $__USER_CS | 0x3 	# cs (ring 3)
-	push %rdi			 	# eip
+	push %r8			 	# ip
 
 	CLEAR_REGS
 
@@ -55,28 +54,16 @@ arch_context_switch:
 	push 	%r12
 	push  	%rbx
 
-	// leal   	0x3e(%ebx), %edx
-	// leal    0x3e(%esi), %eax
-/*
-	pushl   $0x0
-	pushl   %edx
-	pushl  	%eax
-	pushl	$.ct_string
-	pushl  	$0x0
-	call	klog
-	addl    $0x14, %esp
-*/
 	mov		%rdi, %r12
-	mov 	TASK_KSTACK_OFFSET(%rdi), %rdi
+	mov 	TASK_KSTACK_OFFSET(%rsi), %rdi
 	call  	set_tss_esp0
-	mov		%r12, %rdi
 
 	pushf
-	mov 	%rsp, TASK_KSTACK_OFFSET(%rdi)
+	mov 	%rsp, TASK_KSTACK_OFFSET(%r12)
 	mov 	TASK_PGD_OFFSET(%rsi), %rax
 	mov 	%rax, %cr3
 	mov 	TASK_KSTACK_OFFSET(%rsi), %rsp
-	movq 	$1f, TASK_PC_OFFSET(%rdi)
+	movq 	$1f, TASK_PC_OFFSET(%r12)
 	push 	TASK_PC_OFFSET(%rsi)
 	ret
 
@@ -104,7 +91,10 @@ int arch_return_from_fork(void *regs);
 .globl arch_return_from_fork
 .type arch_return_from_fork, @function
 arch_return_from_fork:
-	mov %rdi, %rax
+	mov %rdi, %r8
+	mov RSP(%r8), %rdi
+	call set_tss_esp0
+	mov %r8, %rax
 
 	RESTORE_REGS
 

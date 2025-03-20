@@ -10,9 +10,29 @@
 #define is_aligned(POINTER, BYTE_COUNT) \
     (((uintptr_t)(POINTER)) % (BYTE_COUNT) == 0)
 
+#ifdef ARCH_x86_64
+typedef u64 pml4e_t;
+typedef u64 pdpte_t;
+typedef u64 pde_t;
+typedef u64 pte_t;
+#else
+typedef u32 pdpte_t;
+typedef u32 pde_t;
+typedef u32 pte_t;
+#endif
+
+#ifdef ARCH_x86_64
+#define get_pml4_index(x) ((uintptr_t)(x) >> 39 & 0x1FF)
+#define get_pdpt_index(x) ((uintptr_t)(x) >> 30 & 0x1FF)
+#define get_pd_index(x) ((uintptr_t)(x) >> 21 & 0x1FF)
+#define get_pt_index(x) ((uintptr_t)(x) >> 12 & 0x1FF)
+#define get_page_offset(x) ((uintptr_t)(x) & 0xfff)
+#else
 #define PG_DIR_INDEX(x) (((x) >> 22) & 0x3FF)
 #define PG_TABLE_INDEX(x) (((x) >> 12) & 0x3FF)
+#endif
 
+#define PG_PRESENT         0x1
 #define PG_READ            0x0
 #define PG_WRITE           0x2
 #define PG_SUPER           0x0
@@ -24,6 +44,8 @@
 #define PG_HUGE_PAGE       0x80
 
 #define PG_STRONG_UC (PG_CACHE_DISABLE | PG_WRITE_THROUGH)
+
+extern u8 *const phys_mem_mapping;
 
 int kernel_pt_init(uintptr_t start, uintptr_t end);
 
@@ -42,7 +64,12 @@ static inline int unmap_page(void *virtualaddr)
 }
 
 void init_phys_mem_mapping(size_t memory_sz_kb);
-
 int __map_frame_bm(void *physaddr, void *virtualaddr);
+
+#ifdef ARCH_x86_64
+pdpte_t * get_or_alloc_pdpt(pml4e_t *pml4, void *virt, u16 flags);
+#endif
+pde_t * get_or_alloc_pd(pdpte_t *pdpt, void *virt, u16 flags);
+pte_t * get_or_alloc_pt(pde_t *pd, void *virt, u16 flags);
 
 #endif

@@ -65,6 +65,15 @@ void sched_clock_init(void)
 
 static void context_switch(struct task *prev, struct task *next)
 {
+    register uintptr_t rsp asm("rsp");
+    klog(LOG_DEBUG, "Switching from task %d to task %d\n", prev->pid, next->pid);
+    klog(LOG_DEBUG, "Current stack pointer: %p\n", rsp);
+    klog(LOG_DEBUG, "Previous task info: \n");
+    klog(LOG_DEBUG, "\tPID: %d\n", prev->pid);
+    klog(LOG_DEBUG, "\tPPID: %d\n", prev->ppid);
+    klog(LOG_DEBUG, "\tPGD: %p\n", prev->pgd);
+    klog(LOG_DEBUG, "\tPC: %p\n", prev->pc);
+    klog(LOG_DEBUG, "\tStack: %p\n", prev->kstack);
     klog(LOG_DEBUG, "Next task info: \n");
     klog(LOG_DEBUG, "\tPID: %d\n", next->pid);
     klog(LOG_DEBUG, "\tPPID: %d\n", next->ppid);
@@ -129,11 +138,9 @@ long waitpid(int pid)
 {
     int i = find_by_pid(pid);
     if (i == -1)
-        return -1;
+        return -ECHILD;
     struct task *task = task_queue[i];
     klog(LOG_DEBUG, "Process %d: Waiting for task %d\n", get_pid(), pid);
-    if (task == NULL)
-        return -1;
     while (task->state != TASK_DEAD)
         yield();
     klog(LOG_DEBUG, "Task %d has exited, continuing task %d\n", pid, get_pid());

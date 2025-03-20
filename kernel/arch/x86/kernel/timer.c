@@ -35,23 +35,23 @@ volatile u32 timer_cnt;
 extern volatile u32 system_timer_fractions;
 extern volatile u32 system_timer_ms;
 
-volatile u64 *hpet_base;
+uintptr_t hpet_base;
 u32 hpet_clk_period;
 u64 hpet_frq;
 
 static u64 read_reg(const u32 offset)
 {
-    return *(volatile u64*)((u32)hpet_base + offset);
+    return *(volatile u64*)(hpet_base + offset);
 }
 
 static u32 read_reg32(const u32 offset)
 {
-    return *(volatile u32*)((u32)hpet_base + offset);
+    return *(volatile u32*)(hpet_base + offset);
 }
 
 static void write_reg(const u32 offset, const u64 val)
 {
-    *(volatile u64*)((u32)hpet_base + offset) = val;
+    *(volatile u64*)(hpet_base + offset) = val;
 }
 
 // time in ms
@@ -62,8 +62,8 @@ void hpet_init(u32 time, struct hpet_info *info)
 
     u32 desired_freq = 1000 / time; // in Hz
 
-    hpet_base = (volatile u64*)(uintptr_t)info->address;
-    map_to_self((void*)hpet_base, 0x1000, PG_WRITE | PG_STRONG_UC);
+    hpet_base = (uintptr_t)map_phys((void*)info->address, PAGE_SIZE,
+        PG_WRITE | PG_STRONG_UC);
 
     struct hpet_id_reg *id = (struct hpet_id_reg*)hpet_base;
     hpet_clk_period = id->counter_clk_period;
