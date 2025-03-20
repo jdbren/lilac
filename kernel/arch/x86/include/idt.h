@@ -5,7 +5,7 @@
 
 #include <lilac/types.h>
 
-#define INT_GATE 0x8E
+#define INT_GATE  0x8E
 #define TRAP_GATE 0x8F
 #define TASK_GATE 0x85
 

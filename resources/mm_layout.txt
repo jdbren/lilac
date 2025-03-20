@@ -1,0 +1,25 @@
+Using the same cr3 for both kernel and user space,
+kernel uses half in high mem and half for user in low mem.
+
+Virtual memory in 64 bit using 4 level paging
+0x0000000000000000  pml4 indexes 0 to 255
+... /* USER MEM */
+0x0000_7fff_ffff_ffff
+
+0x0000_8000_0000_0000
+/* unused because they are for the kernel mappings */
+0x0000_ffff_ffff_ffff
+
+/* skip all non-canonical addresses */
+
+0xffff_0000_0000_0000
+/* unused because they are for the user mappings */
+0xffff_7fff_ffff_ffff
+
+0xffff_8000_0000_0000 /* BEGIN KERNEL MEM */
+0xffff_9000_0000_0000 /* physical memory mapping */
+0xffff_fffa_0000_0000 /* kernel heap memory */
+0xffff_fffb_0000_0000 /* end of kernel heap memory */
+0xffff_ffff_8000_0000 /* Kernel text mapping */
+0xffff_ffff_8020_0000 /* Unused */
+0xffff_ffff_ffff_ffff /* END KERNEL MEM */
