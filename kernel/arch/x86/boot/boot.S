@@ -93,14 +93,14 @@ _start:
 
 #ifdef ARCH_x86_64
 	movl 	$0x80000000, %eax
-    cpuid
-    cmpl 	$0x80000001, %eax
-    jb 		.invlboot
+	cpuid
+	cmpl 	$0x80000001, %eax
+	jb 		.invlboot
 
 	movl 	$0x80000001, %eax
-    cpuid
-    test 	$(1 << 29), %edx
-    jz 		.invlboot
+	cpuid
+	test 	$(1 << 29), %edx
+	jz 		.invlboot
 
 	jmp pa(startup_64)
 #else

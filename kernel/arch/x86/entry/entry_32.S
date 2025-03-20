@@ -66,21 +66,9 @@ arch_context_switch:
 
 	movl   	0x08(%ebp), %esi
 	movl   	0x0c(%ebp), %ebx
-/*
-	leal   	0x3e(%ebx), %edx
-	leal    0x3e(%esi), %eax
-
-	pushl   $0x0
-	pushl   %edx
-	pushl  	%eax
-	pushl	$.ct_string
-	pushl  	$0x0
-	call	klog
-	addl    $0x14, %esp
-*/
 
 	pushl   TASK_KSTACK_OFFSET(%ebx)
-	call  	set_tss_esp0
+	call    set_tss_esp0
 	addl    $0x4, %esp
 
 	pushf
@@ -88,7 +76,7 @@ arch_context_switch:
 	movl    TASK_PGD_OFFSET(%ebx), %eax
 	movl    %eax, %cr3
 	movl    TASK_KSTACK_OFFSET(%ebx), %esp
-	movl   	$1f, TASK_PC_OFFSET(%esi)
+	movl    $1f, TASK_PC_OFFSET(%esi)
 	pushl   TASK_PC_OFFSET(%ebx)
 	ret
 
@@ -96,7 +84,7 @@ arch_context_switch:
 	popl    %ebx
 	popl    %esi
 	popl    %edi
-	popl   	%ebp
+	popl    %ebp
 	ret
 
 .section .rodata
@@ -129,13 +117,13 @@ arch_return_from_fork:
 .globl jump_new_proc
 .type jump_new_proc, @function
 jump_new_proc:
-	pushl   TASK_KSTACK_OFFSET(%ebx)
-	call  	set_tss_esp0
-	addl    $0x4, %esp
+	push TASK_KSTACK_OFFSET(%ebx)
+	call set_tss_esp0
+	addl $0x4, %esp
 
-	mov 4(%esp), %esi
-	mov TASK_PGD_OFFSET(%esi), %eax
-	mov %eax, %cr3
-	mov TASK_KSTACK_OFFSET(%esi), %esp
+	mov  4(%esp), %esi
+	mov  TASK_PGD_OFFSET(%esi), %eax
+	mov  %eax, %cr3
+	mov  TASK_KSTACK_OFFSET(%esi), %esp
 	push TASK_PC_OFFSET(%esi)
 	ret

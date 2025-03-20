@@ -6,13 +6,12 @@
 #include <lilac/lilac.h>
 #include <lilac/timer.h>
 #include <mm/kmm.h>
-#include "msr.h"
+#include <asm/msr.h>
 #include "timer.h"
 #include "idt.h"
 #include "apic.h"
 #include "paging.h"
 
-#define IA32_APIC_BASE_MSR 0x1B
 #define IA32_APIC_BASE_MSR_BSP 0x100
 #define IA32_APIC_BASE_MSR_ENABLE 0x800
 
@@ -71,8 +70,8 @@ static void cpu_set_apic_base(uintptr_t apic)
 #ifdef __PHYSICAL_MEMORY_EXTENSION__
     edx = (apic >> 32) & 0x0f;
 #endif
-    if (cpuHasMSR())
-        cpuSetMSR(IA32_APIC_BASE_MSR, eax, edx);
+    if (cpu_has_msr())
+        write_msr(IA32_APIC_BASE, eax, edx);
 }
 
 void lapic_enable(uintptr_t addr) {

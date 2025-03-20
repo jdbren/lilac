@@ -3,7 +3,11 @@
 #include <lilac/keyboard.h>
 #include <drivers/framebuffer.h>
 #include <mm/kmm.h>
+#include <asm/cpu-flags.h>
+#include <asm/msr.h>
+#include <asm/segments.h>
 
+#include "gdt.h"
 #include "idt.h"
 #include "paging.h"
 #include "apic.h"
@@ -22,6 +26,22 @@ uintptr_t page_directory;
 
 extern u32 mbinfo; // defined in boot asm
 
+static void syscall_init(void)
+{
+    extern void syscall_entry();
+    write_msr(IA32_STAR, 0, __KERNEL_CS | (__USER_CS << 16));
+    write_msr(IA32_LSTAR, (u32)syscall_entry, (u32)((uintptr_t)syscall_entry >> 32));
+    write_msr(IA32_FMASK,
+        X86_FLAGS_CF|X86_FLAGS_PF|X86_FLAGS_AF|
+        X86_FLAGS_ZF|X86_FLAGS_SF|X86_FLAGS_TF|
+        X86_FLAGS_IF|X86_FLAGS_DF|X86_FLAGS_OF|
+        X86_FLAGS_IOPL|X86_FLAGS_NT|X86_FLAGS_RF|
+        X86_FLAGS_AC|X86_FLAGS_ID, 0);
+
+    uintptr_t tss_ptr = (uintptr_t)get_tss();
+    write_msr(IA32_KERNEL_GS_BASE, (u32)tss_ptr, tss_ptr >> 32);
+}
+
 __no_stack_chk __no_ret
 void x86_64_kernel_early(void)
 {
@@ -33,9 +53,10 @@ void x86_64_kernel_early(void)
     acpi_early((void*)mbd.new_acpi->rsdp, &acpi);
     apic_init(acpi.madt);
     keyboard_init();
-    timer_init(1, acpi.hpet); // 1ms interval
+    timer_init(1, acpi.hpet);
     ap_init(acpi.madt->core_cnt);
     acpi_early_cleanup(&acpi);
+    syscall_init();
 
     start_kernel();
 

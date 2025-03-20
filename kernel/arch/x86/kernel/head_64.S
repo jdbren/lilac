@@ -3,6 +3,8 @@
 #define __ASSEMBLY__
 #include <lilac/config.h>
 #include <asm/segments.h>
+#include <asm/msr.h>
+#include <asm/cpu-flags.h>
 
 .text
 .globl startup_64
@@ -82,9 +84,9 @@ startup_64:
 	leal pa(boot_pml4), %edi
 	movl %edi, %cr3
 
-	# Set EFER.LME
-	movl $0xC0000080, %ecx
-	movl $(1 << 8), %eax
+	# Set EFER.LME and EFER.SCE
+	movl $IA32_EFER, %ecx
+	movl $(EFER_LME | EFER_SCE), %eax
 	xorl %edx, %edx
 	wrmsr
 
@@ -128,24 +130,29 @@ gdt_init:
 	call tss_init
 	ret
 
-.get_tss:
+.globl get_tss
+.type get_tss, @function
+// args: none
+// returns &tss, + ecx = cpu id in asm
+get_tss:
+	push %rbx
 	movl $1, %eax
 	cpuid
-	shr  $24, %ebx
-	lea  tss, %rcx
+	mov  %ebx, %ecx
+	shr  $24, %ecx
 	movq $0x68, %rax
-	mul  %rbx
-	add  %rcx, %rax
+	mul  %rcx
+	lea  tss(%rax), %rax
+	pop  %rbx
 	ret
 
 tss_init:
 	push %rbp
 	mov  %rsp, %rbp
-	push %rbx
 
-	call .get_tss # eax = &tss, ebx = cpu_id
+	call get_tss # eax = &tss, ecx = cpu_id
 
-	lea  gdt_entries+56(, %rbx, 8), %rdx   # TSS descriptor for this CPU
+	lea  gdt_entries+56(, %rcx, 8), %rdx   # TSS descriptor for this CPU
 	movq $0, 4(%rax)
 
 	# 16..31 base
@@ -168,11 +175,10 @@ tss_init:
 	movl %eax, (%rdx)
 
 	mov  $16, %eax
-	mul  %ebx  		# RPL 0 selector index
+	mul  %ecx  		# RPL 0 selector index
 	add  $7 * 8, %ax
 	ltr  %ax
 
-	pop  %rbx
 	pop  %rbp
 	ret
 
@@ -181,10 +187,8 @@ tss_init:
 set_tss_esp0:
 	push %rbp
 	mov  %rsp, %rbp
-	push %rbx
-	call .get_tss
+	call get_tss
 	movq  %rdi, 4(%rax)
-	pop  %rbx
 	pop  %rbp
 	ret
 

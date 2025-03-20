@@ -25,7 +25,59 @@
 #define SYS_dup 21
 #define SYS_pipe 22
 
+#ifdef ARCH_x86_64
+static inline long syscall0(long number)
+{
+    long ret;
+    asm volatile ("syscall" : "=a"(ret) : "a"(number));
+    return ret;
+}
 
+static inline long syscall1(long number, long arg0)
+{
+    long ret;
+    asm volatile ("syscall" : "=a"(ret) : "a"(number), "D"(arg0));
+    return ret;
+}
+
+static inline long syscall2(long number, long arg0, long arg1)
+{
+    long ret;
+    asm volatile ("syscall" : "=a"(ret) : "a"(number), "D"(arg0), "S"(arg1));
+    return ret;
+}
+
+static inline long syscall3(long number, long arg0, long arg1, long arg2)
+{
+    long ret;
+    asm volatile (
+        "syscall" : "=a"(ret) : "a"(number), "D"(arg0), "S"(arg1), "d"(arg2)
+    );
+    return ret;
+}
+
+static inline long syscall4(long number, long arg0, long arg1, long arg2,
+    long arg3)
+{
+    long ret;
+    asm volatile (
+        "syscall" : "=a"(ret) :
+        "a"(number), "D"(arg0), "S"(arg1), "d"(arg2), "r10"(arg3)
+    );
+    return ret;
+}
+
+static inline long syscall5(long number, long arg0, long arg1, long arg2,
+    long arg3, long arg4)
+{
+    long ret;
+    asm volatile(
+        "syscall" : "=a"(ret) :
+        "a"(number), "D"(arg0), "S"(arg1), "d"(arg2), "r10"(arg3), "r8"(arg4)
+    );
+    return ret;
+}
+#else /* 32-bit: */
 static inline long syscall0(long number)
 {
     long ret;
@@ -91,5 +143,6 @@ static inline long syscall5(long number, long arg0, long arg1, long arg2, long a
     );
     return ret;
 }
+#endif // ARCH_x86_64
 
 #endif // _LIBC_SYSCALL_H
