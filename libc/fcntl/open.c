@@ -3,5 +3,5 @@
 
 int open(const char *pathname, int flags)
 {
-    return syscall2(SYS_open, (long)pathname, flags);
+    return syscall3(SYS_open, (long)pathname, flags, 0);
 }

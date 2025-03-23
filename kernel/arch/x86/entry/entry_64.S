@@ -2,6 +2,7 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #define __ASSEMBLY__
 #include <asm/segments.h>
+#include <asm/msr.h>
 
 #include "macros.S"
 
@@ -21,11 +22,9 @@ jump_usermode:
 	mov  %rdi, %r8		# store entry address
 	mov  %rdx, %rdi
 	call set_tss_esp0
-	movq $(__USER_DS | 0x3), %rax 	# ring 3 data
+	mov  $__USER_DS, %ax 	# ring 3 data
 	mov  %ax, %ds
 	mov  %ax, %es
-	mov  %ax, %fs
-	mov  %ax, %gs
 
 	# set up iret stack frame
 	push %rax 			 	# ss
@@ -34,11 +33,16 @@ jump_usermode:
 	mov  (%rsp), %rax
 	or   $0x200, %rax		# set IF
 	mov  %rax, (%rsp)	 	# flags
-	pushq $__USER_CS | 0x3 	# cs (ring 3)
+	pushq $__USER_CS	 	# cs (ring 3)
 	push %r8			 	# ip
 
+	movl $IA32_GS_BASE, %ecx
+	rdmsr
+	testl %edx,%edx
+	jns 1f
+	swapgs
+1:
 	CLEAR_REGS
-
 	iretq
 
 // void arch_context_switch(struct task *prev, struct task *next)
@@ -81,9 +85,10 @@ arch_context_switch:
 	.asciz "Context switch from %s to %s\n"
 
 /*
-int arch_return_from_fork(void *regs);
+int arch_return_from_fork(void *regs, void *kstack);
 	Params:
 	rdi = ptr to regs
+	rsi = ptr to kstack
 
 	Jump to usermode in new process.
 */
@@ -92,10 +97,16 @@ int arch_return_from_fork(void *regs);
 .type arch_return_from_fork, @function
 arch_return_from_fork:
 	mov %rdi, %r8
-	mov RSP(%r8), %rdi
+	mov %rsi, %rdi
 	call set_tss_esp0
-	mov %r8, %rax
 
+	movl $IA32_GS_BASE, %ecx
+	rdmsr
+	testl %edx,%edx
+	jns 1f
+	swapgs
+1:
+	mov %r8, %rax
 	RESTORE_REGS
 
 	SET_IRET_STACK

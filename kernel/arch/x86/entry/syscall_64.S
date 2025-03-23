@@ -3,6 +3,7 @@
 #define __ASSEMBLY__
 #include <asm/segments.h>
 #include <asm/gdt.h>
+#include <asm/msr.h>
 
 #include "macros.S"
 
@@ -49,13 +50,22 @@ syscall_entry:
 	mov  (%rbp, %rax, 8), %rax
 	xor  %rbp, %rbp
 	call *%rax
+
+	mov  %rax,%rdi # save return value
+	movl $IA32_GS_BASE, %ecx
+	rdmsr
+	testl %edx,%edx
+	jns 1f 
+	swapgs
+1:
 	# restore registers
+	mov %rdi,%rax # restore return value
 	POP_REGS pop_rax=0
+	mov 24(%rsp), %rdi # user stack
 	add $40, %rsp # remove ss, sp, flags, cs, ip since using sysret
 
 	# prepare exit
-	mov %gs:TSS_rsp2, %rsp # switch back to user stack
-	swapgs
+	mov %rdi, %rsp
 	sysretq
 
 

@@ -198,7 +198,7 @@ void clone_process(struct task *parent, struct task *child)
 static void return_from_fork(void)
 {
     klog(LOG_DEBUG, "Returning from fork\n");
-    arch_return_from_fork(current->regs);
+    arch_return_from_fork(current->regs, current->kstack);
 }
 
 int do_fork(void)

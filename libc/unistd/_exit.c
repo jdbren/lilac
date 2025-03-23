@@ -4,6 +4,6 @@
 void __attribute__((noreturn)) _exit(int status)
 {
     while (1)
-        asm ("int $0x80" :: "a"(SYS_exit), "b"(status));
+        syscall1(SYS_exit, status);
     __builtin_unreachable();
 }

@@ -206,8 +206,8 @@ gdt_entries:
     .quad 0x00AF9A000000FFFF    # Kernel 64 bit code
 	.quad 0x00CF92000000FFFF    # Kernel data
 	.quad 0x00CFFA000000FFFF    # User 32 bit code
-    .quad 0x00AFFA000000FFFF    # User 64 bit code
 	.quad 0x00CFF2000000FFFF    # User data
+	.quad 0x00AFFA000000FFFF    # User 64 bit code
     # TSS
 	.rept 8
 	.quad 0x0000890000000067

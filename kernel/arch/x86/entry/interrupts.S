@@ -1,6 +1,9 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #define __ASSEMBLY__
+#include <asm/msr.h>
+#include <asm/regs.h>
+#include <asm/segments.h>
 #include "macros.S"
 
 #ifdef ARCH_x86_64
@@ -121,6 +124,16 @@ timer_handler:
 	call apic_eoi
 
 	call sched_tick
-
+#ifdef ARCH_x86_64
+	mov CS(%rsp), %ax
+	and $3, %ax
+	jz 2f
+	movl $IA32_GS_BASE, %ecx
+	rdmsr
+	testl %edx,%edx
+	jns 2f
+	swapgs
+2:
+#endif
 	POP_REGS
 	ret_from_irq

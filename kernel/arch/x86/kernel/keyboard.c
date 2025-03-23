@@ -3,6 +3,7 @@
 #include <lilac/keyboard.h>
 
 #include <asm/segments.h>
+#include <asm/msr.h>
 #include <lilac/log.h>
 #include <lilac/console.h>
 #include <drivers/framebuffer.h>
@@ -120,6 +121,14 @@ void keyboard_int(struct interrupt_frame *frame)
         if (console)
             console_intr((struct kbd_event){keycode, status});
     }
+#ifdef ARCH_x86_64
+    int gs_base_high, gs_base_low;
+    if (frame->cs & 3) {
+        read_msr(IA32_GS_BASE, &gs_base_low, &gs_base_high);
+        if (gs_base_high < 0)
+            asm ("swapgs");
+    }
+#endif
 }
 
 void keyboard_init(void)

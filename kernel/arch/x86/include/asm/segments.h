@@ -15,8 +15,8 @@
 #define GDT_ENTRY_KERN_CS   2
 #define GDT_ENTRY_KERN_DS   3
 #define GDT_ENTRY_USER_CS32 4
-#define GDT_ENTRY_USER_CS   5
-#define GDT_ENTRY_USER_DS   6
+#define GDT_ENTRY_USER_DS   5
+#define GDT_ENTRY_USER_CS   6
 #define GDT_ENTRY_TSS(cpu_num) (7 + (cpu_num))
 
 #define __KERNEL_CS32   (GDT_ENTRY_KERN_CS32*8)

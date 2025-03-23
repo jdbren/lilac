@@ -67,7 +67,7 @@ struct mm_info *arch_process_remap(struct mm_info *existing);
 void *arch_user_stack(void);
 void jump_new_proc(struct task *next);
 extern void jump_usermode(void *addr, void *ustack, void *kstack);
-extern int arch_return_from_fork(void *regs);
+extern int arch_return_from_fork(void *regs, void *kstack);
 void *arch_copy_regs(void *src);
 struct mm_info *arch_copy_mmap(struct mm_info *parent);
 

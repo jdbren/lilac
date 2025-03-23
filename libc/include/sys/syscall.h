@@ -29,21 +29,27 @@
 static inline long syscall0(long number)
 {
     long ret;
-    asm volatile ("syscall" : "=a"(ret) : "a"(number));
+    asm volatile ("syscall" : "=a"(ret) : "a"(number) : "rcx", "r11", "memory", "rdi");
     return ret;
 }
 
 static inline long syscall1(long number, long arg0)
 {
     long ret;
-    asm volatile ("syscall" : "=a"(ret) : "a"(number), "D"(arg0));
+    asm volatile (
+        "syscall" : "=a"(ret) : "a"(number), "D"(arg0)
+        : "rcx", "r11", "memory"
+    );
     return ret;
 }
 
 static inline long syscall2(long number, long arg0, long arg1)
 {
     long ret;
-    asm volatile ("syscall" : "=a"(ret) : "a"(number), "D"(arg0), "S"(arg1));
+    asm volatile (
+        "syscall" : "=a"(ret) : "a"(number), "D"(arg0), "S"(arg1)
+        : "rcx", "r11", "memory"
+    );
     return ret;
 }
 
@@ -52,6 +58,7 @@ static inline long syscall3(long number, long arg0, long arg1, long arg2)
     long ret;
     asm volatile (
         "syscall" : "=a"(ret) : "a"(number), "D"(arg0), "S"(arg1), "d"(arg2)
+        : "rcx", "r11", "memory"
     );
     return ret;
 }
@@ -61,8 +68,10 @@ static inline long syscall4(long number, long arg0, long arg1, long arg2,
 {
     long ret;
     asm volatile (
+        "mov %4, %r10\n\t"
         "syscall" : "=a"(ret) :
-        "a"(number), "D"(arg0), "S"(arg1), "d"(arg2), "r10"(arg3)
+        "a"(number), "D"(arg0), "S"(arg1), "d"(arg2), "r"(arg3)
+        : "rcx", "r11", "memory", "r10"
     );
     return ret;
 }
@@ -71,9 +80,12 @@ static inline long syscall5(long number, long arg0, long arg1, long arg2,
     long arg3, long arg4)
 {
     long ret;
-    asm volatile(
+    asm volatile (
+        "mov %4, %r10\n\t"
+        "mov %5, %r8\n\t"
         "syscall" : "=a"(ret) :
-        "a"(number), "D"(arg0), "S"(arg1), "d"(arg2), "r10"(arg3), "r8"(arg4)
+        "a"(number), "D"(arg0), "S"(arg1), "d"(arg2), "r"(arg3), "r"(arg4)
+        : "rcx", "r11", "memory", "r10", "r8"
     );
     return ret;
 }

@@ -29,7 +29,7 @@ extern u32 mbinfo; // defined in boot asm
 static void syscall_init(void)
 {
     extern void syscall_entry();
-    write_msr(IA32_STAR, 0, __KERNEL_CS | (__USER_CS << 16));
+    write_msr(IA32_STAR, 0, __KERNEL_CS | (__USER_CS32 << 16));
     write_msr(IA32_LSTAR, (u32)syscall_entry, (u32)((uintptr_t)syscall_entry >> 32));
     write_msr(IA32_FMASK,
         X86_FLAGS_CF|X86_FLAGS_PF|X86_FLAGS_AF|

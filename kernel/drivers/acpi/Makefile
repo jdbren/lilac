@@ -8,7 +8,8 @@ EXEC_PREFIX?=$(PREFIX)
 BOOTDIR?=$(EXEC_PREFIX)/boot
 INCLUDEDIR?=$(PREFIX)/include
 
-CFLAGS:=$(CFLAGS) -I../../include -Wno-unused-parameter
+CFLAGS:=$(CFLAGS) -I../../include -Wno-unused-parameter \
+	-Wno-unterminated-string-initialization
 LDFLAGS:=$(LDFLAGS)
 LIBS:=$(LIBS) -nostdlib -lk -lgcc
 

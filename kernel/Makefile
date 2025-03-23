@@ -14,7 +14,7 @@ INCLUDEDIR?=$(PREFIX)/include
 
 FLAGS=-D__lilac__ -D__is_kernel -Iinclude -ffreestanding -Wall -Wextra \
 	-Wno-unused-parameter -Wno-unused-function
-CFLAGS:=$(CFLAGS) $(FLAGS) -mno-red-zone -fanalyzer
+CFLAGS:=$(CFLAGS) $(FLAGS) -mno-red-zone
 CXXFLAGS:=$(CXXFLAGS) $(FLAGS) -fno-exceptions -fno-rtti
 LDFLAGS:=$(LDFLAGS)
 LIBS:=$(LIBS) -nostdlib -lgcc
