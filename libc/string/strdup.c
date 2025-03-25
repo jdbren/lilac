@@ -1,6 +1,6 @@
 #include <string.h>
 #if defined(__is_libk)
-#include <lilac/mm/kmalloc.h>
+#include <mm/kmalloc.h>
 #endif
 
 char *strdup(const char *str)

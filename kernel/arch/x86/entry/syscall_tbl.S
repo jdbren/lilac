@@ -1,8 +1,5 @@
 // Syscall table and defs
 
-sys_restart:
-	ret
-
 sys_restart_syscall:
 	ret
 
@@ -13,9 +10,6 @@ sys_time:
 	ret
 
 sys_stat:
-	ret
-
-sys_getpid:
 	ret
 
 sys_umount:

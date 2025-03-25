@@ -229,9 +229,9 @@ int arch_do_fork(struct regs_state *regs)
     return do_fork();
 }
 
-void *arch_copy_regs(void *src)
+void *arch_copy_regs(struct regs_state *src)
 {
     struct regs_state *regs = kzmalloc(sizeof *regs);
-    memcpy(regs, src, sizeof *regs);
+    *regs = *src;
     return regs;
 }

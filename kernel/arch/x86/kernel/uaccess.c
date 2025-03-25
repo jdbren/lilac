@@ -24,3 +24,15 @@ int arch_strncpy_from_user(char *dst, const char *src, size_t max_size)
     );
     return ret;
 }
+
+int arch_strnlen_user(const char *str, size_t max_size)
+{
+    int ret;
+    asm volatile (
+        "call x86_strnlen_user_asm\n\t"
+        :"=a"(ret)
+        :"D"(str), "S"(max_size)
+        :"memory"
+    );
+    return ret;
+}

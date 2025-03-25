@@ -92,9 +92,10 @@ arch_context_switch:
 	.asciz "Context switch from %s to %s\n"
 
 /*
-int arch_return_from_fork(void *regs);
+int arch_return_from_fork(void *regs, void *kstack);
 	Params:
 	4(%esp) = ptr to regs
+	8(%esp) = kernel stack
 
 	Jump to usermode in new process.
 */
@@ -102,9 +103,15 @@ int arch_return_from_fork(void *regs);
 .globl arch_return_from_fork
 .type arch_return_from_fork, @function
 arch_return_from_fork:
-	movl 4(%esp), %eax
+	push %ebp
+	mov %esp, %ebp
+
+	push 12(%ebp)
+	call set_tss_esp0
+	addl $4, %esp
 
 	# restore registers
+	movl 8(%ebp), %eax
 	RESTORE_REGS
 
 	# restore stack
@@ -117,7 +124,8 @@ arch_return_from_fork:
 .globl jump_new_proc
 .type jump_new_proc, @function
 jump_new_proc:
-	push TASK_KSTACK_OFFSET(%ebx)
+	mov 4(%esp), %eax
+	push TASK_KSTACK_OFFSET(%eax)
 	call set_tss_esp0
 	addl $0x4, %esp
 

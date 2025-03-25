@@ -6,6 +6,9 @@
 #include <lilac/types.h>
 #include <lilac/file.h>
 
+struct file;
+struct regs_state;
+
 #define TASK_RUNNING 0
 #define TASK_SLEEPING 1
 #define TASK_DEAD 2
@@ -14,6 +17,7 @@ struct task_info {
     const char *path;
     char **argv;
     char **envp;
+    struct file *exec_file;
 };
 
 struct fs_info {
@@ -68,7 +72,7 @@ void *arch_user_stack(void);
 void jump_new_proc(struct task *next);
 extern void jump_usermode(void *addr, void *ustack, void *kstack);
 extern int arch_return_from_fork(void *regs, void *kstack);
-void *arch_copy_regs(void *src);
+void *arch_copy_regs(struct regs_state *src);
 struct mm_info *arch_copy_mmap(struct mm_info *parent);
 
 #endif

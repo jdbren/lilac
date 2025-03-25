@@ -38,6 +38,7 @@ string/strcmp.o \
 string/strcat.o \
 string/strlen.o \
 string/strchr.o \
+string/strdup.o \
 math/log2.o \
 ctype/ctype.o \
 errno.o

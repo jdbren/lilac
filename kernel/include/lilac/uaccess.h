@@ -9,6 +9,7 @@
 
 extern int arch_user_copy(void *dst, const void *src, size_t size);
 extern int arch_strncpy_from_user(char *dst, const char *src, size_t max_size);
+extern int arch_strnlen_user(const char *str, size_t max_size);
 
 #define _is_code(addr, size, mm) \
     ((uintptr_t)(addr) >= mm->start_code && (uintptr_t)(addr) + size < mm->end_code)
@@ -75,9 +76,19 @@ static inline __must_check int strncpy_from_user(char *dst, const char *src, siz
         return ret;
     } else if (ret == 0 && dst[max_size] != '\0') {
         klog(LOG_WARN, "strncpy_from_user: string too long\n");
-        return -ENAMETOOLONG;
+        return -EINVAL;
     }
     return 0;
+}
+
+static inline __must_check size_t strnlen_user(const char *str, size_t max)
+{
+    struct mm_info *mm = current->mm;
+    if (!access_ok(str, 1, mm)) {
+        klog(LOG_WARN, "strnlen_user: str not accessible\n");
+        return -EFAULT;
+    }
+    return arch_strnlen_user(str, max);
 }
 
 #endif
