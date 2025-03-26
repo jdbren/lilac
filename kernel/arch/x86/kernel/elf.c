@@ -79,13 +79,13 @@ static void* elf32_load(void *elf, struct mm_info *mm)
         struct vm_desc *desc = kzmalloc(sizeof *desc);
 
         void *phys = alloc_frames(num_pages);
-	    void *vaddr = (void*)(phdr[i].p_vaddr & 0xFFFFF000);
+	    void *vaddr = (void*)(uintptr_t)(phdr[i].p_vaddr & 0xFFFFF000);
 
         map_pages(phys, vaddr, PG_USER | PG_WRITE, num_pages);
 
-	    memcpy((void*)phdr[i].p_vaddr, (u8*)elf + phdr[i].p_offset, phdr[i].p_filesz);
+	    memcpy((void*)(uintptr_t)phdr[i].p_vaddr, (u8*)elf + phdr[i].p_offset, phdr[i].p_filesz);
         if (phdr[i].p_filesz < phdr[i].p_memsz)
-            memset((void*)(phdr[i].p_vaddr + phdr[i].p_filesz), 0,
+            memset((void*)(uintptr_t)(phdr[i].p_vaddr + phdr[i].p_filesz), 0,
                     phdr[i].p_memsz - phdr[i].p_filesz);
 
         if (phdr[i].flags & WRIT) {
@@ -113,9 +113,10 @@ static void* elf32_load(void *elf, struct mm_info *mm)
         // vma_rb_insert(desc, &mm->mmap_rb);
     }
 
-    return (void*)hdr->elf32.entry;
+    return (void*)(uintptr_t)hdr->elf32.entry;
 }
 
+#ifdef ARCH_x86_64
 static void * elf64_load(void *elf, struct mm_info *mm)
 {
     struct elf_header *hdr = (struct elf_header*)elf;
@@ -186,6 +187,9 @@ static void * elf64_load(void *elf, struct mm_info *mm)
 
     return (void*)hdr->elf64.entry;
 }
+#else
+static void * elf64_load(void *elf, struct mm_info *mm) { return NULL; }
+#endif
 
 void * elf_load(struct elf_header *elf, struct mm_info *mm)
 {

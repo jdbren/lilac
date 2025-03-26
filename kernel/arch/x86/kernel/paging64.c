@@ -130,7 +130,7 @@ void init_phys_mem_mapping(size_t memory_sz_kb)
     // Get mem size in GB
     u32 mem_size_gb = memory_sz_kb / (1024 * 1024);
 
-    for (int i = 0; i <= mem_size_gb; i++) {
+    for (u32 i = 0; i <= mem_size_gb; i++) {
         u32 pdpt_ndx = get_pdpt_index(i*0x40000000UL);
         phys_map_pdpt[pdpt_ndx] = (pdpte_t)((i*0x40000000UL) | PG_WRITE |
             PG_STRONG_UC | PG_HUGE_PAGE | 1);
@@ -167,6 +167,7 @@ int kernel_pt_init(uintptr_t start, uintptr_t end)
     // Unmap the identity mapping
     pml4[0] = 0;
     __native_flush_tlb_single(0);
+    return 0;
 }
 
 void *get_physaddr(void *virt)

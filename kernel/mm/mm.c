@@ -16,7 +16,6 @@ void* mmap_internal(void *addr, unsigned long len, u32 prot, u32 flags,
         vma_list = vma_list->vm_next;
     }
 
-    struct vm_desc *vma = kmalloc(sizeof(struct vm_desc));
     return NULL;
 }
 

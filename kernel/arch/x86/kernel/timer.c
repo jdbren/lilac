@@ -62,7 +62,7 @@ void hpet_init(u32 time, struct hpet_info *info)
 
     u32 desired_freq = 1000 / time; // in Hz
 
-    hpet_base = (uintptr_t)map_phys((void*)info->address, PAGE_SIZE,
+    hpet_base = (uintptr_t)map_phys((void*)(uintptr_t)info->address, PAGE_SIZE,
         PG_WRITE | PG_STRONG_UC);
 
     struct hpet_id_reg *id = (struct hpet_id_reg*)hpet_base;

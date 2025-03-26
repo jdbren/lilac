@@ -21,7 +21,7 @@ enum ACPI_BRIDGE_TYPE {
 static bool doChecksum(struct SDTHeader *tableHeader)
 {
     unsigned char sum = 0;
-    for (int i = 0; i < tableHeader->Length; i++)
+    for (u32 i = 0; i < tableHeader->Length; i++)
         sum += ((char *) tableHeader)[i];
     return sum == 0;
 }
@@ -43,9 +43,9 @@ void read_rsdt(struct SDTHeader *rsdt, struct acpi_info *info)
 
     int entries = (rsdt->Length - sizeof(*rsdt)) / 4;
 
-    u32 *other_entries = (u32*)((u32)rsdt + sizeof(*rsdt));
+    u32 *other_entries = (u32*)((uintptr_t)rsdt + sizeof(*rsdt));
     for (int i = 0; i < entries; i++) {
-        struct SDTHeader *h = (struct SDTHeader*)other_entries[i];
+        struct SDTHeader *h = (struct SDTHeader*)(uintptr_t)other_entries[i];
         if (!memcmp(h->Signature, "APIC", 4))
             info->madt = parse_madt(h);
     }
@@ -58,9 +58,9 @@ void read_xsdt(struct SDTHeader *xsdt, struct acpi_info *info)
 
     int entries = (xsdt->Length - sizeof(*xsdt)) / 8;
 
-    u64 *other_entries = (u64*)((u32)xsdt + sizeof(*xsdt));
+    u64 *other_entries = (u64*)((uintptr_t)xsdt + sizeof(*xsdt));
     for (int i = 0; i < entries; i++) {
-        struct SDTHeader *h = (struct SDTHeader*)other_entries[i];
+        struct SDTHeader *h = (struct SDTHeader*)(uintptr_t)other_entries[i];
         map_to_self((void*)((uintptr_t)h & 0xFFFFF000), 0x1000, 0x1);
         char sig[5];
         strncpy(sig, h->Signature, 4);
@@ -95,7 +95,7 @@ void acpi_early(struct RSDP *rsdp, struct acpi_info *info)
         read_xsdt((struct SDTHeader*)((uintptr_t)(xsdp->XsdtAddress)), info);
         unmap_from_self((void*)((uintptr_t)(xsdp->XsdtAddress) & ~0xfff), 0x1000);
     } else {
-        read_rsdt((struct SDTHeader*)rsdp->RsdtAddress, info);
+        read_rsdt((struct SDTHeader*)(uintptr_t)rsdp->RsdtAddress, info);
     }
 }
 

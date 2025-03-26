@@ -5,7 +5,7 @@
 #include "cpufaults.h"
 #include "idt.h"
 #include "pic.h"
-#include "asm/segments.h"
+#include <asm/segments.h>
 
 #define IDT_SIZE 256
 #define DPL_3 0x60

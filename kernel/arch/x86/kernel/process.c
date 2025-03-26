@@ -11,7 +11,7 @@
 #include <mm/kmalloc.h>
 #include "pgframe.h"
 #include "paging.h"
-#include "asm/regs.h"
+#include <asm/regs.h>
 
 extern const u32 _kernel_end;
 
@@ -22,6 +22,7 @@ static void load_cr3(uintptr_t cr3)
     asm volatile ("mov %0, %%cr3" : : "r"(cr3));
 }
 
+#ifndef ARCH_x86_64
 static void print_page_structs(u32 *cr3)
 {
     for (int i = 0; i < 1024; i++) {
@@ -37,6 +38,7 @@ static void print_page_structs(u32 *cr3)
         }
     }
 }
+#endif
 
 #ifndef ARCH_x86_64
 static struct mm_info * make_32_bit_mmap()
@@ -78,7 +80,7 @@ static struct mm_info * make_64_bit_mmap()
     return info;
 }
 #else
-static struct mm_info * make_64_bit_mmap() {}
+static struct mm_info * make_64_bit_mmap() {return NULL;}
 #endif
 
 struct mm_info * arch_process_mmap(bool is_64_bit)

@@ -124,7 +124,7 @@ void keyboard_int(struct interrupt_frame *frame)
 #ifdef ARCH_x86_64
     int gs_base_high, gs_base_low;
     if (frame->cs & 3) {
-        read_msr(IA32_GS_BASE, &gs_base_low, &gs_base_high);
+        read_msr(IA32_GS_BASE, (void*)&gs_base_low, (void*)&gs_base_high);
         if (gs_base_high < 0)
             asm ("swapgs");
     }

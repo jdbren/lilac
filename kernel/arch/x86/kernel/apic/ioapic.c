@@ -57,7 +57,7 @@ static inline u32 read_reg(const u8 offset)
 void ioapic_init(struct ioapic *ioapic, struct int_override *over, u8 num_over)
 {
     pic_disable();
-    ioapic_base = (uintptr_t)map_phys((void*)ioapic->address, PAGE_SIZE,
+    ioapic_base = (uintptr_t)map_phys((void*)(uintptr_t)ioapic->address, PAGE_SIZE,
         PG_STRONG_UC | PG_WRITE);
     ioapic_gsi_base = ioapic->gsi_base;
     num_overrides = num_over;

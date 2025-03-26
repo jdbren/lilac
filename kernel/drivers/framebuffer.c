@@ -85,7 +85,7 @@ void graphics_init(struct multiboot_tag_framebuffer *mfb)
     }
 
     fb->fb = (u8*)map_phys(
-            (void*)mfb->common.framebuffer_addr,
+            (void*)(uintptr_t)mfb->common.framebuffer_addr,
             mfb->common.framebuffer_pitch * mfb->common.framebuffer_height,
             PG_WRITE|PG_STRONG_UC);
     fb->fb_width = mfb->common.framebuffer_width;

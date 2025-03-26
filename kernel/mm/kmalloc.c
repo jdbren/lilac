@@ -138,7 +138,7 @@ void kfree(void *ptr)
     if (ptr == NULL) return;
 
 #ifdef ARCH_x86_64
-    assert(is_canonical(ptr));
+    assert(is_canonical((uintptr_t)ptr));
 #endif
 
     // get superblock header using bitmask
