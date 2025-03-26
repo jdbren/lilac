@@ -12,7 +12,7 @@ EXEC_PREFIX?=$(PREFIX)
 INCLUDEDIR?=$(PREFIX)/include
 LIBDIR?=$(EXEC_PREFIX)/lib
 
-CFLAGS:=$(CFLAGS) -ffreestanding -Wall -Wextra -Iinclude
+CFLAGS:=$(CFLAGS) -ffreestanding -Wall -Wextra -Iinclude -Wno-unused-parameter
 LIBK_CFLAGS:=$(CFLAGS) -D__is_libk -I ../kernel/include
 
 ARCHDIR=arch/$(HOSTARCH)

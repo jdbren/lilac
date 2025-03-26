@@ -33,19 +33,18 @@ SYSCALL_DECL0(getpid)
     return get_pid();
 }
 
-static void start_process(void)
+static void * load_executable(struct task *p)
 {
-    struct mm_info *mem = current->mm;
-    klog(LOG_DEBUG, "Process %d starting\n", current->pid);
+    const char *path = p->info.path;
+    struct file *file = p->info.exec_file;
 
-    const char *path = current->info.path;
-    struct file *file = current->info.exec_file;
     if (!file) {
         file = vfs_open(path, 0, 0);
         if (IS_ERR_OR_NULL(file)) {
             klog(LOG_ERROR, "Failed to open file %s\n", path);
             exit(1);
         }
+        p->info.exec_file = file;
     }
 
     int bytes = file->f_dentry->d_inode->i_size;
@@ -54,24 +53,24 @@ static void start_process(void)
     klog(LOG_DEBUG, "File size: %d\n", bytes);
     if (vfs_read(file, (void*)hdr, bytes) != bytes) {
         klog(LOG_ERROR, "Failed to read file %s\n", path);
-        vfs_close(file);
-        kfree(hdr);
-        exit(1);
+        goto out;
     }
 
     klog(LOG_DEBUG, "Parsing ELF file\n");
-    void *jmp = elf_load(hdr, mem);
+    void *jmp = elf_load(hdr, p->mm);
     if (!jmp) {
         klog(LOG_ERROR, "Failed to load ELF file\n");
-        vfs_close(file);
-        kfree(hdr);
-        exit(1);
+        goto out;
     }
 
+out:
+    //kfree(hdr);
     klog(LOG_DEBUG, "ELF loaded\n");
+    return jmp;
+}
 
-    mem->start_stack = (uintptr_t)arch_user_stack();
-
+static void set_vm_areas(struct mm_info *mem)
+{
     struct vm_desc *stack_desc = kzmalloc(sizeof(*stack_desc));
     stack_desc->mm = mem;
     stack_desc->start = mem->start_stack;
@@ -79,10 +78,6 @@ static void start_process(void)
     stack_desc->vm_prot = PROT_READ | PROT_WRITE;
     stack_desc->vm_flags = MAP_PRIVATE | MAP_ANONYMOUS;
     vma_list_insert(stack_desc, &mem->mmap);
-
-    // Set up heap
-    mem->start_brk = __USER_BRK;
-    mem->brk = __USER_BRK;
 
     struct vm_desc *heap_desc = kzmalloc(sizeof(*heap_desc));
     heap_desc->mm = mem;
@@ -102,22 +97,18 @@ static void start_process(void)
         desc = desc->vm_next;
     }
     */
-    vfs_close(file);
+}
 
-    volatile uintptr_t *stack = (void*)(__USER_STACK - 128); // Will place argv entries here
-    if (!current->info.argv) {
-        *stack = 0;
-        *--stack = 0;
-        goto skip;
-    }
+static void * prepare_task_args(struct task *p, uintptr_t *stack)
+{
     // Write args to user stack
     u32 argc = 0;
     char **argv = (char**)(stack);
-    for (; current->info.argv[argc] && argc < 31; argc++) {
-        u32 len = strlen(current->info.argv[argc]) + 1;
+    for (; p->info.argv[argc] && argc < 31; argc++) {
+        u32 len = strlen(p->info.argv[argc]) + 1;
         len = (len + sizeof(void*)-1) & ~(sizeof(void*)-1); // Align stack
         stack = (void*)((uintptr_t)stack - len);
-        strcpy((char*)stack, current->info.argv[argc]);
+        strcpy((char*)stack, p->info.argv[argc]);
         argv[argc] = (char*)stack;
     }
     argv[argc] = NULL;
@@ -130,6 +121,29 @@ static void start_process(void)
     assert(is_aligned(stack, sizeof(void*)));
     *--stack = (uintptr_t)argv;
     *--stack = argc;
+    return stack;
+}
+
+static void start_process(void)
+{
+    struct mm_info *mem = current->mm;
+    klog(LOG_DEBUG, "Process %d starting\n", current->pid);
+
+    void *jmp = load_executable(current);
+
+    mem->start_stack = (uintptr_t)arch_user_stack();
+    mem->start_brk = __USER_BRK;
+    mem->brk = __USER_BRK;
+    set_vm_areas(mem);
+
+    uintptr_t *stack = (void*)(__USER_STACK - 128); // Will place argv entries here
+    if (!current->info.argv) {
+        *stack = 0;
+        *--stack = 0;
+        goto skip;
+    } else {
+        stack = prepare_task_args(current, stack);
+    }
 
 skip:
     klog(LOG_DEBUG, "Going to user mode, jmp = %x\n", jmp);
@@ -177,7 +191,7 @@ static void copy_fs_info(struct fs_info *dst, struct fs_info *src)
     }
 }
 
-void clone_process(struct task *parent, struct task *child)
+static void clone_process(struct task *parent, struct task *child)
 {
     *child = *parent;
     child->ppid = parent->pid;
@@ -195,7 +209,7 @@ void clone_process(struct task *parent, struct task *child)
 
 static void return_from_fork(void)
 {
-    klog(LOG_DEBUG, "Returning from fork\n");
+    klog(LOG_DEBUG, "PID %d: Returning from fork\n", current->pid);
     arch_return_from_fork(current->regs, current->kstack);
 }
 
@@ -215,7 +229,7 @@ int do_fork(void)
     return pid;
 }
 
-__noreturn void exec_and_return(void)
+static __noreturn void exec_and_return(void)
 {
     klog(LOG_DEBUG, "Entering exec_and_return, pid = %d\n", current->pid);
     struct mm_info *mem = arch_process_remap(current->mm);
@@ -241,7 +255,7 @@ static int set_task_args(struct task_info *info, char *const argv[])
         kfree(info->argv);
     }
     for (i = 0; argv[i]; i++) {
-        size_t len = strnlen_user(argv[i], 127) + 1;
+        ssize_t len = strnlen_user(argv[i], 127) + 1;
         if (len < 0)
             return -EFAULT;
         info->argv = krealloc(info->argv, (i + 1) * sizeof(char*));
@@ -341,7 +355,7 @@ SYSCALL_DECL1(exit, int, status)
 int getcwd(char *buf, size_t size)
 {
     if (size < strlen(current->fs.cwd) + 1)
-        return -1;
+        return -ERANGE;
 
     return copy_to_user(buf, current->fs.cwd, size);
 }
