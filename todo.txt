@@ -1,11 +1,6 @@
-Fully featured system timer implementation
-Synchronization primitives checks
-Make actual scheduler
-Cleanup header files and arch specific functions
-Maybe do better interrupt handler
-
-FPU implementation
-    - Compile ACPICA separately
-    - Remove -mgeneral-regs-only
-
-Make device tree implementation generic with ACPI function pointers
+- Implement a proper scheduler / preemption
+- Implement non-contiguous memory allocation
+- User space memory allocation
+- Implement SMP and synchronization
+- Implement blocking I/O system calls in disk driver
+- Finsih the file system

@@ -48,7 +48,13 @@ void console_putchar(struct console *con, int c)
     } else if (c == '\t') {
         do {
             console_putchar(con, ' ');
-        } while (con->cx % 8);
+        } while (con->cx % 8 && con->cx < con->width);
+        return;
+    } else if (c == '\b') {
+        if (con->cx > 0) {
+            con->cx--;
+            graphics_putc(' ', con->cx, con->cy);
+        }
         return;
     }
     graphics_putc((u16)c, con->cx, con->cy);
@@ -161,7 +167,6 @@ ssize_t console_read(struct file *file, void *buf, size_t count)
         // input into cons.buffer.
         if (con->input.rpos == con->input.wpos) {
             klog(LOG_DEBUG, "console_read: proc %d waiting for input\n", get_pid());
-            arch_enable_interrupts();
             current->state = TASK_SLEEPING;
             add_to_io_queue(get_pid());
             yield();
@@ -206,10 +211,7 @@ void console_intr(struct kbd_event event)
 {
     char c = keyboard_map[event.keycode];
     struct console *con = &consoles[active_console];
-    if (c == '\b') {
-        // graphics_delchar();
-        return;
-    }
+
     if (event.status & KB_ALT) {
         // if (c == '1')
         //     graphics_setfb(0);
@@ -231,10 +233,11 @@ void console_intr(struct kbd_event event)
     }
     switch(c) {
     case '\b': // Backspace
-    //case '\x7f': // Delete key
-        // if(con->input.epos > con->input.wpos) {
-        //     con->input.epos--;
-        // }
+    case '\x7f': // Delete key
+        if(con->input.epos > con->input.wpos) {
+            con->input.epos--;
+            console_putchar(con, c);
+        }
     break;
     default:
         if (c != 0 && con->input.epos - con->input.rpos < INPUT_BUF_SIZE) {
@@ -247,7 +250,7 @@ void console_intr(struct kbd_event event)
             console_putchar(con, c);
 
             if (c == '\n' || con->input.epos - con->input.rpos == INPUT_BUF_SIZE) {
-                // wake up consoleread() if a whole line (or end-of-file)
+                // wake up console_read() if a whole line (or end-of-file)
                 // has arrived.
                 con->input.wpos = con->input.epos;
                 u32 pid = pop_io_queue();

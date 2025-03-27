@@ -54,7 +54,7 @@ void sched_init(void)
     root.pgd = arch_get_pgd();
     struct task *pid1 = init_process();
     schedule_task(pid1);
-    timer_reset = 3000;
+    timer_reset = 100;
     kstatus(STATUS_OK, "Scheduler initialized\n");
 }
 
@@ -158,5 +158,4 @@ void wakeup(int pid)
         return;
     task_queue[i]->state = TASK_RUNNING;
     klog(LOG_DEBUG, "Waking up task %d\n", pid);
-    schedule();
 }
