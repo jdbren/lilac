@@ -3,9 +3,6 @@
 sys_restart_syscall:
 	ret
 
-sys_chdir:
-	ret
-
 sys_time:
 	ret
 

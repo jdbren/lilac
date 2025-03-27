@@ -36,7 +36,7 @@
 	pop  %rbp
 	iretq
 .endm
-#else // ARCH_x86
+#else // ARCH_x86:
 .macro isr_err name
 	.extern \name\()_handler
 	.global \name
@@ -124,16 +124,6 @@ timer_handler:
 	call apic_eoi
 
 	call sched_tick
-#ifdef ARCH_x86_64
-	mov CS(%rsp), %ax
-	and $3, %ax
-	jz 2f
-	movl $IA32_GS_BASE, %ecx
-	rdmsr
-	testl %edx,%edx
-	jns 2f
-	swapgs
-2:
-#endif
+
 	POP_REGS
 	ret_from_irq

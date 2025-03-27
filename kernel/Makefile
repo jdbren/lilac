@@ -71,7 +71,8 @@ drivers/ahci.o \
 drivers/framebuffer.o \
 drivers/vga.o \
 lib/icxxabi.o \
-lib/multiboot.o
+lib/multiboot.o \
+lib/rbtree.o
 
 OBJS=\
 $(ARCHDIR)/boot/crti.o \

@@ -50,9 +50,7 @@ syscall_entry:
 	mov  (%rbp, %rax, 8), %rax
 	xor  %rbp, %rbp
 
-	sti
 	call *%rax
-	cli
 
 	mov  %rax,%rdi # save return value
 	movl $IA32_GS_BASE, %ecx

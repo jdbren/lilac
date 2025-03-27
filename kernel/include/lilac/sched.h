@@ -10,6 +10,7 @@ void sched_clock_init(void);
 void schedule(void);
 void yield(void);
 void wakeup(int pid);
+void wakeup_task(struct task *task);
 void schedule_task(struct task *new_task);
 struct task *get_current_task(void);
 

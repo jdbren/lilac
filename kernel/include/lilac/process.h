@@ -5,6 +5,7 @@
 
 #include <lilac/types.h>
 #include <lilac/file.h>
+#include <lilac/rbtree.h>
 
 struct file;
 struct regs_state;
@@ -29,23 +30,42 @@ struct fs_info {
 struct task {
     u32 pid;
     u32 ppid;
+
     struct mm_info *mm;
     uintptr_t pgd;  // 12 (32-bit) or 16 (64-bit)
     uintptr_t pc;   // 16 (32-bit) or 24 (64-bit)
     void *kstack;   // 20 (32-bit) or 32 (64-bit)
+    void *regs; // CPU registers
+
+    spinlock_t lock;
+
+    u8 state;
+    u16 flags;
+    u8 priority;
+    u8 policy;
+
+    u8 cpu;
+    bool on_rq;
     u32 time_slice;
+    struct rb_node rq_node;
+
     struct task *parent;
+    struct list_head children;
+    struct list_head sibling;
+
+    int exit_val;
+    int exit_sig;
+
+    bool parent_wait;
     struct fs_info fs;
     struct task_info info;
-    u8 priority;
-    volatile u8 state;
+
     char name[32];
-    void *regs; // CPU registers
 };
 
 struct mm_info {
     struct vm_desc *mmap;
-    // struct rb_tree mmap_rb;
+    // struct rb_root mmap_rb;
     uintptr_t pgd;
     void *kstack;
     // atomic_uint ref_count;
@@ -66,13 +86,17 @@ struct task *init_process(void);
 struct task *create_process(const char *path);
 u32 get_pid(void);
 
-struct mm_info *arch_process_mmap(bool is_64_bit);
-struct mm_info *arch_process_remap(struct mm_info *existing);
-void *arch_user_stack(void);
-void jump_new_proc(struct task *next);
-extern void jump_usermode(void *addr, void *ustack, void *kstack);
-extern int arch_return_from_fork(void *regs, void *kstack);
-void *arch_copy_regs(struct regs_state *src);
-struct mm_info *arch_copy_mmap(struct mm_info *parent);
+// Architecture-specific functions
+struct mm_info * arch_process_mmap(bool is_64_bit);
+struct mm_info * arch_process_remap(struct mm_info *existing);
+struct mm_info * arch_copy_mmap(struct mm_info *parent);
+void *           arch_user_stack(void);
+void *           arch_copy_regs(struct regs_state *src);
+
+// kernel mode jump
+void             jump_new_proc(struct task *next);
+// user mode jumps
+extern void      jump_usermode(void *addr, void *ustack, void *kstack);
+extern int       arch_return_from_fork(void *regs, void *kstack);
 
 #endif

@@ -18,5 +18,6 @@ pid_t        fork(void);
 ssize_t      read(int, void *, size_t);
 ssize_t      write(int, const void *, size_t);
 char*        getcwd(char buf[], size_t size);
+int          chdir(const char *);
 
 #endif

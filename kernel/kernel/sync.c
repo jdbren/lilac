@@ -6,7 +6,11 @@
 #include <mm/kmalloc.h>
 
 #define MAX_SPINLOCKS 16
+#ifdef ARCH_x86_64
 #define pause __builtin_ia32_pause
+#else
+#define pause __builtin_ia32_pause
+#endif
 
 /*
     Spinlocks
@@ -50,9 +54,7 @@ void delete_lock(spinlock_t *spin)
 void acquire_lock(spinlock_t *spin)
 {
 	while(atomic_flag_test_and_set(spin))
-	{
 		pause();
-	}
 }
 
 void release_lock(spinlock_t *spin)

@@ -1,11 +1,24 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
+#include <lilac/sched.h>
+
 #include <lilac/lilac.h>
 #include <lilac/log.h>
 #include <lilac/process.h>
-#include <lilac/sched.h>
 #include <lilac/syscall.h>
 #include <mm/kmm.h>
+
+struct rq {
+    spinlock_t lock;
+    u8 cpu;
+    u32 nr_running;
+
+    struct task *curr;
+    struct task *next;
+    struct task *idle;
+
+    struct rb_root_cached queue;
+};
 
 extern const u32 page_directory;
 extern const u32 stack_top;
@@ -140,9 +153,12 @@ long waitpid(int pid)
     if (i == -1)
         return -ECHILD;
     struct task *task = task_queue[i];
+    if (task->ppid != current->pid)
+        return -ECHILD;
     klog(LOG_DEBUG, "Process %d: Waiting for task %d\n", get_pid(), pid);
-    while (task->state != TASK_DEAD)
-        yield();
+    current->state = TASK_SLEEPING;
+    task->parent_wait = true;
+    schedule();
     klog(LOG_DEBUG, "Task %d has exited, continuing task %d\n", pid, get_pid());
     return 0;
 }
@@ -158,4 +174,12 @@ void wakeup(int pid)
         return;
     task_queue[i]->state = TASK_RUNNING;
     klog(LOG_DEBUG, "Waking up task %d\n", pid);
+}
+
+void wakeup_task(struct task *task)
+{
+    if (task->state == TASK_SLEEPING) {
+        task->state = TASK_RUNNING;
+        klog(LOG_DEBUG, "Waking up task %d\n", task->pid);
+    }
 }

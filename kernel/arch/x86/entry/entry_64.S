@@ -57,12 +57,12 @@ arch_context_switch:
 	push %r13
 	push %r12
 	push %rbx
+	pushf
 
 	mov  %rdi, %r12
 	mov  TASK_KSTACK_OFFSET(%rsi), %rdi
 	call set_tss_esp0
 
-	pushf
 	mov  %rsp, TASK_KSTACK_OFFSET(%r12)
 	mov  TASK_PGD_OFFSET(%rsi), %rax
 	mov  %rax, %cr3

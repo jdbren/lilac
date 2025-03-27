@@ -342,6 +342,8 @@ __noreturn void exit(int status)
 {
     current->state = TASK_DEAD;
     klog(LOG_INFO, "Process %d exited with status %d\n", current->pid, status);
+    if (current->parent_wait)
+        wakeup_task(current->parent);
     schedule();
     kerror("exit: Should never be reached\n");
     unreachable();
@@ -362,4 +364,37 @@ int getcwd(char *buf, size_t size)
 SYSCALL_DECL2(getcwd, char*, buf, size_t, size)
 {
     return getcwd(buf, size);
+}
+
+SYSCALL_DECL1(chdir, const char*, path)
+{
+    char *path_buf = kmalloc(256);
+    long err = 0;
+    struct task *task = current;
+
+    err = strncpy_from_user(path_buf, path, 255);
+    if (err < 0) {
+        kfree(path_buf);
+        return err;
+    }
+
+    struct file *f = vfs_open(path, 0, 0);
+    if (IS_ERR(f)) {
+        kfree(path_buf);
+        return PTR_ERR(f);
+    }
+
+    if (f->f_dentry->d_inode->i_type != TYPE_DIR) {
+        err = -ENOTDIR;
+        goto out;
+    }
+
+    arch_disable_interrupts();
+    kfree(task->fs.cwd);
+    task->fs.cwd = strdup(path_buf);
+    arch_enable_interrupts();
+out:
+    vfs_close(f);
+    kfree(path_buf);
+    return err;
 }

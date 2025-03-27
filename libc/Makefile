@@ -52,6 +52,7 @@ unistd/read.o \
 unistd/write.o \
 unistd/close.o \
 unistd/getcwd.o \
+unistd/chdir.o \
 fcntl/open.o \
 dirent/readdir.o \
 sys/syscall.o \
