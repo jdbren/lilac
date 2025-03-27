@@ -135,16 +135,22 @@ SYSCALL_DECL3(lseek, int, fd, int, offset, int, whence)
     return vfs_lseek(file, offset, whence);
 }
 
+struct dentry * vfs_lookup(const char *path)
+{
+    struct dentry *start = root_dentry;
+    if (path[0] != '/')
+        start = current->fs.cwd_d;
+
+    return lookup_path_from(start, path);
+}
+
 struct file *vfs_open(const char *path, int flags, int mode)
 {
     klog(LOG_DEBUG, "VFS: Opening %s\n", path);
     struct inode *inode;
     struct file *new_file;
 
-    if (path[0] != '/')
-        return ERR_PTR(-ENOENT);
-
-    struct dentry *dentry = lookup_path(path);
+    struct dentry *dentry = vfs_lookup(path);
     if (IS_ERR(dentry))
         return ERR_CAST(dentry);
     inode = dentry->d_inode;
@@ -358,6 +364,7 @@ int vfs_mkdir(const char *path, umode_t mode)
     new_dentry = alloc_dentry(parent_dentry, name);
     if (IS_ERR(new_dentry))
         return PTR_ERR(new_dentry);
+    dget(new_dentry);
     dcache_add(new_dentry);
 
     return parent->i_op->mkdir(parent, new_dentry, mode);
@@ -400,6 +407,7 @@ int vfs_create(const char *path, umode_t mode)
     }
 
     struct dentry *new_dentry = alloc_dentry(parent, basename);
+    dget(new_dentry);
     dcache_add(new_dentry);
 #ifdef DEBUG_VFS
     klog(LOG_DEBUG, "Creating %s\n", new_dentry->d_name);

@@ -165,12 +165,8 @@ struct task *init_process(void)
     this->state = TASK_RUNNING;
     this->fs.files.fdarray = kcalloc(4, sizeof(struct file));
     this->fs.files.max = 4;
-    this->fs.cwd = kzmalloc(2);
-    this->fs.cwd[0] = '/';
-    this->fs.cwd[1] = '\0';
-    this->fs.root = kzmalloc(2);
-    this->fs.root[0] = '/';
-    this->fs.root[1] = '\0';
+    this->fs.root_d = get_root_dentry();
+    this->fs.cwd_d = this->fs.root_d;
     this->info.path = "/sbin/init";
     memcpy(this->name, "init", 5);
 
@@ -179,8 +175,10 @@ struct task *init_process(void)
 
 static void copy_fs_info(struct fs_info *dst, struct fs_info *src)
 {
-    dst->root = strdup(src->root);
-    dst->cwd = strdup(src->cwd);
+    dget(src->root_d);
+    dget(src->cwd_d);
+    dst->root_d = src->root_d;
+    dst->cwd_d = src->cwd_d;
     dst->files.fdarray = kcalloc(src->files.max, sizeof(struct file));
     dst->files.max = src->files.max;
     dst->files.size = src->files.size;
@@ -327,7 +325,7 @@ void cleanup_task(struct task *task)
     for (int i = 0; task->info.argv[i]; i++)
         kfree(task->info.argv[i]);
     kfree(task->info.argv);
-    kfree(task->fs.cwd);
+    dput(task->fs.cwd_d);
     kfree(task->fs.files.fdarray); // TODO: File management
     struct vm_desc *desc = task->mm->mmap;
     while (desc) {
@@ -356,10 +354,10 @@ SYSCALL_DECL1(exit, int, status)
 
 int getcwd(char *buf, size_t size)
 {
-    if (size < strlen(current->fs.cwd) + 1)
+    if (size < strlen(current->fs.cwd_d->d_name) + 1)
         return -ERANGE;
 
-    return copy_to_user(buf, current->fs.cwd, size);
+    return copy_to_user(buf, current->fs.cwd_d->d_name, size);
 }
 SYSCALL_DECL2(getcwd, char*, buf, size_t, size)
 {
@@ -378,23 +376,23 @@ SYSCALL_DECL1(chdir, const char*, path)
         return err;
     }
 
-    struct file *f = vfs_open(path, 0, 0);
-    if (IS_ERR(f)) {
+    struct dentry *d = vfs_lookup(path_buf);
+    if (IS_ERR(d)) {
         kfree(path_buf);
-        return PTR_ERR(f);
+        return PTR_ERR(d);
     }
 
-    if (f->f_dentry->d_inode->i_type != TYPE_DIR) {
+    if (d->d_inode->i_type != TYPE_DIR) {
         err = -ENOTDIR;
         goto out;
     }
 
     arch_disable_interrupts();
-    kfree(task->fs.cwd);
-    task->fs.cwd = strdup(path_buf);
+    dput(task->fs.cwd_d);
+    dget(d);
+    task->fs.cwd_d = d;
     arch_enable_interrupts();
 out:
-    vfs_close(f);
     kfree(path_buf);
     return err;
 }

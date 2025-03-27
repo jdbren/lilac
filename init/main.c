@@ -26,6 +26,16 @@ int prompt(void)
     }
     command[r-1] = 0; // remove newline
 
+    if (strncmp(command, "cd", 2) == 0) {
+        char *path = command + 3;
+        if (chdir(path) < 0) {
+            printf("Error changing directory\n");
+            return -1;
+        }
+        printf("Changed directory to %s\n", path);
+        return 0;
+    }
+
     args[0] = command;
     for (int i = 0, c = 1; i < r && c < 7; i++) {
         if (command[i] == ' ') {

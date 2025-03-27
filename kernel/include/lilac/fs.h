@@ -149,6 +149,8 @@ int vfs_mount(const char *source, const char *target,
         const char *filesystemtype, unsigned long mountflags,
         const void *data);
 
+struct dentry * vfs_lookup(const char *path);
+
 void fs_init(void);
 struct dentry *mount_bdev(struct block_device *bdev, int (*fill_super)(struct super_block*));
 

@@ -57,7 +57,6 @@ struct dentry * alloc_dentry(struct dentry *d_parent, const char *name)
     if (!new_dentry)
         return ERR_PTR(-ENOMEM);
 
-    new_dentry->d_count = 1;
     new_dentry->d_parent = d_parent;
     new_dentry->d_sb = i_parent->i_sb;
     new_dentry->d_name = (char*)name;
@@ -101,6 +100,16 @@ struct dentry * lookup_path_from(struct dentry *parent, const char *path)
         else if (!name)
             break;
 
+        if (strcmp(name, ".") == 0) {
+            kfree(name);
+            continue;
+        } else if (strcmp(name, "..") == 0) {
+            kfree(name);
+            if (parent->d_parent != NULL)
+                parent = parent->d_parent;
+            continue;
+        }
+
         find = dlookup(parent, name);
         if (find == NULL) {
 #ifdef DEBUG_VFS
@@ -133,6 +142,7 @@ struct dentry * lookup_path_from(struct dentry *parent, const char *path)
         }
         parent = find;
     }
+    dget(parent);
     return parent;
 }
 

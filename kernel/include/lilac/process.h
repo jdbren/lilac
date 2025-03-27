@@ -22,8 +22,8 @@ struct task_info {
 };
 
 struct fs_info {
-    char *root;
-    char *cwd;
+    struct dentry *root_d;
+    struct dentry *cwd_d;
     struct fdtable files;
 };
 

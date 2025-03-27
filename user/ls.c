@@ -17,7 +17,7 @@ int main(int argc, char *argv[])
     char *dir = NULL;
 
     if (argc == 1)
-        dir = "/";
+        dir = ".";
     else
         dir = argv[1];
 
