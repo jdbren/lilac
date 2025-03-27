@@ -13,7 +13,7 @@
 static inline bool check_entry(struct fat_file *entry, const char *name)
 {
     if (entry->attributes != LONG_FNAME && entry->name[0] != FAT_UNUSED) {
-        if (!memcmp(entry->name, name, 8))
+        if (!memcmp(entry->name, name, 11))
             return true;
     }
     return false;
@@ -132,19 +132,28 @@ struct dentry *fat32_lookup(struct inode *parent, struct dentry *find,
 {
     struct inode *inode;
     struct fat_file *info = kzmalloc(sizeof(*info));
-    char name[9];
-    int i;
+    char fatname[12];
+    const char *dot;
+    int i, j;
 
-    for (i = 0; i < 8; i++) {
-        if (find->d_name[i] == '\0')
-            break;
-        name[i] = toupper(find->d_name[i]);
+    memset(fatname, ' ', 11);
+    fatname[11] = '\0';
+
+    dot = strchr(find->d_name, '.');
+
+    // Copy up to 8 characters for the base name, stop at a dot
+    for (i = 0, j = 0; i < 8 && find->d_name[j] != '\0' &&
+         find->d_name[j] != '.'; i++, j++) {
+        fatname[i] = toupper(find->d_name[j]);
     }
-    for (; i < 8; i++)
-        name[i] = ' ';
-    name[8] = '\0';
 
-    if (fat32_find(parent, name, info) == 0) {
+    if (dot) {
+        for (i = 8, j = 1; j <= 3 && dot[j] != '\0'; i++, j++) {
+            fatname[i] = toupper(dot[j]);
+        }
+    }
+
+    if (fat32_find(parent, fatname, info) == 0) {
         inode = fat_build_inode(parent->i_sb, info);
         find->d_inode = inode;
         inode->i_count++;
