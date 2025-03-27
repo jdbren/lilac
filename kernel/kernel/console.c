@@ -229,7 +229,7 @@ void console_intr(struct kbd_event event)
         }
         return;
     } else if (event.status & KB_SHIFT) {
-        c = c - 32;
+        c = keyboard_map_shift[event.keycode];
     }
     switch(c) {
     case '\b': // Backspace

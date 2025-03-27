@@ -59,6 +59,14 @@ void graphics_putc(u16 c, u32 cx, u32 cy)
     }
 }
 
+void print_charset(u32 start_x, u32 start_y)
+{
+    // print all characters
+    for (u32 i = 0; i < termius_font.font->numglyph; i++) {
+        graphics_putc(i, (start_x + i) % 80, (start_y + i) / 80);
+    }
+}
+
 void graphics_scroll(void)
 {
     u8 *dst, *src;
