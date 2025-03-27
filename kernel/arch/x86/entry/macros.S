@@ -104,6 +104,10 @@
 	pushq RIP(%rax)
 .endm
 
+.macro EXIT_CHECK_AND_SWAPGS
+	
+.endm
+
 #else /* 32-bit: */
 .macro PUSH_REGS
 	pushl %gs

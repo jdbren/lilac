@@ -4,3 +4,4 @@
 - Implement SMP and synchronization
 - Implement blocking I/O system calls in disk driver
 - Finsih the file system
+- Process signals
