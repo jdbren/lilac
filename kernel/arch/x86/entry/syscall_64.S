@@ -49,13 +49,16 @@ syscall_entry:
 	lea  syscall_table, %rbp
 	mov  (%rbp, %rax, 8), %rax
 	xor  %rbp, %rbp
+
+	sti
 	call *%rax
+	cli
 
 	mov  %rax,%rdi # save return value
 	movl $IA32_GS_BASE, %ecx
 	rdmsr
 	testl %edx,%edx
-	jns 1f 
+	jns 1f
 	swapgs
 1:
 	# restore registers
