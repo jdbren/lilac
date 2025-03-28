@@ -7,6 +7,10 @@
 
 #include "idt.h"
 
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#pragma GCC diagnostic ignored "-Wanalyzer-out-of-bounds"
+#pragma GCC diagnostic ignored "-Wanalyzer-allocation-size"
+
 struct exception_entry {
     uintptr_t err_addr;
     void *handler;

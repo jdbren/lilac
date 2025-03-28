@@ -37,6 +37,7 @@ static void * load_executable(struct task *p)
 {
     const char *path = p->info.path;
     struct file *file = p->info.exec_file;
+    void *jmp = NULL;
 
     if (!file) {
         file = vfs_open(path, 0, 0);
@@ -57,7 +58,7 @@ static void * load_executable(struct task *p)
     }
 
     klog(LOG_DEBUG, "Parsing ELF file\n");
-    void *jmp = elf_load(hdr, p->mm);
+    jmp = elf_load(hdr, p->mm);
     if (!jmp) {
         klog(LOG_ERROR, "Failed to load ELF file\n");
         goto out;

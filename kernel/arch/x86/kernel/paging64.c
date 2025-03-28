@@ -5,6 +5,9 @@
 
 #include <lilac/lilac.h>
 
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#pragma GCC diagnostic ignored "-Wanalyzer-out-of-bounds"
+
 #define ENTRIES_PER_TABLE 512
 
 #define MAX_PHYS_ADDR 0x0000ffffffffffffUL

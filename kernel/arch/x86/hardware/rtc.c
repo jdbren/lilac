@@ -63,7 +63,7 @@ static s64 calculate_unix_time(int seconds, int minutes, int hours, int day, int
 }
 
 static struct timestamp read_rtc(void) {
-    unsigned char century;
+    unsigned char century = 0;
     unsigned char last_second;
     unsigned char last_minute;
     unsigned char last_hour;
@@ -83,7 +83,7 @@ static struct timestamp read_rtc(void) {
     day = get_RTC_register(0x07);
     month = get_RTC_register(0x08);
     year = get_RTC_register(0x09);
-    if(century_register != 0) {
+    if (century_register != 0) {
         century = get_RTC_register(century_register);
     }
 
@@ -103,7 +103,7 @@ static struct timestamp read_rtc(void) {
         day = get_RTC_register(0x07);
         month = get_RTC_register(0x08);
         year = get_RTC_register(0x09);
-        if(century_register != 0) {
+        if (century_register != 0) {
                 century = get_RTC_register(century_register);
         }
     } while( (last_second != second) || (last_minute != minute) || (last_hour != hour) ||

@@ -112,6 +112,10 @@ static int fat32_find(struct inode *dir, const char *name,
     volatile unsigned char *buffer;
 
     buffer = __fat32_read_dir(entry, disk, dir->i_sb->s_bdev->disk);
+    if (!buffer) {
+        klog(LOG_ERROR, "Failed to read directory entries\n");
+        return ret;
+    }
     entry = (struct fat_file*)buffer;
 
     while (entry->name[0]) {

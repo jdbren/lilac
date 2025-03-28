@@ -74,6 +74,12 @@ void pcie_read_device(ACPI_DEVICE_INFO *Info)
     pci_dev = (struct pci_device*)
         get_pci_mmio_addr(0, Info->Address >> 16, Info->Address & 0xFFFF);
 
+    if (!pci_dev) {
+        klog(LOG_ERROR, "Failed to get MMIO address for PCI device at %lx\n",
+            Info->Address);
+        return;
+    }
+
     if (pci_dev->BaseClass == 1 && pci_dev->SubClass == 6) {
         klog(LOG_INFO, "Found AHCI Controller\n");
         ahci_init((void*)(uintptr_t)(pci_dev->u.type0.BaseAddresses[5] & 0xFFFFF000));

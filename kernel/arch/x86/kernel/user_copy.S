@@ -119,6 +119,7 @@ x86_strnlen_user_asm:
 .fault_handler:
 	mov $-EFAULT, %eax
 #ifdef ARCH_x86_64
+	cltq
 	pop %rbp
 	retq
 #else
