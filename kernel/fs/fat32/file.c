@@ -119,9 +119,9 @@ int __do_fat32_write(const struct file *file, u32 clst,
             next_val = __fat_find_free_clst(fat_disk);
             if (next_val == -1)
                 kerror("No free clusters\n");
-            fat_disk->FAT.buf[clst - fat_disk->FAT.first_clst] &= 0xF0000000;
-            fat_disk->FAT.buf[clst - fat_disk->FAT.first_clst] |= next_val & 0x0FFFFFFF;
-            fat_disk->FAT.buf[next_val - fat_disk->FAT.first_clst] |= 0x0FFFFFFF;
+            fat_disk->FAT.FAT_buf[clst - fat_disk->FAT.first_clst] &= 0xF0000000;
+            fat_disk->FAT.FAT_buf[clst - fat_disk->FAT.first_clst] |= next_val & 0x0FFFFFFF;
+            fat_disk->FAT.FAT_buf[next_val - fat_disk->FAT.first_clst] |= 0x0FFFFFFF;
             clst = next_val;
         }
 

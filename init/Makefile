@@ -1,23 +1,15 @@
-CFLAGS=-ffreestanding -I ../libc/include -nostdlib -lgcc
+CC=$(TARGET)-gcc
+CFLAGS=-g
 ifdef CONFIG_x86_64-elf
-CFLAGS+=-DARCH_x86_64 -mgeneral-regs-only
+CFLAGS+=-DARCH_x86_64
 endif
-
-OBJS=crt0.o main.o
-LIBS=../libc/libc.a
 
 .PHONY: all clean install
 .SUFFIXES: .o .c .S
 all: init
 
-init: $(OBJS)
-	$(LD) -o $@ $(OBJS) $(LIBS)
-
-.c.o:
-	$(CC) -MD -c $< -o $@ $(CFLAGS)
-
-.S.o:
-	$(CC) -MD -c $< -o $@ $(CFLAGS)
+init: main.c
+	$(CC) -o $@ main.c $(CFLAGS)
 
 clean:
 	rm -f init *.o *.d

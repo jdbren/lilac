@@ -3,6 +3,8 @@
 #define __ASSEMBLY__
 #include <asm/segments.h>
 #include <asm/msr.h>
+#include <asm/gdt.h>
+#include <lilac/errno.h>
 
 #include "macros.S"
 
@@ -11,6 +13,62 @@
 .equ TASK_KSTACK_OFFSET, 32
 
 .text
+/*
+ * Entry point using the syscall instruction
+ * rip saved in rcx, rflags in r11
+ * most flags cleared including IF and DF
+ * Args from user: rdi, rsi, rdx, r10, r8, r9
+ */
+.globl syscall_entry
+syscall_entry:
+	swapgs
+	mov %rsp, %gs:TSS_rsp2 # save user stack in scratch
+	mov %gs:TSS_rsp0, %rsp # switch to kernel stack
+
+	# set up regs struct
+	push $__USER_DS   # ss
+	push %gs:TSS_rsp2 # user stack
+	push %r11         # rflags
+	push $__USER_CS   # cs
+	push %rcx         # rip
+	PUSH_REGS
+
+	# set up syscall
+	mov  R10(%rsp), %rcx # C ABI expects 4th arg in rcx
+	lea  syscall_table, %rbp
+	mov  (%rbp, %rax, 8), %rax
+	xor  %rbp, %rbp
+
+	call *%rax
+
+	mov  %rax,%rdi # save return value
+	movl $IA32_GS_BASE, %ecx
+	rdmsr
+	testl %edx,%edx
+	jns 1f
+	swapgs
+1:
+	# restore registers
+	mov %rdi,%rax # restore return value
+	POP_REGS pop_rax=0
+
+	# prepare exit
+	mov 24(%rsp), %rsp
+	sysretq
+
+# unused in 64 bit mode
+.globl syscall_handler
+syscall_handler:
+	mov $-ENOSYS, %rax
+	iretq
+
+
+.globl sys_fork
+sys_fork:
+	lea  8(%rsp), %rdi
+	call arch_do_fork
+	ret
+
 // void jump_usermode(void *entry, void *ustack, void *kstack)
 // rdi = entry, rsi = ustack, rdx = kstack
 .globl jump_usermode

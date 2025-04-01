@@ -1,7 +1,5 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include <stdbool.h>
-#include <string.h>
 #include <cpuid.h>
 #include <lilac/lilac.h>
 #include <lilac/timer.h>

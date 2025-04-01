@@ -59,7 +59,7 @@ int fat32_create(struct inode *parent, struct dentry *new, umode_t mode)
     long new_clst = __fat_find_free_clst(disk);
     if (new_clst == -1)
         kerror("No free clusters\n");
-    disk->FAT.buf[new_clst - disk->FAT.first_clst] |= 0x0fffffffUL;
+    disk->FAT.FAT_buf[new_clst - disk->FAT.first_clst] |= 0x0fffffffUL;
 
     u16 fat_date = FAT_SET_DATE(cur_time.year, cur_time.month, cur_time.day);
     u16 fat_time = FAT_SET_TIME(cur_time.hour, cur_time.minute, cur_time.second);

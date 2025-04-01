@@ -72,11 +72,15 @@ int map_pages(void *phys, void *virt, u16 flags, int num_pages)
 
         u32 pt_ndx = get_pt_index(virt);
         if (ENTRY_PRESENT(pt[pt_ndx])) {
-            klog(LOG_ERROR, "page %p already mapped\n", virt);
+            klog(LOG_ERROR, "page %p already mapped to %p\n", virt,
+                (void*)((uintptr_t)pt[pt_ndx]));
             kerror("");
         }
         pt[pt_ndx] = (uintptr_t)phys | flags;
         __native_flush_tlb_single(virt);
+#ifdef DEBUG_PAGING
+        printf("Mapping %p to %p with flags %x\n", virt, phys, flags);
+#endif
     }
     return 0;
 }
@@ -105,7 +109,9 @@ int unmap_pages(void *virt, int num_pages)
 
         if (!ENTRY_PRESENT(pt[pt_ndx]))
             return -1;
-
+#ifdef DEBUG_PAGING
+        printf("Unmapping %p from %p\n", virt, (void*)((uintptr_t)pt[pt_ndx] & ~0xFFF));
+#endif
         pt[pt_ndx] = 0;
     }
     __native_flush_tlb_single(virt);
@@ -127,8 +133,6 @@ void init_phys_mem_mapping(size_t memory_sz_kb)
     u32 pml4_ndx = get_pml4_index(phys_mem_mapping); // index 256
     pml4[pml4_ndx] = (pml4e_t)(pa(((uintptr_t)phys_map_pdpt) & ~0xfff) |
         PG_WRITE | PG_STRONG_UC | 1);
-
-    printf("pml4[%d] = %x\n", pml4_ndx, pml4[pml4_ndx]);
 
     // Get mem size in GB
     u32 mem_size_gb = memory_sz_kb / (1024 * 1024);
@@ -168,7 +172,7 @@ int kernel_pt_init(uintptr_t start, uintptr_t end)
     }
 
     // Unmap the identity mapping
-    pml4[0] = 0;
+    memset(pml4, 0, 2048);
     __native_flush_tlb_single(0);
     return 0;
 }

@@ -1,5 +1,6 @@
 #include <limits.h>
 #include <drivers/pci.h>
+#include <lilac/libc.h>
 #include <lilac/log.h>
 #include <lilac/device.h>
 #include <lilac/port.h>

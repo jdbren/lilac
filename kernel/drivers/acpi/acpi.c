@@ -1,10 +1,8 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include <string.h>
-#include <stdbool.h>
-#include <limits.h>
 #include <lilac/log.h>
 #include <lilac/panic.h>
+#include <lilac/libc.h>
 #include <drivers/pci.h>
 #include <acpi/acpi.h>
 #include <acpi/madt.h>

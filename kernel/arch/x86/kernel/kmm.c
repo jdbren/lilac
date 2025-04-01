@@ -249,3 +249,18 @@ static void __parse_mmap(struct multiboot_tag_efi_mmap *mmap)
         }
     }
 }
+
+int umem_alloc(uintptr_t vaddr, int num_pages)
+{
+    void *frames = alloc_frames(num_pages);
+    if (!frames) {
+        kerror("OUT OF PHYSICAL MEMORY");
+        return -ENOMEM;
+    }
+    if (map_pages(frames, (void*)vaddr, PG_USER | PG_WRITE, num_pages) != 0) {
+        kerror("Failed to map pages");
+        free_frames(frames, num_pages);
+        return -ENOMEM;
+    }
+    return 0;
+}

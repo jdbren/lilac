@@ -3,13 +3,12 @@
 #include <lilac/fs.h>
 #include <lilac/log.h>
 #include <lilac/panic.h>
+#include <lilac/libc.h>
 #include <lilac/timer.h>
 #include <drivers/blkdev.h>
 #include <mm/kmm.h>
 #include <mm/kmalloc.h>
 
-#include <string.h>
-#include <ctype.h>
 
 #include "fat_internal.h"
 
@@ -100,7 +99,7 @@ int fat32_mkdir(struct inode *dir, struct dentry *new, unsigned short mode)
     int new_clst = __fat_find_free_clst(disk);
     if (new_clst == -1)
         kerror("No free clusters\n");
-    disk->FAT.buf[new_clst - disk->FAT.first_clst] |= 0x0fffffffUL;
+    disk->FAT.FAT_buf[new_clst - disk->FAT.first_clst] |= 0x0fffffffUL;
 
     u16 fat_date = FAT_SET_DATE(cur_time.year, cur_time.month, cur_time.day);
     u16 fat_time = FAT_SET_TIME(cur_time.hour, cur_time.minute, cur_time.second);

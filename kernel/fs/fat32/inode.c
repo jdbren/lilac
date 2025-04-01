@@ -2,11 +2,9 @@
 
 #include <lilac/fs.h>
 #include <lilac/log.h>
+#include <lilac/libc.h>
 #include <drivers/blkdev.h>
 #include <mm/kmalloc.h>
-
-#include <string.h>
-#include <ctype.h>
 
 #include "fat_internal.h"
 

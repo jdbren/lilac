@@ -141,6 +141,9 @@ struct dentry * vfs_lookup(const char *path)
     if (path[0] != '/')
         start = current->fs.cwd_d;
 
+    if (strcmp(path, ".") == 0)
+        return start;
+
     return lookup_path_from(start, path);
 }
 
@@ -165,6 +168,7 @@ struct file *vfs_open(const char *path, int flags, int mode)
         return ERR_PTR(-ENOENT);
     }
 
+    fget(new_file);
     return new_file;
 }
 SYSCALL_DECL3(open, const char*, path, int, flags, int, mode)
@@ -195,6 +199,9 @@ SYSCALL_DECL3(open, const char*, path, int, flags, int, mode)
     }
 
     current->fs.files.fdarray[fd] = f;
+#ifdef DEBUG_VFS
+    klog(LOG_DEBUG, "VFS: Opened file %s with fd %d\n", path_buf, fd);
+#endif
 error:
     kfree(path_buf);
     return fd;
@@ -296,6 +303,10 @@ SYSCALL_DECL1(close, int, fd)
     file = get_file_handle(fd);
     if (IS_ERR(file))
         return PTR_ERR(file);
+
+#ifdef DEBUG_VFS
+    klog(LOG_DEBUG, "VFS: Closing file %s (fd: %d)\n", file->f_dentry->d_name, fd);
+#endif
     err = vfs_close(file);
 
     current->fs.files.fdarray[fd] = NULL;
@@ -309,8 +320,11 @@ ssize_t vfs_getdents(struct file *file, struct dirent *dirp, unsigned int buf_si
     struct inode *inode = file->f_dentry->d_inode;
     int dir_cnt;
 
-    if (inode->i_type != TYPE_DIR)
+    if (inode->i_type != TYPE_DIR) {
+        klog(LOG_DEBUG, "VFS: getdents from non-directory %s\n",
+            file->f_dentry->d_name);
         return -ENOTDIR;
+    }
 #ifdef DEBUG_VFS
     klog(LOG_DEBUG, "VFS: Reading directory %s\n", file->f_dentry->d_name);
 #endif
@@ -323,7 +337,9 @@ SYSCALL_DECL3(getdents, unsigned int, fd, struct dirent*, dirp, size_t, buf_size
     struct file *file = get_file_handle(fd);
     unsigned char *buf;
     ssize_t bytes;
-
+#ifdef DEBUG_VFS
+    klog(LOG_DEBUG, "VFS: Getting directory entries for fd %d\n", fd);
+#endif
     if (IS_ERR(file))
         return PTR_ERR(file);
 

@@ -1,12 +1,9 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include <stdbool.h>
-#include <stddef.h>
-#include <string.h>
-#include <math.h>
 
 #include <lilac/config.h>
 #include <lilac/types.h>
+#include <lilac/libc.h>
 #include <lilac/panic.h>
 #include <mm/kmalloc.h>
 #include <mm/kmm.h>
@@ -72,7 +69,9 @@ void *kmalloc(size_t size)
         alloc = malloc_small(size);
 
     assert(is_aligned(alloc, MIN_ALLOC));
-
+#ifdef DEBUG_KMALLOC
+    printf("kmalloc: Allocated %u bytes at %p\n", size, alloc);
+#endif
     if (unlikely(alloc == NULL))
         klog(LOG_ERROR, "kmalloc failed\n");
 
@@ -140,7 +139,9 @@ void kfree(void *ptr)
 #ifdef ARCH_x86_64
     assert(is_canonical((uintptr_t)ptr));
 #endif
-
+#ifdef DEBUG_KMALLOC
+    printf("kfree: Freeing memory at %p\n", ptr);
+#endif
     // get superblock header using bitmask
     uintptr_t base = (uintptr_t)ptr & PAGE_MASK;
     struct sb_header *header = (struct sb_header*)base;

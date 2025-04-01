@@ -115,6 +115,28 @@ startup_64:
 	call _init
 	call gdt_init
 
+	mov $0x1, %rax
+	cpuid
+	and $1<<25, %edx
+	jz .noSSE
+	# SSE is available
+
+	# now enable SSE and the like
+	mov %cr0, %rax
+	and $0xFFFB, %ax	# clear coprocessor emulation CR0.EM
+	or  $0x2, %ax		# set coprocessor monitoring  CR0.MP
+	mov %rax, %cr0
+	mov %cr4, %rax
+	or  $X86_CR4_OSFXSR, %eax	# set CR4.OSFXSR and CR4.OSXMMEXCPT
+//	or  $X86_CR4_OSXSAVE, %eax	# set CR4.OSXSAVE
+	mov %rax, %cr4
+/*
+	mov $7, %eax				# Enable XCR0.SSE and XCR0.AVX
+	xor %edx, %edx
+	xor %rcx, %rcx
+	xsetbv
+*/
+.noSSE:
 	call x86_64_kernel_early
 
 	cli
@@ -225,6 +247,8 @@ boot_pd:
 	.skip 4096
 boot_pt0:
 	.skip 4096
+// boot_pt1:
+// 	.skip 4096
 
 boot_pdtp511_high:
 	.skip 4096

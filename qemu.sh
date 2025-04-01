@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eux
 
-make install
+make install-system
 sudo ./scripts/image.sh
 
 qemu-system-x86_64 \

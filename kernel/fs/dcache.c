@@ -1,8 +1,8 @@
 #include <lilac/fs.h>
 #include <lilac/log.h>
 #include <lilac/err.h>
+#include <lilac/libc.h>
 #include <mm/kmalloc.h>
-#include <string.h>
 
 #include "utils.h"
 

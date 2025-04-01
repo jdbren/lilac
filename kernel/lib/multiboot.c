@@ -46,10 +46,6 @@ void parse_multiboot(uintptr_t addr, struct multiboot_info *mbd)
             case MULTIBOOT_TAG_TYPE_LOAD_BASE_ADDR:
                 mbd->base_addr = (struct multiboot_tag_load_base_addr*)tag;
             break;
-            default:
-                printf("Unknown multiboot tag: %d\n", tag->type);
-            break;
         }
     }
-    printf("Kernel loaded at: 0x%x\n", mbd->base_addr->load_base_addr);
 }

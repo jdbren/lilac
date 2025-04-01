@@ -1,6 +1,5 @@
-#include <stdbool.h>
-#include <string.h>
 #include <lilac/log.h>
+#include <lilac/libc.h>
 #include <lilac/device.h>
 #include <lilac/panic.h>
 #include <drivers/ahci.h>

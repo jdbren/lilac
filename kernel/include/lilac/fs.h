@@ -148,6 +148,7 @@ int vfs_mkdir(const char *path, umode_t mode);
 int vfs_mount(const char *source, const char *target,
         const char *filesystemtype, unsigned long mountflags,
         const void *data);
+int vfs_umount(const char *target);
 
 struct dentry * vfs_lookup(const char *path);
 

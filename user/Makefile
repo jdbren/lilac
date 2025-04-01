@@ -1,5 +1,6 @@
-CFLAGS:=-ffreestanding -I../libc/include -nostdlib -lgcc
-OBJS:=../init/crt0.o ../libc/libc.a
+CC=$(TARGET)-gcc
+CFLAGS=-g
+OBJS=
 
 SRC_DIR:=.
 BIN_DIR:=$(SYSROOT)/bin

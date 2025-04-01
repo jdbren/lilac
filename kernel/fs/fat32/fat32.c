@@ -6,12 +6,11 @@
 #include <lilac/panic.h>
 #include <lilac/fs.h>
 #include <lilac/list.h>
+#include <lilac/libc.h>
 #include <drivers/blkdev.h>
 #include <mm/kmm.h>
 #include <mm/kmalloc.h>
 
-#include <string.h>
-#include <stdbool.h>
 
 #include "fat_internal.h"
 
@@ -70,18 +69,29 @@ fat32_write_fs_info(struct fat_disk *fat_disk, struct gendisk *gd)
 }
 
 static int __must_check
-fat_read_FAT(struct fat_disk *fat_disk, struct gendisk *hd, u32 clst_off)
+fat_read_FAT(struct fat_disk *fat_disk, struct gendisk *hd)
 {
-    const u32 lba = fat_disk->fat_begin_lba + clst_off * fat_disk->sect_per_clst;
+    const u32 lba = fat_disk->fat_begin_lba + 0 * fat_disk->sect_per_clst;
     const u32 FAT_sz = fat_disk->bpb.extended_section.FAT_size_32;
-    const u32 buf_no_sec = sizeof(fat_disk->FAT.buf) / fat_disk->bpb.bytes_per_sector;
-    const u32 cnt = clst_off + buf_no_sec > FAT_sz ? FAT_sz - clst_off : buf_no_sec;
+    const u32 buf_sz = fat_disk->bpb.bytes_per_sector * FAT_sz;
 
-    int ret = hd->ops->disk_read(hd, lba, (void*)fat_disk->FAT.buf, cnt);
+    fat_disk->FAT.FAT_buf = kvirtual_alloc(buf_sz, PG_WRITE);
 
-    fat_disk->FAT.first_clst = clst_off;
-    fat_disk->FAT.last_clst = clst_off + sizeof(fat_disk->FAT.buf) / 4;
-    fat_disk->FAT.sectors = cnt;
+    int ret = 0;
+    for (u32 i = 0; i < FAT_sz; i += 128) {
+        if (i + 128 > FAT_sz) {
+            // Last read might be less than 128 sectors
+            ret = hd->ops->disk_read(hd, lba + i,
+                (void*)fat_disk->FAT.FAT_buf + (i * 512), FAT_sz - i);
+            break;
+        }
+        ret = hd->ops->disk_read(hd, lba + i,
+            (void*)fat_disk->FAT.FAT_buf + (i * 512), 128);
+    }
+
+    fat_disk->FAT.first_clst = 0;
+    fat_disk->FAT.last_clst = fat_disk->bpb.total_sectors_32;
+    fat_disk->FAT.sectors = FAT_sz;
 
 #ifdef DEBUG_FAT
     klog(LOG_DEBUG, "FAT first: %x\n", fat_disk->FAT.first_clst);
@@ -96,16 +106,11 @@ fat_write_FAT(struct fat_disk *fat_disk, struct gendisk *gd)
     const u32 lba = fat_disk->fat_begin_lba +
         (fat_disk->FAT.first_clst * fat_disk->sect_per_clst);
 
-    return gd->ops->disk_write(gd, lba, (void*)fat_disk->FAT.buf, fat_disk->FAT.sectors);
+    return gd->ops->disk_write(gd, lba, (void*)fat_disk->FAT.FAT_buf, fat_disk->FAT.sectors);
 }
 
 u32 __get_FAT_val(u32 clst, struct fat_disk *disk)
 {
-    if (clst > disk->FAT.last_clst) {
-        klog(LOG_DEBUG, "clst: %x\n", clst);
-        klog(LOG_DEBUG, "last clst: %x\n", disk->FAT.last_clst);
-        kerror("clst out of fat bounds\n");
-    }
     return FAT_VALUE(disk->FAT, clst);
 }
 
@@ -136,14 +141,6 @@ u32 __fat_get_clst_num(struct file *file, struct fat_disk *disk)
     while (clst_off--) {
         if (clst_num > 0x0FFFFFF8)
             return 0;
-        if (clst_num > disk->FAT.last_clst) {
-            klog(LOG_DEBUG, "clst: %x\n", clst_num);
-            klog(LOG_DEBUG, "old last clst: %x\n", disk->FAT.last_clst);
-            if (fat_write_FAT(disk, disk->bdev->disk))
-                kerror("Failed to write FAT\n");
-            if (fat_read_FAT(disk, disk->bdev->disk, clst_num))
-                kerror("Failed to read FAT\n");
-        }
         clst_num = FAT_VALUE(disk->FAT, clst_num);
     }
 
@@ -231,7 +228,7 @@ struct dentry *fat32_init(void *dev, struct super_block *sb)
     strncpy(bdev->name, (const char*)fat_disk->bpb.extended_section.volume_label, 11);
 
     // Read the FAT table
-    if (fat_read_FAT(fat_disk, bdev->disk, 0))
+    if (fat_read_FAT(fat_disk, bdev->disk))
         kerror("Failed to read FAT\n");
 
 #ifdef DEBUG_FAT

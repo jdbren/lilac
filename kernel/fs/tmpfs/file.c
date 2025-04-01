@@ -1,10 +1,9 @@
 #include <lilac/fs.h>
 #include <lilac/log.h>
+#include <lilac/libc.h>
 #include <mm/kmalloc.h>
 
 #include "tmpfs_internal.h"
-
-#include <string.h>
 
 
 int tmpfs_create(struct inode *parent, struct dentry *new_dentry, umode_t mode)

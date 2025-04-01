@@ -7,17 +7,19 @@ if [ -f kbuild.config ]; then
   rm -f kbuild.config
 fi
 
-PROJECTS="libc kernel init user"
+PROJECTS="kernel init user"
 
 MAKE="make"
-HOST=${HOST:-$(./scripts/default-host.sh)}
+ARCH=${ARCH:-"x86_64"}
+HOST=${HOST:-"$ARCH-elf"}
+TARGET=${TARGET:-"$ARCH-lilac"}
 
 AR=${HOST}-ar
 AS=${HOST}-as
 CC=${HOST}-gcc
 CXX=${HOST}-g++
 
-PREFIX=/usr
+PREFIX=/usr/local
 EXEC_PREFIX=$PREFIX
 BOOTDIR=/boot
 LIBDIR=$EXEC_PREFIX/lib
@@ -27,8 +29,8 @@ CFLAGS="-g -std=gnu11"
 CXXFLAGS="-g -std=gnu++11"
 
 SYSROOT="$(pwd)/sysroot"
-CC="$CC --sysroot=$SYSROOT -isystem=$INCLUDEDIR"
-CXX="$CXX --sysroot=$SYSROOT -isystem=$INCLUDEDIR"
+CC="$CC --sysroot=$SYSROOT"
+CXX="$CXX --sysroot=$SYSROOT"
 
 echo "PROJECTS=${PROJECTS}" >> kbuild.config
 echo "export MAKE=${MAKE}" >> kbuild.config
@@ -47,3 +49,4 @@ echo "export INCLUDEDIR=${INCLUDEDIR}" >> kbuild.config
 echo "export CFLAGS=${CFLAGS}" >> kbuild.config
 echo "export CXXFLAGS=${CXXFLAGS}" >> kbuild.config
 echo "export SYSROOT=${SYSROOT}" >> kbuild.config
+echo "export TARGET=${TARGET}" >> kbuild.config

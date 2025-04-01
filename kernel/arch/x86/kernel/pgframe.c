@@ -1,9 +1,8 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include <string.h>
-#include <math.h>
 #include <lilac/panic.h>
 #include <lilac/config.h>
+#include <lilac/libc.h>
 #include <utility/efi.h>
 #include "pgframe.h"
 #include "paging.h"
@@ -46,7 +45,6 @@ int phys_mem_init(struct multiboot_tag_efi_mmap *mmap)
 
 #ifdef ARCH_x86_64
     pg_frame_bitmap = (void*)(((uintptr_t)(&_kernel_end) & ~0x1fffffUL) + 0x200000);
-    klog(LOG_DEBUG, "pg_frame_bitmap: %p\n", pg_frame_bitmap);
     __map_frame_bm((void*)get_phys_addr(pg_frame_bitmap),
             (void*)pg_frame_bitmap);
 #else
@@ -61,7 +59,6 @@ int phys_mem_init(struct multiboot_tag_efi_mmap *mmap)
 
     __init_bitmap(mmap);
 
-    kstatus(STATUS_OK, "Physical memory initialized\n");
     return (BITMAP_SIZE & 0xfffff000) + PAGE_SIZE;
 }
 
@@ -119,6 +116,9 @@ static void __mark_frames(size_t index, size_t offset, size_t pg_cnt)
 
 static void __init_bitmap(struct multiboot_tag_efi_mmap *mmap)
 {
+    __mark_frames(get_index(0x0),
+        get_offset(0x0),
+        (get_phys_addr(pg_frame_bitmap) + BITMAP_SIZE) / PAGE_SIZE + 1);
     efi_memory_desc_t *entry = (efi_memory_desc_t*)mmap->efi_mmap;
     for (u32 i = 0; i < mmap->size; i += mmap->descr_size) {
         if (entry->type != EFI_CONVENTIONAL_MEMORY && entry->type != EFI_RESERVED_TYPE) {
@@ -128,13 +128,6 @@ static void __init_bitmap(struct multiboot_tag_efi_mmap *mmap)
         }
         entry = (efi_memory_desc_t*)((uintptr_t)entry + mmap->descr_size);
     }
-
-    __mark_frames(get_index(get_phys_addr(pg_frame_bitmap)),
-                get_offset(get_phys_addr(pg_frame_bitmap)),
-                BITMAP_SIZE / PAGE_SIZE + 1);
-    __mark_frames(get_index(0x0),
-                get_offset(0x0),
-                ((uintptr_t)&_kernel_start - FIRST_PAGE) / PAGE_SIZE);
 }
 
 static void* __check_bitmap(int i, int num_pages, int *count, int *start)

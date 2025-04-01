@@ -1,8 +1,8 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include <string.h>
 #include <lilac/types.h>
 #include <lilac/config.h>
+#include <lilac/libc.h>
 #include <lilac/log.h>
 #include <acpi/madt.h>
 #include <mm/kmalloc.h>

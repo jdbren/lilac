@@ -1,5 +1,5 @@
 #include <drivers/vga.h>
-#include <string.h>
+#include <lilac/lilac.h>
 
 static const size_t VGA_WIDTH = 80;
 static const size_t VGA_HEIGHT = 25;

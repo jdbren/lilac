@@ -1,33 +1,46 @@
 include kbuild.config
 export DESTDIR=$(SYSROOT)
+export LIBC_DIR?=$(HOME)/newlib-cygwin
 
-.PHONY: all clean lilac.ker libk.a install-headers init
+.PHONY: all clean init user libc install install-libc install-system
 
-all: lilac.ker init
+all: lilac.ker
 
-lilac.ker: libk.a
+lilac.ker:
 	$(MAKE) -C kernel
 
-libk.a: install-headers
-	$(MAKE) -C libc
+libc:
+	if [ ! -d build-libc ]; then \
+		mkdir -p build-libc; \
+		env -i /bin/sh -c 'cd build-libc; \
+		$(LIBC_DIR)/configure \
+			--prefix=$(PREFIX) \
+			--target=$(TARGET) \
+			--enable-newlib-multithread=no'; \
+	fi
+	$(MAKE) -C build-libc all
 
-user: install-headers init
-	$(MAKE) -C user
+install-libc: libc
+	$(MAKE) DESTDIR=$(DESTDIR) -C build-libc install
+	cp -r $(DESTDIR)$(PREFIX)/$(TARGET)/* $(SYSROOT)$(PREFIX)/ || true
+	rm -rf $(DESTDIR)$(PREFIX)/$(TARGET) || true
 
-init:
+init: libc
 	$(MAKE) -C init
 
-install: lilac.ker libk.a init user
-	$(MAKE) -C libc install-libs
+user: libc init
+	$(MAKE) -C user
+
+install: lilac.ker
+	$(MAKE) -C kernel install
+
+install-system: lilac.ker install-libc init user
 	$(MAKE) -C kernel install
 	$(MAKE) -C init install
-
-install-headers:
-	mkdir -p $(SYSROOT)
-	$(MAKE) -C libc install-headers
 
 clean:
 	for PROJECT in $(PROJECTS); do \
   		(cd $$PROJECT && $(MAKE) clean) \
 	done
+	rm -rf build-libc
 	rm -rf sysroot

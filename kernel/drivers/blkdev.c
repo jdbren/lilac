@@ -1,5 +1,5 @@
-#include <string.h>
 #include <lilac/log.h>
+#include <lilac/libc.h>
 #include <drivers/blkdev.h>
 #include <lilac/fs.h>
 #include <mm/kmalloc.h>

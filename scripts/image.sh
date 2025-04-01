@@ -12,7 +12,7 @@ if [[ "$OSTYPE" == "linux-gnu"* ]]; then
 elif [[ "$OSTYPE" == "darwin"* ]]; then
     disk=$(hdiutil attach uefi.img)
     disk="${disk%% *}"
-    cp -r sysroot/* /Volumes/LILAC
+    cp -r sysroot/* /Volumes/LILAC2
     hdiutil detach "$disk"
 else
     echo "Unknown host"

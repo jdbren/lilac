@@ -36,6 +36,7 @@ struct task {
     uintptr_t pc;   // 16 (32-bit) or 24 (64-bit)
     void *kstack;   // 20 (32-bit) or 32 (64-bit)
     void *regs; // CPU registers
+    void *fp_regs;
 
     spinlock_t lock;
 
@@ -46,12 +47,12 @@ struct task {
 
     u8 cpu;
     bool on_rq;
-    u32 time_slice;
-    struct rb_node rq_node;
+    //u32 time_slice;
+    //struct rb_node rq_node;
 
     struct task *parent;
-    struct list_head children;
-    struct list_head sibling;
+    // struct list_head children;
+    // struct list_head sibling;
 
     int exit_val;
     int exit_sig;
@@ -75,7 +76,7 @@ struct mm_info {
     // struct list_head mmlist;
     uintptr_t start_code, end_code;
     uintptr_t start_data, end_data;
-    uintptr_t start_brk, brk;
+    uintptr_t brk;
     uintptr_t start_stack;
     // u32 arg_start, arg_end;
     // u32 env_start, env_end;

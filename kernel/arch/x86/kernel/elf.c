@@ -161,6 +161,9 @@ static void * elf64_load(void *elf, struct mm_info *mm)
             memset((void*)(phdr[i].p_vaddr + phdr[i].p_filesz), 0,
                     phdr[i].p_memsz - phdr[i].p_filesz);
 
+        if (phdr[i].flags & READ) {
+            desc->vm_prot |= PROT_READ;
+        }
         if (phdr[i].flags & WRIT) {
             flags |= PG_WRITE;
             desc->vm_prot |= PROT_WRITE;
@@ -176,7 +179,6 @@ static void * elf64_load(void *elf, struct mm_info *mm)
         desc->mm = mm;
         desc->start = (uintptr_t)vaddr;
         desc->end = (uintptr_t)vaddr + num_pages * PAGE_BYTES;
-        desc->vm_prot |= PROT_READ;
         desc->vm_flags = MAP_PRIVATE;
 
         if (desc->vm_prot & PROT_WRITE && desc->vm_prot & PROT_EXEC)

@@ -1,7 +1,7 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include <string.h>
 #include <lilac/process.h>
+#include <lilac/libc.h>
 #include <lilac/sched.h>
 #include <lilac/types.h>
 #include <lilac/panic.h>
@@ -128,7 +128,6 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
     child->end_code = parent->end_code;
     child->start_data = parent->start_data;
     child->end_data = parent->end_data;
-    child->start_brk = parent->start_brk;
     child->brk = parent->brk;
     child->start_stack = parent->start_stack;
     child->total_vm = parent->total_vm;
@@ -176,7 +175,6 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
     child->end_code = parent->end_code;
     child->start_data = parent->start_data;
     child->end_data = parent->end_data;
-    child->start_brk = parent->start_brk;
     child->brk = parent->brk;
     child->start_stack = parent->start_stack;
     child->total_vm = parent->total_vm;

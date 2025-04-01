@@ -1,6 +1,6 @@
 CFLAGS?=-O2
 LDFLAGS?=
-LIBS?=./libc/libk.a
+LIBS?=./kernel/libk.a
 
 DESTDIR?=
 PREFIX?=/usr/local

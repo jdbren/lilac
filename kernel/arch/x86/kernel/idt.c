@@ -58,7 +58,6 @@ void idt_init(void)
     pic_initialize();
 
     asm volatile("lidt %0" : : "m"(idtptr));
-    printf("Loaded IDT\n");
 }
 
 

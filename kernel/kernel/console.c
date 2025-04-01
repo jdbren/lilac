@@ -10,8 +10,6 @@
 #include <utility/keymap.h>
 
 #include <cpuid.h>
-#include <string.h>
-#include <ctype.h>
 
 
 static struct console consoles[5] = {0};

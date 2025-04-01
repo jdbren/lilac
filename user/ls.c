@@ -1,8 +1,16 @@
 #include <stdio.h>
 #include <fcntl.h>
-#include <dirent.h>
+//#include <dirent.h>
 #include <unistd.h>
 #include <errno.h>
+
+typedef struct dirent {
+    int             d_ino;       /* Inode number */
+    unsigned short  d_reclen;    /* Length of this record */
+    char            d_name[32]; /* Null-terminated filename */
+} dirent;
+
+int getdents(unsigned int fd, void *dirp, size_t bufsz);
 
 int main(int argc, char *argv[])
 {
@@ -13,7 +21,7 @@ int main(int argc, char *argv[])
     if (argc > 1)
         printf("argv[1] at %x = %s\n", argv[1], argv[1]);
     */
-    dirent buf[12];
+    dirent buf[12] = {0};
     char *dir = NULL;
 
     if (argc == 1)
@@ -21,7 +29,7 @@ int main(int argc, char *argv[])
     else
         dir = argv[1];
 
-    int fd = open(dir, 0);
+    int fd = open(dir, 0, 0);
     if (fd < 0)
     {
         if (fd == -ENOENT)

@@ -1,10 +1,8 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/process.h>
-
 #include <stdatomic.h>
-#include <string.h>
-
+#include <lilac/libc.h>
 #include <lilac/lilac.h>
 #include <lilac/elf.h>
 #include <lilac/fs.h>
@@ -80,15 +78,6 @@ static void set_vm_areas(struct mm_info *mem)
     stack_desc->vm_flags = MAP_PRIVATE | MAP_ANONYMOUS;
     vma_list_insert(stack_desc, &mem->mmap);
 
-    struct vm_desc *heap_desc = kzmalloc(sizeof(*heap_desc));
-    heap_desc->mm = mem;
-    heap_desc->start = mem->start_brk;
-    heap_desc->end = mem->brk;
-    heap_desc->vm_prot = PROT_READ | PROT_WRITE;
-    heap_desc->vm_flags = MAP_PRIVATE | MAP_ANONYMOUS;
-    vma_list_insert(heap_desc, &mem->mmap);
-
-    /*
     struct vm_desc *desc = mem->mmap;
     while (desc) {
         klog(LOG_DEBUG, "Start: %x\n", desc->start);
@@ -97,7 +86,6 @@ static void set_vm_areas(struct mm_info *mem)
         klog(LOG_DEBUG, "Flags: %x\n", desc->vm_flags);
         desc = desc->vm_next;
     }
-    */
 }
 
 static void * prepare_task_args(struct task *p, uintptr_t *stack)
@@ -132,9 +120,14 @@ static void start_process(void)
 
     void *jmp = load_executable(current);
 
+    struct vm_desc *desc = mem->mmap;
+    while (desc) {
+        if ((desc->vm_prot & (PROT_READ|PROT_WRITE)) == (PROT_READ|PROT_WRITE))
+            break;
+        desc = desc->vm_next;
+    }
+    mem->brk = desc ? desc->end : 0;
     mem->start_stack = (uintptr_t)arch_user_stack();
-    mem->start_brk = __USER_BRK;
-    mem->brk = __USER_BRK;
     set_vm_areas(mem);
 
     uintptr_t *stack = (void*)(__USER_STACK - 128); // Will place argv entries here
@@ -180,7 +173,7 @@ static void copy_fs_info(struct fs_info *dst, struct fs_info *src)
     dget(src->cwd_d);
     dst->root_d = src->root_d;
     dst->cwd_d = src->cwd_d;
-    dst->files.fdarray = kcalloc(src->files.max, sizeof(struct file));
+    dst->files.fdarray = kcalloc(src->files.max, sizeof(struct file*));
     dst->files.max = src->files.max;
     dst->files.size = src->files.size;
     for (size_t i = 0; i < src->files.size; i++) {

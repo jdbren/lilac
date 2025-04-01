@@ -1,4 +1,3 @@
-#include <dirent.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,6 +13,7 @@ int prompt(void)
     char cwd[32];
     getcwd(cwd, 32);
     printf(SHELL_PROMPT, cwd);
+    fflush(stdout);
     char *args[8] = {0};
 
     memset(command, 0, 256);

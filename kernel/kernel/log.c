@@ -1,7 +1,6 @@
 #include <lilac/log.h>
+#include <lilac/libc.h>
 #include <drivers/framebuffer.h>
-#include <stdio.h>
-#include <stdarg.h>
 
 
 #if defined DEBUG_LOG

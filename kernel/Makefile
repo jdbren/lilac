@@ -1,10 +1,9 @@
-DEFAULT_HOST=$(shell ../scripts/default-host.sh)
-HOST?=$(DEFAULT_HOST)
+HOST?=$(shell uname -m)-elf
 HOSTARCH=$(shell ../scripts/target-triplet-to-arch.sh $(HOST))
 
 CFLAGS?=-Og
 LDFLAGS?=
-LIBS?=./drivers/acpi/acpi.lib ../libc/libk.a
+LIBS?=./libk.a ./drivers/acpi/acpi.lib
 
 DESTDIR?=
 PREFIX?=/usr/local
@@ -47,6 +46,7 @@ kernel/log.o \
 kernel/process.o \
 kernel/sched.o \
 kernel/sync.o \
+kernel/sleep.o \
 mm/kmalloc.o \
 mm/mm.o \
 fs/fat32/fat32.o \
@@ -64,6 +64,7 @@ fs/file.o \
 fs/inode.o \
 fs/dcache.o \
 fs/mount.o \
+fs/stat.o \
 fs/name_utils.o \
 drivers/blkdev.o \
 drivers/pci.o \
@@ -73,6 +74,8 @@ drivers/vga.o \
 lib/icxxabi.o \
 lib/multiboot.o \
 lib/rbtree.o
+
+LIBK_OBJS=$(patsubst %.c,%.o,$(wildcard lib/*/*.c))
 
 OBJS=\
 $(ARCHDIR)/boot/crti.o \
@@ -96,12 +99,15 @@ $(ARCHDIR)/boot/crtn.o
 
 all: lilac.ker
 
-lilac.ker: $(OBJS) $(LINKER_SCRIPT) acpi
+lilac.ker: $(OBJS) $(LINKER_SCRIPT) acpi libk.a
 	$(CC) -T $(LINKER_SCRIPT) -o $@ $(CFLAGS) $(LINK_LIST)
 	grub-file --is-x86-multiboot2 lilac.ker
 
 $(ARCHDIR)/crtbegin.o $(ARCHDIR)/crtend.o:
 	OBJ=`$(CC) $(CFLAGS) $(LDFLAGS) -print-file-name=$(@F)` && cp "$$OBJ" $@
+
+libk.a: $(LIBK_OBJS)
+	$(AR) rcs $@ $(LIBK_OBJS)
 
 .c.o:
 	$(CC) -MD -c $< -o $@ $(CFLAGS)
@@ -114,15 +120,18 @@ $(ARCHDIR)/crtbegin.o $(ARCHDIR)/crtend.o:
 
 clean:
 	rm -f lilac.ker
+	rm -f libk.a
 	rm -f $(OBJS)
 	rm -f $(OBJS:.o=.d)
+	rm -f $(LIBK_OBJS)
+	rm -f $(LIBK_OBJS:.o=.d)
 	$(MAKE) -C drivers/acpi clean
 
 install: lilac.ker
 	mkdir -p $(DESTDIR)$(BOOTDIR)
 	cp lilac.ker $(DESTDIR)$(BOOTDIR)
 
-acpi:
+acpi: libk.a
 	$(MAKE) -C drivers/acpi
 
 -include $(OBJS:.o=.d)

@@ -9,20 +9,23 @@ static struct vfsmount disks[16];
 
 struct vfsmount * get_empty_vfsmount(enum fs_type type)
 {
-    struct vfsmount *mnt = &disks[numdisks++];
-    mnt->init_fs = get_fs_init(type);
-    return mnt;
+    for (int i = 0; i < 16; i++) {
+        if (disks[i].mnt_sb == NULL) {
+            disks[i].init_fs = get_fs_init(type);
+            numdisks++;
+            return &disks[i];
+        }
+    }
+    return NULL;
 }
 
 static int validate_params(const char *source, const char *target,
     enum fs_type type, unsigned long mountflags)
 {
-    if (!source || !target)
-        return -EINVAL;
     if (type < -1)
         return -ENODEV;
     if (numdisks >= 8)
-        return -ENOSPC;
+        return -ENOMEM;
     return 0;
 }
 
@@ -59,6 +62,7 @@ static struct dentry * get_final_dentry(struct dentry * parent, const char *path
     return lookup_path_from(parent, basename);
 }
 
+// TODO: Implement device layer in fs
 int vfs_mount(const char *source, const char *target,
         const char *filesystemtype, unsigned long mountflags,
         const void *data)
@@ -73,6 +77,10 @@ int vfs_mount(const char *source, const char *target,
     err = validate_params(source, target, type, mountflags);
     if (err)
         return err;
+
+    mnt = get_empty_vfsmount(type);
+    if (!mnt)
+        return -ENOMEM;
 
     // Check that the target's parent directory exists
     struct dentry *parent = get_parent_dentry(target);
@@ -98,7 +106,6 @@ int vfs_mount(const char *source, const char *target,
     if (IS_ERR(sb))
         return PTR_ERR(sb);
 
-    mnt = get_empty_vfsmount(type);
     dentry = mnt->init_fs(device, sb); // Todo: add error handling
     if (IS_ERR_OR_NULL(dentry)) {
         destroy_sb(sb);
@@ -119,9 +126,62 @@ int vfs_mount(const char *source, const char *target,
 
     return 0;
 }
+
 SYSCALL_DECL5(mount, const char*, source, const char*, target,
     const char*, filesystemtype, unsigned long, mountflags,
     const void*, data)
+{
+    return -ENOSYS;
+/*
+    long err = 0;
+
+    err = user_str_ok(source, 255);
+    if (err < 0)
+        return err;
+
+    err = user_str_ok(target, 255);
+    if (err < 0)
+        return err;
+
+    err = user_str_ok(filesystemtype, 255);
+    if (err < 0)
+        return err;
+
+    if (!access_ok(data, 1, current->mm)) {
+        klog(LOG_WARN, "mount: data pointer not accessible\n");
+        return -EFAULT;
+    }
+
+    err = vfs_mount(source, target, filesystemtype, mountflags, data);
+    return err;
+*/
+}
+
+int vfs_umount(const char *target)
+{
+    struct dentry *dentry = lookup_path(target);
+    if (IS_ERR(dentry)) {
+        klog(LOG_DEBUG, "Failed to find target %s for umount\n", target);
+        return PTR_ERR(dentry);
+    }
+
+    struct vfsmount *mnt = dentry->d_mount;
+    if (!mnt) {
+        klog(LOG_DEBUG, "No mount found for %s\n", target);
+        return -EINVAL;
+    }
+
+    // Perform unmount operations
+    dput(mnt->mnt_root);
+    destroy_sb(mnt->mnt_sb);
+    mnt->mnt_root = NULL;
+    mnt->mnt_sb = NULL;
+
+    klog(LOG_DEBUG, "Unmounted %s\n", target);
+    return 0;
+}
+
+SYSCALL_DECL1(umount, const char *, target)
 {
     return -ENOSYS;
 }

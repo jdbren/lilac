@@ -16,10 +16,11 @@ log.txt
 dump.txt
 kbuild.config
 libc/libk.a
-kernel/l.sh
+kernel/libk.a
 libc/libc.a
 init/init
 kernel/drivers/acpi/acpi.lib
 resources/code/inodes.txt
 user/ls
 *.old
+build*

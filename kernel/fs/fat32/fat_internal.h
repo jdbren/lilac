@@ -97,7 +97,7 @@ struct fat_FAT_buf {
     u32 first_clst;
     u32 last_clst;
     u32 sectors;
-    volatile u32 buf[FAT_BUFFER_SIZE / 4];
+    volatile u32 *FAT_buf;
 };
 
 struct fat_file_buf {
@@ -120,7 +120,7 @@ struct fat_disk {
 };
 
 #define FAT_VALUE(FAT, clst) \
-    ((FAT).buf[(clst) - (FAT).first_clst] & 0x0FFFFFFF)
+    ((FAT).FAT_buf[(clst) - (FAT).first_clst] & 0x0FFFFFFF)
 
 struct super_block;
 struct inode;

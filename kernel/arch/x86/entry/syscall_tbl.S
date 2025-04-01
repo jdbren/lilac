@@ -1,15 +1,20 @@
 // Syscall table and defs
+#include <lilac/errno.h>
 
 sys_restart_syscall:
+	mov $-ENOSYS, %eax
 	ret
 
-sys_time:
+sys_pipe:
+	mov $-ENOSYS, %eax
 	ret
 
-sys_stat:
+sys_dup:
+	mov $-ENOSYS, %eax
 	ret
 
-sys_umount:
+sys_unlink:
+	mov $-ENOSYS, %eax
 	ret
 
 #ifdef ARCH_x86_64
@@ -22,7 +27,7 @@ sys_umount:
 .endm
 #endif
 
-.data
+.section .rodata
 .globl syscall_table
 .globl syscall_table_end
 syscall_table:
@@ -45,8 +50,10 @@ syscall_table:
 	sc_tbl_entry umount		# 16
 	sc_tbl_entry getdents	# 17
 	sc_tbl_entry getcwd		# 18
-	// sc_tbl_entry mkdir	# 19
-	// sc_tbl_entry rmdir	# 20
-	// sc_tbl_entry dup		# 21
-	// sc_tbl_entry pipe	# 22
+	sc_tbl_entry mkdir		# 19
+	sc_tbl_entry unlink		# 20
+	sc_tbl_entry dup		# 21
+	sc_tbl_entry pipe		# 22
+	sc_tbl_entry brk		# 23
+	sc_tbl_entry sbrk		# 24
 syscall_table_end:
