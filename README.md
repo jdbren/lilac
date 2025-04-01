@@ -1,3 +1,13 @@
+Updated 3/31/25 - 
+Running in long mode (x86_64) is now supported. I have ported the newlib
+C library, and modified binutils and gcc sources to customize the compiler
+when it may be helpful. See those ports here:
+
+https://github.com/jdbren/newlib
+https://github.com/jdbren/gcc
+https://github.com/jdbren/binutils-gdb
+
+------------------------------------------------------------------------------
 Lilac is a hobby operating system project running on x86 (32-bit) in 
 early development. It is a toy project to learn about kernel programming and
 operating system fundamentals. 
