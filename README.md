@@ -5,7 +5,7 @@ when it may be helpful. See those ports here:
 
 https://github.com/jdbren/newlib \
 https://github.com/jdbren/gcc \
-https://github.com/jdbren/binutils-gdb \
+https://github.com/jdbren/binutils-gdb
 
 ------------------------------------------------------------------------------
 Lilac is a hobby operating system project running on x86 (32-bit) in 
