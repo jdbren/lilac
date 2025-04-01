@@ -1,6 +1,6 @@
 include kbuild.config
 export DESTDIR=$(SYSROOT)
-export LIBC_DIR?=$(HOME)/newlib-cygwin
+export LIBC_DIR?=$(HOME)/newlib
 
 .PHONY: all clean init user libc install install-libc install-system
 
