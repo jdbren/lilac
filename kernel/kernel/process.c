@@ -221,7 +221,8 @@ int do_fork(void)
     return pid;
 }
 
-static __noreturn void exec_and_return(void)
+__noreturn
+static void exec_and_return(void)
 {
     klog(LOG_DEBUG, "Entering exec_and_return, pid = %d\n", current->pid);
     struct mm_info *mem = arch_process_remap(current->mm);
@@ -372,8 +373,11 @@ SYSCALL_DECL1(chdir, const char*, path)
 
     struct dentry *d = vfs_lookup(path_buf);
     if (IS_ERR(d)) {
-        kfree(path_buf);
-        return PTR_ERR(d);
+        err = PTR_ERR(d);
+        goto out;
+    } else if (!d || !d->d_inode) {
+        err = -ENOENT;
+        goto out;
     }
 
     if (d->d_inode->i_type != TYPE_DIR) {

@@ -20,7 +20,7 @@ struct file {
     const struct file_operations *f_op;
     void *f_info; // fs specific data
     // struct vfsmount *f_disk;
-} __align(4);
+};
 
 struct file_operations {
     int     (*lseek)(struct file *, int, int);

@@ -79,8 +79,8 @@ struct device {
         .mutex = MUTEX_INIT \
     }
 
-int __must_check device_register(struct device *dev);
-int __must_check device_unregister(struct device *dev);
+[[nodiscard]] int device_register(struct device *dev);
+[[nodiscard]] int device_unregister(struct device *dev);
 
 static inline struct device *device_alloc(void)
 {

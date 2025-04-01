@@ -20,12 +20,12 @@
 #define HPET_TIMER_CONF_REG(N) (0x100 + 0x20 * N)
 #define HPET_TIMER_COMP_REG(N) (0x108 + 0x20 * N)
 
-struct hpet_id_reg {
+struct __packed hpet_id_reg {
     u8 rev_id;
     u8 flags;
     u16 vendor_id;
     u32 counter_clk_period;
-} __packed;
+};
 
 extern void timer_handler(void);
 extern void init_PIT(int freq);

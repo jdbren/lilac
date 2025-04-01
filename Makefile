@@ -2,6 +2,10 @@ include kbuild.config
 export DESTDIR=$(SYSROOT)
 export LIBC_DIR?=$(HOME)/newlib
 
+ifeq ($(V),1)
+export VERBOSE=1
+endif
+
 .PHONY: all clean init user libc install install-libc install-system
 
 all: lilac.ker
@@ -10,7 +14,7 @@ lilac.ker:
 	$(MAKE) -C kernel
 
 libc:
-	if [ ! -d build-libc ]; then \
+	@if [ ! -d build-libc ]; then \
 		mkdir -p build-libc; \
 		env -i /bin/sh -c 'cd build-libc; \
 		$(LIBC_DIR)/configure \
@@ -18,10 +22,10 @@ libc:
 			--target=$(TARGET) \
 			--enable-newlib-multithread=no'; \
 	fi
-	$(MAKE) -C build-libc all
+	$(MAKE) -s -C build-libc all
 
 install-libc: libc
-	$(MAKE) DESTDIR=$(DESTDIR) -C build-libc install
+	$(MAKE) -s DESTDIR=$(DESTDIR) -C build-libc install
 	cp -r $(DESTDIR)$(PREFIX)/$(TARGET)/* $(SYSROOT)$(PREFIX)/ || true
 	rm -rf $(DESTDIR)$(PREFIX)/$(TARGET) || true
 
@@ -31,7 +35,7 @@ init: libc
 user: libc init
 	$(MAKE) -C user
 
-install: lilac.ker
+install:
 	$(MAKE) -C kernel install
 
 install-system: lilac.ker install-libc init user
@@ -39,7 +43,7 @@ install-system: lilac.ker install-libc init user
 	$(MAKE) -C init install
 
 clean:
-	for PROJECT in $(PROJECTS); do \
+	@for PROJECT in $(PROJECTS); do \
   		(cd $$PROJECT && $(MAKE) clean) \
 	done
 	rm -rf build-libc

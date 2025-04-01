@@ -4,7 +4,7 @@
 #include <lilac/types.h>
 #include <lilac/config.h>
 
-struct fat_extBS_32 {
+struct __packed fat_extBS_32 {
 	u32		FAT_size_32;
 	u16		extended_flags;
 	u16		fat_version;
@@ -20,9 +20,9 @@ struct fat_extBS_32 {
 	char    fat_type_label[8];
     u8      zero[420];
     u16     signature;
-} __packed;
+};
 
-struct fat_BS {
+struct __packed fat_BS {
     u8 	jmpBoot[3];
     u8 	oem_name[8];
     u16	bytes_per_sector;
@@ -41,9 +41,9 @@ struct fat_BS {
     union {
 	    struct fat_extBS_32 extended_section;
     };
-} __packed;
+};
 
-struct FSInfo {
+struct __packed FSInfo {
     u32 lead_sig;
     u8 res[480];
     u32 struct_sig;
@@ -51,9 +51,9 @@ struct FSInfo {
     u32 next_free_clst;
     u8 res2[12];
     u32 trail_sig;
-} __packed;
+};
 
-struct fat_file {
+struct __packed fat_file {
     unsigned char name[8];
     unsigned char ext[3];
     u8 attributes;
@@ -67,7 +67,7 @@ struct fat_file {
     u16 last_write_date;
     u16 cl_low;
     u32 file_size;
-} __packed;
+};
 
 #define LONG_FNAME 0x0F
 #define FAT_RO_ATTR 0x01

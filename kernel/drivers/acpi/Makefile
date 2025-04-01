@@ -28,12 +28,23 @@ $(ACPI_OBJS)
 all: acpi.lib
 
 acpi.lib: $(OBJS)
+ifndef VERBOSE
+	@echo "\tAR\t$@"
+	@$(AR) rcs $@ $(OBJS)
+else
 	$(AR) rcs $@ $(OBJS)
+endif
 
 %.o: %.c
+ifndef VERBOSE
+	@echo "\tCC\t$<"
+	@$(CC) -MD -c $< -o $@ $(CFLAGS)
+else
 	$(CC) -MD -c $< -o $@ $(CFLAGS)
+endif
 
 clean:
-	rm -f $(OBJS) $(OBJS:.o=.d) acpi.lib
+	@echo "CLEAN\tACPI_OBJS"
+	@rm -f $(OBJS) $(OBJS:.o=.d) acpi.lib
 
 -include $(OBJS:.o=.d)

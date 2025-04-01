@@ -42,7 +42,8 @@ struct block_device {
 
 struct gpt_part_entry;
 
-int __must_check add_gendisk(struct gendisk *disk);
+__must_check
+int add_gendisk(struct gendisk *disk);
 int scan_partitions(struct gendisk *disk);
 struct block_device *get_bdev(dev_t devnum);
 

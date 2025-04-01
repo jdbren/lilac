@@ -51,6 +51,10 @@ int brk(void *addr)
         vma_list = vma_list->vm_next;
     }
 
+    if (vma_list == NULL) {
+        return -ENOMEM; // No VMA found
+    }
+
     // Check if the new break address is valid
     if (addr_val < vma_list->start || addr_val - vma_list->start > 0xffffff) {
         return -ENOMEM; // Invalid address
@@ -84,6 +88,11 @@ void * sbrk(intptr_t increment)
     // Find the VMA that contains the current break point
     while (vma_list && vma_list->end < end_brk) {
         vma_list = vma_list->vm_next;
+    }
+
+    if (vma_list == NULL) {
+        klog(LOG_WARN, "sbrk: No VMA found for current break point\n");
+        return ERR_PTR(-ENOMEM); // No VMA found
     }
 
     if (increment < 0 || (mm->brk - vma_list->start + increment) > 0xFFFFFF) {

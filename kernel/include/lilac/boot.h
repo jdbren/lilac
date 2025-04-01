@@ -39,7 +39,7 @@ struct boot_info {
 uintptr_t get_rsdp(void);
 void parse_multiboot(uintptr_t addr, struct multiboot_info *mbd);
 
-__no_ret __no_stack_chk
+__noreturn __no_stack_chk
 void start_kernel(void);
 
 #endif

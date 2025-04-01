@@ -13,9 +13,9 @@
 #define get_index(frame) ((uintptr_t)frame / (32 * PAGE_SIZE))
 #define get_offset(frame) (((uintptr_t)frame / PAGE_SIZE) % 32)
 
-typedef struct page {
+typedef struct __packed page {
     u8 pg[PAGE_SIZE];
-} __packed page_t;
+} page_t;
 
 extern const u32 _kernel_start;
 extern const u32 _kernel_end;

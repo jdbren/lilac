@@ -54,7 +54,7 @@ struct inode {
     void *i_private; /* fs or device private pointer */
 };
 
-struct inode_operations {
+struct __cacheline_align inode_operations {
     struct dentry *(*lookup)(struct inode *, struct dentry *, unsigned int);
     int (*open)(struct inode *, struct file *);
     int (*create)(struct inode *, struct dentry *, umode_t);
@@ -64,7 +64,7 @@ struct inode_operations {
     int (*rename)(struct inode *, struct dentry *,
             struct inode *, struct dentry *, unsigned int);
     int (*update_time)(struct inode *, int);
-} __cacheline_align;
+};
 
 
 #define d_lock	d_lockref.lock
@@ -88,12 +88,12 @@ struct dentry {
     struct vfsmount *d_mount;
 };
 
-struct dentry_operations {
+struct __cacheline_align dentry_operations {
     int (*d_revalidate)(struct dentry *, unsigned int);
     int (*d_hash)(const struct dentry *, const char *);
     int (*d_delete)(const struct dentry *);
     int (*d_init)(struct dentry *);
-} __cacheline_align;
+};
 
 struct super_block {
     // struct list_head			s_list;		/* Keep this first */

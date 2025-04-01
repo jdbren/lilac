@@ -6,6 +6,7 @@
 #include <lilac/libc.h>
 #include <lilac/errno.h>
 #include <lilac/sched.h>
+#include <lilac/log.h>
 
 extern int arch_user_copy(void *dst, const void *src, size_t size);
 extern int arch_strncpy_from_user(char *dst, const char *src, size_t max_size);
@@ -24,7 +25,8 @@ extern int arch_strnlen_user(const char *str, size_t max_size);
     (_is_data(addr, size, mm) || _is_stack(addr, size, mm) || \
     _is_brk(addr, size, mm) || _is_code(addr, size, mm))
 
-static inline __must_check int check_access(void *addr, size_t size)
+__must_check
+static inline int check_access(void *addr, size_t size)
 {
     struct mm_info *mm = current->mm;
     if (!access_ok(addr, size, mm)) {
@@ -33,7 +35,8 @@ static inline __must_check int check_access(void *addr, size_t size)
     return 0;
 }
 
-static inline __must_check int copy_to_user(void *dst, const void *src, size_t size)
+__must_check
+static inline int copy_to_user(void *dst, const void *src, size_t size)
 {
     struct mm_info *mm = current->mm;
     if (!access_ok(dst, size, mm)) {
@@ -43,7 +46,8 @@ static inline __must_check int copy_to_user(void *dst, const void *src, size_t s
     return arch_user_copy(dst, src, size);
 }
 
-static inline __must_check int copy_from_user(void *dst, const void *src, size_t size)
+__must_check
+static inline int copy_from_user(void *dst, const void *src, size_t size)
 {
     struct mm_info *mm = current->mm;
     if (!access_ok(src, size, mm)) {
@@ -53,7 +57,8 @@ static inline __must_check int copy_from_user(void *dst, const void *src, size_t
     return arch_user_copy(dst, src, size);
 }
 
-static inline __must_check int strncpy_from_user(char *dst, const char *src, size_t max_size)
+__must_check
+static inline int strncpy_from_user(char *dst, const char *src, size_t max_size)
 {
     struct mm_info *mm = current->mm;
     if (!access_ok(src, 1, mm)) {
@@ -63,7 +68,8 @@ static inline __must_check int strncpy_from_user(char *dst, const char *src, siz
     return arch_strncpy_from_user(dst, src, max_size);
 }
 
-static inline __must_check int strnlen_user(const char *str, int max)
+__must_check
+static inline int strnlen_user(const char *str, int max)
 {
     struct mm_info *mm = current->mm;
     if (!access_ok(str, 1, mm)) {
@@ -73,7 +79,8 @@ static inline __must_check int strnlen_user(const char *str, int max)
     return arch_strnlen_user(str, max);
 }
 
-static inline __must_check int user_str_ok(const char *str, int max_size)
+__must_check
+static inline int user_str_ok(const char *str, int max_size)
 {
     struct mm_info *mm = current->mm;
     int len = strnlen_user(str, max_size);

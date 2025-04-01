@@ -6,15 +6,15 @@
 #include <lilac/types.h>
 #include <lilac/config.h>
 
-struct RSDP {
+struct __packed RSDP {
     char Signature[8];
     u8 Checksum;
     char OEMID[6];
     u8 Revision;
     u32 RsdtAddress;
-} __packed;
+};
 
-struct XSDP {
+struct __packed XSDP {
     char Signature[8];
     u8 Checksum;
     char OEMID[6];
@@ -25,9 +25,9 @@ struct XSDP {
     u64 XsdtAddress;
     u8 ExtendedChecksum;
     u8 reserved[3];
-} __packed;
+};
 
-struct SDTHeader {
+struct __packed SDTHeader {
     char Signature[4];
     u32 Length;
     u8 Revision;
@@ -37,7 +37,7 @@ struct SDTHeader {
     u32 OEMRevision;
     u32 CreatorID;
     u32 CreatorRevision;
-} __packed;
+};
 
 struct acpi_info {
     struct madt_info *madt;

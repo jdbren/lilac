@@ -1,5 +1,6 @@
 HOST?=$(shell uname -m)-elf
 HOSTARCH=$(shell ../scripts/target-triplet-to-arch.sh $(HOST))
+COMPILER_DIR?=$(shell dirname $(shell which $(CC)))/..
 
 CFLAGS?=-Og
 LDFLAGS?=
@@ -16,7 +17,7 @@ FLAGS=-D__lilac__ -D__is_kernel -Iinclude -ffreestanding -Wall -Wextra \
 CFLAGS:=$(CFLAGS) $(FLAGS) -mno-red-zone -fanalyzer
 CXXFLAGS:=$(CXXFLAGS) $(FLAGS) -fno-exceptions -fno-rtti
 LDFLAGS:=$(LDFLAGS)
-LIBS:=$(LIBS) -nostdlib -lgcc
+LIBS:=$(LIBS) -nostdlib $(COMPILER_DIR)/lib/gcc/*/*/libgcc.a
 
 ARCHDIR=arch/$(HOSTARCH)
 
@@ -100,32 +101,72 @@ $(ARCHDIR)/boot/crtn.o
 all: lilac.ker
 
 lilac.ker: $(OBJS) $(LINKER_SCRIPT) acpi libk.a
-	$(CC) -T $(LINKER_SCRIPT) -o $@ $(CFLAGS) $(LINK_LIST)
+ifndef VERBOSE
+	@echo "\tLD\t$@"
+	@$(LD) -T $(LINKER_SCRIPT) -o $@ $(LINK_LIST)
+else
+	$(LD) -T $(LINKER_SCRIPT) -o $@ $(LINK_LIST)
 	grub-file --is-x86-multiboot2 lilac.ker
+endif
 
 $(ARCHDIR)/crtbegin.o $(ARCHDIR)/crtend.o:
+ifndef VERBOSE
+	@echo "\tCP\t$@"
+	@OBJ=`$(CC) $(CFLAGS) $(LDFLAGS) -print-file-name=$(@F)` && cp "$$OBJ" $@
+else
 	OBJ=`$(CC) $(CFLAGS) $(LDFLAGS) -print-file-name=$(@F)` && cp "$$OBJ" $@
+endif
 
 libk.a: $(LIBK_OBJS)
+ifndef VERBOSE
+	@echo "\tAR\t$@"
+	@$(AR) rcs $@ $(LIBK_OBJS)
+else
 	$(AR) rcs $@ $(LIBK_OBJS)
+endif
 
 .c.o:
+ifndef VERBOSE
+	@echo "\tCC\t$<"
+	@$(CC) -MD -c $< -o $@ $(CFLAGS)
+else
 	$(CC) -MD -c $< -o $@ $(CFLAGS)
+endif
 
 .S.o:
+ifndef VERBOSE
+	@echo "\tCC\t$<"
+	@$(CC) -MD -c $< -o $@ $(CFLAGS)
+else
 	$(CC) -MD -c $< -o $@ $(CFLAGS)
+endif
+
+.s.o:
+ifndef VERBOSE
+	@echo "\tAS\t$<"
+	@$(AS) -c $< -o $@
+else
+	$(AS) -c $< -o $@
+endif
 
 .cpp.o:
+ifndef VERBOSE
+	@echo "\tCXX\t$<"
+	@$(CXX) -MD -c $< -o $@ $(CXXFLAGS)
+else
 	$(CXX) -MD -c $< -o $@ $(CXXFLAGS)
+endif
 
 clean:
 	rm -f lilac.ker
 	rm -f libk.a
-	rm -f $(OBJS)
-	rm -f $(OBJS:.o=.d)
-	rm -f $(LIBK_OBJS)
-	rm -f $(LIBK_OBJS:.o=.d)
-	$(MAKE) -C drivers/acpi clean
+	@echo "CLEAN\tOBJS"
+	@rm -f $(OBJS)
+	@rm -f $(OBJS:.o=.d)
+	@echo "CLEAN\tLIBK_OBJS"
+	@rm -f $(LIBK_OBJS)
+	@rm -f $(LIBK_OBJS:.o=.d)
+	@$(MAKE) -C drivers/acpi clean
 
 install: lilac.ker
 	mkdir -p $(DESTDIR)$(BOOTDIR)

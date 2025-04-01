@@ -7,8 +7,7 @@
 
 #define assert(x) if (unlikely(!(x))) kerror("Assertion failed: " #x)
 
-static inline __attribute__((noreturn))
-void kerror(const char *msg) {
+[[noreturn]] static inline void kerror(const char *msg) {
 	klog(LOG_FATAL, "Kernel panic: %s\n", msg);
 	asm("cli");
 	while (1)

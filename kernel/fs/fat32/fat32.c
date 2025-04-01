@@ -2,6 +2,7 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <fs/fat32.h>
 
+#include <stdbool.h>
 #include <lilac/types.h>
 #include <lilac/panic.h>
 #include <lilac/fs.h>
@@ -40,8 +41,8 @@ const struct inode_operations fat_iops = {
 **/
 static void print_fat32_data(struct fat_BS*);
 
-static inline int __must_check
-fat_read_bpb(struct fat_disk *fat_disk, struct gendisk *gd)
+__must_check
+static inline int fat_read_bpb(struct fat_disk *fat_disk, struct gendisk *gd)
 {
     gd->ops->disk_read(gd, fat_disk->base_lba, (void*)&fat_disk->bpb, 1);
     if (fat_disk->bpb.extended_section.signature != 0xAA55)
@@ -49,8 +50,8 @@ fat_read_bpb(struct fat_disk *fat_disk, struct gendisk *gd)
     return 0;
 }
 
-static inline int __must_check
-fat32_read_fs_info(struct fat_disk *fat_disk, struct gendisk *gd)
+__must_check
+static inline int fat32_read_fs_info(struct fat_disk *fat_disk, struct gendisk *gd)
 {
     gd->ops->disk_read(gd, fat_disk->base_lba +
         fat_disk->bpb.extended_section.fs_info, (void*)&fat_disk->fs_info, 1);
@@ -61,15 +62,15 @@ fat32_read_fs_info(struct fat_disk *fat_disk, struct gendisk *gd)
     return 0;
 }
 
-int __must_check
-fat32_write_fs_info(struct fat_disk *fat_disk, struct gendisk *gd)
+__must_check
+int fat32_write_fs_info(struct fat_disk *fat_disk, struct gendisk *gd)
 {
     return gd->ops->disk_write(gd, fat_disk->base_lba +
         fat_disk->bpb.extended_section.fs_info, (void*)&fat_disk->fs_info, 1);
 }
 
-static int __must_check
-fat_read_FAT(struct fat_disk *fat_disk, struct gendisk *hd)
+__must_check
+static int fat_read_FAT(struct fat_disk *fat_disk, struct gendisk *hd)
 {
     const u32 lba = fat_disk->fat_begin_lba + 0 * fat_disk->sect_per_clst;
     const u32 FAT_sz = fat_disk->bpb.extended_section.FAT_size_32;
@@ -100,8 +101,8 @@ fat_read_FAT(struct fat_disk *fat_disk, struct gendisk *hd)
     return ret;
 }
 
-int __must_check
-fat_write_FAT(struct fat_disk *fat_disk, struct gendisk *gd)
+__must_check
+int fat_write_FAT(struct fat_disk *fat_disk, struct gendisk *gd)
 {
     const u32 lba = fat_disk->fat_begin_lba +
         (fat_disk->FAT.first_clst * fat_disk->sect_per_clst);

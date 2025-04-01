@@ -42,7 +42,7 @@ static void syscall_init(void)
     write_msr(IA32_KERNEL_GS_BASE, (u32)tss_ptr, tss_ptr >> 32);
 }
 
-__no_stack_chk __no_ret
+__noreturn __no_stack_chk
 void x86_64_kernel_early(void)
 {
     idt_init();

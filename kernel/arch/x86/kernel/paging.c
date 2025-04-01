@@ -2,6 +2,7 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/types.h>
 #include <lilac/panic.h>
+#include <lilac/libc.h>
 #include "paging.h"
 #include "pgframe.h"
 

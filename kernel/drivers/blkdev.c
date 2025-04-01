@@ -11,7 +11,8 @@
 static struct gendisk *disks[MAX_DISKS];
 static int num_disks;
 
-static int __must_check create_block_dev(struct gendisk *disk,
+__must_check
+static int create_block_dev(struct gendisk *disk,
    const struct gpt_part_entry *part_entry, int num);
 
 int gpt_validate(struct GPT *gpt) {
@@ -21,7 +22,8 @@ int gpt_validate(struct GPT *gpt) {
     return 0;
 }
 
-static int __must_check get_part_type(struct gendisk *disk,
+__must_check
+static int get_part_type(struct gendisk *disk,
     const struct gpt_part_entry *part)
 {
     unsigned char buf[512];
@@ -32,7 +34,8 @@ static int __must_check get_part_type(struct gendisk *disk,
     return -1;
 }
 
-int __must_check add_gendisk(struct gendisk *disk)
+__must_check
+int add_gendisk(struct gendisk *disk)
 {
     if (num_disks >= MAX_DISKS)
         return -1;
@@ -107,8 +110,8 @@ struct block_device *get_bdev(dev_t devnum)
     return NULL;
 }
 
-
-static int __must_check create_block_dev(struct gendisk *disk,
+__must_check
+static int create_block_dev(struct gendisk *disk,
     const struct gpt_part_entry *part_entry, int num)
 {
     struct block_device *bdev = kzmalloc(sizeof(*bdev));

@@ -13,9 +13,8 @@
 
 #define KERNEL_VERSION "0.1.0"
 
-#define __no_ret __attribute__((noreturn))
-#define __no_stack_chk __attribute__((no_stack_protector))
-#define __always_inline __attribute__((always_inline)) inline
+#define __no_stack_chk [[gnu::no_stack_protector]]
+#define __always_inline [[gnu::always_inline]]
 
 
 #if defined ARCH_x86 || defined ARCH_x86_64
@@ -29,12 +28,14 @@ static inline void arch_idle(void)
     }
 }
 
-static __always_inline void arch_enable_interrupts(void)
+__always_inline
+static inline void arch_enable_interrupts(void)
 {
     asm volatile ("sti");
 }
 
-static __always_inline void arch_disable_interrupts(void)
+__always_inline
+static inline void arch_disable_interrupts(void)
 {
     asm volatile ("cli");
 }

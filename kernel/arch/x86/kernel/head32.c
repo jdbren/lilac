@@ -50,8 +50,8 @@ uintptr_t get_rsdp(void)
     return virt_to_phys((void*)mbd.new_acpi->rsdp);
 }
 
-__attribute__((noreturn))
-void __stack_chk_fail(void)
+
+[[noreturn]] void __stack_chk_fail(void)
 {
 #if __STDC_HOSTED__
     abort();

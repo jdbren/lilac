@@ -4,15 +4,15 @@
 #include <lilac/config.h>
 #include <acpi/acpi.h>
 
-struct addr_struct {
+struct __packed addr_struct {
     u8 address_space_id;    // 0 - system memory, 1 - system I/O
     u8 register_bit_width;
     u8 register_bit_offset;
     u8 reserved;
     u64 address;
-} __packed;
+};
 
-struct hpet {
+struct __packed hpet {
     struct SDTHeader header;
     u8 hardware_rev_id;
     u8 comparator_count:5;
@@ -24,7 +24,7 @@ struct hpet {
     u8 hpet_number;
     u16 minimum_tick;
     u8 page_protection;
-} __packed;
+};
 
 struct hpet_info {
     u64 address;

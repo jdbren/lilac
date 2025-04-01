@@ -3,7 +3,7 @@
 
 #include <lilac/types.h>
 
-#define ISR __attribute__((interrupt))
+#define ISR [[gnu::interrupt]]
 
 int install_isr(int num, void (*handler));
 int uninstall_isr(int num);

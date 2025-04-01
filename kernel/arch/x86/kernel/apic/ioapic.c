@@ -18,13 +18,13 @@
 #define IOAPIC_VER 1
 #define IOAPIC_ARB 2
 
-typedef struct redir_entry {
+typedef struct __packed redir_entry {
     u8 vector;
     u8 flags;
     u8 mask;
     u8 reserved[4];
     u8 dest;
-} __packed redir_entry_t;
+} redir_entry_t;
 
 static uintptr_t ioapic_base;
 static u8 ioapic_gsi_base;

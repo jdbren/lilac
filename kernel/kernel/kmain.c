@@ -6,7 +6,7 @@
 #include <lilac/console.h>
 #include <acpi/acpi.h>
 
-__no_ret __no_stack_chk
+__noreturn __no_stack_chk
 void start_kernel(void)
 {
     kstatus(STATUS_OK, "Starting kernel\n");

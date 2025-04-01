@@ -10,15 +10,15 @@
 #define IDT_SIZE 256
 #define DPL_3 0x60
 
-struct IDTGate32 {
+struct __packed IDTGate32 {
     u16 offset_low;
     u16 selector;
     u8 zero;
     u8 type_attr;
     u16 offset_high;
-} __packed;
+};
 
-struct IDTGate64 {
+struct __packed IDTGate64 {
     u16 offset_low;
     u16 selector;
     u8 ist;
@@ -26,12 +26,12 @@ struct IDTGate64 {
     u16 offset_mid;
     u32 offset_high;
     u32 zero;
-} __packed;
+};
 
-struct IDT {
+struct __packed IDT {
     u16 size;
     uintptr_t offset;
-} __packed;
+};
 
 #ifdef ARCH_x86_64
 typedef struct IDTGate64 idt_entry_t;
@@ -85,18 +85,3 @@ void idt_entry(int num, u32 offset, u16 selector, u8 unused, u8 attr)
 }
 #endif
 
-
-struct cpu_state {
-    unsigned int eax;
-    unsigned int ebx;
-    unsigned int ecx;
-    //...
-    unsigned int esp;
-} __packed;
-
-struct stack_state {
-    unsigned int error_code;
-    unsigned int eip;
-    unsigned int cs;
-    unsigned int eflags;
-} __packed;

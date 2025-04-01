@@ -110,8 +110,7 @@ inline void set_console(int value)
     console = value;
 }
 
-__attribute__((interrupt))
-void keyboard_int(struct interrupt_frame *frame)
+[[gnu::interrupt]] void keyboard_int(struct interrupt_frame *frame)
 {
     u8 keycode;
 

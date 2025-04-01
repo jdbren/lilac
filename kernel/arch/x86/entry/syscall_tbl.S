@@ -1,4 +1,5 @@
 // Syscall table and defs
+#define __ASSEMBLY__
 #include <lilac/errno.h>
 
 sys_restart_syscall:

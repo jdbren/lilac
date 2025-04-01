@@ -3,7 +3,8 @@
 #include <lilac/fs.h>
 #include <lilac/lilac.h>
 
-int __must_check device_register(struct device *dev)
+[[nodiscard]]
+int device_register(struct device *dev)
 {
     mutex_init(&dev->mutex);
     return 0;

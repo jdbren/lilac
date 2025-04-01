@@ -29,7 +29,7 @@ enum segment_flags {
     READ = 4,
 };
 
-struct elf32_header {
+struct __packed elf32_header {
     u16 type;
     u16 mach;
     u32 elfv;
@@ -43,9 +43,9 @@ struct elf32_header {
     u16 s_entry_sz;
     u16 s_tbl_sz;
     u16 nms_idx;
-} __packed;
+};
 
-struct elf64_header {
+struct __packed elf64_header {
     u16 type;
     u16 mach;
     u32 elfv;
@@ -59,9 +59,9 @@ struct elf64_header {
     u16 s_entry_sz;
     u16 s_tbl_sz;
     u16 nms_idx;
-} __packed;
+};
 
-struct elf_header {
+struct __packed elf_header {
     u32 sig;
     u8 class;
     u8 endian;
@@ -72,9 +72,9 @@ struct elf_header {
         struct elf32_header elf32;
         struct elf64_header elf64;
     };
-} __packed;
+};
 
-struct elf32_pheader {
+struct __packed elf32_pheader {
     u32 type;
     u32 p_offset;
     u32 p_vaddr;
@@ -83,9 +83,9 @@ struct elf32_pheader {
     u32 p_memsz;
     u32 flags;
     u32 align;
-} __packed;
+};
 
-struct elf64_pheader {
+struct __packed elf64_pheader {
     u32 type;
     u32 flags;
     u64 p_offset;
@@ -94,7 +94,7 @@ struct elf64_pheader {
     u64 p_filesz;
     u64 p_memsz;
     u64 align;
-} __packed;
+};
 
 struct mm_info;
 

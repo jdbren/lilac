@@ -32,7 +32,7 @@ struct sb_list {
     u32 num_sb;
 };
 
-struct sb_header {
+struct __align(32) sb_header {
     struct sb_header *next;
     struct sb_header *prev;
     alloc_t *free;
@@ -42,7 +42,7 @@ struct sb_header {
     };
     u16 free_count;
     bool is_large;
-} __align(32);
+};
 
 
 static struct sb_list buckets[BUCKETS];
