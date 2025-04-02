@@ -32,7 +32,7 @@ SYSROOT="$(pwd)/sysroot"
 CC="$CC --sysroot=$SYSROOT"
 CXX="$CXX --sysroot=$SYSROOT"
 
-echo "PROJECTS=${PROJECTS}" >> kbuild.config
+echo "export PROJECTS=${PROJECTS}" >> kbuild.config
 echo "export MAKE=${MAKE}" >> kbuild.config
 echo "export HOST=${HOST}" >> kbuild.config
 echo "export AR=${AR}" >> kbuild.config

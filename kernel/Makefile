@@ -2,6 +2,10 @@ HOST?=$(shell uname -m)-elf
 HOSTARCH=$(shell ../scripts/target-triplet-to-arch.sh $(HOST))
 COMPILER_DIR?=$(shell dirname $(shell which $(CC)))/..
 
+ifeq ($(HOST), x86_64-elf)
+CONFIG_x86_64-elf := 1
+endif
+
 CFLAGS?=-Og
 LDFLAGS?=
 LIBS?=./libk.a ./drivers/acpi/acpi.lib
@@ -106,8 +110,8 @@ ifndef VERBOSE
 	@$(LD) -T $(LINKER_SCRIPT) -o $@ $(LINK_LIST)
 else
 	$(LD) -T $(LINKER_SCRIPT) -o $@ $(LINK_LIST)
-	grub-file --is-x86-multiboot2 lilac.ker
 endif
+	grub-file --is-x86-multiboot2 lilac.ker
 
 $(ARCHDIR)/crtbegin.o $(ARCHDIR)/crtend.o:
 ifndef VERBOSE

@@ -11,28 +11,28 @@ endif
 all: lilac.ker
 
 lilac.ker:
-	$(MAKE) -C kernel
+	$(MAKE) -j6 -C kernel
 
 libc:
 	@if [ ! -d build-libc ]; then \
 		mkdir -p build-libc; \
-		env -i /bin/sh -c 'cd build-libc; \
+		env -i PATH="$$PATH" /bin/sh -c 'cd build-libc; \
 		$(LIBC_DIR)/configure \
 			--prefix=$(PREFIX) \
 			--target=$(TARGET) \
 			--enable-newlib-multithread=no'; \
 	fi
-	$(MAKE) -s -C build-libc all
+	$(MAKE) -j6 -s -C build-libc all
 
 install-libc: libc
 	$(MAKE) -s DESTDIR=$(DESTDIR) -C build-libc install
 	cp -r $(DESTDIR)$(PREFIX)/$(TARGET)/* $(SYSROOT)$(PREFIX)/ || true
 	rm -rf $(DESTDIR)$(PREFIX)/$(TARGET) || true
 
-init: libc
+init: install-libc
 	$(MAKE) -C init
 
-user: libc init
+user: install-libc
 	$(MAKE) -C user
 
 install:
@@ -44,7 +44,7 @@ install-system: lilac.ker install-libc init user
 
 clean:
 	@for PROJECT in $(PROJECTS); do \
-  		(cd $$PROJECT && $(MAKE) clean) \
+  		($(MAKE) -C $$PROJECT clean) \
 	done
 	rm -rf build-libc
 	rm -rf sysroot

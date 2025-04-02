@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -eu
 
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
