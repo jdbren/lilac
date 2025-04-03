@@ -16,6 +16,14 @@
 #define STACK_CHK_GUARD 0x595e9fbd94fda766
 
 uintptr_t __stack_chk_guard = STACK_CHK_GUARD;
+[[noreturn]] void __stack_chk_fail(void)
+{
+#if __STDC_HOSTED__
+    abort();
+#else
+    kerror("Stack smashing detected\n");
+#endif
+}
 
 struct multiboot_info mbd;
 static struct acpi_info acpi;
