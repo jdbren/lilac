@@ -94,7 +94,10 @@ static void context_switch(struct task *prev, struct task *next)
     klog(LOG_DEBUG, "\tPC: %p\n", next->pc);
     klog(LOG_DEBUG, "\tStack: %p\n", next->kstack);
 
+    arch_disable_interrupts();
+    save_fp_regs(prev);
     arch_context_switch(prev, next);
+    restore_fp_regs(next);
 }
 
 void schedule(void)

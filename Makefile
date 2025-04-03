@@ -11,7 +11,7 @@ endif
 all: lilac.ker
 
 lilac.ker:
-	$(MAKE) -j6 -C kernel
+	$(MAKE) -j4 -C kernel
 
 libc:
 	@if [ ! -d build-libc ]; then \
@@ -22,7 +22,7 @@ libc:
 			--target=$(TARGET) \
 			--enable-newlib-multithread=no'; \
 	fi
-	$(MAKE) -j6 -s -C build-libc all
+	$(MAKE) -j4 -s -C build-libc all
 
 install-libc: libc
 	$(MAKE) -s DESTDIR=$(DESTDIR) -C build-libc install

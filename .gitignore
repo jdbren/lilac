@@ -24,3 +24,4 @@ resources/code/inodes.txt
 user/ls
 *.old
 build*
+/mnt

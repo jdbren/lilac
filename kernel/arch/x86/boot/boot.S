@@ -4,6 +4,7 @@
 #include <utility/multiboot2.h>
 #include <lilac/config.h>
 #include <asm/segments.h>
+#include <asm/cpu-flags.h>
 
 # Declare constants for the multiboot2 header.
 .set ARCH,     0
@@ -91,6 +92,19 @@ _start:
 	movl pa(_mbd_size), %ecx
 	rep ;movsb
 
+	mov $0x1, %eax
+	cpuid
+	and $1<<25, %edx
+	jz .noSSE
+	# enable SSE and the like
+	mov %cr0, %eax
+	and $(~X86_CR0_EM), %ax	# clear coprocessor emulation CR0.EM
+	or  $X86_CR0_MP, %ax	# set coprocessor monitoring  CR0.MP
+	mov %eax, %cr0
+	mov %cr4, %eax
+	or  $(X86_CR4_OSFXSR), %eax	# set CR4.OSFXSR
+	mov %eax, %cr4
+.noSSE:
 #ifdef ARCH_x86_64
 	movl 	$0x80000000, %eax
 	cpuid
@@ -99,7 +113,7 @@ _start:
 
 	movl 	$0x80000001, %eax
 	cpuid
-	test 	$(1 << 29), %edx
+	test 	$1<<29, %edx
 	jz 		.invlboot
 
 	jmp pa(startup_64)

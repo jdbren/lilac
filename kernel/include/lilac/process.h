@@ -93,6 +93,8 @@ struct mm_info * arch_process_remap(struct mm_info *existing);
 struct mm_info * arch_copy_mmap(struct mm_info *parent);
 void *           arch_user_stack(void);
 void *           arch_copy_regs(struct regs_state *src);
+void             save_fp_regs(struct task *task);
+void             restore_fp_regs(struct task *task);
 
 // kernel mode jump
 void             jump_new_proc(struct task *next);

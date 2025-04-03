@@ -4,6 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/syscall.h>
 
 #define SHELL_PROMPT "lilacOS %s # "
 
@@ -34,6 +35,9 @@ int prompt(void)
         }
         printf("Changed directory to %s\n", path);
         return 0;
+    } else if (strncmp(command, "shutdown", 8) == 0) {
+        printf("Shutting down...\n");
+        syscall0(25);
     }
 
     args[0] = command;

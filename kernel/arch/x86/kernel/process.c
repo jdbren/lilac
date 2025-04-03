@@ -235,3 +235,17 @@ void *arch_copy_regs(struct regs_state *src)
     *regs = *src;
     return regs;
 }
+
+void save_fp_regs(struct task *task)
+{
+    if (!task->fp_regs)
+        task->fp_regs = kzmalloc(512);
+    asm volatile("fxsave %0" : : "m" (*(char (*)[512])task->fp_regs) : "memory");
+}
+
+void restore_fp_regs(struct task *task)
+{
+    if (task->fp_regs == NULL)
+        return;
+    asm volatile("fxrstor %0" : : "m" (*(const char (*)[512])task->fp_regs) : "memory");
+}

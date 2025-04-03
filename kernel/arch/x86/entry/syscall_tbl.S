@@ -57,4 +57,5 @@ syscall_table:
 	sc_tbl_entry pipe		# 22
 	sc_tbl_entry brk		# 23
 	sc_tbl_entry sbrk		# 24
+	sc_tbl_entry shutdown	# 25
 syscall_table_end:
