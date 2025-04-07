@@ -127,6 +127,18 @@ struct inode;
 struct file;
 struct gendisk;
 
+struct fat_inode_priv {
+    struct fat_file entry;
+    u32 clst;
+    u32 clst_off;
+    struct fat_file_buf *buf;
+    //struct blkio_buffer *buffer;
+};
+
+struct fat_dir_context {
+    u32 index;
+};
+
 extern const struct file_operations fat_fops;
 extern const struct super_operations fat_sops;
 extern const struct inode_operations fat_iops;

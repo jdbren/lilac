@@ -40,6 +40,14 @@ struct block_device {
     struct mutex bd_holder_lock;
 };
 
+struct blkio_buffer {
+    struct block_device *bdev;
+    u32 lba;
+    u32 sector_cnt;
+    void *buffer;
+    struct list_head b_list;
+};
+
 struct gpt_part_entry;
 
 __must_check
