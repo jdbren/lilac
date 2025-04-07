@@ -351,8 +351,11 @@ SYSCALL_DECL3(getdents, unsigned int, fd, struct dirent*, dirp, size_t, buf_size
         return -ENOMEM;
 
     bytes = vfs_getdents(file, (struct dirent *)buf, buf_size);
+    long err = 0;
     if (bytes > 0)
-        bytes = copy_to_user(dirp, buf, bytes);
+        err = copy_to_user(dirp, buf, bytes);
+    if (err < 0)
+        bytes = err;
 
     kfree(buf);
     return bytes;

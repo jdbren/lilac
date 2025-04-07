@@ -83,8 +83,9 @@ void * sbrk(intptr_t increment)
     struct vm_desc *vma_list = mm->mmap;
 
     uintptr_t end_brk = (uintptr_t)mm->brk;
+#ifdef DEBUG_MM
     klog(LOG_DEBUG, "sbrk: Current break point: %p, Increment: %ld\n", (void*)end_brk, increment);
-
+#endif
     // Find the VMA that contains the current break point
     while (vma_list && vma_list->end < end_brk) {
         vma_list = vma_list->vm_next;
@@ -115,7 +116,6 @@ void * sbrk(intptr_t increment)
 
 SYSCALL_DECL1(sbrk, intptr_t, increment)
 {
-    klog(LOG_DEBUG, "sbrk called with increment: %ld\n", increment);
     void *_brk = sbrk(increment);
     if (IS_ERR(_brk)) {
         return PTR_ERR(_brk);

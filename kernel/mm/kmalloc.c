@@ -73,7 +73,7 @@ void *kmalloc(size_t size)
     printf("kmalloc: Allocated %u bytes at %p\n", size, alloc);
 #endif
     if (unlikely(alloc == NULL))
-        klog(LOG_ERROR, "kmalloc failed\n");
+        kerror("kmalloc failed\n");
 
     return alloc;
 }

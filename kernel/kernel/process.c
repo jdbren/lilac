@@ -77,7 +77,7 @@ static void set_vm_areas(struct mm_info *mem)
     stack_desc->vm_prot = PROT_READ | PROT_WRITE;
     stack_desc->vm_flags = MAP_PRIVATE | MAP_ANONYMOUS;
     vma_list_insert(stack_desc, &mem->mmap);
-
+#ifdef DEBUG_VMA
     struct vm_desc *desc = mem->mmap;
     while (desc) {
         klog(LOG_DEBUG, "Start: %x\n", desc->start);
@@ -86,6 +86,7 @@ static void set_vm_areas(struct mm_info *mem)
         klog(LOG_DEBUG, "Flags: %x\n", desc->vm_flags);
         desc = desc->vm_next;
     }
+#endif
 }
 
 static void * prepare_task_args(struct task *p, uintptr_t *stack)

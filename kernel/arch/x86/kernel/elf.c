@@ -9,7 +9,7 @@
 #include "paging.h"
 #include "pgframe.h"
 
-#define DEBUG_ELF 1
+// #define DEBUG_ELF 1
 
 void elf32_print(struct elf_header *hdr)
 {

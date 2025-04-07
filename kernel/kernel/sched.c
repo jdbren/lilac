@@ -2,6 +2,7 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/sched.h>
 
+#include <stdbool.h>
 #include <lilac/lilac.h>
 #include <lilac/log.h>
 #include <lilac/process.h>
@@ -80,6 +81,7 @@ static void context_switch(struct task *prev, struct task *next)
 {
     register uintptr_t rsp asm("rsp");
     klog(LOG_DEBUG, "Switching from task %d to task %d\n", prev->pid, next->pid);
+#ifdef DEBUG_SCHED
     klog(LOG_DEBUG, "Current stack pointer: %p\n", rsp);
     klog(LOG_DEBUG, "Previous task info: \n");
     klog(LOG_DEBUG, "\tPID: %d\n", prev->pid);
@@ -93,7 +95,7 @@ static void context_switch(struct task *prev, struct task *next)
     klog(LOG_DEBUG, "\tPGD: %p\n", next->pgd);
     klog(LOG_DEBUG, "\tPC: %p\n", next->pc);
     klog(LOG_DEBUG, "\tStack: %p\n", next->kstack);
-
+#endif
     arch_disable_interrupts();
     save_fp_regs(prev);
     arch_context_switch(prev, next);
