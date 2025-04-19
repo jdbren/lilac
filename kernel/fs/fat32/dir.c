@@ -12,26 +12,23 @@
 
 #include "fat_internal.h"
 
-// count is the size of the buffer
-int fat32_readdir(struct file *file, struct dirent *dir_buf, unsigned int count)
+int __fat32_read_all_dirent(struct file *file, struct dirent **dirents_ptr)
 {
-    int num_dirents = count / sizeof(struct dirent);
     u32 start_clst;
     struct fat_disk *disk = (struct fat_disk*)file->f_dentry->d_inode->i_sb->private;
-    u32 offset = file->f_pos % disk->bytes_per_clst;
-    u32 num_clst = ROUND_UP(count + offset, disk->bytes_per_clst) /
-        disk->bytes_per_clst;
-    volatile unsigned char *buffer = kvirtual_alloc(disk->bytes_per_clst * num_clst, PG_WRITE);
+    volatile unsigned char *buffer = kvirtual_alloc(disk->bytes_per_clst * 64, PG_WRITE);
+    struct dirent *dir_buf = kzmalloc(disk->bytes_per_clst);
+    u32 num_dirents = disk->bytes_per_clst / sizeof(struct dirent);
 
     start_clst = __fat_get_clst_num(file, disk);
     if (start_clst <= 0)
         return -1;
-    if (__do_fat32_read(file, start_clst, buffer, num_clst) < 0)
+    if (__do_fat32_read(file, start_clst, buffer, 64) < 0)
         return -1;
 
-    int i = 0;
+    u32 i = 0;
     struct fat_file *entry = (struct fat_file*)buffer;
-    while (i < num_dirents && entry->name[0] != 0) {
+    while (entry->name[0] != 0) {
         if ((u8)entry->name[0] == FAT_UNUSED ||
             entry->name[0] == 0x0 ||
             entry->attributes & FAT_VOL_LABEL ||
@@ -40,23 +37,45 @@ int fat32_readdir(struct file *file, struct dirent *dir_buf, unsigned int count)
             entry++;
             continue;
         }
+        if (i >= num_dirents) {
+            num_dirents *= 2;
+            void *tmp = kcalloc(num_dirents, sizeof(struct dirent));
+            memcpy(tmp, dir_buf, i * sizeof(struct dirent));
+            dir_buf = tmp;
+        }
         int c = 0;
         for (c = 0; c < 8 && entry->name[c] != ' '; c++)
-            dir_buf->d_name[c] = entry->name[c];
+            dir_buf[i].d_name[c] = entry->name[c];
         if (entry->ext[0] != ' ') {
-            dir_buf->d_name[c++] = '.';
+            dir_buf[i].d_name[c++] = '.';
             for (int j = 0; j < 3 && entry->ext[j] != ' '; j++)
-                dir_buf->d_name[c++] = entry->ext[j];
+                dir_buf[i].d_name[c++] = entry->ext[j];
         }
-        entry++;
-        dir_buf++;
-        i++;
+        ++entry;
+        ++i;
     }
 
-    kvirtual_free((void*)buffer, disk->bytes_per_clst * num_clst);
+    *dirents_ptr = dir_buf;
+#ifdef DEBUG_FAT
+    for (int i = 0; i < num_dirents; i++)
+        klog(LOG_DEBUG, "dirent %d: %s\n", i, dir_buf[i].d_name);
+#endif
+    kvirtual_free((void*)buffer, disk->bytes_per_clst * 64);
     return i;
 }
 
+int fat32_readdir(struct file *file, struct dirent *dir_buf, unsigned int count)
+{
+    struct fat_inode *info = (struct fat_inode*)file->f_dentry->d_inode->i_private;
+    u32 i = 0;
+    while (i < count && i + file->f_pos < info->buf.num_dirent) {
+        dir_buf[i] = info->buf.dirent[i + file->f_pos];
+        i++;
+    }
+    return i;
+}
+
+// This is awful, need to rewrite
 int fat32_mkdir(struct inode *dir, struct dentry *new, unsigned short mode)
 {
     struct fat_file *entry = NULL;
@@ -122,7 +141,10 @@ int fat32_mkdir(struct inode *dir, struct dentry *new, unsigned short mode)
 
     __fat_write_clst(disk, hd, clst, (void*)buffer);
 
-    new->d_inode = fat_build_inode(dir->i_sb, entry);
+    struct fat_inode *fat_i = kzmalloc(sizeof(struct fat_inode));
+    fat_i->entry = *entry;
+
+    new->d_inode = fat_build_inode(dir->i_sb, fat_i);
     new->d_inode->i_type = TYPE_DIR;
 
     memset((void*)buffer, 0, disk->bytes_per_clst);

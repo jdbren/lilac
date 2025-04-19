@@ -234,6 +234,7 @@ void stop_cmd(hba_port_t *port)
 
 int ahci_read(struct gendisk *disk, u64 lba, void *buf, u32 count)
 {
+	assert(count <= 128);
 	// printf("Reading %d sectors from disk at LBA %x\n", count, lba);
 	return __ahci_read(disk->private, lba & 0xFFFFFFFF, lba >> 32, count,
 		(void*)virt_to_phys(buf));
@@ -242,6 +243,7 @@ int ahci_read(struct gendisk *disk, u64 lba, void *buf, u32 count)
 int ahci_write(struct gendisk *disk, u64 lba, const void *buf, u32 count)
 {
 	// printf("Writing %d sectors to disk at LBA %x\n", count, lba);
+	assert(count <= 128);
 	return __ahci_write(disk->private, lba & 0xFFFFFFFF, lba >> 32, count,
 		(void*)virt_to_phys((void*)buf));
 }

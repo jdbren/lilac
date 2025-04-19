@@ -106,8 +106,19 @@ int fat_write_FAT(struct fat_disk *fat_disk, struct gendisk *gd)
 {
     const u32 lba = fat_disk->fat_begin_lba +
         (fat_disk->FAT.first_clst * fat_disk->sect_per_clst);
-
-    return gd->ops->disk_write(gd, lba, (void*)fat_disk->FAT.FAT_buf, fat_disk->FAT.sectors);
+    u32 i = 0;
+    while (i < fat_disk->FAT.sectors) {
+        if (i + 128 > fat_disk->FAT.sectors) {
+            // Last write might be less than 128 sectors
+            gd->ops->disk_write(gd, lba + i,
+                (void*)fat_disk->FAT.FAT_buf + (i * 512), fat_disk->FAT.sectors - i);
+            break;
+        }
+        gd->ops->disk_write(gd, lba + i,
+            (void*)fat_disk->FAT.FAT_buf + (i * 512), 128);
+        i += 128;
+    }
+    return 0;
 }
 
 u32 __get_FAT_val(u32 clst, struct fat_disk *disk)
@@ -119,7 +130,7 @@ u32 __get_FAT_val(u32 clst, struct fat_disk *disk)
     (disk->clst_begin_lba + \
     ((cluster_num - disk->root_start) * disk->sect_per_clst))
 
-    void __fat_read_clst(struct fat_disk *fat_disk,
+void __fat_read_clst(struct fat_disk *fat_disk,
     struct gendisk *hd, u32 clst, void *buf)
 {
     hd->ops->disk_read(hd, LBA_ADDR(clst, fat_disk), buf,

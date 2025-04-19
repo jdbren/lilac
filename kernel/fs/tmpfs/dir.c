@@ -46,18 +46,19 @@ int tmpfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 int tmpfs_readdir(struct file *file, struct dirent *dirp, unsigned int count)
 {
-    u32 num_dirents = count / sizeof(*dirp);
     struct inode *inode = file->f_dentry->d_inode;
     struct tmpfs_dir *dir = (struct tmpfs_dir*)inode->i_private;
     struct tmpfs_entry *entry = (struct tmpfs_entry*)dir->children;
-    size_t i = file->f_pos;
+    size_t pos = file->f_pos;
+    u32 i = 0;
 
-    while (i < num_dirents && i < dir->num_entries) {
+    while (i < count && pos < dir->num_entries) {
         if (entry->inode) {
-            strcpy(dirp[i].d_name, entry->name);
-            dirp[i].d_ino = entry->inode->i_ino;
-            dirp[i].d_reclen = sizeof(struct dirent);
-            i++;
+            strcpy(dirp[pos].d_name, entry->name);
+            dirp[pos].d_ino = entry->inode->i_ino;
+            dirp[pos].d_reclen = sizeof(struct dirent);
+            ++pos;
+            ++i;
         }
         entry++;
     }

@@ -24,6 +24,7 @@ struct inode *fat_alloc_inode(struct super_block *sb)
     new_node->i_sb = sb;
     new_node->i_op = &fat_iops;
     new_node->i_count = 1;
+    new_node->i_private = kzmalloc(sizeof(struct fat_inode));
 
     return new_node;
 }
@@ -57,10 +58,10 @@ static struct inode *fat_iget(struct super_block *sb, unsigned long pos)
     return NULL;
 }
 
-struct inode *fat_build_inode(struct super_block *sb, struct fat_file *info)
+struct inode *fat_build_inode(struct super_block *sb, struct fat_inode *info)
 {
     struct inode *inode;
-    unsigned long pos = (u32)info->cl_low + (u32)info->cl_high;
+    unsigned long pos = (u32)info->entry.cl_low + (u32)info->entry.cl_high;
 
     inode = fat_iget(sb, pos);
     if (inode) {
@@ -72,9 +73,9 @@ struct inode *fat_build_inode(struct super_block *sb, struct fat_file *info)
     inode = fat_alloc_inode(sb);
 
     inode->i_ino = unique_ino();
-    inode->i_size = info->file_size;
+    inode->i_size = info->entry.file_size;
     inode->i_private = info;
-    inode->i_type = info->attributes & FAT_DIR_ATTR ? TYPE_DIR : TYPE_FILE;
+    inode->i_type = info->entry.attributes & FAT_DIR_ATTR ? TYPE_DIR : TYPE_FILE;
 
     list_add_tail(&inode->i_list, &sb->s_inodes);
 
@@ -102,7 +103,7 @@ static void *__fat32_read_dir(struct fat_file *entry, struct fat_disk *disk,
 }
 
 static int fat32_find(struct inode *dir, const char *name,
-    struct fat_file *info)
+    struct fat_inode *info)
 {
     int ret = -1;
     struct fat_file *entry = (struct fat_file*)dir->i_private;
@@ -118,7 +119,7 @@ static int fat32_find(struct inode *dir, const char *name,
 
     while (entry->name[0]) {
         if (check_entry(entry, name)) {
-            memcpy(info, entry, sizeof(*info));
+            memcpy(&info->entry, entry, sizeof(info->entry));
             ret = 0;
             break;
         }
@@ -133,7 +134,7 @@ struct dentry *fat32_lookup(struct inode *parent, struct dentry *find,
     unsigned int flags)
 {
     struct inode *inode;
-    struct fat_file *info = kzmalloc(sizeof(*info));
+    struct fat_inode *info = kzmalloc(sizeof(*info));
     char fatname[12];
     const char *dot;
     int i, j;

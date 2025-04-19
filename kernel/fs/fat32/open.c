@@ -11,9 +11,14 @@
 
 int fat32_open(struct inode *inode, struct file *file)
 {
+    struct fat_inode *info = (struct fat_inode*)inode->i_private;
     file->f_dentry->d_inode = inode;
     file->f_op = &fat_fops;
     file->f_count++;
+    if (inode->i_type == TYPE_DIR) {
+        file->f_info = kzmalloc(sizeof(struct fat_dir_context));
+        info->buf.num_dirent = __fat32_read_all_dirent(file, &info->buf.dirent);
+    }
     return 0;
 }
 
@@ -79,7 +84,10 @@ int fat32_create(struct inode *parent, struct dentry *new, umode_t mode)
 
     __fat_write_clst(disk, hd, clst, (const void*)buffer);
 
-    new->d_inode = fat_build_inode(parent->i_sb, entry);
+    struct fat_inode *fat_i = kzmalloc(sizeof(struct fat_inode));
+    fat_i->entry = *entry;
+
+    new->d_inode = fat_build_inode(parent->i_sb, fat_i);
     new->d_inode->i_type = TYPE_FILE;
 
     disk->fs_info.free_clst_cnt--;

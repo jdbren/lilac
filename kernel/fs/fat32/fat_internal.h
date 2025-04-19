@@ -103,7 +103,13 @@ struct fat_FAT_buf {
 struct fat_file_buf {
     u32 cl;
     u32 buf_sz;
-    volatile u8 *buffer;
+    union {
+        struct {
+            struct dirent *dirent;
+            u32 num_dirent;
+        };
+        volatile u8 *buffer;
+    };
 };
 
 struct fat_disk {
@@ -127,11 +133,9 @@ struct inode;
 struct file;
 struct gendisk;
 
-struct fat_inode_priv {
+struct fat_inode {
     struct fat_file entry;
-    u32 clst;
-    u32 clst_off;
-    struct fat_file_buf *buf;
+    struct fat_file_buf buf;
     //struct blkio_buffer *buffer;
 };
 
@@ -145,8 +149,9 @@ extern const struct inode_operations fat_iops;
 
 struct inode *fat_alloc_inode(struct super_block *sb);
 void fat_destroy_inode(struct inode *inode);
-struct inode *fat_build_inode(struct super_block *sb, struct fat_file *info);
+struct inode *fat_build_inode(struct super_block *sb, struct fat_inode *info);
 
+int __fat32_read_all_dirent(struct file *file, struct dirent **dirents_ptr);
 void __fat_read_clst(struct fat_disk *fat_disk, struct gendisk *hd, u32 clst, void *buf);
 void __fat_write_clst(struct fat_disk *fat_disk, struct gendisk *hd, u32 clst, const void *buf);
 u32 __get_FAT_val(u32 clst, struct fat_disk *disk);

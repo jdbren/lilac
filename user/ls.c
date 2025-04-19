@@ -22,17 +22,16 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    int err = getdents(fd, (void*)buf, sizeof(buf));
-    if (err < 0)
-    {
-        if (err == -ENOTDIR)
+    int err = 0;
+    while ((err = getdents(fd, (void*)buf, sizeof(buf))) > 0) {
+        if (errno == -ENOTDIR) {
             printf("ls: cannot access '%s': Not a directory\n", dir);
-        return 1;
+            return 1;
+        }
+        for (int i = 0; i < 12; i++)
+            printf("%-12s\t", buf[i].d_name);
     }
-    for (int i = 0; i < 12; i++)
-    {
-        printf("%s\t", buf[i].d_name);
-    }
+
     putchar('\n');
     close(fd);
     return 0;

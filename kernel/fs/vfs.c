@@ -328,7 +328,11 @@ ssize_t vfs_getdents(struct file *file, struct dirent *dirp, unsigned int buf_si
 #ifdef DEBUG_VFS
     klog(LOG_DEBUG, "VFS: Reading directory %s\n", file->f_dentry->d_name);
 #endif
-    dir_cnt = file->f_op->readdir(file, dirp, buf_size);
+    dir_cnt = buf_size / sizeof(struct dirent);
+    dir_cnt = file->f_op->readdir(file, dirp, dir_cnt);
+#ifdef DEBUG_VFS
+    klog(LOG_DEBUG, "VFS: Read %d entries\n", dir_cnt);
+#endif
     file->f_pos += dir_cnt;
     return dir_cnt > 0 ? dir_cnt * (int)sizeof(struct dirent) : dir_cnt;
 }
@@ -361,7 +365,6 @@ SYSCALL_DECL3(getdents, unsigned int, fd, struct dirent*, dirp, size_t, buf_size
     return bytes;
 }
 
-// No relative path yet
 int vfs_mkdir(const char *path, umode_t mode)
 {
     struct inode *parent;
@@ -372,7 +375,7 @@ int vfs_mkdir(const char *path, umode_t mode)
     get_dirname(dir_path, path, 64);
     get_basename(name, path, 16);
 
-    struct dentry *parent_dentry = lookup_path(dir_path);
+    struct dentry *parent_dentry = vfs_lookup(dir_path);
     if (IS_ERR(parent_dentry))
         return PTR_ERR(parent_dentry);
 
@@ -394,10 +397,11 @@ SYSCALL_DECL2(mkdir, const char*, path, umode_t, mode)
     long err = -EFAULT;
 
     err = strncpy_from_user(path_buf, path, 255);
-    if (err > 0)
-        err = -ENAMETOOLONG;
-    else if (err == 0)
-        err = vfs_mkdir(path_buf, mode);
+    if (err == 0)
+        return -EINVAL;
+    else if (err < 0)
+        return err;
+    err = vfs_mkdir(path_buf, mode);
 
     kfree(path_buf);
     return err;
