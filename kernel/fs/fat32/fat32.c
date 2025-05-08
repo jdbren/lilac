@@ -199,7 +199,7 @@ struct dentry *fat32_init(void *dev, struct super_block *sb)
 
     struct block_device *bdev = (struct block_device*)dev;
     struct fat_disk *fat_disk = kzmalloc(sizeof(*fat_disk));
-    struct fat_file *fat_file = kzmalloc(sizeof(*fat_file));
+    struct fat_inode *fat_inode = kzmalloc(sizeof(*fat_inode));
     struct inode *root_inode;
     struct dentry *root_dentry;
 
@@ -215,10 +215,10 @@ struct dentry *fat32_init(void *dev, struct super_block *sb)
     // Initialize the root inode
     root_inode = fat_alloc_inode(sb);
     root_inode->i_ino = 1;
-    root_inode->i_private = fat_file;
+    root_inode->i_private = fat_inode;
     root_inode->i_type = TYPE_DIR;
-    fat_file->cl_low = fat_disk->root_start & 0xFFFF;
-    fat_file->cl_high = fat_disk->root_start >> 16;
+    fat_inode->entry.cl_low = fat_disk->root_start & 0xFFFF;
+    fat_inode->entry.cl_high = fat_disk->root_start >> 16;
 
     // Initialize the dentry
     root_dentry = kzmalloc(sizeof(struct dentry));
@@ -260,7 +260,7 @@ struct dentry *fat32_init(void *dev, struct super_block *sb)
 
 error:
     kfree(fat_disk);
-    kfree(fat_file);
+    kfree(fat_inode);
     return NULL;
 }
 

@@ -99,7 +99,9 @@ struct dentry * lookup_path_from(struct dentry *parent, const char *path)
             return ERR_CAST(name);
         else if (!name)
             break;
-
+#ifdef DEBUG_VFS
+        klog(LOG_DEBUG, "VFS: Looking up %s\n", name);
+#endif
         if (strcmp(name, ".") == 0) {
             kfree(name);
             continue;

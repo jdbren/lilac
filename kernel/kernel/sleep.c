@@ -1,8 +1,10 @@
 #include <lilac/config.h>
+#include <lilac/lilac.h>
 #include <lilac/log.h>
 #include <lilac/syscall.h>
 #include <lilac/timer.h>
 #include <lilac/uaccess.h>
+#include <lilac/port.h>
 #include <acpi/acpica.h>
 
 void arch_shutdown(void);
@@ -14,9 +16,39 @@ __noreturn void kernel_shutdown(void)
     unreachable();
 }
 
-__noreturn SYSCALL_DECL0(shutdown)
+/*
+__noreturn void kernel_reboot(void)
 {
-    kernel_shutdown();
+    //klog(LOG_INFO, "Rebooting system\n");
+    AcpiReset();
+    // if that failed keyboard reset the CPU
+    // klog(LOG_ERROR, "ACPI reset failed, doing cpu reset\n");
+    // uint8_t good = 0x02;
+    // while (good & 0x02)
+    //     good = read_port(0x64, 8);
+    // write_port(0x64, 0xFE, 8);
+    while (1)
+        asm ("hlt");
+    unreachable();
+}
+*/
+
+SYSCALL_DECL1(reboot, unsigned long, how)
+{
+    for (;;) {
+        arch_disable_interrupts();
+        switch (how) {
+            // case 0:
+            //     kernel_reboot();
+            //     break;
+            case 1:
+                kernel_shutdown();
+                break;
+            default:
+                klog(LOG_ERROR, "Invalid reboot option: %lu\n", how);
+                return -EINVAL;
+        }
+    }
 }
 
 SYSCALL_DECL1(time, long long *, t)

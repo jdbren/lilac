@@ -3,7 +3,7 @@
 
 #include <lilac/types.h>
 
-u32 ReadPort(u32 Address, u32 Width);
-int WritePort(u32 Address, u32 Value, u32 Width);
+u32 read_port(u32 Address, u32 Width);
+int write_port(u32 Address, u32 Value, u32 Width);
 
 #endif

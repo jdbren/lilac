@@ -144,6 +144,9 @@ struct dentry * vfs_lookup(const char *path)
     if (strcmp(path, ".") == 0)
         return start;
 
+    if (!strcmp(path, "/"))
+        return root_dentry;
+
     return lookup_path_from(start, path);
 }
 

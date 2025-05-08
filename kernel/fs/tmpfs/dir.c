@@ -2,6 +2,7 @@
 #include <mm/kmalloc.h>
 #include <lilac/libc.h>
 #include "tmpfs_internal.h"
+#include <lilac/log.h>
 
 struct dentry *tmpfs_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags)
 {
@@ -48,10 +49,12 @@ int tmpfs_readdir(struct file *file, struct dirent *dirp, unsigned int count)
 {
     struct inode *inode = file->f_dentry->d_inode;
     struct tmpfs_dir *dir = (struct tmpfs_dir*)inode->i_private;
-    struct tmpfs_entry *entry = (struct tmpfs_entry*)dir->children;
+    struct tmpfs_entry *entry = dir->children;
     size_t pos = file->f_pos;
     u32 i = 0;
-
+#ifdef DEBUG_TMPFS
+    klog(LOG_DEBUG, "tmpfs_readdir: inode = %p, dir = %p\n", inode, dir);
+#endif
     while (i < count && pos < dir->num_entries) {
         if (entry->inode) {
             strcpy(dirp[pos].d_name, entry->name);

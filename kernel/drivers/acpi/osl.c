@@ -273,7 +273,7 @@ ACPI_STATUS AcpiOsReadPort(ACPI_IO_ADDRESS Address, UINT32 *Value, UINT32 Width)
 {
     if (Value == NULL || (Width != 8 && Width != 16 && Width != 32))
         return AE_BAD_PARAMETER;
-    *Value = ReadPort(Address, Width);
+    *Value = read_port(Address, Width);
     return AE_OK;
 }
 
@@ -281,7 +281,7 @@ ACPI_STATUS AcpiOsWritePort(ACPI_IO_ADDRESS Address, UINT32 Value, UINT32 Width)
 {
     if (Width != 8 && Width != 16 && Width != 32)
         return AE_BAD_PARAMETER;
-    WritePort(Address, Value, Width);
+    write_port(Address, Value, Width);
     return AE_OK;
 }
 

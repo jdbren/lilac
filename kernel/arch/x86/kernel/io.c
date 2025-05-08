@@ -1,7 +1,7 @@
 #include "io.h"
 #include <lilac/port.h>
 
-u32 ReadPort(u32 Address, u32 Width)
+u32 read_port(u32 Address, u32 Width)
 {
     switch (Width) {
         case 8:
@@ -14,7 +14,7 @@ u32 ReadPort(u32 Address, u32 Width)
     return 0;
 }
 
-int WritePort(u32 Address, u32 Value, u32 Width)
+int write_port(u32 Address, u32 Value, u32 Width)
 {
     switch (Width) {
         case 8:

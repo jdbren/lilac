@@ -54,13 +54,13 @@ void pgflt_handler(long error_code, struct interrupt_frame *frame)
         asm (
             "movq (%%rbp), %%rax\n\t"   // Get previous fp
             "movq %0, 16(%%rax)\n\t"  // Overwrite return address with handler
-            ::"r"(handler) : "rax", "memory"
+            : :"r"(handler) : "rax", "memory"
         );
 #else
         asm (
             "movl (%%ebp), %%eax\n\t"   // Get previous fp
             "movl %0, 8(%%eax)\n\t"  // Overwrite return address with handler
-            ::"r"(handler) : "eax", "memory"
+            : :"r"(handler) : "eax", "memory"
         );
 #endif
     } else {

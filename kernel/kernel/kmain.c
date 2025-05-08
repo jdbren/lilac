@@ -10,7 +10,6 @@ __noreturn __no_stack_chk
 void start_kernel(void)
 {
     kstatus(STATUS_OK, "Starting kernel\n");
-    log_init(LOG_INFO);
 
     acpi_full_init();
     scan_sys_bus();

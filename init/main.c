@@ -37,7 +37,7 @@ int prompt(void)
         return 0;
     } else if (strncmp(command, "shutdown", 8) == 0) {
         printf("Shutting down...\n");
-        syscall0(25);
+        syscall1(25, 1);
     }
 
     args[0] = command;

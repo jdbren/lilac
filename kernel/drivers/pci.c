@@ -163,14 +163,14 @@ void pcie_add_map(ACPI_TABLE_MCFG *mcfg)
 
 u32 pciRead(u32 addr)
 {
-    WritePort(PCI_CONFIG_ADDRESS, addr | (1U << 31), 32);
-    return ReadPort(PCI_CONFIG_DATA, 32);
+    write_port(PCI_CONFIG_ADDRESS, addr | (1U << 31), 32);
+    return read_port(PCI_CONFIG_DATA, 32);
 }
 
 void pciWrite(u32 addr, u32 data)
 {
-    WritePort(PCI_CONFIG_ADDRESS, addr | (1U << 31), 32);
-    WritePort(PCI_CONFIG_DATA, data, 32);
+    write_port(PCI_CONFIG_ADDRESS, addr | (1U << 31), 32);
+    write_port(PCI_CONFIG_DATA, data, 32);
 }
 
 u32 pciConfigRead(u8 bus, u8 slot, u8 func, u8 offset, u32 width)
@@ -191,9 +191,9 @@ u32 pciConfigRead(u8 bus, u8 slot, u8 func, u8 offset, u32 width)
               (lfunc << 8) | (offset & 0xFC) | (1U << 31));
 
     // Write out the address
-    WritePort(PCI_CONFIG_ADDRESS, address, 32);
+    write_port(PCI_CONFIG_ADDRESS, address, 32);
     // Read in the data
-    tmp = ReadPort(PCI_CONFIG_DATA, 32);
+    tmp = read_port(PCI_CONFIG_DATA, 32);
     switch (width) {
         case 8:
             tmp >>= ((offset & 3) * 8) & 0xFF;
@@ -224,6 +224,6 @@ void pciConfigWrite(u8 bus, u8 slot, u8 func, u8 offset, u32 data, u32 width)
               (lfunc << 8) | (offset & 0xFC) | (1U << 31));
 
     // Write out the address
-    WritePort(PCI_CONFIG_ADDRESS, address, 32);
-    WritePort(PCI_CONFIG_DATA, (u8)data, width);
+    write_port(PCI_CONFIG_ADDRESS, address, 32);
+    write_port(PCI_CONFIG_DATA, (u8)data, width);
 }

@@ -15,12 +15,11 @@
 #define LOG_LEVEL LOG_INFO
 #endif
 
-static int log_level = LOG_DEBUG;
+static int log_level = LOG_LEVEL;
 
-int log_init(int level)
+void set_log_level(int level)
 {
     log_level = level;
-    return 0;
 }
 
 void klog(int level, const char *data, ...)

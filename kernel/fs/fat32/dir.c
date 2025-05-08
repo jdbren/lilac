@@ -5,6 +5,7 @@
 #include <lilac/panic.h>
 #include <lilac/libc.h>
 #include <lilac/timer.h>
+#include <lilac/err.h>
 #include <drivers/blkdev.h>
 #include <mm/kmm.h>
 #include <mm/kmalloc.h>
@@ -40,7 +41,13 @@ int __fat32_read_all_dirent(struct file *file, struct dirent **dirents_ptr)
         if (i >= num_dirents) {
             num_dirents *= 2;
             void *tmp = kcalloc(num_dirents, sizeof(struct dirent));
+            if (!tmp) {
+                kfree(dir_buf);
+                kvirtual_free((void*)buffer, disk->bytes_per_clst * 64);
+                return -ENOMEM;
+            }
             memcpy(tmp, dir_buf, i * sizeof(struct dirent));
+            kfree(dir_buf);
             dir_buf = tmp;
         }
         int c = 0;

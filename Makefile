@@ -8,7 +8,7 @@ endif
 
 .PHONY: all clean init user libc install install-libc install-system
 
-all: lilac.ker
+all: lilac.ker libc init user
 
 lilac.ker:
 	$(MAKE) -j4 -C kernel

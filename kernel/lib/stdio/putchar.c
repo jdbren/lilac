@@ -4,7 +4,7 @@
 int putchar(int ic)
 {
 	char c = (char)ic;
-	WritePort(0xe9, c, 8);
+	write_port(0xe9, c, 8);
 	console_write(NULL, &c, 1);
 	return ic;
 }
