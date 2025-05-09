@@ -139,9 +139,6 @@ struct fat_inode {
     //struct blkio_buffer *buffer;
 };
 
-struct fat_dir_context {
-    u32 index;
-};
 
 extern const struct file_operations fat_fops;
 extern const struct super_operations fat_sops;

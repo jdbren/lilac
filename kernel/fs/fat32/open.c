@@ -16,7 +16,6 @@ int fat32_open(struct inode *inode, struct file *file)
     file->f_op = &fat_fops;
     file->f_count++;
     if (inode->i_type == TYPE_DIR) {
-        file->f_info = kzmalloc(sizeof(struct fat_dir_context));
         info->buf.num_dirent = __fat32_read_all_dirent(file, &info->buf.dirent);
     }
     return 0;
