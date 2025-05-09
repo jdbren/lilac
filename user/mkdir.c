@@ -3,7 +3,8 @@
 #include <stdio.h>
 #include <sys/errno.h>
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <directory_name>\n", argv[0]);
         return 1;
