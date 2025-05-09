@@ -84,17 +84,20 @@ struct mm_info {
 };
 
 struct task *init_process(void);
-struct task *create_process(const char *path);
 u32 get_pid(void);
+void reap_task(struct task *p);
 
 // Architecture-specific functions
 struct mm_info * arch_process_mmap(bool is_64_bit);
 struct mm_info * arch_process_remap(struct mm_info *existing);
 struct mm_info * arch_copy_mmap(struct mm_info *parent);
+void             arch_unmap_all_user_vm(struct mm_info *info);
+void             arch_reclaim_mem(struct task *p);
 void *           arch_user_stack(void);
 void *           arch_copy_regs(struct regs_state *src);
-void             save_fp_regs(struct task *task);
-void             restore_fp_regs(struct task *task);
+void             save_fp_regs(struct task *p);
+void             restore_fp_regs(struct task *p);
+void             copy_fp_regs(struct task *dst, struct task *src);
 
 // kernel mode jump
 void             jump_new_proc(struct task *next);

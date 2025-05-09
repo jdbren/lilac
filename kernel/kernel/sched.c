@@ -21,8 +21,6 @@ struct rq {
     struct rb_root_cached queue;
 };
 
-extern const u32 page_directory;
-extern const u32 stack_top;
 
 void idle(void)
 {
@@ -48,6 +46,17 @@ extern void arch_context_switch(struct task *prev, struct task *next);
 struct task* get_current_task(void)
 {
     return task_queue[current_task];
+}
+
+void remove_task(struct task *p)
+{
+    for (int i = 0; i < 16; i++) {
+        if (task_queue[i] == p) {
+            task_queue[i] = NULL;
+            klog(LOG_DEBUG, "Task %d removed from queue\n", p->pid);
+            break;
+        }
+    }
 }
 
 void yield(void)
@@ -99,7 +108,7 @@ static void context_switch(struct task *prev, struct task *next)
     arch_disable_interrupts();
     save_fp_regs(prev);
     arch_context_switch(prev, next);
-    restore_fp_regs(next);
+    restore_fp_regs(prev);
 }
 
 void schedule(void)
@@ -143,27 +152,31 @@ void sched_tick()
     schedule();
 }
 
-int find_by_pid(u32 pid)
+struct task * find_by_pid(u32 pid)
 {
     for (int i = 0; i < 16; i++) {
         if (task_queue[i] && task_queue[i]->pid == pid)
-            return i;
+            return task_queue[i];
     }
-    return -1;
+    return NULL;
 }
 
 long waitpid(int pid)
 {
-    int i = find_by_pid(pid);
-    if (i == -1)
+    struct task *p = find_by_pid(pid);
+    if (!p)
         return -ECHILD;
-    struct task *task = task_queue[i];
-    if (task->ppid != current->pid)
+    if (p->ppid != current->pid)
         return -ECHILD;
     klog(LOG_DEBUG, "Process %d: Waiting for task %d\n", get_pid(), pid);
     current->state = TASK_SLEEPING;
-    task->parent_wait = true;
+    p->parent_wait = true;
     schedule();
+    arch_disable_interrupts();
+    reap_task(p);
+    remove_task(p);
+    kfree(p);
+    arch_enable_interrupts();
     klog(LOG_DEBUG, "Task %d has exited, continuing task %d\n", pid, get_pid());
     return 0;
 }
@@ -174,17 +187,17 @@ SYSCALL_DECL1(waitpid, int, pid)
 
 void wakeup(int pid)
 {
-    int i = find_by_pid(pid);
-    if (i == -1)
+    struct task *p = find_by_pid(pid);
+    if (!p)
         return;
-    task_queue[i]->state = TASK_RUNNING;
+    p->state = TASK_RUNNING;
     klog(LOG_DEBUG, "Waking up task %d\n", pid);
 }
 
-void wakeup_task(struct task *task)
+void wakeup_task(struct task *p)
 {
-    if (task->state == TASK_SLEEPING) {
-        task->state = TASK_RUNNING;
-        klog(LOG_DEBUG, "Waking up task %d\n", task->pid);
+    if (p->state == TASK_SLEEPING) {
+        p->state = TASK_RUNNING;
+        klog(LOG_DEBUG, "Waking up task %d\n", p->pid);
     }
 }

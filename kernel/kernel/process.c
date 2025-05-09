@@ -16,7 +16,6 @@
 #define MAX_TASKS 1024
 #define INIT_STACK(KSTACK) ((uintptr_t)KSTACK + __KERNEL_STACK_SZ - sizeof(size_t))
 
-static struct task tasks[MAX_TASKS];
 static int num_tasks;
 
 void exit(int status);
@@ -148,7 +147,7 @@ skip:
 struct task *init_process(void)
 {
     num_tasks = 1;
-    struct task *this = &tasks[1];
+    struct task *this = kzmalloc(sizeof(*this));
     struct mm_info *mem = arch_process_mmap(sizeof(void*) == 8);
 
     this->pid = 1;
@@ -210,12 +209,13 @@ int do_fork(void)
 {
     u32 pid = ++num_tasks;
     struct task *parent = current;
-    struct task *child = &tasks[pid];
+    struct task *child = kzmalloc(sizeof(*child));
 
     clone_process(parent, child);
     child->pid = pid;
     child->pc = (uintptr_t)return_from_fork;
     child->regs = arch_copy_regs(parent->regs);
+    copy_fp_regs(child, parent);
     child->state = TASK_RUNNING;
     schedule_task(child);
 
@@ -314,30 +314,75 @@ SYSCALL_DECL3(execve, const char*, path, char* const*, argv, char* const*, envp)
     return err;
 }
 
-void cleanup_task(struct task *task)
+static void cleanup_files(struct fs_info *fs)
 {
-    klog(LOG_DEBUG, "Cleaning up task %d\n", task->pid);
-    kfree((void*)task->info.path);
-    for (int i = 0; task->info.argv[i]; i++)
-        kfree(task->info.argv[i]);
-    kfree(task->info.argv);
-    dput(task->fs.cwd_d);
-    kfree(task->fs.files.fdarray); // TODO: File management
-    struct vm_desc *desc = task->mm->mmap;
-    while (desc) {
-        struct vm_desc *next = desc->vm_next;
-        kfree(desc);
-        desc = next;
+    dput(fs->cwd_d);
+    for (size_t i = 0; i < fs->files.size; i++) {
+        if (fs->files.fdarray[i]) {
+            struct file *file = fs->files.fdarray[i];
+            vfs_close(file);
+            fs->files.fdarray[i] = NULL;
+        }
     }
-    kfree(task->mm);
+    kfree(fs->files.fdarray);
+}
+
+static void cleanup_task_info(struct task_info *info)
+{
+    klog(LOG_DEBUG, "Cleaning up task info\n");
+    if (info->path)
+        kfree((void*)info->path);
+    if (info->exec_file) {
+        vfs_close(info->exec_file);
+        info->exec_file = NULL;
+    }
+    if (info->argv) {
+        for (int i = 0; info->argv[i]; i++)
+            kfree(info->argv[i]);
+        kfree(info->argv);
+        info->argv = NULL;
+    }
+}
+
+static void cleanup_memory(struct mm_info *mm)
+{
+    klog(LOG_DEBUG, "Cleaning up memory\n");
+    arch_unmap_all_user_vm(mm);
+    kfree(mm);
+}
+
+void cleanup_task(struct task *p)
+{
+    klog(LOG_DEBUG, "Cleaning up task %d\n", p->pid);
+    cleanup_task_info(&p->info);
+    cleanup_files(&p->fs);
+    cleanup_memory(p->mm);
+}
+
+void reap_task(struct task *p)
+{
+    if (p->state != TASK_DEAD) {
+        klog(LOG_WARN, "Tried to reap task %d, but it is not dead\n", p->pid);
+        return;
+    }
+    klog(LOG_DEBUG, "Reaping task %d\n", p->pid);
+    arch_reclaim_mem(p);
+    kfree(p->fp_regs);
+    p->fp_regs = NULL;
+    // kfree(p->regs);
+    kvirtual_free(p->kstack, __KERNEL_STACK_SZ);
 }
 
 __noreturn void exit(int status)
 {
+    struct task *parent = NULL;
     current->state = TASK_DEAD;
     klog(LOG_INFO, "Process %d exited with status %d\n", current->pid, status);
     if (current->parent_wait)
-        wakeup_task(current->parent);
+        parent = current->parent;
+    cleanup_task(current);
+    if (parent)
+        wakeup_task(parent);
     schedule();
     kerror("exit: Should never be reached\n");
     unreachable();

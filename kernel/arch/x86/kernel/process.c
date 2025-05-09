@@ -98,12 +98,18 @@ void arch_unmap_all_user_vm(struct mm_info *info)
     while (desc) {
         struct vm_desc *next = desc->vm_next;
         uintptr_t phys = virt_to_phys((void*)desc->start);
+        klog(LOG_DEBUG, "Unmapping %x-%x\n", desc->start, desc->end);
         unmap_pages((void*)desc->start, (desc->end - desc->start) / PAGE_SIZE);
         free_frames((void*)phys, (desc->end - desc->start) / PAGE_SIZE);
         kfree(desc);
         desc = next;
     }
     info->mmap = NULL;
+}
+
+void arch_reclaim_mem(struct task *p)
+{
+    free_frame((void*)(p->pgd));
 }
 
 struct mm_info * arch_process_remap(struct mm_info *existing)
@@ -236,16 +242,22 @@ void *arch_copy_regs(struct regs_state *src)
     return regs;
 }
 
-void save_fp_regs(struct task *task)
+void save_fp_regs(struct task *p)
 {
-    if (!task->fp_regs)
-        task->fp_regs = kzmalloc(512);
-    asm volatile("fxsave %0" : : "m" (*(char (*)[512])task->fp_regs) : "memory");
+    if (!p->fp_regs)
+        p->fp_regs = kzmalloc(512);
+    asm volatile("fxsave %0" : : "m" (*(char (*)[512])p->fp_regs) : "memory");
 }
 
-void restore_fp_regs(struct task *task)
+void copy_fp_regs(struct task *dst, struct task *src)
 {
-    if (task->fp_regs == NULL)
+    dst->fp_regs = kmalloc(512);
+    memcpy(dst->fp_regs, src->fp_regs, 512);
+}
+
+void restore_fp_regs(struct task *p)
+{
+    if (p->fp_regs == NULL)
         return;
-    asm volatile("fxrstor %0" : : "m" (*(const char (*)[512])task->fp_regs) : "memory");
+    asm volatile("fxrstor %0" : : "m" (*(const char (*)[512])p->fp_regs) : "memory");
 }
