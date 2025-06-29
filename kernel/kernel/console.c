@@ -165,7 +165,7 @@ ssize_t console_read(struct file *file, void *buf, size_t count)
         // input into cons.buffer.
         if (con->input.rpos == con->input.wpos) {
             klog(LOG_DEBUG, "console_read: proc %d waiting for input\n", get_pid());
-            current->state = TASK_SLEEPING;
+            sleep_task(current);
             add_to_io_queue(get_pid());
             yield();
         }

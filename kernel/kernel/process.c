@@ -2,6 +2,7 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/process.h>
 #include <stdatomic.h>
+#include <lilac/rbtree.h>
 #include <lilac/libc.h>
 #include <lilac/lilac.h>
 #include <lilac/elf.h>
@@ -164,6 +165,8 @@ struct task *init_process(void)
     this->info.path = "/sbin/init";
     memcpy(this->name, "init", 5);
 
+    INIT_LIST_HEAD(&this->children);
+
     return this;
 }
 
@@ -183,20 +186,43 @@ static void copy_fs_info(struct fs_info *dst, struct fs_info *src)
     }
 }
 
-static void clone_process(struct task *parent, struct task *child)
+static struct task *dup_task(struct task *p)
 {
-    *child = *parent;
-    child->ppid = parent->pid;
+    struct task *new_task = kzmalloc(sizeof(*new_task));
+    if (!new_task)
+        return NULL;
+    *new_task = *p;
+    return new_task;
+}
+
+static struct task * clone_process(struct task *parent)
+{
+    struct task *child = dup_task(parent);
+    if (!child)
+        return NULL;
+    child->rq_node = (struct rb_node){0};
+    child->children = (struct list_head){0};
+    INIT_LIST_HEAD(&child->children);
+    child->on_rq = false;
+    child->parent_wait = false;
+
+    child->pid = ++num_tasks;
     child->parent = parent;
+    child->ppid = parent->pid;
+    list_add_tail(&child->sibling, &parent->children);
 
     child->mm = arch_copy_mmap(parent->mm);
     child->pgd = child->mm->pgd;
     child->kstack = (void*)INIT_STACK(child->mm->kstack);
 
+    child->regs = arch_copy_regs(parent->regs);
+    copy_fp_regs(child, parent);
+
     child->info.path = strdup(parent->info.path);
     copy_fs_info(&child->fs, &parent->fs);
 
     strncat(child->name, " (clone)", 31);
+    return child;
 }
 
 static void return_from_fork(void)
@@ -207,19 +233,16 @@ static void return_from_fork(void)
 
 int do_fork(void)
 {
-    u32 pid = ++num_tasks;
     struct task *parent = current;
-    struct task *child = kzmalloc(sizeof(*child));
+    struct task *child = clone_process(parent);
+    if (!child)
+        return -ENOMEM;
 
-    clone_process(parent, child);
-    child->pid = pid;
     child->pc = (uintptr_t)return_from_fork;
-    child->regs = arch_copy_regs(parent->regs);
-    copy_fp_regs(child, parent);
     child->state = TASK_RUNNING;
     schedule_task(child);
 
-    return pid;
+    return child->pid;
 }
 
 __noreturn
@@ -354,7 +377,7 @@ static void cleanup_memory(struct mm_info *mm)
 void cleanup_task(struct task *p)
 {
     klog(LOG_DEBUG, "Cleaning up task %d\n", p->pid);
-    cleanup_task_info(&p->info);
+    // cleanup_task_info(&p->info);
     cleanup_files(&p->fs);
     cleanup_memory(p->mm);
 }
@@ -370,12 +393,13 @@ void reap_task(struct task *p)
     kfree(p->fp_regs);
     p->fp_regs = NULL;
     // kfree(p->regs);
-    kvirtual_free(p->kstack, __KERNEL_STACK_SZ);
+    // kvirtual_free(p->kstack, __KERNEL_STACK_SZ);
 }
 
 __noreturn void exit(int status)
 {
     struct task *parent = NULL;
+    remove_task(current);
     current->state = TASK_DEAD;
     klog(LOG_INFO, "Process %d exited with status %d\n", current->pid, status);
     if (current->parent_wait)

@@ -15,12 +15,50 @@ struct rq {
     u32 nr_running;
 
     struct task *curr;
-    struct task *next;
     struct task *idle;
 
     struct rb_root_cached queue;
 };
 
+struct wait_queue_head {
+    spinlock_t lock;
+    struct list_head task_list;
+};
+
+struct waitqueue {
+    struct task *task;
+    //wait_queue_func_t func; // callback function, e.g. try_to_wake_up()
+    struct list_head entry;
+};
+
+static struct rq rqs[4] = {
+    [0 ... 3] = {
+        .lock = SPINLOCK_INIT,
+        .cpu = 0,
+        .nr_running = 0,
+        .curr = NULL,
+        .idle = NULL,
+        .queue = RB_ROOT_CACHED,
+    }
+};
+
+static struct wait_queue_head wait_q = {
+    .lock = SPINLOCK_INIT,
+    .task_list = LIST_HEAD_INIT(wait_q.task_list),
+};
+
+void sleep_task(struct task *p)
+{
+    if (p->state == TASK_RUNNING) {
+        rb_erase_cached(&p->rq_node, &rqs[0].queue);
+        p->state = TASK_SLEEPING;
+        rqs[0].nr_running--;
+        struct waitqueue *wait = kmalloc(sizeof(struct waitqueue));
+        wait->task = p;
+        list_add_tail(&wait->entry, &wait_q.task_list);
+        klog(LOG_DEBUG, "Task %d is now sleeping\n", p->pid);
+    }
+}
 
 void idle(void)
 {
@@ -28,16 +66,15 @@ void idle(void)
     arch_idle();
 }
 
-static struct task *task_queue[16];
 static struct task root = {
     .state = TASK_RUNNING,
     .name = "idle",
     .priority = 20,
     .pid = 0,
-    .ppid = 0
+    .ppid = 0,
+    .lock = SPINLOCK_INIT,
 };
-static int back;
-static volatile int current_task;
+
 volatile int sched_timer = -1;
 int timer_reset = -1;
 
@@ -45,18 +82,12 @@ extern void arch_context_switch(struct task *prev, struct task *next);
 
 struct task* get_current_task(void)
 {
-    return task_queue[current_task];
+    return rqs[0].curr;
 }
 
 void remove_task(struct task *p)
 {
-    for (int i = 0; i < 16; i++) {
-        if (task_queue[i] == p) {
-            task_queue[i] = NULL;
-            klog(LOG_DEBUG, "Task %d removed from queue\n", p->pid);
-            break;
-        }
-    }
+    rb_erase_cached(&p->rq_node, &rqs[0].queue);
 }
 
 void yield(void)
@@ -65,15 +96,32 @@ void yield(void)
     schedule();
 }
 
+static bool prio_comp(struct rb_node *a, const struct rb_node *b)
+{
+    struct task *task_a = rb_entry(a, struct task, rq_node);
+    struct task *task_b = rb_entry(b, struct task, rq_node);
+    return task_a->priority < task_b->priority;
+}
+
+
 void schedule_task(struct task *new_task)
 {
-    task_queue[++back] = new_task;
-    klog(LOG_DEBUG, "Task_queue[%d] = %s\n", back, new_task->name);
+    struct task *tmp = NULL;
+    rqs[0].nr_running++;
+    rb_add_cached(&new_task->rq_node, &rqs[0].queue, prio_comp);
+#ifdef DEBUG_SCHED
+    struct task *t = new_task;
+    rbtree_postorder_for_each_entry_safe(t, tmp, &rqs[0].queue.rb_root, rq_node) {
+        klog(LOG_DEBUG, "RB: Task %d in queue\n", t->pid);
+    }
+#endif
 }
 
 void sched_init(void)
 {
-    task_queue[0] = &root;
+    rqs[0].idle = &root;
+    rqs[0].curr = &root;
+    rqs[0].nr_running = 1;
     root.pgd = arch_get_pgd();
     struct task *pid1 = init_process();
     schedule_task(pid1);
@@ -88,9 +136,11 @@ void sched_clock_init(void)
 
 static void context_switch(struct task *prev, struct task *next)
 {
-    register uintptr_t rsp asm("rsp");
+    arch_disable_interrupts();
+    rqs[0].curr = next;
     klog(LOG_DEBUG, "Switching from task %d to task %d\n", prev->pid, next->pid);
 #ifdef DEBUG_SCHED
+    register uintptr_t rsp asm("rsp");
     klog(LOG_DEBUG, "Current stack pointer: %p\n", rsp);
     klog(LOG_DEBUG, "Previous task info: \n");
     klog(LOG_DEBUG, "\tPID: %d\n", prev->pid);
@@ -105,7 +155,6 @@ static void context_switch(struct task *prev, struct task *next)
     klog(LOG_DEBUG, "\tPC: %p\n", next->pc);
     klog(LOG_DEBUG, "\tStack: %p\n", next->kstack);
 #endif
-    arch_disable_interrupts();
     save_fp_regs(prev);
     arch_context_switch(prev, next);
     restore_fp_regs(prev);
@@ -113,28 +162,25 @@ static void context_switch(struct task *prev, struct task *next)
 
 void schedule(void)
 {
-    if (back == 0)
-        return;
+    struct task *prev = current;
+    struct task *next = NULL;
 
-    struct task *prev = task_queue[current_task];
-
-    int i = 0;
-    while (i < 16) {
-        current_task = (current_task + 1) % 16;
-        if (task_queue[current_task]) {
-            if (task_queue[current_task]->state == TASK_RUNNING &&
-                task_queue[current_task]->priority <= prev->priority)
-                break;
-        }
-        i++;
-    }
-    if (task_queue[current_task] == prev) {
+    struct rb_node *node = rb_first_cached(&rqs[0].queue);
+    if (!node)
+        next = rqs[0].idle;
+    else
+        next = rb_entry(node, struct task, rq_node);
+    if (next == prev) {
         if (prev->state == TASK_RUNNING)
             return;
         else
-            current_task = 0; // idle
+            next = rqs[0].idle; // idle
     }
-    struct task *next = task_queue[current_task];
+
+    if (next->state != TASK_RUNNING) {
+        klog(LOG_FATAL, "Task %d is not running\n", next->pid);
+        kerror("");
+    }
 
     context_switch(prev, next);
 }
@@ -154,9 +200,20 @@ void sched_tick()
 
 struct task * find_by_pid(u32 pid)
 {
-    for (int i = 0; i < 16; i++) {
-        if (task_queue[i] && task_queue[i]->pid == pid)
-            return task_queue[i];
+    struct task *t = NULL, *tmp = NULL;
+    rbtree_postorder_for_each_entry_safe(t, tmp, &rqs[0].queue.rb_root, rq_node) {
+        if (t->pid == pid)
+            return t;
+    }
+    return NULL;
+}
+
+static struct waitqueue *find_waiting_task(int pid)
+{
+    struct waitqueue *wait = NULL;
+    list_for_each_entry(wait, &wait_q.task_list, entry) {
+        if (wait->task->pid == pid)
+            return wait;
     }
     return NULL;
 }
@@ -169,14 +226,17 @@ long waitpid(int pid)
     if (p->ppid != current->pid)
         return -ECHILD;
     klog(LOG_DEBUG, "Process %d: Waiting for task %d\n", get_pid(), pid);
+    rb_erase_cached(&current->rq_node, &rqs[0].queue);
     current->state = TASK_SLEEPING;
+    struct waitqueue *wait = kmalloc(sizeof(struct waitqueue));
+    wait->task = current;
+    list_add_tail(&wait->entry, &wait_q.task_list);
     p->parent_wait = true;
     schedule();
     arch_disable_interrupts();
     reap_task(p);
-    remove_task(p);
     kfree(p);
-    arch_enable_interrupts();
+    // arch_enable_interrupts();
     klog(LOG_DEBUG, "Task %d has exited, continuing task %d\n", pid, get_pid());
     return 0;
 }
@@ -185,19 +245,22 @@ SYSCALL_DECL1(waitpid, int, pid)
     return waitpid(pid);
 }
 
-void wakeup(int pid)
-{
-    struct task *p = find_by_pid(pid);
-    if (!p)
-        return;
-    p->state = TASK_RUNNING;
-    klog(LOG_DEBUG, "Waking up task %d\n", pid);
-}
-
 void wakeup_task(struct task *p)
 {
     if (p->state == TASK_SLEEPING) {
         p->state = TASK_RUNNING;
+        rb_add_cached(&p->rq_node, &rqs[0].queue, prio_comp);
+        rqs[0].nr_running++;
         klog(LOG_DEBUG, "Waking up task %d\n", p->pid);
     }
+}
+
+void wakeup(int pid)
+{
+    struct waitqueue *wq = find_waiting_task(pid);
+    if (!wq)
+        return;
+    list_del(&wq->entry);
+    wakeup_task(wq->task);
+    kfree(wq);
 }
