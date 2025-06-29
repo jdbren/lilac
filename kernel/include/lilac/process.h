@@ -28,8 +28,8 @@ struct fs_info {
 };
 
 struct task {
-    u32 pid;
-    u32 ppid;
+    int pid;
+    int ppid;
 
     struct mm_info *mm;
     uintptr_t pgd;  // 12 (32-bit) or 16 (64-bit)
@@ -47,12 +47,12 @@ struct task {
 
     u8 cpu;
     bool on_rq;
-    //u32 time_slice;
-    //struct rb_node rq_node;
+    u32 time_slice;
+    struct rb_node rq_node;
 
     struct task *parent;
-    // struct list_head children;
-    // struct list_head sibling;
+    struct list_head children;
+    struct list_head sibling;
 
     int exit_val;
     int exit_sig;

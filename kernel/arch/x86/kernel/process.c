@@ -97,10 +97,12 @@ void arch_unmap_all_user_vm(struct mm_info *info)
     struct vm_desc *desc = info->mmap;
     while (desc) {
         struct vm_desc *next = desc->vm_next;
-        uintptr_t phys = virt_to_phys((void*)desc->start);
         klog(LOG_DEBUG, "Unmapping %x-%x\n", desc->start, desc->end);
-        unmap_pages((void*)desc->start, (desc->end - desc->start) / PAGE_SIZE);
-        free_frames((void*)phys, (desc->end - desc->start) / PAGE_SIZE);
+        for (uintptr_t addr = desc->start; addr < desc->end; addr += PAGE_SIZE) {
+            uintptr_t phys = virt_to_phys((void*)addr);
+            unmap_page((void*)addr);
+            free_frame((void*)phys);
+        }
         kfree(desc);
         desc = next;
     }
@@ -142,6 +144,9 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
     struct vm_desc *desc = parent->mmap;
     while (desc) {
         struct vm_desc *new_desc = kzmalloc(sizeof *new_desc);
+#ifdef DEBUG_FORK
+        klog(LOG_DEBUG, "Copying VMA %lx-%lx\n", desc->start, desc->end);
+#endif
         memcpy(new_desc, desc, sizeof *desc);
         new_desc->mm = child;
         new_desc->vm_next = NULL;

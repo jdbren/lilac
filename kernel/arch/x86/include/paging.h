@@ -45,7 +45,7 @@ typedef u32 pte_t;
 
 #define PG_STRONG_UC (PG_CACHE_DISABLE | PG_WRITE_THROUGH)
 
-extern u8 *const phys_mem_mapping;
+extern volatile u8 *const phys_mem_mapping;
 
 int kernel_pt_init(uintptr_t start, uintptr_t end);
 

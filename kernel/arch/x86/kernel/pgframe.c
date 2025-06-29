@@ -21,7 +21,7 @@ extern const u32 _kernel_start;
 extern const u32 _kernel_end;
 static uintptr_t FIRST_PAGE;
 static u32 BITMAP_SIZE;
-static u32 *pg_frame_bitmap;
+static volatile u32 *pg_frame_bitmap;
 
 static void __init_bitmap(struct multiboot_tag_efi_mmap *mmap);
 static void *__check_bitmap(int i, int num_pages, int *count, int *start);
@@ -40,7 +40,7 @@ int phys_mem_init(struct multiboot_tag_efi_mmap *mmap)
         entry = (efi_memory_desc_t*)((uintptr_t)entry + mmap->descr_size);
     }
 
-    BITMAP_SIZE = phys_map_pgcnt / 8 + 8;
+    BITMAP_SIZE = phys_map_pgcnt / 8 + 8; // in bytes
     FIRST_PAGE = 0;
 
 #ifdef ARCH_x86_64
@@ -73,6 +73,9 @@ void* alloc_frames(u32 num_pages)
         if (pg_frame_bitmap[i] != ~0U) {
             void *ptr = __check_bitmap(i, num_pages, &count, &start);
             if (ptr) {
+#ifdef DEBUG_PAGING
+                klog(LOG_DEBUG, "Allocated %d physical frames at %p\n", num_pages, ptr);
+#endif
                 return ptr;
             }
         }
@@ -93,6 +96,9 @@ void free_frames(void *frame, u32 num_pages)
     pg < end; pg++) {
         __free_frame(pg);
     }
+#ifdef DEBUG_PAGING
+    klog(LOG_DEBUG, "Freed %d physical frames at %p\n", num_pages, frame);
+#endif
 }
 
 static void __mark_frames(size_t index, size_t offset, size_t pg_cnt)
@@ -168,4 +174,41 @@ static void __free_frame(page_t *frame)
     u32 offset = get_offset(frame);
 
     pg_frame_bitmap[index] &= ~(1 << offset);
+}
+
+void print_bitmap(void)
+{
+    for (size_t i = 0; i < BITMAP_SIZE / sizeof(u32); i++) {
+        for (int j = 0; j < 32; j++) {
+            if (check_bit(pg_frame_bitmap[i], j))
+                putchar('1');
+            else
+                putchar('0');
+        }
+        putchar('\n');
+    }
+}
+
+int num_free_frames(void)
+{
+    int count = 0;
+    for (size_t i = 0; i < BITMAP_SIZE / sizeof(u32); i++) {
+        for (int j = 0; j < 32; j++) {
+            if (!check_bit(pg_frame_bitmap[i], j))
+                count++;
+        }
+    }
+    return count;
+}
+
+int num_used_frames(void)
+{
+    int count = 0;
+    for (size_t i = 0; i < BITMAP_SIZE / sizeof(u32); i++) {
+        for (int j = 0; j < 32; j++) {
+            if (check_bit(pg_frame_bitmap[i], j))
+                count++;
+        }
+    }
+    return count;
 }

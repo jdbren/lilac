@@ -138,6 +138,9 @@ SYSCALL_DECL3(lseek, int, fd, int, offset, int, whence)
 struct dentry * vfs_lookup(const char *path)
 {
     struct dentry *start = root_dentry;
+    if (*path == '\0')
+        return ERR_PTR(-ENOENT);
+
     if (path[0] != '/')
         start = current->fs.cwd_d;
 

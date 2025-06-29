@@ -5,10 +5,13 @@
 
 #include <lilac/log.h>
 
+void print_bitmap(void);
+
 #define assert(x) if (unlikely(!(x))) kerror("Assertion failed: " #x)
 
 [[noreturn]] static inline void kerror(const char *msg) {
 	klog(LOG_FATAL, "Kernel panic: %s\n", msg);
+	// print_bitmap();
 	asm("cli");
 	while (1)
 		asm("hlt");

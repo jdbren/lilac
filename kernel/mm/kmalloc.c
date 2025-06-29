@@ -36,6 +36,7 @@ struct __align(32) sb_header {
     struct sb_header *next;
     struct sb_header *prev;
     alloc_t *free;
+    u16 canary;
     union {
         u16 alloc_size;
         u16 num_pages;
@@ -44,6 +45,13 @@ struct __align(32) sb_header {
     bool is_large;
 };
 
+#define verify_canary(header) \
+    do { \
+        if (header->canary != 0xDEAD) { \
+            klog(LOG_ERROR, "kmalloc: Superblock canary mismatch at %p\n", header); \
+            kerror("kmalloc: Superblock canary mismatch"); \
+        } \
+    } while (0)
 
 static struct sb_list buckets[BUCKETS];
 
@@ -55,6 +63,26 @@ static void sb_mtf(struct sb_header*, int);
 static void sb_atf(struct sb_header*, int);
 static size_t next_pow_2(size_t);
 
+#ifdef DEBUG_KMALLOC
+static void verify_bucket_counts(void) {
+    for (int i = 0; i < BUCKETS; i++) {
+        u32 expected = 0;
+        struct sb_header *header = buckets[i].head;
+
+        while (header != NULL) {
+            verify_canary(header);
+            expected += header->free_count;
+            header = header->next;
+        }
+
+        if (expected != buckets[i].free_count) {
+            klog(LOG_DEBUG, "Bucket %d: free_count mismatch! expected %u, actual %u\n",
+                   i, expected, buckets[i].free_count);
+            kerror("kmalloc: Bucket free count mismatch");
+        }
+    }
+}
+#endif
 
 void *kmalloc(size_t size)
 {
@@ -62,6 +90,11 @@ void *kmalloc(size_t size)
     assert(BUCKETS >= log2(SUPERBLOCKSIZE)-MIN_ALLOC_POWER);
 
     void *alloc = NULL;
+
+#ifdef DEBUG_KMALLOC
+    printf("kmalloc: Allocating %u bytes\n", size);
+    verify_bucket_counts();
+#endif
 
     if (size > SUPERBLOCKSIZE/2)
         alloc = malloc_large(size);
@@ -71,6 +104,7 @@ void *kmalloc(size_t size)
     assert(is_aligned(alloc, MIN_ALLOC));
 #ifdef DEBUG_KMALLOC
     printf("kmalloc: Allocated %u bytes at %p\n", size, alloc);
+    verify_bucket_counts();
 #endif
     if (unlikely(alloc == NULL))
         kerror("kmalloc failed\n");
@@ -141,6 +175,7 @@ void kfree(void *ptr)
 #endif
 #ifdef DEBUG_KMALLOC
     printf("kfree: Freeing memory at %p\n", ptr);
+    verify_bucket_counts();
 #endif
     // get superblock header using bitmask
     uintptr_t base = (uintptr_t)ptr & PAGE_MASK;
@@ -157,6 +192,8 @@ void kfree(void *ptr)
     int step = header->alloc_size;
     int bucket_idx = log2(step) - MIN_ALLOC_POWER;
 
+    assert(is_aligned(ptr, header->alloc_size));
+
     // return alloc to free list
     alloc_t *alloc = (alloc_t*)ptr;
     alloc->data = header->free;
@@ -172,6 +209,11 @@ void kfree(void *ptr)
     // move superblock to front of list
     if (header != NULL && !(header == buckets[bucket_idx].head))
         sb_mtf(header, bucket_idx);
+#ifdef DEBUG_KMALLOC
+    klog(LOG_DEBUG, "kfree: Freed memory at %p, bucket %d, free_count %d\n",
+           ptr, bucket_idx, buckets[bucket_idx].free_count);
+    verify_bucket_counts();
+#endif
 }
 
 static void* malloc_small(size_t size)
@@ -196,12 +238,17 @@ static void* malloc_small(size_t size)
 
         // add superblock to front of list
         sb_atf(header, bucket_idx);
-    }
-    else {
+    } else {
         // use existing superblock
         header = (struct sb_header*)buckets[bucket_idx].head;
-        while (header->free_count == 0)
-            header = header->next;
+        while (header->free_count == 0) {
+            if (header->next == NULL) {
+                klog(LOG_ERROR , "kmalloc: No free memory in bucket %d\n", bucket_idx);
+                kerror("");
+            } else {
+                header = header->next;
+            }
+        }
         // move superblock to front of list if it has room
         // trying to improve locality, I think Hoard does something similar
         if (header->free_count > 1 && header != buckets[bucket_idx].head)
@@ -247,6 +294,7 @@ static void* malloc_large(size_t size)
 static void init_super(struct sb_header *header, size_t size, int bucket_idx)
 {
     // make superblock header
+    header->canary = 0xDEAD;
     if (size > sizeof(struct sb_header))
         header->free = (alloc_t*)((u8*)header + size);
     else
@@ -299,6 +347,7 @@ static struct sb_header* manage_empty_sb(struct sb_header *header, int bucket_id
         // remove superblock from list
         if (header == buckets[bucket_idx].head) {
             // list front block is empty
+            assert(header->next != NULL);
             buckets[bucket_idx].head = header->next;
             buckets[bucket_idx].head->prev = NULL;
         }
@@ -310,6 +359,7 @@ static struct sb_header* manage_empty_sb(struct sb_header *header, int bucket_id
                 header->next->prev = header->prev;
         }
         buckets[bucket_idx].num_sb--;
+        assert(header->free_count == (SUPERBLOCKSIZE - sizeof(struct sb_header)) / header->alloc_size);
         buckets[bucket_idx].free_count -= header->free_count;
         // free superblock
         kvirtual_free(header, SUPERBLOCKPAGES * PAGE_SIZE);

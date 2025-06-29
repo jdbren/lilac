@@ -41,7 +41,11 @@ syscall_entry:
 
 	call *%rax
 
-	mov  %rax,%rdi # save return value
+	mov  %rax, %r12 # save return value
+	# reset interrupt stack
+	lea  40+15*8(%rsp), %rax
+	mov  %rax, %gs:TSS_rsp0
+
 	movl $IA32_GS_BASE, %ecx
 	rdmsr
 	testl %edx,%edx
@@ -49,11 +53,12 @@ syscall_entry:
 	swapgs
 1:
 	# restore registers
-	mov %rdi,%rax # restore return value
+	mov %r12,%rax # restore return value
 	POP_REGS pop_rax=0
+	add $40, %rsp # pop manual interrupt stack frame
 
 	# prepare exit
-	mov 24(%rsp), %rsp
+	mov -16(%rsp), %rsp
 	sysretq
 
 # unused in 64 bit mode
@@ -75,8 +80,6 @@ sys_fork:
 .type jump_usermode, @function
 jump_usermode:
 	cli
-	push %rbp
-	mov  %rsp, %rbp
 	mov  %rdi, %r8		# store entry address
 	mov  %rdx, %rdi
 	call set_tss_esp0

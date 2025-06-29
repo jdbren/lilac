@@ -21,7 +21,7 @@
    asm volatile("invlpg (%0)" : : "r"((uintptr_t)addr) : "memory");
 
 // Maps all of physical memory
-u8 *const phys_mem_mapping = (void*)__PHYS_MAP_ADDR;
+volatile u8 *const phys_mem_mapping = (void*)__PHYS_MAP_ADDR;
 
 uintptr_t arch_get_pgd(void)
 {
@@ -65,6 +65,9 @@ int map_pages(void *phys, void *virt, u16 flags, int num_pages)
     flags |= PG_PRESENT;
     for (int i = 0; i < num_pages; i++, phys = (u8*)phys + PAGE_BYTES,
     virt = (u8*)virt + PAGE_BYTES) {
+#ifdef DEBUG_PAGING
+        printf("Mapping %p to %p with flags %x\n", virt, phys, flags);
+#endif
         pml4e_t *pml4 = (pml4e_t*)ENTRY_ADDR(arch_get_pgd());
         pdpte_t *pdpt = get_or_alloc_pdpt(pml4, virt, flags);
         pde_t *pd = get_or_alloc_pd(pdpt, virt, flags);
@@ -78,9 +81,6 @@ int map_pages(void *phys, void *virt, u16 flags, int num_pages)
         }
         pt[pt_ndx] = (uintptr_t)phys | flags;
         __native_flush_tlb_single(virt);
-#ifdef DEBUG_PAGING
-        printf("Mapping %p to %p with flags %x\n", virt, phys, flags);
-#endif
     }
     return 0;
 }

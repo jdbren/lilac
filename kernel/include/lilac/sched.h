@@ -11,6 +11,8 @@ void schedule(void);
 void yield(void);
 void wakeup(int pid);
 void wakeup_task(struct task *task);
+void sleep_task(struct task *p);
+void remove_task(struct task *p);
 void schedule_task(struct task *new_task);
 struct task *get_current_task(void);
 
