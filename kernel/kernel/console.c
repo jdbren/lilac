@@ -14,6 +14,7 @@
 
 static struct console consoles[5] = {0};
 static unsigned active_console = 0;
+int write_to_screen = 1;
 
 struct file_operations console_fops = {
     .read = console_read,
@@ -128,6 +129,7 @@ void console_init(void)
     printf("Current time: " TIME_FORMAT "\n\n",
         ts.year, ts.month, ts.day, ts.hour, ts.minute, ts.second);
     graphics_setcolor(RGB_WHITE, RGB_BLACK);
+    write_to_screen = 0;
     sleep(500);
 }
 

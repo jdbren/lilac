@@ -26,6 +26,8 @@ struct console {
     struct file *file;
 };
 
+extern int write_to_screen;
+
 void console_init(void);
 void console_intr(struct kbd_event);
 ssize_t console_read(struct file*, void *, size_t);
