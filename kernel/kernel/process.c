@@ -122,7 +122,7 @@ static void start_process(void)
     void *jmp = load_executable(current);
 
     struct vm_desc *desc = mem->mmap;
-    while (desc) {
+    while (desc) { // after the data segment, this seems imprecise?
         if ((desc->vm_prot & (PROT_READ|PROT_WRITE)) == (PROT_READ|PROT_WRITE))
             break;
         desc = desc->vm_next;
@@ -201,7 +201,6 @@ static struct task * clone_process(struct task *parent)
     if (!child)
         return NULL;
     child->rq_node = (struct rb_node){0};
-    child->children = (struct list_head){0};
     INIT_LIST_HEAD(&child->children);
     child->on_rq = false;
     child->parent_wait = false;
@@ -371,20 +370,20 @@ static void cleanup_memory(struct mm_info *mm)
 {
     klog(LOG_DEBUG, "Cleaning up memory\n");
     arch_unmap_all_user_vm(mm);
-    kfree(mm);
+    // mm_struct is freed in reap_task() since we need original kstack
 }
 
 void cleanup_task(struct task *p)
 {
     klog(LOG_DEBUG, "Cleaning up task %d\n", p->pid);
-    // cleanup_task_info(&p->info);
+    // cleanup_task_info(&p->info); // TODO BUG
     cleanup_files(&p->fs);
     cleanup_memory(p->mm);
 }
 
 void reap_task(struct task *p)
 {
-    if (p->state != TASK_DEAD) {
+    if (p->state != TASK_ZOMBIE) {
         klog(LOG_WARN, "Tried to reap task %d, but it is not dead\n", p->pid);
         return;
     }
@@ -392,19 +391,22 @@ void reap_task(struct task *p)
     arch_reclaim_mem(p);
     kfree(p->fp_regs);
     p->fp_regs = NULL;
-    // kfree(p->regs);
-    // kvirtual_free(p->kstack, __KERNEL_STACK_SZ);
+    // kfree(p->regs); // ISSUE This is sometimes stack memory, so can't free currently
+    kvirtual_free(p->mm->kstack, __KERNEL_STACK_SZ);
+    kfree(p->mm);
 }
 
 __noreturn void exit(int status)
 {
     struct task *parent = NULL;
     remove_task(current);
-    current->state = TASK_DEAD;
+    current->state = TASK_SLEEPING;
     klog(LOG_INFO, "Process %d exited with status %d\n", current->pid, status);
     if (current->parent_wait)
         parent = current->parent;
     cleanup_task(current);
+    current->exit_val = status;
+    current->state = TASK_ZOMBIE;
     if (parent)
         wakeup_task(parent);
     schedule();

@@ -63,7 +63,7 @@ static void sb_mtf(struct sb_header*, int);
 static void sb_atf(struct sb_header*, int);
 static size_t next_pow_2(size_t);
 
-#ifdef DEBUG_KMALLOC
+#ifdef DEBUG_CHECK_KMALLOC
 static void verify_bucket_counts(void) {
     for (int i = 0; i < BUCKETS; i++) {
         u32 expected = 0;
@@ -93,6 +93,8 @@ void *kmalloc(size_t size)
 
 #ifdef DEBUG_KMALLOC
     printf("kmalloc: Allocating %u bytes\n", size);
+#endif
+#ifdef DEBUG_CHECK_KMALLOC
     verify_bucket_counts();
 #endif
 
@@ -104,6 +106,8 @@ void *kmalloc(size_t size)
     assert(is_aligned(alloc, MIN_ALLOC));
 #ifdef DEBUG_KMALLOC
     printf("kmalloc: Allocated %u bytes at %p\n", size, alloc);
+#endif
+#ifdef DEBUG_CHECK_KMALLOC
     verify_bucket_counts();
 #endif
     if (unlikely(alloc == NULL))
@@ -175,6 +179,8 @@ void kfree(void *ptr)
 #endif
 #ifdef DEBUG_KMALLOC
     printf("kfree: Freeing memory at %p\n", ptr);
+#endif
+#ifdef DEBUG_CHECK_KMALLOC
     verify_bucket_counts();
 #endif
     // get superblock header using bitmask
@@ -212,6 +218,8 @@ void kfree(void *ptr)
 #ifdef DEBUG_KMALLOC
     klog(LOG_DEBUG, "kfree: Freed memory at %p, bucket %d, free_count %d\n",
            ptr, bucket_idx, buckets[bucket_idx].free_count);
+#endif
+#ifdef DEBUG_CHECK_KMALLOC
     verify_bucket_counts();
 #endif
 }

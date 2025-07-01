@@ -129,6 +129,31 @@ void * arch_user_stack(void)
 }
 
 #ifdef ARCH_x86_64
+static void copy_vm_area(void *cr3, struct vm_desc *new_desc)
+{
+    int num_pages = PAGE_ROUND_UP(new_desc->end - new_desc->start) / PAGE_SIZE;
+    void *phys = alloc_frames(num_pages);
+
+    // Copy data
+    void *tmp_virt = phys_mem_mapping + (uintptr_t)phys;
+    memcpy(tmp_virt, (void*)new_desc->start, num_pages * PAGE_SIZE);
+
+    int flags = PG_USER | PG_PRESENT;
+
+    for (int i = 0; i < num_pages; i++) {
+        void *virt = (void*)(new_desc->start + i * PAGE_SIZE);
+        pml4e_t *pml4 = (pml4e_t*)cr3;
+        pdpte_t *pdpt = get_or_alloc_pdpt(pml4, virt, flags | PG_WRITE);
+        pde_t *pd = get_or_alloc_pd(pdpt, virt, flags | PG_WRITE);
+        pte_t *pt = get_or_alloc_pt(pd, virt, flags | PG_WRITE);
+
+        if (new_desc->vm_prot & PROT_WRITE)
+            flags |= PG_WRITE;
+
+        pt[get_pt_index(virt)] = ((uintptr_t)phys + i * PAGE_SIZE) | flags;
+    }
+}
+
 struct mm_info *arch_copy_mmap(struct mm_info *parent)
 {
     struct mm_info *child = arch_process_mmap(sizeof(void*) == 8);
@@ -147,33 +172,13 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
 #ifdef DEBUG_FORK
         klog(LOG_DEBUG, "Copying VMA %lx-%lx\n", desc->start, desc->end);
 #endif
-        memcpy(new_desc, desc, sizeof *desc);
+        *new_desc = *desc;
         new_desc->mm = child;
         new_desc->vm_next = NULL;
         vma_list_insert(new_desc, &child->mmap);
         desc = desc->vm_next;
 
-        int num_pages = PAGE_ROUND_UP(new_desc->end - new_desc->start) / PAGE_SIZE;
-        void *phys = alloc_frames(num_pages);
-
-        // Copy data
-        void *tmp_virt = phys_mem_mapping + (uintptr_t)phys;
-        memcpy(tmp_virt, (void*)new_desc->start, num_pages * PAGE_SIZE);
-
-        int flags = PG_USER | PG_PRESENT;
-
-        for (int i = 0; i < num_pages; i++) {
-            void *virt = (void*)(new_desc->start + i * PAGE_SIZE);
-            pml4e_t *pml4 = (pml4e_t*)cr3;
-            pdpte_t *pdpt = get_or_alloc_pdpt(pml4, virt, flags | PG_WRITE);
-            pde_t *pd = get_or_alloc_pd(pdpt, virt, flags | PG_WRITE);
-            pte_t *pt = get_or_alloc_pt(pd, virt, flags | PG_WRITE);
-
-            if (new_desc->vm_prot & PROT_WRITE)
-                flags |= PG_WRITE;
-
-            pt[get_pt_index(virt)] = ((uintptr_t)phys + i * PAGE_SIZE) | flags;
-        }
+        copy_vm_area((void*)cr3, new_desc);
     }
 
     return child;

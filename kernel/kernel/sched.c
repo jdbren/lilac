@@ -220,6 +220,11 @@ static struct wq_entry *find_waiting_task(int pid)
 
 long wait_task(struct task *p)
 {
+    if (p->state == TASK_ZOMBIE) {
+        reap_task(p);
+        kfree(p);
+        return 0;
+    }
     klog(LOG_DEBUG, "Process %d: Waiting for task %d\n", get_pid(), p->pid);
     rb_erase_cached(&current->rq_node, &rqs[0].queue);
     current->state = TASK_SLEEPING;
@@ -232,9 +237,9 @@ long wait_task(struct task *p)
 
     arch_disable_interrupts();
     reap_task(p);
-    kfree(p);
     // arch_enable_interrupts();
     klog(LOG_DEBUG, "Task %d has exited, continuing task %d\n", p->pid, get_pid());
+    kfree(p);
     return 0;
 }
 SYSCALL_DECL1(waitpid, int, pid)

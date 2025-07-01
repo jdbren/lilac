@@ -12,7 +12,7 @@ struct regs_state;
 
 #define TASK_RUNNING 0
 #define TASK_SLEEPING 1
-#define TASK_DEAD 2
+#define TASK_ZOMBIE 2
 
 struct task_info {
     const char *path;
