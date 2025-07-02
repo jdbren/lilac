@@ -235,9 +235,7 @@ long wait_task(struct task *p)
 
     schedule();
 
-    arch_disable_interrupts();
     reap_task(p);
-    // arch_enable_interrupts();
     klog(LOG_DEBUG, "Task %d has exited, continuing task %d\n", p->pid, get_pid());
     kfree(p);
     return 0;

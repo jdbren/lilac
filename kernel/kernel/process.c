@@ -182,7 +182,7 @@ static void copy_fs_info(struct fs_info *dst, struct fs_info *src)
     for (size_t i = 0; i < src->files.size; i++) {
         dst->files.fdarray[i] = src->files.fdarray[i];
         if (dst->files.fdarray[i])
-            dst->files.fdarray[i]->f_count++;
+            fget(dst->files.fdarray[i]);
     }
 }
 
@@ -218,9 +218,11 @@ static struct task * clone_process(struct task *parent)
     copy_fp_regs(child, parent);
 
     child->info.path = strdup(parent->info.path);
+    child->info.argv = NULL;
+    fget(child->info.exec_file);
     copy_fs_info(&child->fs, &parent->fs);
 
-    strncat(child->name, " (clone)", 31);
+    strncat(child->name, " (fork)", 31);
     return child;
 }
 
@@ -352,8 +354,10 @@ static void cleanup_files(struct fs_info *fs)
 static void cleanup_task_info(struct task_info *info)
 {
     klog(LOG_DEBUG, "Cleaning up task info\n");
-    if (info->path)
+    if (info->path) {
         kfree((void*)info->path);
+        info->path = NULL;
+    }
     if (info->exec_file) {
         vfs_close(info->exec_file);
         info->exec_file = NULL;
@@ -376,7 +380,7 @@ static void cleanup_memory(struct mm_info *mm)
 void cleanup_task(struct task *p)
 {
     klog(LOG_DEBUG, "Cleaning up task %d\n", p->pid);
-    // cleanup_task_info(&p->info); // TODO BUG
+    cleanup_task_info(&p->info);
     cleanup_files(&p->fs);
     cleanup_memory(p->mm);
 }
@@ -461,7 +465,7 @@ SYSCALL_DECL1(chdir, const char*, path)
     dput(task->fs.cwd_d);
     dget(d);
     task->fs.cwd_d = d;
-    arch_enable_interrupts();
+    // arch_enable_interrupts();
 out:
     kfree(path_buf);
     return err;
