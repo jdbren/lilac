@@ -3,8 +3,7 @@ set -e
 
 # Remove the old configuration file
 if [ -f kbuild.config ]; then
-  cp kbuild.config kbuild.config.old
-  rm -f kbuild.config
+  mv kbuild.config kbuild.config.old
 fi
 
 PROJECTS="kernel init user"
@@ -25,7 +24,7 @@ BOOTDIR=/boot
 LIBDIR=$EXEC_PREFIX/lib
 INCLUDEDIR=$PREFIX/include
 
-CFLAGS="-g"
+CFLAGS="-g -DDEBUG"
 CXXFLAGS="-g"
 
 SYSROOT="$(pwd)/sysroot"

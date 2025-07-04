@@ -45,6 +45,10 @@ struct __align(32) sb_header {
     bool is_large;
 };
 
+#ifdef DEBUG
+#define DEBUG_CHECK_KMALLOC
+#endif
+
 #define verify_canary(header) \
     do { \
         if (header->canary != 0xDEAD) { \

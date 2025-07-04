@@ -3,7 +3,7 @@
 #include <drivers/framebuffer.h>
 
 
-#if defined DEBUG_LOG
+#if defined DEBUG_LOG || defined DEBUG
 #define LOG_LEVEL LOG_DEBUG
 #elif defined WARN_LOG
 #define LOG_LEVEL LOG_WARN

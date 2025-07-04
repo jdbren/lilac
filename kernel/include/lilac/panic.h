@@ -7,7 +7,11 @@
 
 void print_bitmap(void);
 
+#ifdef DEBUG
 #define assert(x) if (unlikely(!(x))) kerror("Assertion failed: " #x)
+#else
+#define assert(x) ((void)0)
+#endif
 
 [[noreturn]] static inline void kerror(const char *msg) {
 	klog(LOG_FATAL, "Kernel panic: %s\n", msg);

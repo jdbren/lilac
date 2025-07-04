@@ -17,7 +17,7 @@ BOOTDIR?=$(EXEC_PREFIX)/boot
 INCLUDEDIR?=$(PREFIX)/include
 
 FLAGS=-D__lilac__ -D__is_kernel -Iinclude -ffreestanding -Wall -Wextra \
-	-Wno-unused-parameter -Wno-unused-function -Wno-unused-variable -DDEBUG_LOG -DDEBUG_CHECK_KMALLOC
+	-Wno-unused-parameter -Wno-unused-function -Wno-unused-variable
 CFLAGS:=$(CFLAGS) $(FLAGS) -mno-red-zone -fanalyzer -fstack-protector
 CXXFLAGS:=$(CXXFLAGS) $(FLAGS) -fno-exceptions -fno-rtti
 LDFLAGS:=$(LDFLAGS)
