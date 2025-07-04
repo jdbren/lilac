@@ -8,6 +8,7 @@
 #include <lilac/elf.h>
 #include <lilac/fs.h>
 #include <lilac/sched.h>
+#include <lilac/wait.h>
 #include <lilac/timer.h>
 #include <lilac/syscall.h>
 #include <lilac/mm.h>
@@ -403,8 +404,7 @@ void reap_task(struct task *p)
 __noreturn void exit(int status)
 {
     struct task *parent = NULL;
-    rq_del(current);
-    current->state = TASK_SLEEPING;
+    set_task_sleeping(current);
     klog(LOG_INFO, "Process %d exited with status %d\n", current->pid, status);
     if (current->parent_wait)
         parent = current->parent;
@@ -412,7 +412,7 @@ __noreturn void exit(int status)
     current->exit_val = status;
     current->state = TASK_ZOMBIE;
     if (parent)
-        wakeup_task(parent);
+        notify_parent(parent, current);
     schedule();
     kerror("exit: Should never be reached\n");
     unreachable();

@@ -4,6 +4,7 @@
 #include <lilac/timer.h>
 #include <lilac/device.h>
 #include <lilac/sched.h>
+#include <lilac/wait.h>
 #include <lilac/fs.h>
 #include <drivers/framebuffer.h>
 #include <mm/kmm.h>
@@ -133,26 +134,11 @@ void console_init(void)
     sleep(500);
 }
 
-static u32 io_queue[8];
 
-static void add_to_io_queue(u32 pid)
-{
-    for (int i = 0; i < 8; i++) {
-        if (io_queue[i] == 0) {
-            io_queue[i] = pid;
-            return;
-        }
-    }
-}
-
-static u32 pop_io_queue(void)
-{
-    u32 pid = io_queue[0];
-    for (int i = 0; i < 7; i++)
-        io_queue[i] = io_queue[i+1];
-    io_queue[7] = 0;
-    return pid;
-}
+static struct waitqueue console_wq = {
+    .lock = SPINLOCK_INIT,
+    .task_list = LIST_HEAD_INIT(console_wq.task_list)
+};
 
 ssize_t console_read(struct file *file, void *buf, size_t count)
 {
@@ -167,9 +153,7 @@ ssize_t console_read(struct file *file, void *buf, size_t count)
         // input into cons.buffer.
         if (con->input.rpos == con->input.wpos) {
             klog(LOG_DEBUG, "console_read: proc %d waiting for input\n", get_pid());
-            sleep_task(current);
-            add_to_io_queue(get_pid());
-            yield();
+            sleep_on(&console_wq);
         }
 
         c = con->input.buf[con->input.rpos++ % INPUT_BUF_SIZE];
@@ -253,8 +237,7 @@ void console_intr(struct kbd_event event)
                 // wake up console_read() if a whole line (or end-of-file)
                 // has arrived.
                 con->input.wpos = con->input.epos;
-                u32 pid = pop_io_queue();
-                wakeup(pid);
+                wake_first(&console_wq);
             }
         }
     }

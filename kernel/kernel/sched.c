@@ -99,12 +99,29 @@ void rq_add(struct task *p)
     release_lock(&rqs[0].lock);
 }
 
+void set_task_running(struct task *p)
+{
+    if (p->state == TASK_SLEEPING) {
+        p->state = TASK_RUNNING;
+        rq_add(p);
+        klog(LOG_DEBUG, "Waking up task %d\n", p->pid);
+    }
+}
+
+void set_task_sleeping(struct task *p)
+{
+    if (p->state == TASK_RUNNING) {
+        rq_del(p);
+        p->state = TASK_SLEEPING;
+        klog(LOG_DEBUG, "Task %d is now sleeping\n", p->pid);
+    }
+}
+
 void yield(void)
 {
     sched_timer = timer_reset;
     schedule();
 }
-
 
 void schedule_task(struct task *new_task)
 {

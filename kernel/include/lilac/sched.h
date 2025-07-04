@@ -9,9 +9,6 @@ void sched_init(void);
 void sched_clock_init(void);
 void schedule(void);
 void yield(void);
-void wakeup(int pid);
-void wakeup_task(struct task *task);
-void sleep_task(struct task *p);
 void schedule_task(struct task *new_task);
 struct task * get_current_task(void);
 struct task * find_child_by_pid(struct task *parent, int pid);
@@ -23,5 +20,7 @@ void idle(void);
 
 void rq_add(struct task *p);
 void rq_del(struct task *p);
+void set_task_running(struct task *p);
+void set_task_sleeping(struct task *p);
 
 #endif
