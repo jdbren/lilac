@@ -4,7 +4,6 @@
 
 #include <stdbool.h>
 #include <lilac/lilac.h>
-#include <lilac/log.h>
 #include <lilac/process.h>
 #include <lilac/syscall.h>
 #include <mm/kmm.h>
@@ -20,17 +19,6 @@ struct rq {
     struct rb_root_cached queue;
 };
 
-struct waitqueue {
-    spinlock_t lock;
-    struct list_head task_list;
-};
-
-struct wq_entry {
-    struct task *task;
-    //wait_queue_func_t func; // callback function, e.g. try_to_wake_up()
-    struct list_head entry;
-};
-
 static struct rq rqs[4] = {
     [0 ... 3] = {
         .lock = SPINLOCK_INIT,
@@ -42,23 +30,6 @@ static struct rq rqs[4] = {
     }
 };
 
-static struct waitqueue wait_q = {
-    .lock = SPINLOCK_INIT,
-    .task_list = LIST_HEAD_INIT(wait_q.task_list),
-};
-
-void sleep_task(struct task *p)
-{
-    if (p->state == TASK_RUNNING) {
-        rb_erase_cached(&p->rq_node, &rqs[0].queue);
-        p->state = TASK_SLEEPING;
-        rqs[0].nr_running--;
-        struct wq_entry *wait = kmalloc(sizeof(*wait));
-        wait->task = p;
-        list_add_tail(&wait->entry, &wait_q.task_list);
-        klog(LOG_DEBUG, "Task %d is now sleeping\n", p->pid);
-    }
-}
 
 void idle(void)
 {
@@ -85,15 +56,14 @@ struct task* get_current_task(void)
     return rqs[0].curr;
 }
 
-void remove_task(struct task *p)
+struct task * find_child_by_pid(struct task *parent, int pid)
 {
-    rb_erase_cached(&p->rq_node, &rqs[0].queue);
-}
-
-void yield(void)
-{
-    sched_timer = timer_reset;
-    schedule();
+    struct task *p = NULL;
+    list_for_each_entry(p, &parent->children, sibling) {
+        if (p->pid == pid)
+            return p;
+    }
+    return NULL;
 }
 
 static bool prio_comp(struct rb_node *a, const struct rb_node *b)
@@ -103,14 +73,44 @@ static bool prio_comp(struct rb_node *a, const struct rb_node *b)
     return task_a->priority < task_b->priority;
 }
 
+void rq_del(struct task *p)
+{
+    if (!p->on_rq) {
+        klog(LOG_ERROR, "Task %d is not on the run queue\n", p->pid);
+        return;
+    }
+    acquire_lock(&rqs[0].lock);
+    rb_erase_cached(&p->rq_node, &rqs[0].queue);
+    rqs[0].nr_running--;
+    p->on_rq = false;
+    release_lock(&rqs[0].lock);
+}
+
+void rq_add(struct task *p)
+{
+    if (p->on_rq) {
+        klog(LOG_ERROR, "Task %d is already on the run queue\n", p->pid);
+        return;
+    }
+    acquire_lock(&rqs[0].lock);
+    rb_add_cached(&p->rq_node, &rqs[0].queue, prio_comp);
+    rqs[0].nr_running++;
+    p->on_rq = true;
+    release_lock(&rqs[0].lock);
+}
+
+void yield(void)
+{
+    sched_timer = timer_reset;
+    schedule();
+}
+
 
 void schedule_task(struct task *new_task)
 {
-    struct task *tmp = NULL;
-    rqs[0].nr_running++;
-    rb_add_cached(&new_task->rq_node, &rqs[0].queue, prio_comp);
+    rq_add(new_task);
 #ifdef DEBUG_SCHED
-    struct task *t = new_task;
+    struct task *tmp = NULL, *t = new_task;
     rbtree_postorder_for_each_entry_safe(t, tmp, &rqs[0].queue.rb_root, rq_node) {
         klog(LOG_DEBUG, "RB: Task %d in queue\n", t->pid);
     }
@@ -196,76 +196,4 @@ void sched_tick()
     sched_timer = timer_reset;
 
     schedule();
-}
-
-struct task * find_by_pid(int pid)
-{
-    struct task *t = NULL, *tmp = NULL;
-    rbtree_postorder_for_each_entry_safe(t, tmp, &rqs[0].queue.rb_root, rq_node) {
-        if (t->pid == pid)
-            return t;
-    }
-    return NULL;
-}
-
-static struct wq_entry *find_waiting_task(int pid)
-{
-    struct wq_entry *wait = NULL;
-    list_for_each_entry(wait, &wait_q.task_list, entry) {
-        if (wait->task->pid == pid)
-            return wait;
-    }
-    return NULL;
-}
-
-long wait_task(struct task *p)
-{
-    if (p->state == TASK_ZOMBIE) {
-        reap_task(p);
-        kfree(p);
-        return 0;
-    }
-    klog(LOG_DEBUG, "Process %d: Waiting for task %d\n", get_pid(), p->pid);
-    rb_erase_cached(&current->rq_node, &rqs[0].queue);
-    current->state = TASK_SLEEPING;
-    struct wq_entry *wait = kmalloc(sizeof(*wait));
-    wait->task = current;
-    list_add_tail(&wait->entry, &wait_q.task_list);
-    p->parent_wait = true;
-
-    schedule();
-
-    reap_task(p);
-    klog(LOG_DEBUG, "Task %d has exited, continuing task %d\n", p->pid, get_pid());
-    kfree(p);
-    return 0;
-}
-SYSCALL_DECL1(waitpid, int, pid)
-{
-    struct task *p = find_by_pid(pid);
-    if (!p)
-        return -ECHILD;
-    if (p->ppid != current->pid)
-        return -ECHILD;
-    return wait_task(p);
-}
-
-void wakeup_task(struct task *p)
-{
-    if (p->state == TASK_SLEEPING) {
-        p->state = TASK_RUNNING;
-        rb_add_cached(&p->rq_node, &rqs[0].queue, prio_comp);
-        rqs[0].nr_running++;
-        klog(LOG_DEBUG, "Waking up task %d\n", p->pid);
-    }
-}
-
-void wakeup(int pid)
-{
-    struct wq_entry *wq_ent = find_waiting_task(pid);
-    if (!wq_ent)
-        return;
-    list_del(&wq_ent->entry);
-    wakeup_task(wq_ent->task);
-    kfree(wq_ent);
 }

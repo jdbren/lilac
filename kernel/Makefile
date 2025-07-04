@@ -51,7 +51,8 @@ kernel/log.o \
 kernel/process.o \
 kernel/sched.o \
 kernel/sync.o \
-kernel/sleep.o \
+kernel/reboot.o \
+kernel/wait.o \
 mm/kmalloc.o \
 mm/mm.o \
 fs/fat32/fat32.o \

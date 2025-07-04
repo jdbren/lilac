@@ -12,13 +12,16 @@ void yield(void);
 void wakeup(int pid);
 void wakeup_task(struct task *task);
 void sleep_task(struct task *p);
-void remove_task(struct task *p);
 void schedule_task(struct task *new_task);
-struct task *get_current_task(void);
+struct task * get_current_task(void);
+struct task * find_child_by_pid(struct task *parent, int pid);
 
 #define current get_current_task()
 
 int do_fork(void);
 void idle(void);
+
+void rq_add(struct task *p);
+void rq_del(struct task *p);
 
 #endif

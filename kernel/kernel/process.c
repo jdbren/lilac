@@ -403,7 +403,7 @@ void reap_task(struct task *p)
 __noreturn void exit(int status)
 {
     struct task *parent = NULL;
-    remove_task(current);
+    rq_del(current);
     current->state = TASK_SLEEPING;
     klog(LOG_INFO, "Process %d exited with status %d\n", current->pid, status);
     if (current->parent_wait)
