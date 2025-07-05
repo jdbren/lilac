@@ -35,9 +35,10 @@ volatile u32 timer_cnt;
 extern volatile u32 system_timer_fractions;
 extern volatile u32 system_timer_ms;
 
-uintptr_t hpet_base;
-u32 hpet_clk_period;
-u64 hpet_frq;
+static uintptr_t hpet_base;
+static u32 hpet_clk_period;
+static u64 hpet_frq;
+static int hpet_enabled;
 
 static u64 read_reg(const u32 offset)
 {
@@ -71,24 +72,26 @@ void hpet_init(u32 time, struct hpet_info *info)
 
     time = hpet_frq / desired_freq;
 
-    // Int enable, periodic, write to accumulator bit, force 32-bit mode
+    // Int enable, periodic, write to accumulator bit
     u64 timer_reg = read_reg(HPET_TIMER_CONF_REG(info->hpet_number));
     if (!(timer_reg & (1 << 4)))
         kerror("HPET does not allow periodic mode\n");
-    u64 val = (1 << 2) | (1 << 3) | (1 << 6) | (1 << 8);
+    u64 val = (1 << 2) | (1 << 3) | (1 << 6);
 
-    write_reg(HPET_CONFIG_REG, 0x2); // Enable legacy replacement
-    write_reg(HPET_COUNTER_REG, 0);	 // Reset counter
+    write_reg(HPET_CONFIG_REG, 0x0); // Disable
     write_reg(HPET_TIMER_CONF_REG(info->hpet_number), val);
     write_reg(HPET_TIMER_COMP_REG(info->hpet_number), time);
+    write_reg(HPET_COUNTER_REG, 0);	 // Reset counter
     write_reg(HPET_CONFIG_REG, 0x3); // Enable counter
 
-    klog(LOG_INFO, "HPET set at %d Hz\n", desired_freq);
+    hpet_enabled = 1;
+
+    klog(LOG_INFO, "HPET interrupt running at %d Hz (%u fs period)\n", desired_freq, hpet_clk_period);
 }
 
-u32 hpet_read(void)
+u64 hpet_read(void)
 {
-    return read_reg32(HPET_COUNTER_REG);
+    return read_reg(HPET_COUNTER_REG);
 }
 
 // TODO: Make sure HPET is supported
@@ -122,10 +125,11 @@ void usleep(u32 micros)
 // Get system timer in 1 ns intervals
 u64 get_sys_time(void)
 {
-    u32 counter = hpet_read();
-    u32 frq = hpet_frq / 100000000U;
-    u64 time = counter / frq * 10;
-    return time;
+    if (!hpet_enabled)
+        return 0;
+    u64 counter = hpet_read();
+    u64 time_ns = (counter * hpet_clk_period) / 1000000ULL;
+    return time_ns;
 }
 
 s64 get_unix_time(void)

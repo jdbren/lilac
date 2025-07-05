@@ -238,6 +238,22 @@ int vprintf(const char *restrict format, va_list args)
                     }
                     char *s = convert(i, 10);
                     unsigned len = strlen(s);
+                    if (use_width) {
+                        if (width < len)
+                            len = width;
+                        while (len < width && !left_justify) {
+                            if (zero_pad) {
+                                if (!print("0", 1))
+                                    return -1;
+                            }
+                            else {
+                                if(!print(" ", 1))
+                                    return -1;
+                            }
+                            written++;
+                            width--;
+                        }
+                    }
                     if (!print(s, len))
                         return -1;
                     written += len;

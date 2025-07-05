@@ -48,6 +48,8 @@ static int get_fd(void)
             return -ENOMEM;
         files->fdarray = tmp;
         files->max *= 2;
+        for (size_t i = files->size; i < files->max; i++)
+            files->fdarray[i] = NULL;
         return files->size++;
     } else {
         return -EMFILE;
@@ -462,4 +464,41 @@ int mknod(const char *pathname, int mode, dev_t dev)
 SYSCALL_DECL3(mknod, const char*, pathname, int, mode, dev_t, dev)
 {
     return mknod(pathname, mode, dev);
+}
+
+int vfs_dup(int oldfd, int newfd)
+{
+    struct file *f = get_file_handle(oldfd);
+    if (IS_ERR(f))
+        return PTR_ERR(f);
+    struct fdtable *files = &current->fs.files;
+
+    if (newfd < 0 || newfd >= files->max)
+        return -EBADF;
+
+    // if (newfd < files->size && current->fs.files.fdarray[newfd]) {
+    //     vfs_close(current->fs.files.fdarray[newfd]);
+    // }
+
+    current->fs.files.fdarray[newfd] = f;
+    fget(f);
+#ifdef DEBUG_VFS
+    klog(LOG_DEBUG, "VFS: Duplicated fd %d to %d\n", oldfd, newfd);
+#endif
+    return newfd;
+}
+
+SYSCALL_DECL1(dup, int, oldfd)
+{
+    int newfd = get_fd();
+    if (newfd < 0) {
+        return newfd; // -EMFILE
+    }
+
+    return vfs_dup(oldfd, newfd);
+}
+
+SYSCALL_DECL2(dup2, int, oldfd, int, newfd)
+{
+    return vfs_dup(oldfd, newfd);
 }

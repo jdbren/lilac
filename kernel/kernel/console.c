@@ -84,7 +84,6 @@ void console_init(void)
 
     struct console *con = &consoles[active_console];
 
-    sleep(500);
     console_clear(con);
     graphics_setcolor(RGB_MAGENTA, RGB_BLACK);
     console_writestring(con, "LilacOS v0.1.0\n\n");
@@ -131,7 +130,6 @@ void console_init(void)
         ts.year, ts.month, ts.day, ts.hour, ts.minute, ts.second);
     graphics_setcolor(RGB_WHITE, RGB_BLACK);
     write_to_screen = 0;
-    sleep(500);
 }
 
 

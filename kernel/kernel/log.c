@@ -1,5 +1,7 @@
 #include <lilac/log.h>
 #include <lilac/libc.h>
+#include <lilac/timer.h>
+#include <lilac/process.h>
 #include <drivers/framebuffer.h>
 
 
@@ -27,32 +29,25 @@ void klog(int level, const char *data, ...)
     u32 text_color = graphics_getcolor().fg;
     va_list args;
     if (!data || log_level > level) return;
-    printf("[");
+    u64 stime = get_sys_time();
     switch (level)
     {
-    case LOG_DEBUG:
-        graphics_setcolor(RGB_MAGENTA, RGB_BLACK);
-        printf(" DEBUG ");
-        break;
-    case LOG_INFO:
-        graphics_setcolor(RGB_CYAN, RGB_BLACK);
-        printf(" INFO ");
-        break;
     case LOG_WARN:
         graphics_setcolor(RGB_YELLOW, RGB_BLACK);
-        printf(" WARNING ");
+        printf("[ WARNING ]");
         break;
     case LOG_ERROR:
         graphics_setcolor(RGB_RED, RGB_BLACK);
-        printf(" ERROR ");
+        printf("[ ERROR ]");
         break;
     case LOG_FATAL:
         graphics_setcolor(RGB_RED, RGB_BLACK);
-        printf(" FATAL ");
+        printf("[ PANIC ]");
         break;
     }
     graphics_setcolor(text_color, RGB_BLACK);
-    printf("] ");
+    printf("[%lld.%09lld] pid %d: ", (long long)(stime / 1000000000ll),
+        (long long)(stime % 1000000000ll), get_pid());
 
     va_start(args, data);
     vprintf(data, args);

@@ -4,17 +4,6 @@
 #include <lilac/sched.h>
 #include <lilac/syscall.h>
 
-struct waitqueue {
-    spinlock_t lock;
-    struct list_head task_list;
-};
-
-struct wq_entry {
-    struct task *task;
-    //wait_queue_func_t func; // callback function, e.g. try_to_wake_up()
-    struct list_head entry;
-};
-
 static struct waitqueue wait_q = {
     .lock = SPINLOCK_INIT,
     .task_list = LIST_HEAD_INIT(wait_q.task_list),
@@ -54,6 +43,10 @@ static void remove_wait_entry(struct wq_entry *wait, struct waitqueue *wq)
 static struct wq_entry *find_waiting_task(struct waitqueue *wq, int pid)
 {
     struct wq_entry *wait = NULL;
+    if (list_empty(&wq->task_list)) {
+        klog(LOG_DEBUG, "No tasks waiting in waitqueue for pid %d\n", pid);
+        return NULL;
+    }
     list_for_each_entry(wait, &wq->task_list, entry) {
         if (wait->task->pid == pid)
             return wait;
@@ -72,7 +65,6 @@ static void sleep_task_on(struct task *p, struct waitqueue *wq)
         return;
     }
     add_wait_entry(wait, wq);
-    klog(LOG_DEBUG, "Task %d is now sleeping\n", p->pid);
 }
 
 long wait_for(struct task *p)

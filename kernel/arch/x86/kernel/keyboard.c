@@ -116,9 +116,6 @@ inline void set_console(int value)
 
     keycode = inb(KEYBOARD_DATA_PORT);
 
-    /* Send End of Interrupt (EOI) */
-    apic_eoi();
-
     //printf("Keycode: %x, Status: %x\n", keycode);
 
     switch (keycode) {
@@ -144,6 +141,9 @@ inline void set_console(int value)
             key_status_map[CAPS_LOCK] = !key_status_map[CAPS_LOCK];
             break;
     }
+
+    /* Send End of Interrupt (EOI) */
+    apic_eoi();
 
     if (keycode < sizeof keyboard_map && keyboard_map[keycode]) {
         u8 status = key_status_map[SHIFT_PRESSED] | key_status_map[CTRL_PRESSED] | key_status_map[ALT_PRESSED];

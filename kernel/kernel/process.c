@@ -15,7 +15,6 @@
 #include <mm/kmm.h>
 #include <mm/kmalloc.h>
 
-#define MAX_TASKS 1024
 #define INIT_STACK(KSTACK) ((uintptr_t)KSTACK + __KERNEL_STACK_SZ - sizeof(size_t))
 
 static int num_tasks;

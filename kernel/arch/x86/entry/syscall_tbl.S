@@ -10,10 +10,6 @@ sys_pipe:
 	mov $-ENOSYS, %eax
 	ret
 
-sys_dup:
-	mov $-ENOSYS, %eax
-	ret
-
 sys_rmdir:
 	mov $-ENOSYS, %eax
 	ret
@@ -58,6 +54,7 @@ syscall_table:
 	sc_tbl_entry brk		# 23
 	sc_tbl_entry sbrk		# 24
 	sc_tbl_entry reboot		# 25
+	sc_tbl_entry dup2		# 26
 /*
 	sc_tbl_entry link		# 26
 	sc_tbl_entry unlink		# 27

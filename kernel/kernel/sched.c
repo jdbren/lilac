@@ -8,6 +8,15 @@
 #include <lilac/syscall.h>
 #include <mm/kmm.h>
 
+static struct task root = {
+    .state = TASK_RUNNING,
+    .name = "idle",
+    .priority = 20,
+    .pid = 0,
+    .ppid = 0,
+    .lock = SPINLOCK_INIT,
+};
+
 struct rq {
     spinlock_t lock;
     u8 cpu;
@@ -24,8 +33,8 @@ static struct rq rqs[4] = {
         .lock = SPINLOCK_INIT,
         .cpu = 0,
         .nr_running = 0,
-        .curr = NULL,
-        .idle = NULL,
+        .curr = &root,
+        .idle = &root,
         .queue = RB_ROOT_CACHED,
     }
 };
@@ -37,14 +46,6 @@ void idle(void)
     arch_idle();
 }
 
-static struct task root = {
-    .state = TASK_RUNNING,
-    .name = "idle",
-    .priority = 20,
-    .pid = 0,
-    .ppid = 0,
-    .lock = SPINLOCK_INIT,
-};
 
 volatile int sched_timer = -1;
 int timer_reset = -1;
