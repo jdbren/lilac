@@ -1,7 +1,18 @@
-#!/bin/sh
+#!/bin/bash
 set -eux
 
-make install-system
+get_ncpus() {
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        return $(nproc)
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        return $(sysctl -n hw.ncpu)
+    else
+        echo "Unknown host"
+        exit 1
+    fi
+}
+
+make -j $(get_ncpus) install-system
 sudo ./scripts/image.sh
 
 qemu-system-x86_64 \

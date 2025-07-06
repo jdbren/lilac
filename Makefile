@@ -11,7 +11,7 @@ endif
 all: lilac.ker libc init user
 
 lilac.ker:
-	$(MAKE) -j4 -C kernel
+	$(MAKE) -C kernel
 
 libc:
 	@if [ ! -d build-libc ]; then \
@@ -22,7 +22,7 @@ libc:
 			--target=$(TARGET) \
 			--enable-newlib-multithread=no'; \
 	fi
-	$(MAKE) -j4 -s -C build-libc all
+	$(MAKE) -s -C build-libc all
 
 install-libc: libc
 	$(MAKE) -s DESTDIR=$(DESTDIR) -C build-libc install
