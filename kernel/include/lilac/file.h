@@ -33,7 +33,6 @@ struct file_operations {
 
 struct fdtable {
     struct file **fdarray;
-    unsigned int size;
     unsigned int max;
 };
 

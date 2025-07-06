@@ -30,24 +30,25 @@ void klog(int level, const char *data, ...)
     va_list args;
     if (!data || log_level > level) return;
     u64 stime = get_sys_time();
+    printf("[%lld.%09lld] ", (long long)(stime / 1000000000ll),
+        (long long)(stime % 1000000000ll));
     switch (level)
     {
     case LOG_WARN:
         graphics_setcolor(RGB_YELLOW, RGB_BLACK);
-        printf("[ WARNING ]");
+        printf("[ WARNING ] ");
         break;
     case LOG_ERROR:
         graphics_setcolor(RGB_RED, RGB_BLACK);
-        printf("[ ERROR ]");
+        printf("[ ERROR ] ");
         break;
     case LOG_FATAL:
         graphics_setcolor(RGB_RED, RGB_BLACK);
-        printf("[ PANIC ]");
+        printf("[ PANIC ] ");
         break;
     }
     graphics_setcolor(text_color, RGB_BLACK);
-    printf("[%lld.%09lld] pid %d: ", (long long)(stime / 1000000000ll),
-        (long long)(stime % 1000000000ll), get_pid());
+    printf("pid %d: ", get_pid());
 
     va_start(args, data);
     vprintf(data, args);

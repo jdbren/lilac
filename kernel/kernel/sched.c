@@ -207,11 +207,11 @@ void sched_tick()
 {
     if (sched_timer == -1)
         return;
-    if (sched_timer > 0) {
-        sched_timer--;
-        return;
-    }
-    sched_timer = timer_reset;
+    // if (sched_timer > 0) {
+    //     sched_timer--;
+    //     return;
+    // }
+    // sched_timer = timer_reset;
 
     schedule();
 }

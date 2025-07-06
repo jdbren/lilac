@@ -144,7 +144,6 @@ struct dentry * lookup_path_from(struct dentry *parent, const char *path)
         }
         parent = find;
     }
-    dget(parent);
     return parent;
 }
 

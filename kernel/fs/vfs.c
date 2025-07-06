@@ -37,20 +37,22 @@ static int get_fd(void)
     struct fdtable *files = &current->fs.files;
     for (size_t i = 0; i < files->max; i++) {
         if (!files->fdarray[i]) {
-            files->size++;
             return i;
         }
     }
 
     if (files->max < 256) {
-        void *tmp = krealloc(files->fdarray, files->max * 2);
+        int new_max = files->max * 2;
+        void *tmp = krealloc(files->fdarray, sizeof(struct file*) * new_max);
         if (!tmp)
             return -ENOMEM;
         files->fdarray = tmp;
-        files->max *= 2;
-        for (size_t i = files->size; i < files->max; i++)
+        for (size_t i = files->max; i < new_max; i++)
             files->fdarray[i] = NULL;
-        return files->size++;
+        int fd = files->max;
+        files->max = new_max;
+        klog(LOG_DEBUG, "Increased max file descriptors to %d\n", new_max);
+        return fd;
     } else {
         return -EMFILE;
     }
@@ -169,6 +171,7 @@ struct file *vfs_open(const char *path, int flags, int mode)
         return ERR_PTR(-ENOENT);
 
     new_file = kzmalloc(sizeof(*new_file));
+    dget(dentry);
     new_file->f_dentry = dentry;
 
     if(inode->i_op->open(inode, new_file)) {
@@ -240,6 +243,10 @@ SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
     ssize_t bytes;
     long err = -1;
 
+#ifdef DEBUG_VFS
+    klog(LOG_DEBUG, "syscall read: Reading from fd %d\n", fd);
+#endif
+
     file = get_file_handle(fd);
     if (IS_ERR(file))
         return PTR_ERR(file);
@@ -276,6 +283,10 @@ SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
     ssize_t bytes;
     long err;
 
+#ifdef DEBUG_VFS
+    klog(LOG_DEBUG, "syscall write: Writing to fd %d\n", fd);
+#endif
+
     file = get_file_handle(fd);
     if (IS_ERR(file))
         return PTR_ERR(file);
@@ -296,6 +307,13 @@ SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
 
 int vfs_close(struct file *file)
 {
+#ifdef DEBUG_VFS
+    klog(LOG_DEBUG, "vfs_close: file = %p, dentry = %p\n", file, file->f_dentry);
+    klog(LOG_DEBUG, "vfs_close: fdtable = %p, max = %d\n", current->fs.files.fdarray, current->fs.files.max);
+    for (size_t i = 0; i < current->fs.files.max; i++) {
+        klog(LOG_DEBUG, "table[%u] = %p\n", i, current->fs.files.fdarray[i]);
+    }
+#endif
     if (file->f_op->flush)
         file->f_op->flush(file);
 
@@ -313,12 +331,11 @@ SYSCALL_DECL1(close, int, fd)
         return PTR_ERR(file);
 
 #ifdef DEBUG_VFS
-    klog(LOG_DEBUG, "VFS: Closing file %s (fd: %d)\n", file->f_dentry->d_name, fd);
+    klog(LOG_DEBUG, "syscall close: Closing fd %d, file %p, dentry %p\n", fd, file, file->f_dentry);
 #endif
     err = vfs_close(file);
 
     current->fs.files.fdarray[fd] = NULL;
-    current->fs.files.size--;
     return err;
 }
 
@@ -415,7 +432,6 @@ SYSCALL_DECL2(mkdir, const char*, path, umode_t, mode)
     return err;
 }
 
-
 int vfs_create(const char *path, umode_t mode)
 {
     char dirname[64];
@@ -472,16 +488,18 @@ int vfs_dup(int oldfd, int newfd)
     if (IS_ERR(f))
         return PTR_ERR(f);
     struct fdtable *files = &current->fs.files;
-
-    if (newfd < 0 || newfd >= files->max)
+#ifdef DEBUG_VFS
+    klog(LOG_DEBUG, "vfs_dup: file %p, dentry %p, oldfd %d, newfd %d\n", f, f->f_dentry, oldfd, newfd);
+#endif
+    if (newfd < 0 || newfd >= files->max) {
+        klog(LOG_ERROR, "VFS: vfs_dup invalid newfd %d\n", newfd);
         return -EBADF;
-
-    // if (newfd < files->size && current->fs.files.fdarray[newfd]) {
-    //     vfs_close(current->fs.files.fdarray[newfd]);
-    // }
-
-    current->fs.files.fdarray[newfd] = f;
+    }
+    if (newfd < files->max && current->fs.files.fdarray[newfd]) {
+        vfs_close(current->fs.files.fdarray[newfd]);
+    }
     fget(f);
+    current->fs.files.fdarray[newfd] = f;
 #ifdef DEBUG_VFS
     klog(LOG_DEBUG, "VFS: Duplicated fd %d to %d\n", oldfd, newfd);
 #endif

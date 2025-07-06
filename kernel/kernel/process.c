@@ -178,11 +178,11 @@ static void copy_fs_info(struct fs_info *dst, struct fs_info *src)
     dst->cwd_d = src->cwd_d;
     dst->files.fdarray = kcalloc(src->files.max, sizeof(struct file*));
     dst->files.max = src->files.max;
-    dst->files.size = src->files.size;
-    for (size_t i = 0; i < src->files.size; i++) {
+    for (size_t i = 0; i < src->files.max; i++) {
         dst->files.fdarray[i] = src->files.fdarray[i];
-        if (dst->files.fdarray[i])
+        if (dst->files.fdarray[i]) {
             fget(dst->files.fdarray[i]);
+        }
     }
 }
 
@@ -341,9 +341,12 @@ SYSCALL_DECL3(execve, const char*, path, char* const*, argv, char* const*, envp)
 static void cleanup_files(struct fs_info *fs)
 {
     dput(fs->cwd_d);
-    for (size_t i = 0; i < fs->files.size; i++) {
+    for (size_t i = 0; i < fs->files.max; i++) {
         if (fs->files.fdarray[i]) {
             struct file *file = fs->files.fdarray[i];
+#ifdef DEBUG_VFS
+            klog(LOG_DEBUG, "Cleaning up file descriptor %d, file %p\n", i, file);
+#endif
             vfs_close(file);
             fs->files.fdarray[i] = NULL;
         }
