@@ -7,10 +7,10 @@
 #include <lilac/libc.h>
 
 #define ACPI_MACHINE_WIDTH          BITS_PER_LONG
-//#define ACPI_USE_SYSTEM_INTTYPES
 #define ACPI_USE_SYSTEM_CLIBRARY
-//#define ACPI_USE_STANDARD_HEADERS
 #define ACPI_USE_NATIVE_DIVIDE
+//#define ACPI_USE_SYSTEM_INTTYPES
+//#define ACPI_USE_STANDARD_HEADERS
 
 #define ACPI_CACHE_T                ACPI_MEMORY_LIST
 #define ACPI_USE_LOCAL_CACHE        1
@@ -21,4 +21,12 @@
 // #define ACPI_DEBUG_OUTPUT
 // #define ACPI_NO_ERROR_MESSAGES
 
+#if BITS_PER_LONG == 64
+#define COMPILER_DEPENDENT_INT64    long
+#define COMPILER_DEPENDENT_UINT64   unsigned long
+#else
+#define COMPILER_DEPENDENT_INT64    long long
+#define COMPILER_DEPENDENT_UINT64   unsigned long long
 #endif
+
+#endif /* __ACLILAC_H__ */

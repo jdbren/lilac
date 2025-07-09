@@ -30,8 +30,9 @@ int putchar(int c);
 int puts(const char *str);
 
 int printf(const char *restrict format, ...);
-int sprintf(char *restrict str, const char *restrict format, ...);
 int vprintf(const char *restrict format, va_list args);
+int snprintf(char *restrict str, size_t size, const char *restrict format, ...);
+int vsnprintf(char *restrict buf, size_t size, const char *restrict fmt, va_list args);
 
 void *memcpy(void *restrict dst, const void *restrict src, size_t sz);
 void *memmove(void *dst, const void *src, size_t sz);

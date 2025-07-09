@@ -324,3 +324,15 @@ int vprintf(const char *restrict format, va_list args)
     }
     return written;
 }
+
+int printf(const char *restrict format, ...)
+{
+	int written;
+	va_list parameters;
+
+	va_start(parameters, format);
+	written = vprintf(format, parameters);
+	va_end(parameters);
+
+	return written;
+}
