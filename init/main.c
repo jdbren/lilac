@@ -12,13 +12,14 @@ int prompt(void)
 {
     char command[256];
     char cwd[32];
+
+    memset(command, 0, 256);
+    memset(cwd, 0, 32);
+
     getcwd(cwd, 32);
     printf(SHELL_PROMPT, cwd);
     fflush(stdout);
     char *args[8] = {0};
-
-    memset(command, 0, 256);
-    memset(cwd, 0, 32);
 
     int r = read(STDIN_FILENO, command, 256);
     if (r < 0) {

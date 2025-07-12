@@ -520,3 +520,59 @@ SYSCALL_DECL2(dup2, int, oldfd, int, newfd)
 {
     return vfs_dup(oldfd, newfd);
 }
+
+static char * build_absolute_path(struct dentry *d)
+{
+    if (!d) return ERR_PTR(-EINVAL);
+
+    char tmp[1024] = {0};
+    char *buf = kmalloc(1024);
+    if (!buf) return ERR_PTR(-ENOMEM);
+    buf[0] = '\0';
+
+    if (d == root_dentry) {
+        strcpy(buf, "/");
+        return buf;
+    } else {
+        strcpy(buf, d->d_name);
+    }
+
+    struct dentry *cur = d->d_parent;
+    while (cur) {
+#ifdef DEBUG_VFS
+        klog(LOG_DEBUG, "build_absolute_path: cur = %p, name = %s, buf = %s\n", cur, cur->d_name, buf);
+#endif
+        if (cur == current->fs.root_d) {
+            // Reached root
+            snprintf(tmp, 64, "%c%s", '/', buf);
+            strcpy(buf, tmp);
+            break;
+        } else {
+            snprintf(tmp, 64, "%s/%s", cur->d_name, buf);
+            strcpy(buf, tmp);
+        }
+        cur = cur->d_parent;
+    }
+    return buf;
+}
+
+SYSCALL_DECL2(getcwd, char*, buf, size_t, size)
+{
+    if (!buf || size == 0)
+        return -EINVAL;
+
+    struct dentry *cwd = current->fs.cwd_d;
+    char *path = build_absolute_path(cwd);
+    if (IS_ERR(path))
+        return PTR_ERR(path);
+
+    size_t len = strlen(path);
+    if (len >= size) {
+        kfree(path);
+        return -ERANGE;
+    }
+
+    len = copy_to_user(buf, path, len + 1);
+    kfree(path);
+    return len < 0 ? len : 0;
+}

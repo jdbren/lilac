@@ -425,17 +425,6 @@ SYSCALL_DECL1(exit, int, status)
     return -1;
 }
 
-int getcwd(char *buf, size_t size)
-{
-    if (size < strlen(current->fs.cwd_d->d_name) + 1)
-        return -ERANGE;
-
-    return copy_to_user(buf, current->fs.cwd_d->d_name, size);
-}
-SYSCALL_DECL2(getcwd, char*, buf, size_t, size)
-{
-    return getcwd(buf, size);
-}
 
 SYSCALL_DECL1(chdir, const char*, path)
 {
