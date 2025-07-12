@@ -67,28 +67,91 @@ static void sleep_task_on(struct task *p, struct waitqueue *wq)
     add_wait_entry(wait, wq);
 }
 
-long wait_for(struct task *p)
+static pid_t wait_for(struct task *p, int *status, bool nohang)
 {
     if (p->state != TASK_ZOMBIE) {
+        if (nohang) {
+            klog(LOG_DEBUG, "Task %d has not exited yet, returning immediately\n", p->pid);
+            return 0;
+        }
         klog(LOG_DEBUG, "Process %d: Waiting for task %d\n", get_pid(), p->pid);
         sleep_task_on(current, &wait_q);
         p->parent_wait = true;
         yield();
     }
 
+    pid_t pid = p->pid;
+    if (access_ok(status, sizeof(int)))
+        *status = WEXITED(p->exit_val);
     reap_task(p);
     klog(LOG_DEBUG, "Task %d has exited, continuing task %d\n", p->pid, get_pid());
     kfree(p);
     return 0;
 }
-SYSCALL_DECL1(waitpid, int, pid)
+
+static struct task * find_exited_child(struct task *parent, int pid)
 {
+    struct task *child;
+    list_for_each_entry(child, &parent->children, sibling) {
+        if (child->state == TASK_ZOMBIE && (pid == WAIT_ANY || child->pid == pid)) {
+            return child;
+        }
+    }
+    return NULL;
+}
+
+static pid_t wait_any(int *status, bool nohang)
+{
+    if (list_empty(&current->children)) {
+        klog(LOG_DEBUG, "Process %d has no children to wait for\n", current->pid);
+        return -ECHILD;
+    }
+    struct task *child = find_exited_child(current, WAIT_ANY);
+    if (child) {
+        pid_t child_pid = child->pid;
+        if (access_ok(status, sizeof(int))) {
+            *status = WEXITED(child->exit_val);
+            klog(LOG_DEBUG, "wait_any: Child %d exited with status %d\n", child_pid, *status);
+        }
+        reap_task(child);
+        kfree(child);
+        return child_pid;
+    } else if (nohang) {
+        return 0;
+    }
+
+    // No child has exited yet, so wait for one
+    current->waiting_any = true;
+    sleep_task_on(current, &wait_q);
+    yield();
+
+    // After being woken up, check for exited children again
+    child = find_exited_child(current, WAIT_ANY);
+    if (child) {
+        pid_t child_pid = child->pid;
+        if (access_ok(status, sizeof(int)))
+            *status = WEXITED(child->exit_val);
+        reap_task(child);
+        kfree(child);
+        return child_pid;
+    }
+
+    return -ECHILD; // no children at all
+}
+
+SYSCALL_DECL3(waitpid, int, pid, int*, status, int, options)
+{
+    if (pid < -1 || pid == 0)
+        return -EINVAL;
+    if (pid == -1) {
+        return wait_any(status, options & WNOHANG);
+    }
     struct task *p = find_child_by_pid(current, pid);
     if (!p)
         return -ECHILD;
     if (p->ppid != current->pid)
         return -ECHILD;
-    return wait_for(p);
+    return wait_for(p, status, options & WNOHANG);
 }
 
 void sleep_on(struct waitqueue *wq)
@@ -134,5 +197,6 @@ void notify_parent(struct task *parent, struct task *child)
         return;
     }
     klog(LOG_DEBUG, "Notifying parent %d of child %d exit\n", parent->pid, child->pid);
+    parent->waiting_any = false;
     wakeup_by_pid_on(parent->pid, &wait_q);
 }

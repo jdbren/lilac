@@ -147,7 +147,7 @@ SYSCALL_DECL5(mount, const char*, source, const char*, target,
     if (err < 0)
         return err;
 
-    if (!access_ok(data, 1, current->mm)) {
+    if (!access_ok(data, 1)) {
         klog(LOG_WARN, "mount: data pointer not accessible\n");
         return -EFAULT;
     }

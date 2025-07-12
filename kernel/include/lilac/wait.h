@@ -1,8 +1,23 @@
 #ifndef LILAC_WAIT_H
 #define LILAC_WAIT_H
 
+#include <lilac/config.h>
 #include <lilac/sync.h>
 #include <lilac/list.h>
+
+#define WNOHANG 1
+#define WUNTRACED 2
+
+#define WAIT_ANY -1
+#define WAIT_PGRP 0
+
+#define SEXITED     0x00
+#define SSIGNALED   0x01
+#define SSTOPPED    0x7f
+#define SCORE       0x80
+
+#define WEXITED(exitval) (SEXITED | (exitval << 8))
+
 
 struct waitqueue {
     spinlock_t lock;

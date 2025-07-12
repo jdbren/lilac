@@ -398,6 +398,7 @@ void reap_task(struct task *p)
     arch_reclaim_mem(p);
     kfree(p->fp_regs);
     p->fp_regs = NULL;
+    list_del(&p->sibling);
     // kfree(p->regs); // ISSUE This is sometimes stack memory, so can't free currently
     kvirtual_free(p->mm->kstack, __KERNEL_STACK_SZ);
     kfree(p->mm);
@@ -408,7 +409,7 @@ __noreturn void exit(int status)
     struct task *parent = NULL;
     set_task_sleeping(current);
     klog(LOG_INFO, "Process %d exited with status %d\n", current->pid, status);
-    if (current->parent_wait)
+    if (current->parent_wait || current->parent->waiting_any)
         parent = current->parent;
     cleanup_task(current);
     current->exit_val = status;

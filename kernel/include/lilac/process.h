@@ -58,6 +58,7 @@ struct task {
     int exit_sig;
 
     bool parent_wait;
+    bool waiting_any;
     struct fs_info fs;
     struct task_info info;
 

@@ -34,6 +34,8 @@ typedef long long      time_t;
 #define likely(x)       __builtin_expect(!!(x), 1)
 #define unlikely(x)     __builtin_expect(!!(x), 0)
 
+typedef int pid_t;
+
 struct list_head {
     struct list_head *next, *prev;
 };

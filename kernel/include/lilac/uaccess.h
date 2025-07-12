@@ -21,15 +21,19 @@ extern int arch_strnlen_user(const char *str, size_t max_size);
 #define _is_brk(addr, size, mm) \
     ((uintptr_t)(addr) + size < mm->brk)
 
-#define access_ok(addr, size, mm) \
+#define __access_ok(addr, size, mm) (addr && \
     (_is_data(addr, size, mm) || _is_stack(addr, size, mm) || \
-    _is_brk(addr, size, mm) || _is_code(addr, size, mm))
+    _is_brk(addr, size, mm) || _is_code(addr, size, mm)))
+
+#define access_ok(addr, size) ({ \
+    struct mm_info *mm = current->mm; \
+    __access_ok(addr, size, mm); \
+})
 
 __must_check
 static inline int check_access(void *addr, size_t size)
 {
-    struct mm_info *mm = current->mm;
-    if (!access_ok(addr, size, mm)) {
+    if (!access_ok(addr, size)) {
         return -EFAULT;
     }
     return 0;
@@ -38,8 +42,7 @@ static inline int check_access(void *addr, size_t size)
 __must_check
 static inline int copy_to_user(void *dst, const void *src, size_t size)
 {
-    struct mm_info *mm = current->mm;
-    if (!access_ok(dst, size, mm)) {
+    if (!access_ok(dst, size)) {
         klog(LOG_WARN, "copy_to_user: dst not accessible\n");
         return -EFAULT;
     }
@@ -49,8 +52,7 @@ static inline int copy_to_user(void *dst, const void *src, size_t size)
 __must_check
 static inline int copy_from_user(void *dst, const void *src, size_t size)
 {
-    struct mm_info *mm = current->mm;
-    if (!access_ok(src, size, mm)) {
+    if (!access_ok(src, size)) {
         klog(LOG_WARN, "copy_from_user: src not accessible\n");
         return -EFAULT;
     }
@@ -60,8 +62,7 @@ static inline int copy_from_user(void *dst, const void *src, size_t size)
 __must_check
 static inline int strncpy_from_user(char *dst, const char *src, size_t max_size)
 {
-    struct mm_info *mm = current->mm;
-    if (!access_ok(src, 1, mm)) {
+    if (!access_ok(src, 1)) {
         klog(LOG_WARN, "strncpy_from_user: src (%x) not accessible\n", src);
         return -EFAULT;
     }
@@ -71,8 +72,7 @@ static inline int strncpy_from_user(char *dst, const char *src, size_t max_size)
 __must_check
 static inline int strnlen_user(const char *str, int max)
 {
-    struct mm_info *mm = current->mm;
-    if (!access_ok(str, 1, mm)) {
+    if (!access_ok(str, 1)) {
         klog(LOG_WARN, "strnlen_user: str not accessible\n");
         return -EFAULT;
     }

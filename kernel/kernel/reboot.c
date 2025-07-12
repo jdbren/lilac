@@ -57,7 +57,7 @@ SYSCALL_DECL1(time, long long *, t)
     long long ret = get_unix_time();
 
     if (t) {
-        if (access_ok(t, sizeof(long long), p->mm))
+        if (access_ok(t, sizeof(long long)))
             *t = ret;
         else
             ret = -EFAULT;
