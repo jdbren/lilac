@@ -6,10 +6,6 @@ sys_restart_syscall:
 	mov $-ENOSYS, %eax
 	ret
 
-sys_pipe:
-	mov $-ENOSYS, %eax
-	ret
-
 sys_rmdir:
 	mov $-ENOSYS, %eax
 	ret

@@ -39,6 +39,7 @@ void dput(struct dentry *d)
     if (--d->d_count)
         return;
 
+    klog(LOG_WARN, "dput: dentry %p (%s) count is zero, but not freeing it yet\n", d, d->d_name);
     /*
     if (hlist_empty(&d->d_children)) {
         dcache_remove(d);

@@ -181,4 +181,6 @@ struct dentry * get_root_dentry(void);
 struct vfsmount * get_empty_vfsmount(enum fs_type type);
 fs_init_func_t get_fs_init(enum fs_type type);
 
+int get_next_fd(struct fdtable *, struct file *);
+
 #endif

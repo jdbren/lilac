@@ -10,13 +10,17 @@ void fget(struct file *file)
 void fput(struct file *file)
 {
     struct dentry *dentry = file->f_dentry;
-    struct inode *inode = dentry->d_inode;
+    struct inode *inode = NULL;
+    if (dentry)
+        inode = dentry->d_inode;
 
     if (--file->f_count)
         return;
 
-    file->f_op->release(inode, file);
+    if (file->f_op->release)
+        file->f_op->release(inode, file);
     kfree(file);
 
-    dput(dentry);
+    if (dentry)
+        dput(dentry);
 }

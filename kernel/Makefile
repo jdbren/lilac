@@ -49,6 +49,7 @@ kernel/kmain.o \
 kernel/console.o \
 kernel/device.o \
 kernel/log.o \
+kernel/pipe.o \
 kernel/process.o \
 kernel/sched.o \
 kernel/sync.o \

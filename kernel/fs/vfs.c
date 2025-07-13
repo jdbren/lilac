@@ -32,9 +32,8 @@ struct dentry * get_root_dentry(void)
     return root_dentry;
 }
 
-static int get_fd(void)
+static int get_fd_for(struct fdtable *files)
 {
-    struct fdtable *files = &current->fs.files;
     for (size_t i = 0; i < files->max; i++) {
         if (!files->fdarray[i]) {
             return i;
@@ -56,6 +55,26 @@ static int get_fd(void)
     } else {
         return -EMFILE;
     }
+}
+
+static int get_fd(void)
+{
+    struct fdtable *files = &current->fs.files;
+    return get_fd_for(files);
+}
+
+
+int get_next_fd(struct fdtable *files, struct file *file)
+{
+    if (!files || !file)
+        return -EINVAL;
+
+    int fd = get_fd_for(files);
+    if (fd < 0)
+        return fd;
+
+    files->fdarray[fd] = file;
+    return fd;
 }
 
 static struct file * get_file_handle(int fd)
@@ -221,15 +240,17 @@ error:
 
 ssize_t vfs_read(struct file *file, void *buf, size_t count)
 {
-    struct inode *inode = file->f_dentry->d_inode;
-    if (inode->i_type == TYPE_DIR)
-        return -EISDIR;
+    if (file->f_dentry) {
+        struct inode *inode = file->f_dentry->d_inode;
+        if (inode->i_type == TYPE_DIR)
+            return -EISDIR;
 
-    if (inode->i_type == TYPE_DEV)
-        return inode->i_fop->read(file, buf, count);
+        if (inode->i_type == TYPE_DEV)
+            return inode->i_fop->read(file, buf, count);
 
-    if (file->f_pos >= inode->i_size)
-        return 0;
+        if (file->f_pos >= inode->i_size)
+            return 0;
+    }
 
     ssize_t bytes = file->f_op->read(file, buf, count);
     if (bytes > 0)
@@ -266,9 +287,11 @@ SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
 
 ssize_t vfs_write(struct file *file, const void *buf, size_t count)
 {
-    struct inode *inode = file->f_dentry->d_inode;
-    if (inode->i_type == TYPE_DEV) {
-        return inode->i_fop->write(file, buf, count);
+    if (file->f_dentry) {
+        struct inode *inode = file->f_dentry->d_inode;
+        if (inode->i_type == TYPE_DEV) {
+            return inode->i_fop->write(file, buf, count);
+        }
     }
 
     ssize_t bytes = file->f_op->write(file, buf, count);
@@ -304,11 +327,10 @@ SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
     return bytes;
 }
 
-
 int vfs_close(struct file *file)
 {
-#ifdef DEBUG_VFS
     klog(LOG_DEBUG, "vfs_close: file = %p, dentry = %p\n", file, file->f_dentry);
+#ifdef DEBUG_VFS_FULL
     klog(LOG_DEBUG, "vfs_close: fdtable = %p, max = %d\n", current->fs.files.fdarray, current->fs.files.max);
     for (size_t i = 0; i < current->fs.files.max; i++) {
         klog(LOG_DEBUG, "table[%u] = %p\n", i, current->fs.files.fdarray[i]);
