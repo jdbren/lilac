@@ -47,7 +47,8 @@ struct task {
 
     u8 cpu;
     bool on_rq;
-    u32 time_slice;
+    u64 runtime;
+    u64 timeslice;
     struct rb_node rq_node;
 
     struct task *parent;

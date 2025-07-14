@@ -71,7 +71,7 @@ static bool prio_comp(struct rb_node *a, const struct rb_node *b)
 {
     struct task *task_a = rb_entry(a, struct task, rq_node);
     struct task *task_b = rb_entry(b, struct task, rq_node);
-    return task_a->priority < task_b->priority;
+    return task_a->runtime < task_b->runtime;
 }
 
 void rq_del(struct task *p)
@@ -80,6 +80,9 @@ void rq_del(struct task *p)
         klog(LOG_ERROR, "Task %d is not on the run queue\n", p->pid);
         return;
     }
+#ifdef DEBUG_SCHED
+    klog(LOG_DEBUG, "Removing task %d from run queue\n", p->pid);
+#endif
     acquire_lock(&rqs[0].lock);
     rb_erase_cached(&p->rq_node, &rqs[0].queue);
     rqs[0].nr_running--;
@@ -93,6 +96,9 @@ void rq_add(struct task *p)
         klog(LOG_ERROR, "Task %d is already on the run queue\n", p->pid);
         return;
     }
+#ifdef DEBUG_SCHED
+    klog(LOG_DEBUG, "Adding task %d to run queue\n", p->pid);
+#endif
     acquire_lock(&rqs[0].lock);
     rb_add_cached(&p->rq_node, &rqs[0].queue, prio_comp);
     rqs[0].nr_running++;
@@ -143,7 +149,7 @@ void sched_init(void)
     root.pgd = arch_get_pgd();
     struct task *pid1 = init_process();
     schedule_task(pid1);
-    timer_reset = 100;
+    timer_reset = 10;
     kstatus(STATUS_OK, "Scheduler initialized\n");
 }
 
@@ -184,10 +190,14 @@ void schedule(void)
     struct task *next = NULL;
 
     struct rb_node *node = rb_first_cached(&rqs[0].queue);
-    if (!node)
+    if (!node) {
+        if (prev->state == TASK_RUNNING)
+            return;
         next = rqs[0].idle;
-    else
+    } else {
         next = rb_entry(node, struct task, rq_node);
+    }
+
     if (next == prev) {
         if (prev->state == TASK_RUNNING)
             return;
@@ -200,18 +210,28 @@ void schedule(void)
         kerror("");
     }
 
+    // Simple way to make sure all tasks get to run
+    if (next != rqs[0].idle) {
+        rq_del(next);
+        next->runtime += 1;
+    }
+
     context_switch(prev, next);
+
+    if (next->state == TASK_RUNNING && next != rqs[0].idle) {
+        rq_add(next);
+    }
 }
 
 void sched_tick()
 {
     if (sched_timer == -1)
         return;
-    // if (sched_timer > 0) {
-    //     sched_timer--;
-    //     return;
-    // }
-    // sched_timer = timer_reset;
+    if (sched_timer > 0) {
+        sched_timer--;
+        return;
+    }
+    sched_timer = timer_reset;
 
     schedule();
 }

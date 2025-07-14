@@ -110,9 +110,16 @@ inline void set_console(int value)
     console = value;
 }
 
-[[gnu::interrupt]] void keyboard_int(struct interrupt_frame *frame)
+[[gnu::interrupt]]
+void keyboard_int(struct interrupt_frame *frame)
 {
     u8 keycode;
+#ifdef ARCH_x86_64
+    int gs_base_high, gs_base_low;
+    if (frame->cs & 3) {
+        asm ("swapgs");
+    }
+#endif
 
     keycode = inb(KEYBOARD_DATA_PORT);
 
@@ -154,10 +161,9 @@ inline void set_console(int value)
             console_intr((struct kbd_event){keycode, status});
     }
 #ifdef ARCH_x86_64
-    int gs_base_high, gs_base_low;
     if (frame->cs & 3) {
-        read_msr(IA32_GS_BASE, (void*)&gs_base_low, (void*)&gs_base_high);
-        if (gs_base_high < 0)
+        // read_msr(IA32_GS_BASE, (void*)&gs_base_low, (void*)&gs_base_high);
+        // if (gs_base_high < 0)
             asm ("swapgs");
     }
 #endif

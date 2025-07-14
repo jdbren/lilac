@@ -17,7 +17,7 @@
  * Entry point using the syscall instruction
  * rip saved in rcx, rflags in r11
  * most flags cleared including IF and DF
- * Args from user: rdi, rsi, rdx, r10, r8, r9
+ * Args from user: rdi, rsi, rdx, r10, r8, r9, same as Linux
  */
 .globl syscall_entry
 syscall_entry:
@@ -46,11 +46,8 @@ syscall_entry:
 	lea  40+15*8(%rsp), %rax
 	mov  %rax, %gs:TSS_rsp0
 
-	movl $IA32_GS_BASE, %ecx
-	rdmsr
-	testl %edx,%edx
-	jns 1f
 	swapgs
+# This should switch to using a trampoline stack
 1:
 	# restore registers
 	mov %r12,%rax # restore return value
