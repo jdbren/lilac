@@ -9,7 +9,7 @@ BOOTDIR?=$(EXEC_PREFIX)/boot
 INCLUDEDIR?=$(PREFIX)/include
 
 CFLAGS:=$(CFLAGS) -I../../include -Wno-unused-parameter \
-	-Wno-unterminated-string-initialization -fno-analyzer
+	-Wno-unterminated-string-initialization -Wno-format -fno-analyzer
 LDFLAGS:=$(LDFLAGS)
 LIBS:=$(LIBS) -nostdlib -lk -lgcc
 

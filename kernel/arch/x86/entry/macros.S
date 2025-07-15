@@ -108,6 +108,10 @@
 	
 .endm
 
+.macro TEST_USER_CS
+	testb $3, CS(%rsp)
+.endm
+
 #else /* 32-bit: */
 .macro PUSH_REGS
 	pushl %gs
@@ -175,6 +179,10 @@
 	pushl EFLAGS(%eax)
 	pushl CS(%eax)
 	pushl EIP(%eax)
+.endm
+
+.macro TEST_USER_CS
+	testb $3, CS(%esp)
 .endm
 #endif /* ARCH_x86_64 */
 

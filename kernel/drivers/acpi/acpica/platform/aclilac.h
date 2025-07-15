@@ -9,7 +9,7 @@
 #define ACPI_MACHINE_WIDTH          BITS_PER_LONG
 #define ACPI_USE_SYSTEM_CLIBRARY
 #define ACPI_USE_NATIVE_DIVIDE
-//#define ACPI_USE_SYSTEM_INTTYPES
+#define ACPI_USE_SYSTEM_INTTYPES
 //#define ACPI_USE_STANDARD_HEADERS
 
 #define ACPI_CACHE_T                ACPI_MEMORY_LIST
@@ -28,5 +28,16 @@
 #define COMPILER_DEPENDENT_INT64    long long
 #define COMPILER_DEPENDENT_UINT64   unsigned long long
 #endif
+
+typedef uint64_t UINT64;
+typedef int64_t INT64;
+typedef uint32_t UINT32;
+typedef int32_t INT32;
+typedef uint16_t UINT16;
+typedef int16_t INT16;
+typedef uint8_t UINT8;
+typedef int8_t INT8;
+typedef uint8_t BOOLEAN;
+typedef void VOID;
 
 #endif /* __ACLILAC_H__ */

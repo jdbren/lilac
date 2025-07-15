@@ -123,17 +123,18 @@ timer_handler:
 	xor  %eax, %eax
 	call apic_eoi
 
+#ifdef ARCH_x86_64
 	testb $3, CS(%rsp)
 	jz .kernel_entry # if in kernel mode, skip
 	swapgs
-
+#endif
 .kernel_entry:
 	call sched_tick
-
+#ifdef ARCH_x86_64
 	testb $3, CS(%rsp)
 	jz .kernel_exit # if return to kernel mode, skip
 	swapgs
-
+#endif
 .kernel_exit:
 	POP_REGS
 	ret_from_irq
