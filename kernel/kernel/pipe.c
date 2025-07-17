@@ -139,9 +139,11 @@ int pipe_close(struct inode *i, struct file *f)
     if (--p->files == 0) {
         destroy_pipe(p);
         klog(LOG_DEBUG, "pipe_close: Pipe %p destroyed\n", p);
+        goto out;
     }
 
     release_lock(&p->lock);
+out:
     f->pipe = NULL;
     return 0;
 }
