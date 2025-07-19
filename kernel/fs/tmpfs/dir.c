@@ -1,6 +1,7 @@
 #include <lilac/fs.h>
 #include <mm/kmalloc.h>
 #include <lilac/libc.h>
+#include <lilac/err.h>
 #include "tmpfs_internal.h"
 #include <lilac/log.h>
 
@@ -26,6 +27,10 @@ int tmpfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
     struct inode *new_inode;
     struct tmpfs_dir *parent = (struct tmpfs_dir*)dir->i_private;
     struct tmpfs_dir *new_dir = kzmalloc(sizeof(struct tmpfs_dir));
+    if (!new_dir) {
+        klog(LOG_ERROR, "tmpfs_mkdir: Out of memory allocating tmpfs_dir\n");
+        return -ENOMEM;
+    }
 
     new_dir->num_entries = 0;
     new_dir->children = kzmalloc(4096);

@@ -1,5 +1,6 @@
 #include <lilac/log.h>
 #include <lilac/libc.h>
+#include <lilac/err.h>
 #include <drivers/blkdev.h>
 #include <lilac/fs.h>
 #include <mm/kmalloc.h>
@@ -115,6 +116,10 @@ static int create_block_dev(struct gendisk *disk,
     const struct gpt_part_entry *part_entry, int num)
 {
     struct block_device *bdev = kzmalloc(sizeof(*bdev));
+    if (!bdev) {
+        klog(LOG_ERROR, "Failed to allocate block device\n");
+        return -ENOMEM;
+    }
 
     // Identify fs type
     enum fs_type type = get_part_type(disk, part_entry);

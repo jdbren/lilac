@@ -13,6 +13,8 @@
 #include "paging.h"
 #include <asm/regs.h>
 
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+
 extern const u32 _kernel_end;
 
 static u32 *const pd = (u32*)0xFFFFF000UL;
@@ -57,6 +59,9 @@ static struct mm_info * make_32_bit_mmap()
         cr3[i] = pd[i];
 
     struct mm_info *info = kzmalloc(sizeof *info);
+    if (!info) {
+        kerror("Out of memory allocating mm_info\n");
+    }
     info->pgd = virt_to_phys((void*)cr3);
     info->kstack = kstack;
     cr3[1023] = virt_to_phys((void*)cr3) | PG_WRITE | PG_SUPER | 1;
@@ -199,6 +204,9 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
     struct vm_desc *desc = parent->mmap;
     while (desc) {
         struct vm_desc *new_desc = kzmalloc(sizeof *new_desc);
+        if (!new_desc) {
+            kerror("Out of memory allocating vm_desc for fork\n");
+        }
         memcpy(new_desc, desc, sizeof *desc);
         new_desc->mm = child;
         new_desc->vm_next = NULL;
@@ -248,6 +256,9 @@ int arch_do_fork(struct regs_state *regs)
 void *arch_copy_regs(struct regs_state *src)
 {
     struct regs_state *regs = kzmalloc(sizeof *regs);
+    if (!regs) {
+        kerror("Out of memory allocating regs_state\n");
+    }
     *regs = *src;
     return regs;
 }
@@ -256,12 +267,16 @@ void save_fp_regs(struct task *p)
 {
     if (!p->fp_regs)
         p->fp_regs = kzmalloc(512);
+    if (!p->fp_regs)
+        kerror("Out of memory allocating FP regs\n");
     asm volatile("fxsave %0" : : "m" (*(char (*)[512])p->fp_regs) : "memory");
 }
 
 void copy_fp_regs(struct task *dst, struct task *src)
 {
     dst->fp_regs = kmalloc(512);
+    if (!dst->fp_regs || !src->fp_regs)
+        kerror("FP regs not allocated for copy\n");
     memcpy(dst->fp_regs, src->fp_regs, 512);
 }
 

@@ -84,6 +84,11 @@ int fat32_create(struct inode *parent, struct dentry *new, umode_t mode)
     __fat_write_clst(disk, hd, clst, (const void*)buffer);
 
     struct fat_inode *fat_i = kzmalloc(sizeof(struct fat_inode));
+    if (!fat_i) {
+        klog(LOG_ERROR, "fat32_create: Out of memory allocating fat_inode\n");
+        ret = -ENOMEM;
+        goto error;
+    }
     fat_i->entry = *entry;
 
     new->d_inode = fat_build_inode(parent->i_sb, fat_i);

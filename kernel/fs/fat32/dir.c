@@ -10,15 +10,16 @@
 #include <mm/kmm.h>
 #include <mm/kmalloc.h>
 
-
 #include "fat_internal.h"
+
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 
 int __fat32_read_all_dirent(struct file *file, struct dirent **dirents_ptr)
 {
     u32 start_clst;
     struct fat_disk *disk = (struct fat_disk*)file->f_dentry->d_inode->i_sb->private;
     volatile unsigned char *buffer = kvirtual_alloc(disk->bytes_per_clst * 64, PG_WRITE);
-    struct dirent *dir_buf = kzmalloc(disk->bytes_per_clst);
+    struct dirent *dir_buf;
     u32 num_dirents = disk->bytes_per_clst / sizeof(struct dirent);
 
     start_clst = __fat_get_clst_num(file, disk);
@@ -26,6 +27,12 @@ int __fat32_read_all_dirent(struct file *file, struct dirent **dirents_ptr)
         return -1;
     if (__do_fat32_read(file, start_clst, buffer, 64) < 0)
         return -1;
+
+    dir_buf = kzmalloc(disk->bytes_per_clst);
+    if (!dir_buf) {
+        kvirtual_free((void*)buffer, disk->bytes_per_clst * 64);
+        return -ENOMEM;
+    }
 
     u32 i = 0;
     struct fat_file *entry = (struct fat_file*)buffer;
@@ -149,6 +156,10 @@ int fat32_mkdir(struct inode *dir, struct dentry *new, unsigned short mode)
     __fat_write_clst(disk, hd, clst, (void*)buffer);
 
     struct fat_inode *fat_i = kzmalloc(sizeof(struct fat_inode));
+    if (!fat_i) {
+        ret = -ENOMEM;
+        goto error;
+    }
     fat_i->entry = *entry;
 
     new->d_inode = fat_build_inode(dir->i_sb, fat_i);

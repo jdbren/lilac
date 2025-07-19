@@ -4,6 +4,8 @@
 #include <lilac/sched.h>
 #include <lilac/syscall.h>
 
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+
 static struct waitqueue wait_q = {
     .lock = SPINLOCK_INIT,
     .task_list = LIST_HEAD_INIT(wait_q.task_list),

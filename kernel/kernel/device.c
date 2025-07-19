@@ -34,6 +34,8 @@ int add_device(const char *path, struct file_operations *fops)
 int dev_mknod(struct inode *parent_dir, struct dentry *node, umode_t mode, dev_t dev)
 {
     struct inode *inode = kzmalloc(sizeof(*inode));
+    if (!inode)
+        return -ENOMEM;
     inode->i_mode = mode;
     inode->i_sb = parent_dir->i_sb;
     inode->i_count = 1;

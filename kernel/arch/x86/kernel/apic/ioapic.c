@@ -62,6 +62,10 @@ void ioapic_init(struct ioapic *ioapic, struct int_override *over, u8 num_over)
     ioapic_gsi_base = ioapic->gsi_base;
     num_overrides = num_over;
     overrides = kcalloc(num_over, sizeof(struct int_override));
+    if (!overrides) {
+        klog(LOG_ERROR, "Failed to allocate memory for IOAPIC overrides\n");
+        return;
+    }
     for (int i = 0; i < num_over; over = over->next, i++) {
         memcpy(overrides + i, over, sizeof(struct int_override));
         overrides[i].next = 0;

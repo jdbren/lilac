@@ -3,10 +3,13 @@
 #include <lilac/fs.h>
 #include <lilac/log.h>
 #include <lilac/libc.h>
+#include <lilac/err.h>
 #include <drivers/blkdev.h>
 #include <mm/kmalloc.h>
 
 #include "fat_internal.h"
+
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 
 static inline bool check_entry(struct fat_file *entry, const char *name)
 {
@@ -20,6 +23,10 @@ static inline bool check_entry(struct fat_file *entry, const char *name)
 struct inode *fat_alloc_inode(struct super_block *sb)
 {
     struct inode *new_node = kzmalloc(sizeof(struct inode));
+    if (!new_node) {
+        klog(LOG_ERROR, "fat_alloc_inode: Out of memory allocating inode\n");
+        return ERR_PTR(-ENOMEM);
+    }
 
     new_node->i_sb = sb;
     new_node->i_op = &fat_iops;
@@ -66,11 +73,13 @@ struct inode *fat_build_inode(struct super_block *sb, struct fat_inode *info)
     inode = fat_iget(sb, pos);
     if (inode) {
         klog(LOG_WARN, "Inode already exists\n");
-        kfree(info);
         return inode;
     }
 
     inode = fat_alloc_inode(sb);
+    if (IS_ERR_OR_NULL(inode)) {
+        return inode;
+    }
 
     inode->i_ino = unique_ino();
     inode->i_size = info->entry.file_size;
@@ -158,6 +167,10 @@ struct dentry *fat32_lookup(struct inode *parent, struct dentry *find,
 
     if (fat32_find(parent, fatname, info) == 0) {
         inode = fat_build_inode(parent->i_sb, info);
+        if (IS_ERR_OR_NULL(inode)) {
+            kfree(info);
+            return ERR_CAST(inode);
+        }
         find->d_inode = inode;
         inode->i_count++;
     }

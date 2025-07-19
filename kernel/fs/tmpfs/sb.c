@@ -1,5 +1,6 @@
 #include <lilac/fs.h>
 #include <lilac/log.h>
+#include <lilac/err.h>
 #include "tmpfs_internal.h"
 
 #include <mm/kmalloc.h>
@@ -7,6 +8,10 @@
 struct inode* tmpfs_alloc_inode(struct super_block *sb)
 {
     struct inode *inode = kzmalloc(sizeof(struct inode));
+    if (!inode) {
+        klog(LOG_ERROR, "tmpfs_alloc_inode: Out of memory allocating inode\n");
+        return ERR_PTR(-ENOMEM);
+    }
 
     inode->i_sb = sb;
     inode->i_op = &tmpfs_iops;
@@ -31,8 +36,23 @@ struct dentry* tmpfs_init(void *device, struct super_block *sb)
     sb->s_maxbytes = 0xfffff;
 
     struct dentry *root_dentry = kzmalloc(sizeof(struct dentry));
+    if (!root_dentry) {
+        klog(LOG_ERROR, "tmpfs_init: Failed to allocate root dentry\n");
+        return ERR_PTR(-ENOMEM);
+    }
     struct inode *root_inode = tmpfs_alloc_inode(sb);
+    if (IS_ERR_OR_NULL(root_inode)) {
+        klog(LOG_ERROR, "tmpfs_init: Failed to allocate root inode\n");
+        kfree(root_dentry);
+        return ERR_CAST(root_inode);
+    }
     struct tmpfs_dir *root_dir = kzmalloc(sizeof(struct tmpfs_dir));
+    if (!root_dir) {
+        klog(LOG_ERROR, "tmpfs_init: Failed to allocate root tmpfs_dir\n");
+        tmpfs_destroy_inode(root_inode);
+        kfree(root_dentry);
+        return ERR_PTR(-ENOMEM);
+    }
 
     root_inode->i_private = root_dir;
     root_inode->i_type = TYPE_DIR;

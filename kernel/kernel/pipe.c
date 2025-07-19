@@ -8,7 +8,7 @@ ssize_t pipe_read(struct file *f, void *buf, size_t count);
 ssize_t pipe_write(struct file *f, const void *buf, size_t count);
 int pipe_close(struct inode *i, struct file *f);
 
-const static struct file_operations pipe_fops = {
+static const struct file_operations pipe_fops = {
     .read = pipe_read,
     .write = pipe_write,
     .release = pipe_close,
@@ -105,7 +105,7 @@ ssize_t pipe_write(struct file *f, const void *buf, size_t count)
 
     acquire_lock(&pipe->lock);
     int pos = pipe->write_pos;
-    int to_write = MIN(count, pipe->buf_size - pipe->data_size);
+    unsigned int to_write = MIN(count, pipe->buf_size - pipe->data_size);
     memcpy(pipe->buffer + pos, buf, to_write);
     pipe->write_pos = (pos + to_write) % pipe->buf_size;
     pipe->data_size += to_write;

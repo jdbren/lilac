@@ -6,6 +6,7 @@
 #include <lilac/types.h>
 #include <lilac/file.h>
 #include <lilac/rbtree.h>
+#include <lilac/signal.h>
 
 struct file;
 struct regs_state;
@@ -25,6 +26,12 @@ struct fs_info {
     struct dentry *root_d;
     struct dentry *cwd_d;
     struct fdtable files;
+};
+
+struct sighandlers {
+    spinlock_t lock;
+    atomic_uint ref_count;
+    struct ksigaction actions[_NSIG];
 };
 
 struct task {
@@ -62,6 +69,10 @@ struct task {
     bool waiting_any;
     struct fs_info fs;
     struct task_info info;
+
+    struct sighandlers *sighandlers;
+    struct sigpending pending;
+    sigset_t blocked;
 
     char name[32];
 };

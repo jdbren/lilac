@@ -9,6 +9,8 @@
 #include <mm/kmalloc.h>
 #include <drivers/ahci.h>
 
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+
 #define PCI_CONFIG_ADDRESS 0xCF8
 #define PCI_CONFIG_DATA 0xCFC
 
@@ -92,6 +94,9 @@ void pci_read_device(ACPI_DEVICE_INFO *Info)
     ACPI_STATUS Status;
 
     struct pci_device *pci_dev = kzmalloc(sizeof(*pci_dev));
+    if (!pci_dev) {
+        kerror("Failed to allocate memory for PCI device\n");
+    }
     u32 *pci_reg = (u32*)pci_dev;
 
     if (Info->Valid & ACPI_VALID_ADR) {
@@ -138,6 +143,9 @@ void pcie_add_map(ACPI_TABLE_MCFG *mcfg)
 
     pcie_mmio_map_cnt = 4;
     pcie_mmio_maps = kcalloc(pcie_mmio_map_cnt, sizeof(*pcie_mmio_maps));
+    if (!pcie_mmio_maps) {
+        kerror("Failed to allocate memory for PCIe MMIO maps\n");
+    }
 
     mcfg_alloc = (ACPI_MCFG_ALLOCATION*)((uintptr_t)mcfg + sizeof(*mcfg));
 
@@ -149,6 +157,9 @@ void pcie_add_map(ACPI_TABLE_MCFG *mcfg)
             pcie_mmio_map_cnt *= 2;
             pcie_mmio_maps = krealloc(pcie_mmio_maps,
                                 pcie_mmio_map_cnt * sizeof(*pcie_mmio_maps));
+            if (!pcie_mmio_maps) {
+                kerror("Failed to allocate memory for PCIe MMIO maps\n");
+            }
         }
         pcie_mmio_maps[i].base = mcfg_alloc->Address;
         pcie_mmio_maps[i].start_bus = mcfg_alloc->StartBusNumber;

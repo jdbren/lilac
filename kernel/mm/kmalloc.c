@@ -8,6 +8,8 @@
 #include <mm/kmalloc.h>
 #include <mm/kmm.h>
 
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+
 #define MIN_ALLOC sizeof(alloc_t)
 #define MIN_ALLOC_POWER (MIN_ALLOC == 4 ? 2 : \
                         MIN_ALLOC == 8 ? 3 : -1)

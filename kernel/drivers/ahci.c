@@ -189,6 +189,9 @@ void ahci_port_rebase(hba_port_t *port, int portno)
 static void ahci_install_device(struct ahci_device *dev)
 {
 	struct gendisk *new_disk = kzmalloc(sizeof(*new_disk));
+	if (!new_disk) {
+		kerror("Failed to allocate gendisk\n");
+	}
 	strcpy(new_disk->driver, "AHCI");
 
 	new_disk->major = SATA_DEVICE;

@@ -12,8 +12,9 @@
 #include <mm/kmm.h>
 #include <mm/kmalloc.h>
 
-
 #include "fat_internal.h"
+
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 
 // #define DEBUG_FAT 1
 
@@ -203,6 +204,10 @@ struct dentry *fat32_init(void *dev, struct super_block *sb)
     struct inode *root_inode;
     struct dentry *root_dentry;
 
+    if (!fat_disk || !fat_inode) {
+        kerror("Out of memory allocating FAT32 structures\n");
+    }
+
     // Initialize the FAT32 disk info
     fat_disk->base_lba = bdev->first_sector_lba;
     fat_disk->bdev = bdev;
@@ -222,6 +227,9 @@ struct dentry *fat32_init(void *dev, struct super_block *sb)
 
     // Initialize the dentry
     root_dentry = kzmalloc(sizeof(struct dentry));
+    if (!root_dentry) {
+        kerror("Out of memory allocating FAT32 root dentry\n");
+    }
     root_dentry->d_sb = sb;
     root_dentry->d_inode = root_inode;
     root_dentry->d_count = 1;

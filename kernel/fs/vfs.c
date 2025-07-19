@@ -41,7 +41,7 @@ static int get_fd_for(struct fdtable *files)
     }
 
     if (files->max < 256) {
-        int new_max = files->max * 2;
+        unsigned int new_max = files->max * 2;
         void *tmp = krealloc(files->fdarray, sizeof(struct file*) * new_max);
         if (!tmp)
             return -ENOMEM;
@@ -190,6 +190,8 @@ struct file *vfs_open(const char *path, int flags, int mode)
         return ERR_PTR(-ENOENT);
 
     new_file = kzmalloc(sizeof(*new_file));
+    if (!new_file)
+        return ERR_PTR(-ENOMEM);
     dget(dentry);
     new_file->f_dentry = dentry;
 
@@ -319,8 +321,10 @@ SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
         return -ENOMEM;
 
     err = copy_from_user(kbuf, buf, count);
-    if (err)
+    if (err) {
+        kfree(kbuf);
         return err;
+    }
 
     bytes = vfs_write(file, buf, count);
     kfree(kbuf);
@@ -444,12 +448,14 @@ SYSCALL_DECL2(mkdir, const char*, path, umode_t, mode)
     long err = -EFAULT;
 
     err = strncpy_from_user(path_buf, path, 255);
-    if (err == 0)
-        return -EINVAL;
-    else if (err < 0)
-        return err;
+    if (err == 0) {
+        err = -EINVAL;
+        goto error;
+    } else if (err < 0) {
+        goto error;
+    }
     err = vfs_mkdir(path_buf, mode);
-
+error:
     kfree(path_buf);
     return err;
 }
@@ -513,11 +519,11 @@ int vfs_dup(int oldfd, int newfd)
 #ifdef DEBUG_VFS
     klog(LOG_DEBUG, "vfs_dup: file %p, dentry %p, oldfd %d, newfd %d\n", f, f->f_dentry, oldfd, newfd);
 #endif
-    if (newfd < 0 || newfd >= files->max) {
+    if (newfd < 0 || newfd >= (int)files->max) {
         klog(LOG_ERROR, "VFS: vfs_dup invalid newfd %d\n", newfd);
         return -EBADF;
     }
-    if (newfd < files->max && current->fs.files.fdarray[newfd]) {
+    if (newfd < (int)files->max && current->fs.files.fdarray[newfd]) {
         vfs_close(current->fs.files.fdarray[newfd]);
     }
     fget(f);
@@ -580,7 +586,7 @@ static char * build_absolute_path(struct dentry *d)
 
 SYSCALL_DECL2(getcwd, char*, buf, size_t, size)
 {
-    if (!buf || size == 0)
+    if (!buf || size == 0 || size > 4096)
         return -EINVAL;
 
     struct dentry *cwd = current->fs.cwd_d;
@@ -588,8 +594,8 @@ SYSCALL_DECL2(getcwd, char*, buf, size_t, size)
     if (IS_ERR(path))
         return PTR_ERR(path);
 
-    size_t len = strlen(path);
-    if (len >= size) {
+    int len = strlen(path);
+    if (len >= (int)size) {
         kfree(path);
         return -ERANGE;
     }

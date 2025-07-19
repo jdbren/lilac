@@ -55,7 +55,7 @@ int phys_mem_init(struct multiboot_tag_efi_mmap *mmap)
             PG_WRITE,
             BITMAP_SIZE / PAGE_SIZE + 1);
 #endif
-    memset(pg_frame_bitmap, 0, BITMAP_SIZE);
+    memset((void*)pg_frame_bitmap, 0, BITMAP_SIZE);
 
     __init_bitmap(mmap);
 
