@@ -10,7 +10,7 @@
      (((base)  & _AC(0x00ffffff,ULL)) << 16) |	    \
      (((limit) & _AC(0x0000ffff,ULL))))
 
-#ifdef ARCH_x86_64 /* 64-bit: */
+#ifdef __x86_64__ /* 64-bit: */
 #define GDT_ENTRY_KERN_CS32 1
 #define GDT_ENTRY_KERN_CS   2
 #define GDT_ENTRY_KERN_DS   3
@@ -38,6 +38,6 @@
 #define __USER_CS   (GDT_ENTRY_USER_CS*8+3)
 #define __USER_DS   (GDT_ENTRY_USER_DS*8+3)
 #define __TSS(cpu_num)  (GDT_ENTRY_TSS(cpu_num)*8)
-#endif /* ARCH_x86_64 */
+#endif /* __x86_64__ */
 
 #endif /* __ASM_SEGMENTS_H */

@@ -1,6 +1,6 @@
 .text
 .globl _start
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 _start:
 	mov 	8(%rsp), %rsi # argv
 	mov 	(%rsp), %rdi  # argc

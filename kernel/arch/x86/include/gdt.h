@@ -4,7 +4,7 @@
 #include <lilac/types.h>
 #include <asm/gdt.h>
 
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 struct tss {
     u32 reserved0;
     u64 rsp0;

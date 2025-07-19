@@ -22,7 +22,7 @@ static void load_cr3(uintptr_t cr3)
     asm volatile ("mov %0, %%cr3" : : "r"(cr3));
 }
 
-#ifndef ARCH_x86_64
+#ifndef __x86_64__
 static void print_page_structs(u32 *cr3)
 {
     for (int i = 0; i < 1024; i++) {
@@ -40,7 +40,7 @@ static void print_page_structs(u32 *cr3)
 }
 #endif
 
-#ifndef ARCH_x86_64
+#ifndef __x86_64__
 static struct mm_info * make_32_bit_mmap()
 {
     volatile uintptr_t *cr3 = map_phys(alloc_frame(), PAGE_BYTES, PG_WRITE);
@@ -66,7 +66,7 @@ static struct mm_info * make_32_bit_mmap()
 }
 #endif
 
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 static struct mm_info * make_64_bit_mmap()
 {
     uintptr_t cr3 = (uintptr_t)alloc_frame();
@@ -85,7 +85,7 @@ static struct mm_info * make_64_bit_mmap() {return NULL;}
 
 struct mm_info * arch_process_mmap(bool is_64_bit)
 {
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
     return make_64_bit_mmap();
 #else
     return make_32_bit_mmap();
@@ -128,7 +128,7 @@ void * arch_user_stack(void)
     return stack;
 }
 
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 static void copy_vm_area(void *cr3, struct vm_desc *new_desc)
 {
     int num_pages = PAGE_ROUND_UP(new_desc->end - new_desc->start) / PAGE_SIZE;

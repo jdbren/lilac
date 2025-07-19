@@ -5,7 +5,7 @@
 
 #include <lilac/types.h>
 
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 struct regs_state {
     unsigned long bx;
     unsigned long cx;
@@ -47,11 +47,11 @@ struct regs_state {
     unsigned long sp;
     unsigned long ss;
 };
-#endif /* ARCH_x86_64 */
+#endif /* __x86_64__ */
 
 #endif /* !__ASSEMBLY__ */
 
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 #define RBX 0
 #define RCX 8
 #define RDX 16
@@ -89,6 +89,6 @@ struct regs_state {
 #define EFLAGS 52
 #define ESP 56
 #define SS 60
-#endif /* ARCH_x86_64 */
+#endif /* __x86_64__ */
 
 #endif /* _X86_REGS_H */

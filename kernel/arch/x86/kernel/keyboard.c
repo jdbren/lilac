@@ -114,7 +114,7 @@ inline void set_console(int value)
 void keyboard_int(struct interrupt_frame *frame)
 {
     u8 keycode;
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
     int gs_base_high, gs_base_low;
     if (frame->cs & 3) {
         asm ("swapgs");
@@ -160,7 +160,7 @@ void keyboard_int(struct interrupt_frame *frame)
         if (console)
             console_intr((struct kbd_event){keycode, status});
     }
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
     if (frame->cs & 3) {
         // read_msr(IA32_GS_BASE, (void*)&gs_base_low, (void*)&gs_base_high);
         // if (gs_base_high < 0)

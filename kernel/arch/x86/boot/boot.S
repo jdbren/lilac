@@ -105,7 +105,7 @@ _start:
 	or  $(X86_CR4_OSFXSR), %eax	# set CR4.OSFXSR
 	mov %eax, %cr4
 .noSSE:
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 	movl 	$0x80000000, %eax
 	cpuid
 	cmpl 	$0x80000001, %eax

@@ -10,7 +10,7 @@ sys_rmdir:
 	mov $-ENOSYS, %eax
 	ret
 
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 .macro sc_tbl_entry name
 	.quad sys_\name
 .endm

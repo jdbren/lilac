@@ -9,7 +9,7 @@
 	cx - number of bytes to copy
 */
 .global x86_user_copy_asm
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 x86_user_copy_asm:
 	push %rbp
 	mov  %rsp, %rbp
@@ -43,7 +43,7 @@ x86_user_copy_asm:
 	returns: number of bytes remaining in cx
 */
 .global x86_strncpy_from_user_asm
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 x86_strncpy_from_user_asm:
 	push %rbp
 	mov  %rsp, %rbp
@@ -78,7 +78,7 @@ x86_strncpy_from_user_asm:
 	si - max length
 */
 .global x86_strnlen_user_asm
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 x86_strnlen_user_asm:
     push    %rbp
     mov     %rsp, %rbp
@@ -118,7 +118,7 @@ x86_strnlen_user_asm:
 
 .fault_handler:
 	mov $-EFAULT, %eax
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 	cltq
 	pop %rbp
 	retq

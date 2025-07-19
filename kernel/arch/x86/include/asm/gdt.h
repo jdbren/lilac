@@ -28,7 +28,7 @@
 #define SEG_CODE_EXRDC     0x0E // Execute/Read, conforming
 #define SEG_CODE_EXRDCA    0x0F // Execute/Read, conforming, accessed
 
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 #define TSS_rsp0 4
 #define TSS_rsp1 12
 #define TSS_rsp2 20
@@ -39,6 +39,6 @@
 #define TSS_ist5 60
 #define TSS_ist6 68
 #define TSS_ist7 76
-#endif // ARCH_x86_64
+#endif // __x86_64__
 
 #endif

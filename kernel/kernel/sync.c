@@ -6,7 +6,7 @@
 #include <mm/kmalloc.h>
 
 #define MAX_SPINLOCKS 16
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 #define pause __builtin_ia32_pause
 #else
 #define pause __builtin_ia32_pause

@@ -25,7 +25,7 @@ typedef unsigned short uid_t;
 typedef unsigned short gid_t;
 typedef long long      time_t;
 
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 #define BITS_PER_LONG 64
 #else
 #define BITS_PER_LONG 32

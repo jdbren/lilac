@@ -178,7 +178,7 @@ void kfree(void *ptr)
 {
     if (ptr == NULL) return;
 
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
     assert(is_canonical((uintptr_t)ptr));
 #endif
 #ifdef DEBUG_KMALLOC

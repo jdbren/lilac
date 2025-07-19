@@ -17,7 +17,7 @@
 #define __always_inline [[gnu::always_inline]]
 
 
-#if defined ARCH_x86 || defined ARCH_x86_64
+#if defined __i386__ || defined __x86_64__
 static inline void arch_idle(void)
 {
     while (1) {
@@ -39,6 +39,6 @@ static inline void arch_disable_interrupts(void)
 {
     asm volatile ("cli");
 }
-#endif // ARCH_x86 || ARCH_x86_64
+#endif // __i386__ || __x86_64__
 
 #endif // _LILAC_LILAC_H

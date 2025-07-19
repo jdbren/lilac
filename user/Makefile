@@ -1,5 +1,5 @@
 CC=$(TARGET)-gcc
-CFLAGS=-g
+CFLAGS?=-g
 OBJS=
 
 SRC_DIR:=.

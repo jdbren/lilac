@@ -43,7 +43,7 @@ int phys_mem_init(struct multiboot_tag_efi_mmap *mmap)
     BITMAP_SIZE = phys_map_pgcnt / 8 + 8; // in bytes
     FIRST_PAGE = 0;
 
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
     pg_frame_bitmap = (void*)(((uintptr_t)(&_kernel_end) & ~0x1fffffUL) + 0x200000);
     __map_frame_bm((void*)get_phys_addr(pg_frame_bitmap),
             (void*)pg_frame_bitmap);

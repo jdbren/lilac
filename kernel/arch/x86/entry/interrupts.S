@@ -6,7 +6,7 @@
 #include <asm/segments.h>
 #include "macros.S"
 
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 .macro isr_err name
 	.extern \name\()_handler
 	.global \name
@@ -70,7 +70,7 @@
 	pop %ebp
 	iret
 .endm
-#endif /* ARCH_x86_64 */
+#endif /* __x86_64__ */
 
 isr_no_err div0
 # isr_no_err debug
@@ -123,14 +123,14 @@ timer_handler:
 	xor  %eax, %eax
 	call apic_eoi
 
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 	testb $3, CS(%rsp)
 	jz .kernel_entry # if in kernel mode, skip
 	swapgs
 #endif
 .kernel_entry:
 	call sched_tick
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 	testb $3, CS(%rsp)
 	jz .kernel_exit # if return to kernel mode, skip
 	swapgs

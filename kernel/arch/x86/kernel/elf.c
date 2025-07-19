@@ -116,7 +116,7 @@ static void* elf32_load(void *elf, struct mm_info *mm)
     return (void*)(uintptr_t)hdr->elf32.entry;
 }
 
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 static void * elf64_load(void *elf, struct mm_info *mm)
 {
     struct elf_header *hdr = (struct elf_header*)elf;

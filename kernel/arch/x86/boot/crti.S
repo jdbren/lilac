@@ -2,7 +2,7 @@
 .global _init
 .type _init, @function
 _init:
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 	push %rbp
 	mov %rsp, %rbp
 #else
@@ -15,7 +15,7 @@ _init:
 .global _fini
 .type _fini, @function
 _fini:
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 	push %rbp
 	mov %rsp, %rbp
 #else

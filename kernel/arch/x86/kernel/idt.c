@@ -33,7 +33,7 @@ struct __packed IDT {
     uintptr_t offset;
 };
 
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 typedef struct IDTGate64 idt_entry_t;
 #else
 typedef struct IDTGate32 idt_entry_t;
@@ -61,7 +61,7 @@ void idt_init(void)
 }
 
 
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 void idt_entry(int num, uintptr_t offset, u16 selector, u8 ist, u8 attr)
 {
     idt_entry_t *target = idt_entries + num;
@@ -84,4 +84,3 @@ void idt_entry(int num, u32 offset, u16 selector, u8 unused, u8 attr)
     target->type_attr = attr;
 }
 #endif
-

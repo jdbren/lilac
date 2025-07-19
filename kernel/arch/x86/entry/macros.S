@@ -8,14 +8,14 @@
 #include <asm/regs.h>
 
 .macro ret_from_irq
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 	iretq
 #else
 	iret
 #endif
 .endm
 
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 .macro PUSH_REGS rdx=%rdx rcx=%rcx rax=%rax
 	pushq \rax
 	pushq %rbp
@@ -105,7 +105,7 @@
 .endm
 
 .macro EXIT_CHECK_AND_SWAPGS
-	
+
 .endm
 
 .macro TEST_USER_CS
@@ -184,6 +184,6 @@
 .macro TEST_USER_CS
 	testb $3, CS(%esp)
 .endm
-#endif /* ARCH_x86_64 */
+#endif /* __x86_64__ */
 
 #endif /* __ASM_X86_MACROS_H */

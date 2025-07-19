@@ -50,7 +50,7 @@ void pgflt_handler(long error_code, struct interrupt_frame *frame)
     void *handler = find_exception(frame->ip);
     if (handler && addr < __KERNEL_BASE) {
         klog(LOG_WARN, "Page fault at %x handled by %p\n", frame->ip, handler);
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
         asm (
             "movq (%%rbp), %%rax\n\t"   // Get previous fp
             "movq %0, 16(%%rax)\n\t"  // Overwrite return address with handler

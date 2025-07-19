@@ -8,7 +8,7 @@
 
 #define PAGE_SIZE           4096
 
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 #define __PHYS_MAP_ADDR     0xffff900000000000ULL
 #define KHEAP_START_ADDR    0xfffffffa00000000ULL
 #define KHEAP_MAX_ADDR      0xfffffffb00000000ULL
@@ -47,5 +47,7 @@
 #define is_canonical(addr) \
     (((addr) < 0x0000ffffffffffffUL) || \
      ((addr) > 0xffff000000000000UL))
+
+#define __user
 
 #endif

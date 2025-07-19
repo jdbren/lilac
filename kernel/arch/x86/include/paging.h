@@ -10,7 +10,7 @@
 #define is_aligned(POINTER, BYTE_COUNT) \
     (((uintptr_t)(POINTER)) % (BYTE_COUNT) == 0)
 
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 typedef u64 pml4e_t;
 typedef u64 pdpte_t;
 typedef u64 pde_t;
@@ -21,7 +21,7 @@ typedef u32 pde_t;
 typedef u32 pte_t;
 #endif
 
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 #define get_pml4_index(x) ((uintptr_t)(x) >> 39 & 0x1FF)
 #define get_pdpt_index(x) ((uintptr_t)(x) >> 30 & 0x1FF)
 #define get_pd_index(x) ((uintptr_t)(x) >> 21 & 0x1FF)
@@ -66,7 +66,7 @@ static inline int unmap_page(void *virtualaddr)
 void init_phys_mem_mapping(size_t memory_sz_kb);
 int __map_frame_bm(void *physaddr, void *virtualaddr);
 
-#ifdef ARCH_x86_64
+#ifdef __x86_64__
 pdpte_t * get_or_alloc_pdpt(pml4e_t *pml4, void *virt, u16 flags);
 #endif
 pde_t * get_or_alloc_pd(pdpte_t *pdpt, void *virt, u16 flags);

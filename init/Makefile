@@ -1,8 +1,5 @@
 CC=$(TARGET)-gcc
-CFLAGS=-g
-ifdef CONFIG_x86_64-elf
-CFLAGS+=-DARCH_x86_64
-endif
+CFLAGS?=-g
 
 .PHONY: all clean install
 .SUFFIXES: .o .c .S
