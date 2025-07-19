@@ -83,8 +83,8 @@ static pid_t wait_for(struct task *p, int *status, bool nohang)
     }
 
     pid_t pid = p->pid;
-    if (access_ok(status, sizeof(int)))
-        *status = WEXITED(p->exit_val);
+    if (status)
+        *status = p->exit_status;
     reap_task(p);
     klog(LOG_DEBUG, "Task %d has exited, continuing task %d\n", p->pid, get_pid());
     kfree(p);
@@ -111,8 +111,8 @@ static pid_t wait_any(int *status, bool nohang)
     struct task *child = find_exited_child(current, WAIT_ANY);
     if (child) {
         pid_t child_pid = child->pid;
-        if (access_ok(status, sizeof(int))) {
-            *status = WEXITED(child->exit_val);
+        if (status) {
+            *status = child->exit_status;
             klog(LOG_DEBUG, "wait_any: Child %d exited with status %d\n", child_pid, *status);
         }
         reap_task(child);
@@ -131,8 +131,8 @@ static pid_t wait_any(int *status, bool nohang)
     child = find_exited_child(current, WAIT_ANY);
     if (child) {
         pid_t child_pid = child->pid;
-        if (access_ok(status, sizeof(int)))
-            *status = WEXITED(child->exit_val);
+        if (status)
+            *status = child->exit_status;
         reap_task(child);
         kfree(child);
         return child_pid;
@@ -145,6 +145,8 @@ SYSCALL_DECL3(waitpid, int, pid, int*, status, int, options)
 {
     if (pid < -1 || pid == 0)
         return -EINVAL;
+    if (status && !access_ok(status, sizeof(int)))
+        return -EFAULT;
     if (pid == -1) {
         return wait_any(status, options & WNOHANG);
     }

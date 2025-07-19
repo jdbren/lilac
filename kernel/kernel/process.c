@@ -404,19 +404,25 @@ void reap_task(struct task *p)
     kfree(p->mm);
 }
 
-__noreturn void exit(int status)
+__noreturn void do_exit(void)
 {
     struct task *parent = NULL;
     set_task_sleeping(current);
-    klog(LOG_INFO, "Process %d exited with status %d\n", current->pid, status);
     if (current->parent_wait || current->parent->waiting_any)
         parent = current->parent;
     cleanup_task(current);
-    current->exit_val = status;
     current->state = TASK_ZOMBIE;
     if (parent)
         notify_parent(parent, current);
     schedule();
+    unreachable();
+}
+
+__noreturn void exit(int status)
+{
+    current->exit_status = WEXITED(status);
+    klog(LOG_INFO, "Process %d exited with status %d\n", current->pid, status);
+    do_exit();
     kerror("exit: Should never be reached\n");
     unreachable();
 }

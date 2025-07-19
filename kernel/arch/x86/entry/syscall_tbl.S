@@ -51,6 +51,7 @@ syscall_table:
 	sc_tbl_entry sbrk		# 24
 	sc_tbl_entry reboot		# 25
 	sc_tbl_entry dup2		# 26
+	sc_tbl_entry kill		# 27
 /*
 	sc_tbl_entry link		# 26
 	sc_tbl_entry unlink		# 27

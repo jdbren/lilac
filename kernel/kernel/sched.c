@@ -227,6 +227,12 @@ void sched_tick()
 {
     if (sched_timer == -1)
         return;
+
+    if (current->pending.signal & (1 << SIGKILL)) {
+        klog(LOG_INFO, "Process %d killed by SIGKILL\n", current->pid);
+        do_exit();
+    }
+
     if (sched_timer > 0) {
         sched_timer--;
         return;

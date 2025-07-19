@@ -52,6 +52,7 @@ kernel/log.o \
 kernel/pipe.o \
 kernel/process.o \
 kernel/sched.o \
+kernel/signal.o \
 kernel/sync.o \
 kernel/reboot.o \
 kernel/wait.o \
