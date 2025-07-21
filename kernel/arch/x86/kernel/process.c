@@ -79,6 +79,10 @@ static struct mm_info * make_64_bit_mmap()
     copy_kernel_mappings(cr3);
 
     struct mm_info *info = kzmalloc(sizeof *info);
+    if (!info) {
+        free_frame((void*)cr3);
+        kerror("Out of memory allocating mm_info\n");
+    }
     info->pgd = cr3;
     info->kstack = kvirtual_alloc(__KERNEL_STACK_SZ, PG_WRITE);
 
@@ -140,8 +144,7 @@ static void copy_vm_area(void *cr3, struct vm_desc *new_desc)
     void *phys = alloc_frames(num_pages);
 
     // Copy data
-    void *tmp_virt = phys_mem_mapping + (uintptr_t)phys;
-    memcpy(tmp_virt, (void*)new_desc->start, num_pages * PAGE_SIZE);
+    memcpy((unsigned char*)phys_mem_mapping + (uintptr_t)phys, (void*)new_desc->start, num_pages * PAGE_SIZE);
 
     int flags = PG_USER | PG_PRESENT;
 
@@ -174,6 +177,9 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
     struct vm_desc *desc = parent->mmap;
     while (desc) {
         struct vm_desc *new_desc = kzmalloc(sizeof *new_desc);
+        if (!new_desc) {
+            kerror("Out of memory allocating vm_desc for fork\n");
+        }
 #ifdef DEBUG_FORK
         klog(LOG_DEBUG, "Copying VMA %lx-%lx\n", desc->start, desc->end);
 #endif

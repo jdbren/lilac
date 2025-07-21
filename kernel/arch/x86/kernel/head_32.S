@@ -3,6 +3,7 @@
 #define __ASSEMBLY__
 #include <lilac/config.h>
 #include <asm/segments.h>
+#include <asm/cpu-flags.h>
 
 .text
 .globl startup_32
@@ -64,7 +65,7 @@ startup_32:
 	leal pa(page_directory), %eax
 	movl %eax, %cr3
 	movl %cr0, %eax
-	orl  $(0x80010000), %eax # pg enable, wp enable
+	orl  $(X86_CR0_PG|X86_CR0_WP), %eax # pg enable, wp enable
 	movl %eax, %cr0
 
 	# Switch to the higher half.

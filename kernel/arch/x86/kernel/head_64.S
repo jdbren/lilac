@@ -79,7 +79,7 @@ startup_64:
 
 	# Set PAE bit and load CR3
 	movl %cr4, %eax
-	orl  $(1 << 5), %eax
+	orl  $X86_CR4_PAE, %eax
 	movl %eax, %cr4
 	leal pa(boot_pml4), %edi
 	movl %edi, %cr3
@@ -92,7 +92,7 @@ startup_64:
 
 	# Enable paging
 	movl %cr0, %eax
-	orl  $0x80010000, %eax # pg enable, wp enable
+	orl  $(X86_CR0_PG | X86_CR0_WP), %eax # pg enable, wp enable
 	movl %eax, %cr0
 
 	lea  pa(gdt_descr), %eax

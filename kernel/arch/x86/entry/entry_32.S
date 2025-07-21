@@ -75,9 +75,9 @@ jump_usermode:
 
 	iret
 
-// void arch_context_switch(struct task *prev, struct task *next)
-.globl arch_context_switch
-arch_context_switch:
+// void __context_switch_asm(struct task *prev, struct task *next)
+.globl __context_switch_asm
+__context_switch_asm:
 	pushl   %ebp
 	movl 	%esp, %ebp
 	pushl   %edi
@@ -92,10 +92,6 @@ arch_context_switch:
 
 	movl   	0x08(%ebp), %esi
 	movl   	0x0c(%ebp), %ebx
-
-	pushl   TASK_KSTACK_OFFSET(%ebx)
-	call    set_tss_esp0
-	addl    $0x4, %esp
 
 	pushf
 	movl    %esp, TASK_KSTACK_OFFSET(%esi)

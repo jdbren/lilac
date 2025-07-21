@@ -1,8 +1,18 @@
+#include <lilac/signal.h>
+
 #include <lilac/lilac.h>
 #include <lilac/syscall.h>
-#include <lilac/signal.h>
 #include <lilac/process.h>
 #include <lilac/wait.h>
+
+int handle_signals(void)
+{
+    if (current->pending.signal & (1 << SIGKILL)) {
+        klog(LOG_INFO, "Process %d killed by SIGKILL\n", current->pid);
+        do_exit();
+    }
+    return 0;
+}
 
 int do_raise(struct task *task, int sig)
 {
@@ -13,7 +23,9 @@ int do_raise(struct task *task, int sig)
         break;
     default:
         klog(LOG_DEBUG, "do_raise: unimplemented signal %d\n", sig);
+        return -EINVAL;
     }
+    task->flags.sig_pending = 1;
     return 0;
 }
 

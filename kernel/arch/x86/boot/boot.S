@@ -5,6 +5,7 @@
 #include <lilac/config.h>
 #include <asm/segments.h>
 #include <asm/cpu-flags.h>
+#include <asm/cpuid-bits.h>
 
 # Declare constants for the multiboot2 header.
 .set ARCH,     0
@@ -94,7 +95,7 @@ _start:
 
 	mov $0x1, %eax
 	cpuid
-	and $1<<25, %edx
+	test $bit_SSE, %edx
 	jz .noSSE
 	# enable SSE and the like
 	mov %cr0, %eax
@@ -113,7 +114,7 @@ _start:
 
 	movl 	$0x80000001, %eax
 	cpuid
-	test 	$1<<29, %edx
+	test 	$bit_LM, %edx
 	jz 		.invlboot
 
 	jmp pa(startup_64)

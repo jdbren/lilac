@@ -106,13 +106,51 @@ isr_err    pgflt
 # isr_err    30
 # isr_no_err 31
 
-.text
-.extern timer_cnt
-.global timer_handler
-timer_handler:
+#ifdef __x86_64__
+.macro isr_device name func
+.global \name
+\name:
 	cld
 	PUSH_REGS
+	xor %rbp, %rbp
 
+	testb $3, CS(%rsp)
+	jz .kernel_entry # if in kernel mode, skip
+	swapgs
+.kernel_entry:
+
+	lea  RIP(%rsp), %rdi   # interrupt stack frame
+	call \func
+
+	call x86_kernel_exit
+
+	testb $3, CS(%rsp)
+	jz .kernel_exit # if return to kernel mode, skip
+	swapgs
+.kernel_exit:
+
+	POP_REGS
+	iretq
+.endm
+#else
+.macro isr_device name func
+.global \name
+\name:
+	cld
+	PUSH_REGS
+	lea ESP(%esp), %eax
+	push %eax
+	call \func
+	addl $4, %esp
+	call x86_kernel_exit
+	POP_REGS
+	iret
+.endm
+#endif
+
+.text
+.extern timer_cnt
+do_timer_interrupt:
 	movl (timer_cnt), %eax
 	cmpl $(-1), %eax
 	je .no_tick
@@ -123,18 +161,8 @@ timer_handler:
 	xor  %eax, %eax
 	call apic_eoi
 
-#ifdef __x86_64__
-	testb $3, CS(%rsp)
-	jz .kernel_entry # if in kernel mode, skip
-	swapgs
-#endif
-.kernel_entry:
 	call sched_tick
-#ifdef __x86_64__
-	testb $3, CS(%rsp)
-	jz .kernel_exit # if return to kernel mode, skip
-	swapgs
-#endif
-.kernel_exit:
-	POP_REGS
-	ret_from_irq
+	ret
+
+
+isr_device timer_handler do_timer_interrupt

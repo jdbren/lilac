@@ -154,6 +154,10 @@ static void * elf64_load(void *elf, struct mm_info *mm)
         int num_pages = phdr[i].p_memsz / PAGE_BYTES + 1;
         int flags = PG_USER;
         struct vm_desc *desc = kzmalloc(sizeof *desc);
+        if (!desc) {
+            klog(LOG_ERROR, "Out of memory loading ELF\n");
+            return NULL;
+        }
 
         void *phys = alloc_frames(num_pages);
         void *vaddr = (void*)(phdr[i].p_vaddr & 0xFFFFF000);

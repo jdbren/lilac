@@ -407,7 +407,6 @@ void reap_task(struct task *p)
 __noreturn void do_exit(void)
 {
     struct task *parent = NULL;
-    set_task_sleeping(current);
     if (current->parent_wait || current->parent->waiting_any)
         parent = current->parent;
     cleanup_task(current);

@@ -34,6 +34,14 @@ struct sighandlers {
     struct ksigaction actions[_NSIG];
 };
 
+struct task_flags {
+    u8 need_resched :1;
+    u8 exiting      :1;
+    u8 in_syscall   :1;
+    u8 sig_pending  :1;
+    u8 ptrace_stop  :1;
+};
+
 struct task {
     int pid;
     int ppid;
@@ -48,7 +56,7 @@ struct task {
     spinlock_t lock;
 
     u8 state;
-    u16 flags;
+    struct task_flags flags;
     u8 priority;
     u8 policy;
 
@@ -101,6 +109,7 @@ void reap_task(struct task *p);
 __noreturn void do_exit(void);
 
 // Architecture-specific functions
+void             arch_prepare_context_switch(void);
 struct mm_info * arch_process_mmap(bool is_64_bit);
 struct mm_info * arch_process_remap(struct mm_info *existing);
 struct mm_info * arch_copy_mmap(struct mm_info *parent);

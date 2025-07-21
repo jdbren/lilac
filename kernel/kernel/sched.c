@@ -8,6 +8,12 @@
 #include <lilac/syscall.h>
 #include <mm/kmm.h>
 
+extern uintptr_t stack_top;
+
+static struct mm_info root_mm = {
+    .kstack = (void*)((uintptr_t)&stack_top - __KERNEL_STACK_SZ),
+};
+
 static struct task root = {
     .state = TASK_RUNNING,
     .name = "idle",
@@ -15,6 +21,7 @@ static struct task root = {
     .pid = 0,
     .ppid = 0,
     .lock = SPINLOCK_INIT,
+    .mm = &root_mm,
 };
 
 struct rq {
@@ -50,7 +57,7 @@ void idle(void)
 volatile int sched_timer = -1;
 int timer_reset = -1;
 
-extern void arch_context_switch(struct task *prev, struct task *next);
+extern void __context_switch_asm(struct task *prev, struct task *next);
 
 struct task* get_current_task(void)
 {
@@ -110,7 +117,8 @@ void set_task_running(struct task *p)
 {
     if (p->state == TASK_SLEEPING) {
         p->state = TASK_RUNNING;
-        rq_add(p);
+        if (!p->on_rq)
+            rq_add(p);
         klog(LOG_DEBUG, "Waking up task %d\n", p->pid);
     }
 }
@@ -118,7 +126,8 @@ void set_task_running(struct task *p)
 void set_task_sleeping(struct task *p)
 {
     if (p->state == TASK_RUNNING) {
-        rq_del(p);
+        if (p->on_rq)
+            rq_del(p);
         p->state = TASK_SLEEPING;
         klog(LOG_DEBUG, "Task %d is now sleeping\n", p->pid);
     }
@@ -149,7 +158,7 @@ void sched_init(void)
     root.pgd = arch_get_pgd();
     struct task *pid1 = init_process();
     schedule_task(pid1);
-    timer_reset = 10;
+    timer_reset = 100;
     kstatus(STATUS_OK, "Scheduler initialized\n");
 }
 
@@ -180,7 +189,8 @@ static void context_switch(struct task *prev, struct task *next)
     klog(LOG_DEBUG, "\tStack: %p\n", next->kstack);
 #endif
     save_fp_regs(prev);
-    arch_context_switch(prev, next);
+    arch_prepare_context_switch();
+    __context_switch_asm(prev, next);
     restore_fp_regs(prev);
 }
 
@@ -198,6 +208,8 @@ void schedule(void)
         next = rb_entry(node, struct task, rq_node);
     }
 
+    next->runtime += 1;
+
     if (next == prev) {
         if (prev->state == TASK_RUNNING)
             return;
@@ -213,31 +225,22 @@ void schedule(void)
     // Simple way to make sure all tasks get to run
     if (next != rqs[0].idle) {
         rq_del(next);
-        next->runtime += 1;
+    }
+
+    if (prev->state == TASK_RUNNING && prev != rqs[0].idle) {
+        rq_add(prev);
     }
 
     context_switch(prev, next);
-
-    if (next->state == TASK_RUNNING && next != rqs[0].idle) {
-        rq_add(next);
-    }
 }
 
 void sched_tick()
 {
     if (sched_timer == -1)
         return;
-
-    if (current->pending.signal & (1 << SIGKILL)) {
-        klog(LOG_INFO, "Process %d killed by SIGKILL\n", current->pid);
-        do_exit();
-    }
-
     if (sched_timer > 0) {
         sched_timer--;
         return;
     }
-    sched_timer = timer_reset;
-
-    schedule();
+    current->flags.need_resched = 1;
 }

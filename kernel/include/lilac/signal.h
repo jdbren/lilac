@@ -40,5 +40,6 @@ struct ksignal {
 	int sig;
 };
 
+int handle_signals(void);
 
 #endif /* _LINUX_SIGNAL_TYPES_H */

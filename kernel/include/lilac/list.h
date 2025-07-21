@@ -2,6 +2,7 @@
 #define _KERNEL_LIST_H
 
 #include <stdbool.h>
+#include <lilac/types.h>
 #include <lilac/const.h>
 #include <lilac/container_of.h>
 

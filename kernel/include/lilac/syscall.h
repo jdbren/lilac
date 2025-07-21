@@ -33,4 +33,6 @@
 #define SYSCALL_DECL4(name, ...) SYSCALL_DECLn(4, name, __VA_ARGS__)
 #define SYSCALL_DECL5(name, ...) SYSCALL_DECLn(5, name, __VA_ARGS__)
 
+int do_kernel_exit_work(void);
+
 #endif

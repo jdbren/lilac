@@ -18,7 +18,7 @@ INCLUDEDIR?=$(PREFIX)/include
 
 FLAGS=-D__lilac__ -D__KERNEL__ -Iinclude -ffreestanding -Wall -Wextra \
 	-Wno-unused-parameter -Wno-unused-function -Wno-unused-variable
-CFLAGS:=$(CFLAGS) $(FLAGS) -fno-strict-aliasing -mno-red-zone -fanalyzer -fstack-protector 
+CFLAGS:=$(CFLAGS) $(FLAGS) -fno-strict-aliasing -mno-red-zone -fanalyzer -fstack-protector
 # -DDEBUG_VFS -DDEBUG_FORK -DDEBUG_KMM -DDEBUG_KMALLOC
 CXXFLAGS:=$(CXXFLAGS) $(FLAGS) -fno-exceptions -fno-rtti
 LDFLAGS:=$(LDFLAGS)
@@ -51,10 +51,11 @@ kernel/device.o \
 kernel/log.o \
 kernel/pipe.o \
 kernel/process.o \
+kernel/reboot.o \
 kernel/sched.o \
 kernel/signal.o \
 kernel/sync.o \
-kernel/reboot.o \
+kernel/syscall.o \
 kernel/wait.o \
 mm/kmalloc.o \
 mm/mm.o \

@@ -103,11 +103,11 @@ jump_usermode:
 	CLEAR_REGS
 	iretq
 
-// void arch_context_switch(struct task *prev, struct task *next)
+// void __context_switch_asm(struct task *prev, struct task *next)
 // esi = next, rdi = prev
-.type arch_context_switch, @function
-.globl arch_context_switch
-arch_context_switch:
+.type __context_switch_asm, @function
+.globl __context_switch_asm
+__context_switch_asm:
 	push %rbp
 	mov  %rsp, %rbp
 	push %r15
@@ -117,15 +117,12 @@ arch_context_switch:
 	push %rbx
 	pushf
 
-	mov  %rdi, %r12
-	mov  TASK_KSTACK_OFFSET(%rsi), %rdi
-	call set_tss_esp0
 
-	mov  %rsp, TASK_KSTACK_OFFSET(%r12)
+	mov  %rsp, TASK_KSTACK_OFFSET(%rdi)
 	mov  TASK_PGD_OFFSET(%rsi), %rax
 	mov  %rax, %cr3
 	mov  TASK_KSTACK_OFFSET(%rsi), %rsp
-	movq $1f, TASK_PC_OFFSET(%r12)
+	movq $1f, TASK_PC_OFFSET(%rdi)
 	push TASK_PC_OFFSET(%rsi)
 	ret
 
