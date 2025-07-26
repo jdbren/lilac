@@ -1,6 +1,21 @@
 #include <lilac/file.h>
 #include <lilac/fs.h>
+#include <lilac/err.h>
 #include <mm/kmalloc.h>
+
+struct file * alloc_file(struct dentry *d)
+{
+    struct file *file = kzmalloc(sizeof(*file));
+    if (!file)
+        return NULL;
+
+    spin_lock_init(&file->f_lock);
+    mutex_init(&file->f_pos_lock);
+    if (d)
+        dget(d);
+    file->f_dentry = d;
+    return file;
+}
 
 void fget(struct file *file)
 {

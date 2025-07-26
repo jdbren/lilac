@@ -16,6 +16,7 @@ struct dirent;
 struct dentry *fat32_lookup(struct inode *parent, struct dentry *find,
     unsigned int flags);
 struct dentry *fat32_init(void *dev, struct super_block *sb);
+int fat32_create(struct inode *parent, struct dentry *new, umode_t mode);
 int fat32_open(struct inode *inode, struct file *file);
 int fat32_close(struct inode *inode, struct file *file);
 ssize_t fat32_read(struct file *file, void *file_buf, size_t count);

@@ -171,8 +171,8 @@ struct dentry *fat32_lookup(struct inode *parent, struct dentry *find,
             kfree(info);
             return ERR_CAST(inode);
         }
+        iget(inode);
         find->d_inode = inode;
-        inode->i_count++;
     }
 
     return NULL;

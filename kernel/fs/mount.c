@@ -1,6 +1,7 @@
 #include <lilac/fs.h>
 #include <lilac/lilac.h>
 #include <lilac/syscall.h>
+#include <drivers/blkdev.h>
 
 #include "utils.h"
 
@@ -102,7 +103,9 @@ int vfs_mount(const char *source, const char *target,
         parent->d_inode->i_op->mkdir(parent->d_inode, new_dentry, 0);
     }
 
-    sb = alloc_sb(type);
+    struct block_device *bdev = kzmalloc(sizeof(struct block_device));
+    bdev->type = type;
+    sb = alloc_sb(bdev);
     if (IS_ERR(sb))
         return PTR_ERR(sb);
 

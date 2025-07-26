@@ -19,6 +19,7 @@
 struct dirent;
 struct inode;
 struct file_operations;
+struct vfsmount;
 
 struct file {
     spinlock_t		f_lock;
@@ -33,7 +34,7 @@ struct file {
         struct pipe_buf *pipe; // for pipe files
         void *f_data; // other fs specific data
     };
-    // struct vfsmount *f_disk;
+    struct vfsmount *f_disk;
 };
 
 struct file_operations {

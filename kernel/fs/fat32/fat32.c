@@ -33,7 +33,8 @@ const struct super_operations fat_sops = {
 const struct inode_operations fat_iops = {
     .lookup = fat32_lookup,
     .open = fat32_open,
-    .mkdir = fat32_mkdir
+    .mkdir = fat32_mkdir,
+    .create = fat32_create,
 };
 
 

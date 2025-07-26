@@ -12,9 +12,7 @@
 int fat32_open(struct inode *inode, struct file *file)
 {
     struct fat_inode *info = (struct fat_inode*)inode->i_private;
-    file->f_dentry->d_inode = inode;
     file->f_op = &fat_fops;
-    file->f_count++;
     if (inode->i_type == TYPE_DIR) {
         info->buf.num_dirent = __fat32_read_all_dirent(file, &info->buf.dirent);
     }

@@ -175,13 +175,16 @@ ACPI_STATUS AcpiOsCreateLock(ACPI_SPINLOCK *OutHandle)
 {
     if (!OutHandle)
         return AE_BAD_PARAMETER;
-    *OutHandle = create_lock();
+    *OutHandle = kmalloc(sizeof(spinlock_t));
+    spin_lock_init(*OutHandle);
     return AE_OK;
 }
 
 void AcpiOsDeleteLock(ACPI_SPINLOCK Handle)
 {
-    delete_lock(Handle);
+    if (!Handle)
+        return;
+    kfree(Handle);
 }
 
 ACPI_CPU_FLAGS AcpiOsAcquireLock(ACPI_SPINLOCK Handle)

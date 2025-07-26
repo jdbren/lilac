@@ -96,7 +96,7 @@ struct __cacheline_align dentry_operations {
 };
 
 struct super_block {
-    // struct list_head			s_list;		/* Keep this first */
+    struct list_head			s_list;		/* Keep this first */
     // dev_t					s_dev;		/* search index; _not_ kdev_t */
     unsigned long			s_blocksize;
     unsigned long long		s_maxbytes;	/* Max file size */
@@ -155,7 +155,7 @@ struct dentry * vfs_lookup(const char *path);
 void fs_init(void);
 struct dentry *mount_bdev(struct block_device *bdev, int (*fill_super)(struct super_block*));
 
-struct super_block * alloc_sb(enum fs_type type);
+struct super_block * alloc_sb(struct block_device *bdev);
 void destroy_sb(struct super_block *sb);
 
 struct dentry * lookup_path_from(struct dentry *parent, const char *path);
@@ -169,9 +169,11 @@ void destroy_dentry(struct dentry *d);
 void dcache_add(struct dentry *d);
 void dcache_remove(struct dentry *d);
 
+struct inode * alloc_inode(struct super_block *sb);
 void iget(struct inode *inode);
 void iput(struct inode *inode);
 
+struct file * alloc_file(struct dentry *d);
 void fget(struct file *file);
 void fput(struct file *file);
 

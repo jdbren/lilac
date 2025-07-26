@@ -8,10 +8,27 @@
 typedef atomic_flag spinlock_t;
 #define SPINLOCK_INIT ATOMIC_FLAG_INIT
 
-spinlock_t *create_lock();
-void delete_lock(spinlock_t *spin);
-void acquire_lock(spinlock_t *spin);
-void release_lock(spinlock_t *spin);
+#ifdef __x86_64__
+#define pause __builtin_ia32_pause
+#else
+#define pause __builtin_ia32_pause
+#endif
+
+static inline void spin_lock_init(spinlock_t *spin)
+{
+    atomic_flag_clear(spin);
+}
+
+static inline void acquire_lock(spinlock_t *spin)
+{
+    while(atomic_flag_test_and_set(spin))
+		pause();
+}
+
+static inline void release_lock(spinlock_t *spin)
+{
+    atomic_flag_clear(spin);
+}
 
 struct lockref {
     spinlock_t lock;
@@ -31,7 +48,7 @@ void sem_post(sem_t *sem);
 
 typedef volatile struct mutex {
     atomic_int owner;
-    // list_t waiters;
+    struct list_head waiters;
     atomic_bool locked;
 } mutex_t;
 

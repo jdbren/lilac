@@ -92,7 +92,7 @@ static struct file * get_file_handle(int fd)
 
 static void root_init(struct block_device *bdev)
 {
-    struct super_block *sb = kzmalloc(sizeof(struct super_block));
+    struct super_block *sb = alloc_sb(bdev);
     struct vfsmount *root_disk = get_empty_vfsmount(bdev->type);
 
     root_disk->mnt_sb = sb;
@@ -167,7 +167,7 @@ struct dentry * vfs_lookup(const char *path)
     if (path[0] != '/')
         start = current->fs.cwd_d;
 
-    if (strcmp(path, ".") == 0)
+    if (!strcmp(path, "."))
         return start;
 
     if (!strcmp(path, "/"))
@@ -176,31 +176,47 @@ struct dentry * vfs_lookup(const char *path)
     return lookup_path_from(start, path);
 }
 
+static int create_file_at(struct dentry *new, umode_t mode)
+{
+    struct inode *parent_inode = new->d_parent->d_inode;
+    return parent_inode->i_op->create(parent_inode, new, mode);
+}
+
 struct file *vfs_open(const char *path, int flags, int mode)
 {
     klog(LOG_DEBUG, "VFS: Opening %s\n", path);
     struct inode *inode;
     struct file *new_file;
+    long err;
 
     struct dentry *dentry = vfs_lookup(path);
     if (IS_ERR(dentry))
         return ERR_CAST(dentry);
     inode = dentry->d_inode;
-    if (!inode)
-        return ERR_PTR(-ENOENT);
-
-    new_file = kzmalloc(sizeof(*new_file));
-    if (!new_file)
-        return ERR_PTR(-ENOMEM);
-    dget(dentry);
-    new_file->f_dentry = dentry;
-
-    if(inode->i_op->open(inode, new_file)) {
-        kfree(new_file);
-        return ERR_PTR(-ENOENT);
+    if (!inode) {
+        if (flags & O_CREAT) {
+            int err = create_file_at(dentry, mode);
+            if (err < 0) {
+                klog(LOG_DEBUG, "Failed to create file %s: %d\n", path, err);
+                return ERR_PTR(err);
+            }
+            inode = dentry->d_inode;
+        } else {
+            return ERR_PTR(-ENOENT);
+        }
     }
 
+    new_file = alloc_file(dentry);
+    if (IS_ERR_OR_NULL(new_file))
+        return ERR_PTR(-ENOMEM);
+    
     fget(new_file);
+
+    if ((err = inode->i_op->open(inode, new_file)) < 0) {
+        fput(new_file);
+        return ERR_PTR(err);
+    }
+
     return new_file;
 }
 SYSCALL_DECL3(open, const char*, path, int, flags, int, mode)

@@ -13,6 +13,7 @@ struct dentry *tmpfs_lookup(struct inode *dir, struct dentry *dentry, unsigned i
 
     for (i = 0; i < parent->num_entries; i++) {
         if (!strcmp(entry->name, dentry->d_name)) {
+            iget(entry->inode);
             dentry->d_inode = entry->inode;
             return dentry;
         }
