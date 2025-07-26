@@ -173,6 +173,11 @@ struct dentry *fat32_lookup(struct inode *parent, struct dentry *find,
         }
         iget(inode);
         find->d_inode = inode;
+        int i;
+        for (i = 0; find->d_name[i]; i++) {
+            find->d_name[i] = toupper(find->d_name[i]);
+        }
+        find->d_name[i] = '\0';
     }
 
     return NULL;

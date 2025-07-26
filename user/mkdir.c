@@ -1,6 +1,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <sys/stat.h>
 #include <sys/errno.h>
 
 int main(int argc, char *argv[])

@@ -57,6 +57,7 @@ char *strrchr(const char *str, int c);
 char *strtok(char *s, const char *delim);
 
 char *strdup(const char *str);
+char *strndup(const char *str, size_t n);
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))

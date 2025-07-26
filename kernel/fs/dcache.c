@@ -8,9 +8,13 @@
 
 extern struct dentry *root_dentry;
 
-struct dentry *dlookup(struct dentry *parent, const char *name)
+struct dentry *dlookup(struct dentry *parent, char *name)
 {
     struct dentry *d = NULL;
+    if (parent->d_sb->s_type == MSDOS) {
+        for (int i = 0; name[i]; i++)
+            name[i] = toupper(name[i]);
+    }
     hlist_for_each_entry(d, &parent->d_children, d_sib) {
         if (strcmp(d->d_name, name) == 0)
             return d;
@@ -93,6 +97,7 @@ struct dentry * lookup_path_from(struct dentry *parent, const char *path)
     struct inode *inode;
     struct dentry *find;
     char *name;
+    long err = 0;
 
     while (path[n_pos] != '\0') {
         name = next_path_component(path, &n_pos);
@@ -125,13 +130,20 @@ struct dentry * lookup_path_from(struct dentry *parent, const char *path)
             }
 
             inode = parent->d_inode;
-            inode->i_op->lookup(inode, find, 0);
+            if ((err = PTR_ERR(inode->i_op->lookup(inode, find, 0))) < 0) {
+                kfree(name);
+                destroy_dentry(find);
+                return ERR_PTR(err);
+            }
             dcache_add(find);
             // If the inode is NULL, we've reached a dead end (negative dentry)
             if (find->d_inode == NULL)
                 return find;
         }
         else {
+#ifdef DEBUG_VFS
+            klog(LOG_DEBUG, "VFS: Found %s in cache\n", name);
+#endif
             kfree(name);
             if (find->d_inode == NULL)
                 return find;

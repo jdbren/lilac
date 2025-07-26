@@ -160,7 +160,7 @@ void destroy_sb(struct super_block *sb);
 
 struct dentry * lookup_path_from(struct dentry *parent, const char *path);
 struct dentry * lookup_path(const char *path);
-struct dentry * dlookup(struct dentry *parent, const char *name);
+struct dentry * dlookup(struct dentry *parent, char *name);
 
 void dget(struct dentry *d);
 void dput(struct dentry *d);

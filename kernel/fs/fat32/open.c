@@ -32,8 +32,9 @@ int fat32_create(struct inode *parent, struct dentry *new, umode_t mode)
     int ret = 0;
 
     memset(name, ' ', 8);
-    for (int i = 0; i < 8 && isprint(new->d_name[i]); i++)
-        name[i] = toupper(new->d_name[i]);
+    for (int i = 0; i < 8 && isprint(new->d_name[i]); i++) {
+        name[i] = new->d_name[i] = toupper(new->d_name[i]);
+    }
 
     while (clst < 0x0FFFFFF8) {
         __fat_read_clst(disk, hd, clst, (void*)buffer);

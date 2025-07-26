@@ -104,6 +104,8 @@ int vfs_mount(const char *source, const char *target,
     }
 
     struct block_device *bdev = kzmalloc(sizeof(struct block_device));
+    if (!bdev)
+        return -ENOMEM;
     bdev->type = type;
     sb = alloc_sb(bdev);
     if (IS_ERR(sb))

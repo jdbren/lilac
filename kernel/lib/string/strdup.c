@@ -9,3 +9,14 @@ char *strdup(const char *str)
         return NULL;
     return strncpy(new, str, len);
 }
+
+char *strndup(const char *str, size_t n)
+{
+    size_t len = strnlen(str, n);
+    char *new = kmalloc(len + 1);
+    if (!new)
+        return NULL;
+    strncpy(new, str, len);
+    new[len] = '\0';
+    return new;
+}

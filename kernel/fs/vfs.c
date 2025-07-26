@@ -178,13 +178,14 @@ struct dentry * vfs_lookup(const char *path)
 
 static int create_file_at(struct dentry *new, umode_t mode)
 {
+    klog(LOG_DEBUG, "Creating file %s with mode %o\n", new->d_name, mode);
     struct inode *parent_inode = new->d_parent->d_inode;
     return parent_inode->i_op->create(parent_inode, new, mode);
 }
 
 struct file *vfs_open(const char *path, int flags, int mode)
 {
-    klog(LOG_DEBUG, "VFS: Opening %s\n", path);
+    klog(LOG_DEBUG, "VFS: Opening %s, flags = %x, mode = %x\n", path, flags, mode);
     struct inode *inode;
     struct file *new_file;
     long err;
@@ -438,7 +439,11 @@ int vfs_mkdir(const char *path, umode_t mode)
     struct dentry *new_dentry;
     char *name = kmalloc(16);
     char dir_path[64];
+    long err;
 
+#ifdef DEBUG_VFS
+    klog(LOG_DEBUG, "VFS: Creating directory %s with mode %o\n", path, mode);
+#endif
     get_dirname(dir_path, path, 64);
     get_basename(name, path, 16);
 
@@ -449,14 +454,25 @@ int vfs_mkdir(const char *path, umode_t mode)
     parent = parent_dentry->d_inode;
     if (!parent)
         return -ENOENT;
+    if (parent->i_type != TYPE_DIR) {
+        klog(LOG_DEBUG, "VFS: Parent %s is not a directory\n", dir_path);
+        return -ENOTDIR;
+    }
 
     new_dentry = alloc_dentry(parent_dentry, name);
     if (IS_ERR(new_dentry))
         return PTR_ERR(new_dentry);
+
+    err = parent->i_op->mkdir(parent, new_dentry, mode);
+    if (err < 0) {
+        destroy_dentry(new_dentry);
+        return err;
+    }
+
     dget(new_dentry);
     dcache_add(new_dentry);
-
-    return parent->i_op->mkdir(parent, new_dentry, mode);
+    klog(LOG_DEBUG, "VFS: Created directory %s\n", new_dentry->d_name);
+    return 0;
 }
 SYSCALL_DECL2(mkdir, const char*, path, umode_t, mode)
 {
