@@ -146,13 +146,12 @@ void *krealloc(void *addr, size_t size)
     assert(is_aligned(header, PAGE_SIZE));
 
     // check if large allocation
-    // TODO: this looks wrong
     if (header->is_large) {
         if (size <= header->num_pages * PAGE_SIZE + sizeof(struct sb_header))
             return addr;
         void *new = kmalloc(size);
         if (new == NULL) return NULL;
-        memcpy(new, addr, size);
+        memcpy(new, addr, header->num_pages * PAGE_SIZE);
         kfree(addr);
         return new;
     }

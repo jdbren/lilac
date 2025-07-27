@@ -6,6 +6,7 @@
 #include <lilac/libc.h>
 #include <lilac/process.h>
 #include <lilac/mm.h>
+#include <mm/kmm.h>
 #include "paging.h"
 #include "pgframe.h"
 
@@ -74,7 +75,7 @@ static void* elf32_load(void *elf, struct mm_info *mm)
             continue;
         if (phdr[i].align > PAGE_BYTES)
             kerror("Alignment greater than page size\n");
-        int num_pages = phdr[i].p_memsz / PAGE_BYTES + 1;
+        int num_pages = PAGE_ROUND_UP(phdr[i].p_memsz) / PAGE_BYTES;
         int flags = PG_USER;
         struct vm_desc *desc = kzmalloc(sizeof *desc);
         if (!desc) {
@@ -151,7 +152,7 @@ static void * elf64_load(void *elf, struct mm_info *mm)
             continue;
         if (phdr[i].align > PAGE_BYTES)
             kerror("Alignment greater than page size\n");
-        int num_pages = phdr[i].p_memsz / PAGE_BYTES + 1;
+        int num_pages = PAGE_ROUND_UP(phdr[i].p_memsz) / PAGE_BYTES;
         int flags = PG_USER;
         struct vm_desc *desc = kzmalloc(sizeof *desc);
         if (!desc) {
