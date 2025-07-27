@@ -34,8 +34,12 @@ pdpte_t * get_or_alloc_pdpt(pml4e_t *pml4, void *virt, u16 flags)
 {
     u32 pml4_ndx = get_pml4_index(virt);
     if (!ENTRY_PRESENT(pml4[pml4_ndx])) {
-        pml4[pml4_ndx] = (uintptr_t)alloc_frame() | flags;
+        pml4[pml4_ndx] = (uintptr_t)alloc_frame() | flags | PG_WRITE;
         memset((void*)ENTRY_ADDR(pml4[pml4_ndx]), 0, PAGE_BYTES);
+#ifdef DEBUG_PAGING
+        klog(LOG_DEBUG, "Allocated PDPT at %p for %p\n",
+            (void*)ENTRY_ADDR(pml4[pml4_ndx]), virt);
+#endif
     }
     return (pdpte_t*)ENTRY_ADDR(pml4[pml4_ndx]);
 }
@@ -44,8 +48,12 @@ pde_t * get_or_alloc_pd(pdpte_t *pdpt, void *virt, u16 flags)
 {
     u32 pdpt_ndx = get_pdpt_index(virt);
     if (!ENTRY_PRESENT(pdpt[pdpt_ndx])) {
-        pdpt[pdpt_ndx] = (uintptr_t)alloc_frame() | flags;
+        pdpt[pdpt_ndx] = (uintptr_t)alloc_frame() | flags | PG_WRITE;
         memset((void*)ENTRY_ADDR(pdpt[pdpt_ndx]), 0, PAGE_BYTES);
+#ifdef DEBUG_PAGING
+        klog(LOG_DEBUG, "Allocated PD at %p for %p\n",
+            (void*)ENTRY_ADDR(pdpt[pdpt_ndx]), virt);
+#endif
     }
     return (pde_t*)ENTRY_ADDR(pdpt[pdpt_ndx]);
 }
@@ -56,6 +64,10 @@ pte_t * get_or_alloc_pt(pde_t *pd, void *virt, u16 flags)
     if (!ENTRY_PRESENT(pd[pd_ndx])) {
         pd[pd_ndx] = (uintptr_t)alloc_frame() | flags;
         memset((void*)ENTRY_ADDR(pd[pd_ndx]), 0, PAGE_BYTES);
+#ifdef DEBUG_PAGING
+        klog(LOG_DEBUG, "Allocated PT at %p for %p\n",
+            (void*)ENTRY_ADDR(pd[pd_ndx]), virt);
+#endif
     }
     return (pte_t*)ENTRY_ADDR(pd[pd_ndx]);
 }

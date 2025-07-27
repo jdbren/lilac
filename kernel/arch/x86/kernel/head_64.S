@@ -201,7 +201,9 @@ set_tss_esp0:
 
 .data
 .align 8
+.global gdt
 gdt_descr:
+gdt:
 	.word 7 * 64 + 8 * 128 - 1
 	.quad pa(gdt_entries)
 

@@ -1,5 +1,8 @@
 #define __ASSEMBLY__
 #include <lilac/config.h>
+#include <asm/segments.h>
+#include <asm/cpu-flags.h>
+#include <asm/msr.h>
 
 # TODO: Set up acutal stack and code to jump to
 
@@ -17,7 +20,7 @@ _L8010_GDT_table:
 	.quad 0x0000000000000000	    # null descriptor
 	.quad 0x00CF9A000000FFFF	    # code descriptor
 	.quad 0x00CF92000000FFFF	    # data descriptor
-	.long 0x00000068, 0x00CF8900    # tss
+	.quad 0x00AF9A000000FFFF    	# Kernel 64 bit code
 .org 0x8030
 _L8030_GDT_value:
 	.word _L8030_GDT_value - _L8010_GDT_table - 1
@@ -47,17 +50,51 @@ _L8060:
 	# set up a stack
 	movl	$0x1000, %eax
 	mul		%ebx
-	addl	$pa(ap_stack_top), %eax
+	addl	$pa(ap_stack), %eax
 	mov		%eax, %esp
 	push	%ebx
 	# spinlock, wait for the BSP to finish
 1:  pause
-	cmpb	$0, pa(bspdone)
-	jz		1b
-	lock	incb pa(aprunning)
-	# jump into C code (should never return)
-	ljmp	$0x8, $pa(ap_startup)
+	cmpb		$0, pa(bspdone)
+	jz			1b
+	lock incb 	pa(aprunning)
 
-.align 32
-ap_stack_top:
-	.fill 0x8000, 1, 0
+#ifdef __x86_64__
+.code32
+init_cpu:
+	# prepare jump into C code (should never return)
+	mov  $(X86_CR4_PAE|X86_CR4_MCE|X86_CR4_OSFXSR), %eax
+	mov  %eax, %cr4
+
+	mov  $pa(boot_pml4), %eax
+	mov  %eax, %cr3
+
+	# Set EFER.LME and EFER.SCE
+	movl $IA32_EFER, %ecx
+	movl $(EFER_LME | EFER_SCE), %eax
+	xorl %edx, %edx
+	wrmsr
+
+	mov $(X86_CR0_PE|X86_CR0_PG|X86_CR0_WP|X86_CR0_AM \
+		|X86_CR0_NE|X86_CR0_ET|X86_CR0_MP), %eax
+	mov %eax, %cr0
+
+	ljmp  $24,$0x8100
+.code64
+.align 0x100
+.org 0x8100
+	lea  gdt, %rax
+	lgdt (%rax)
+	mov $__KERNEL_DS, %ax
+	mov %ax, %ds
+	mov %ax, %es
+	mov %ax, %fs
+	mov %ax, %gs
+	mov %ax, %ss
+	add $__KERNEL_BASE, %rsp
+	pushq $__KERNEL_CS
+	pushq $._high
+	lretq
+._high:
+	call ap_startup
+#endif

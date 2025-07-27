@@ -35,7 +35,7 @@ inline void apic_eoi(void)
     write_reg(0xB0, 0);
 }
 
-static inline u8 get_lapic_id(void)
+u8 get_lapic_id(void)
 {
     u8 bspid;
     asm volatile (
@@ -102,8 +102,8 @@ int ap_init(u8 numcores)
     bspid = get_lapic_id();
     // copy the AP trampoline code to a fixed address in low memory
 
-    void *tmp = map_phys((void*)0x8000, PAGE_SIZE, PG_WRITE);
-    memcpy(tmp, (void*)ap_tramp, PAGE_SIZE);
+    map_to_self((void*)0x8000, PAGE_SIZE, PG_WRITE);
+    memcpy((void*)0x8000, (void*)ap_tramp, PAGE_SIZE);
 
     const uintptr_t base = lapic_base;
     volatile u32 *const ap_select = (volatile u32* const)(base + ICR_SELECT);
@@ -152,16 +152,9 @@ int ap_init(u8 numcores)
     arch_disable_interrupts();
 
     kstatus(STATUS_OK, "APs running: %d\n", aprunning);
+    unmap_from_self((void*)0x8000, PAGE_SIZE);
     if (aprunning == numcores - 1)
         return 0;
     else
         return 1;
-}
-
-// We are still without paging here
-__noreturn
-void ap_startup(int id)
-{
-    while (1)
-        asm volatile ("hlt");
 }

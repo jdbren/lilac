@@ -22,7 +22,7 @@ sudo ./scripts/image.sh
 qemu-system-x86_64 \
     -s \
     -machine q35,firmware=./resources/OVMF-pure-efi.fd \
-    -cpu max -no-reboot -smp 2 -m 512M \
+    -cpu max -no-reboot -smp 4 -m 512M \
     -drive file=./uefi.img,format=raw -snapshot \
     -net none \
     -monitor stdio -debugcon file:debug.txt -d int,cpu_reset,guest_errors -D log.txt

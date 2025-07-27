@@ -16,7 +16,7 @@
 
 static struct console consoles[5] = {0};
 static unsigned active_console = 0;
-#ifndef DEBUG_KMM
+#if (!defined(DEBUG_KMM) && !defined(DEBUG_PAGING))
 int write_to_screen = 1;
 #else
 int write_to_screen = 0;
