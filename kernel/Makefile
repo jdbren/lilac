@@ -18,8 +18,8 @@ INCLUDEDIR?=$(PREFIX)/include
 
 FLAGS=-D__lilac__ -D__KERNEL__ -Iinclude -ffreestanding -Wall -Wextra \
 	-Wno-unused-parameter -Wno-unused-function -Wno-unused-variable
-CFLAGS:=$(CFLAGS) $(FLAGS) -fno-strict-aliasing -mno-red-zone -fanalyzer -fstack-protector
-# -DDEBUG_VFS -DDEBUG_FORK -DDEBUG_KMM -DDEBUG_KMALLOC
+CFLAGS:=$(CFLAGS) $(FLAGS) -fno-strict-aliasing -mno-red-zone -fanalyzer -fstack-protector 
+# -DDEBUG_VFS -DDEBUG_FORK -DDEBUG_KMM -DDEBUG_KMALLOC -DDEBUG_PAGING -DDEBUG_FAT -DDEBUG_TMPFS -DDEBUG_ELF
 CXXFLAGS:=$(CXXFLAGS) $(FLAGS) -fno-exceptions -fno-rtti
 LDFLAGS:=$(LDFLAGS)
 LIBS:=$(LIBS) -nostdlib $(COMPILER_DIR)/lib/gcc/*/*/libgcc.a

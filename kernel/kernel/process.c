@@ -31,6 +31,32 @@ SYSCALL_DECL0(getpid)
     return get_pid();
 }
 
+SYSCALL_DECL0(getppid)
+{
+    return current->ppid;
+}
+
+static inline void get_sighandlers(struct sighandlers *sh)
+{
+    sh->ref_count++;
+}
+
+static inline void put_sighandlers(struct sighandlers *sh)
+{
+    if (--sh->ref_count == 0)
+        kfree(sh);
+}
+
+struct sighandlers * alloc_sighandlers(void)
+{
+    struct sighandlers *sh = kzmalloc(sizeof(*sh));
+    if (!sh)
+        return NULL;
+    sh->ref_count = 1;
+    sh->lock = (spinlock_t)SPINLOCK_INIT;
+    return sh;
+}
+
 static void * load_executable(struct task *p)
 {
     const char *path = p->info.path;
@@ -164,7 +190,7 @@ struct task *init_process(void)
     this->fs.cwd_d = this->fs.root_d;
     this->info.path = "/sbin/init";
     memcpy(this->name, "init", 5);
-
+    this->sighandlers = alloc_sighandlers();
     INIT_LIST_HEAD(&this->children);
 
     return this;
@@ -184,6 +210,12 @@ static void copy_fs_info(struct fs_info *dst, struct fs_info *src)
             fget(dst->files.fdarray[i]);
         }
     }
+}
+
+static void copy_sighandlers(struct sighandlers *dst, struct sighandlers *src)
+{
+    for (int i = 0; i < _NSIG; i++)
+        dst->actions[i] = src->actions[i];
 }
 
 static struct task *dup_task(struct task *p)
@@ -221,6 +253,9 @@ static struct task * clone_process(struct task *parent)
     child->info.argv = NULL;
     fget(child->info.exec_file);
     copy_fs_info(&child->fs, &parent->fs);
+
+    child->sighandlers = alloc_sighandlers();
+    copy_sighandlers(child->sighandlers, parent->sighandlers);
 
     strncat(child->name, " (fork)", 31);
     return child;
@@ -386,6 +421,7 @@ void cleanup_task(struct task *p)
     cleanup_task_info(&p->info);
     cleanup_files(&p->fs);
     cleanup_memory(p->mm);
+    put_sighandlers(p->sighandlers);
 }
 
 void reap_task(struct task *p)

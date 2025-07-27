@@ -14,6 +14,18 @@ static struct mm_info root_mm = {
     .kstack = (void*)((uintptr_t)&stack_top - __KERNEL_STACK_SZ),
 };
 
+static struct sighandlers root_sighand = {
+    .ref_count = 1,
+    .lock = (spinlock_t)SPINLOCK_INIT,
+    .actions = {
+        [SIGINT] = {.sa_handler = SIG_IGN, .sa_flags = SA_RESTART},
+        [SIGQUIT] = {.sa_handler = SIG_IGN, .sa_flags = SA_RESTART},
+        [SIGTERM] = {.sa_handler = SIG_IGN, .sa_flags = SA_RESTART},
+        [SIGCHLD] = {.sa_handler = SIG_DFL, .sa_flags = SA_NOCLDSTOP | SA_NOCLDWAIT | SA_RESTART},
+        [SIGKILL] = {.sa_handler = SIG_IGN, .sa_flags = SA_RESTART},
+    }
+};
+
 static struct task root = {
     .state = TASK_RUNNING,
     .name = "idle",
@@ -22,6 +34,7 @@ static struct task root = {
     .ppid = 0,
     .lock = SPINLOCK_INIT,
     .mm = &root_mm,
+    .sighandlers = &root_sighand,
 };
 
 struct rq {

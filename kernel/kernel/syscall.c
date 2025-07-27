@@ -5,14 +5,15 @@
 
 int do_kernel_exit_work(void)
 {
-    if (current->flags.need_resched) {
-        current->flags.need_resched = 0;
-        yield();
-    }
-    if (current->flags.sig_pending) {
-        klog(LOG_DEBUG, "Handling pending signals\n");
-        handle_signals();
-        current->flags.sig_pending = 0;
+    while (current->flags.need_resched || current->flags.sig_pending) {
+        if (current->flags.need_resched) {
+            current->flags.need_resched = 0;
+            yield();
+        }
+        if (current->flags.sig_pending) {
+            klog(LOG_DEBUG, "Handling first pending signal\n");
+            handle_signal();
+        }
     }
     return 0;
 }

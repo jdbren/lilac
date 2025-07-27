@@ -1,6 +1,7 @@
 #include <lilac/console.h>
 #include <lilac/lilac.h>
 #include <lilac/keyboard.h>
+#include <lilac/signal.h>
 #include <lilac/timer.h>
 #include <lilac/device.h>
 #include <lilac/sched.h>
@@ -208,9 +209,14 @@ void console_intr(struct kbd_event event)
         switch(c) {
         case 'c':
             console_writestring(con, "^C\n");
+            do_raise(current, SIGINT);
             break;
         case 'd':
             console_writestring(con, "^D\n");
+            break;
+        case '\\':
+            console_writestring(con, "^\\\n");
+            do_raise(current, SIGQUIT);
             break;
         }
         return;
