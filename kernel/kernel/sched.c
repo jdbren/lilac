@@ -183,7 +183,6 @@ void sched_clock_init(void)
 static void context_switch(struct task *prev, struct task *next)
 {
     arch_disable_interrupts();
-    rqs[0].curr = next;
     klog(LOG_DEBUG, "Switching from task %d to task %d\n", prev->pid, next->pid);
 #ifdef DEBUG_SCHED
     register uintptr_t rsp asm("rsp");
@@ -201,8 +200,9 @@ static void context_switch(struct task *prev, struct task *next)
     klog(LOG_DEBUG, "\tPC: %p\n", next->pc);
     klog(LOG_DEBUG, "\tStack: %p\n", next->kstack);
 #endif
+    rqs[0].curr = next;
     save_fp_regs(prev);
-    arch_prepare_context_switch();
+    arch_prepare_context_switch(next);
     __context_switch_asm(prev, next);
     restore_fp_regs(prev);
 }

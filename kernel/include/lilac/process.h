@@ -109,7 +109,7 @@ void reap_task(struct task *p);
 __noreturn void do_exit(void);
 
 // Architecture-specific functions
-void             arch_prepare_context_switch(void);
+void             arch_prepare_context_switch(struct task *next);
 struct mm_info * arch_process_mmap(bool is_64_bit);
 struct mm_info * arch_process_remap(struct mm_info *existing);
 struct mm_info * arch_copy_mmap(struct mm_info *parent);

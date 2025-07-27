@@ -24,7 +24,7 @@ BOOTDIR=/boot
 LIBDIR=$EXEC_PREFIX/lib
 INCLUDEDIR=$PREFIX/include
 
-CFLAGS="-g -DDEBUG"
+CFLAGS="-g -O2 -DDEBUG"
 CXXFLAGS="-g"
 
 SYSROOT="$(pwd)/sysroot"
