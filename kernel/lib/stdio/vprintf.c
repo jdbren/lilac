@@ -205,6 +205,31 @@ int vprintf(const char *restrict format, va_list args)
                 return -1;
             written += len;
         }
+        else if (*format == 'o') {
+            format++;
+            unsigned int i = va_arg(args, unsigned int);
+            char *s = convert(i, 8);
+            unsigned len = strlen(s);
+            if (use_width) {
+                if (width < len)
+                    len = width;
+                while (len < width && !left_justify) {
+                    if (zero_pad) {
+                        if (!print("0", 1))
+                            return -1;
+                    }
+                    else {
+                        if(!print(" ", 1))
+                            return -1;
+                    }
+                    written++;
+                    width--;
+                }
+            }
+            if (!print(s, len))
+                return -1;
+            written += len;
+        }
         /*
         else if (*format == 'f') {
             format++;
