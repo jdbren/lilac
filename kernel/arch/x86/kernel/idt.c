@@ -45,6 +45,11 @@ static struct IDT idtptr = {
     (uintptr_t)&idt_entries
 };
 
+inline void load_idt(void)
+{
+    asm volatile("lidt %0" : : "m"(idtptr));
+}
+
 void idt_init(void)
 {
     extern void syscall_handler(void);
@@ -57,7 +62,7 @@ void idt_init(void)
 
     pic_initialize();
 
-    asm volatile("lidt %0" : : "m"(idtptr));
+    load_idt();
 }
 
 

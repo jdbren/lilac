@@ -56,6 +56,7 @@ struct tss {
 #endif
 
 void gdt_init(void);
+void tss_init(void);
 void set_tss_esp0(uintptr_t esp0);
 struct tss* get_tss(void);
 

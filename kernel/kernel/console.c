@@ -188,9 +188,10 @@ ssize_t console_write(struct file *file, const void *buf, size_t count)
 {
     char *bufp = (char*)buf;
     struct console *con = &consoles[active_console];
+    acquire_lock(&con->lock);
     for (size_t i = 0; i < count; i++)
         console_putchar(con, bufp[i] & 0xff);
-
+    release_lock(&con->lock);
     return count;
 }
 

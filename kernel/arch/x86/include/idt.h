@@ -18,6 +18,7 @@ struct interrupt_frame {
 };
 
 void idt_init(void);
+void load_idt(void);
 void idt_entry(int num, uintptr_t offset, u16 selector, u8 ist_or_unused, u8 attr);
 
 #endif

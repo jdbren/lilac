@@ -83,8 +83,7 @@ init_cpu:
 .code64
 .align 0x100
 .org 0x8100
-	lea  gdt, %rax
-	lgdt (%rax)
+	lgdt gdt
 	mov $__KERNEL_DS, %ax
 	mov %ax, %ds
 	mov %ax, %es

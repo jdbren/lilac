@@ -142,23 +142,27 @@ gdt_init:
 // returns &tss, + ecx = cpu id in asm
 get_tss:
 	push %rbx
-	movl $1, %eax
+	mov  $1, %rax
 	cpuid
-	mov  %ebx, %ecx
-	shr  $24, %ecx
+	mov  %rbx, %rcx
+	shr  $24, %rcx
 	movq $0x68, %rax
 	mul  %rcx
 	lea  tss(%rax), %rax
 	pop  %rbx
 	ret
 
+.global tss_init
+.type tss_init, @function
 tss_init:
 	push %rbp
 	mov  %rsp, %rbp
 
 	call get_tss # eax = &tss, ecx = cpu_id
 
-	lea  gdt_entries+56(, %rcx, 8), %rdx   # TSS descriptor for this CPU
+	mov  %rcx, %rdx
+    shl  $4, %rdx             # %rdx = %rcx * 16
+    add  $gdt_entries+56, %rdx # %rdx = gdt_entries + 56 + (%rcx * 16)
 	movq $0, 4(%rax)
 
 	# 16..31 base

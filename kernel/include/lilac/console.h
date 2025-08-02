@@ -2,6 +2,7 @@
 #define _CONSOLE_H
 
 #include <lilac/types.h>
+#include <lilac/sync.h>
 #include <lilac/keyboard.h>
 
 struct file;
@@ -16,6 +17,7 @@ struct input_buffer {
 };
 
 struct console {
+    spinlock_t lock;
     struct input_buffer input;
     u32 cx; // cursor position before write
     u32 cy;

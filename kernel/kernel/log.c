@@ -18,6 +18,7 @@
 #endif
 
 static int log_level = LOG_LEVEL;
+spinlock_t log_lock = SPINLOCK_INIT;
 
 void set_log_level(int level)
 {
@@ -26,6 +27,7 @@ void set_log_level(int level)
 
 void klog(int level, const char *data, ...)
 {
+    acquire_lock(&log_lock);
     u32 text_color = graphics_getcolor().fg;
     va_list args;
     if (!data || log_level > level) return;
@@ -53,6 +55,7 @@ void klog(int level, const char *data, ...)
     va_start(args, data);
     vprintf(data, args);
     va_end(args);
+    release_lock(&log_lock);
 }
 
 void kstatus(int status, const char *message, ...)
