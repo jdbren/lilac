@@ -2,7 +2,6 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include "timer.h"
 
-#include <asm/segments.h>
 #include <lilac/timer.h>
 #include <acpi/hpet.h>
 #include <mm/kmm.h>
@@ -10,22 +9,12 @@
 #include <lilac/panic.h>
 #include <lilac/log.h>
 
+#include <asm/segments.h>
+#include <asm/cpuid-bits.h>
+
 #include "apic.h"
 #include "idt.h"
 
-#define HPET_ID_REG 0x0
-#define HPET_CONFIG_REG 0x10
-#define HPET_INTR_REG 0x20
-#define HPET_COUNTER_REG 0xf0
-#define HPET_TIMER_CONF_REG(N) (0x100 + 0x20 * N)
-#define HPET_TIMER_COMP_REG(N) (0x108 + 0x20 * N)
-
-struct __packed hpet_id_reg {
-    u8 rev_id;
-    u8 flags;
-    u16 vendor_id;
-    u32 counter_clk_period;
-};
 
 extern void timer_handler(void);
 extern void init_PIT(int freq);
@@ -35,63 +24,45 @@ volatile u32 timer_cnt;
 extern volatile u32 system_timer_fractions;
 extern volatile u32 system_timer_ms;
 
-static uintptr_t hpet_base;
-static u32 hpet_clk_period;
-static u64 hpet_frq;
-static int hpet_enabled;
+static int hpet_enabled = 0;
 
-static u64 read_reg(const u32 offset)
+static u64 tsc_freq_hz = 0;
+
+u64 rdtsc(void)
 {
-    return *(volatile u64*)(hpet_base + offset);
+    unsigned long eax, edx;
+    __asm__ ("rdtsc" : "=a"(eax), "=d"(edx));
+    return ((u64)edx << 32) | eax;
 }
 
-static u32 read_reg32(const u32 offset)
+static inline u64 cpuid_get_tsc_hz(void)
 {
-    return *(volatile u32*)(hpet_base + offset);
+    u32 a, b, c, d;
+    __cpuid(0x15, a, b, c, d);
+    return a ? ((c ? c : (unsigned long)24e6) * (b / a)) : 0;
 }
 
-static void write_reg(const u32 offset, const u64 val)
+static bool invariant_tsc(void)
 {
-    *(volatile u64*)(hpet_base + offset) = val;
+    u32 a, b, c, d;
+    __cpuid(0x8000'0007, a, b, c, d);
+    klog(LOG_DEBUG, "CPUID 0x8000'0007: a=%x, b=%x, c=%x, d=%x\n", a, b, c, d);
+    return d & (1<<8); // Check if invariant TSC bit is set
 }
 
-// time in ms
-void hpet_init(u32 time, struct hpet_info *info)
+static u64 calc_tsc_hz(void)
 {
-    if (time < 1 || time > 100)
-        kerror("Invalid timer interval\n");
+    unsigned long tsc_hz = cpuid_get_tsc_hz();
+    if (tsc_hz > 0)
+        return tsc_hz;
 
-    u32 desired_freq = 1000 / time; // in Hz
-
-    hpet_base = (uintptr_t)map_phys((void*)(uintptr_t)info->address, PAGE_SIZE,
-        PG_WRITE | PG_STRONG_UC);
-
-    struct hpet_id_reg *id = (struct hpet_id_reg*)hpet_base;
-    hpet_clk_period = id->counter_clk_period;
-    hpet_frq = 1000000000000000ULL / hpet_clk_period; // in Hz
-
-    time = hpet_frq / desired_freq;
-
-    // Int enable, periodic, write to accumulator bit
-    u64 timer_reg = read_reg(HPET_TIMER_CONF_REG(info->hpet_number));
-    if (!(timer_reg & (1 << 4)))
-        kerror("HPET does not allow periodic mode\n");
-    u64 val = (1 << 2) | (1 << 3) | (1 << 6);
-
-    write_reg(HPET_CONFIG_REG, 0x0); // Disable
-    write_reg(HPET_TIMER_CONF_REG(info->hpet_number), val);
-    write_reg(HPET_TIMER_COMP_REG(info->hpet_number), time);
-    write_reg(HPET_COUNTER_REG, 0);	 // Reset counter
-    write_reg(HPET_CONFIG_REG, 0x3); // Enable counter
-
-    hpet_enabled = 1;
-
-    klog(LOG_INFO, "HPET interrupt running at %d Hz (%u fs period)\n", desired_freq, hpet_clk_period);
-}
-
-u64 hpet_read(void)
-{
-    return read_reg(HPET_COUNTER_REG);
+    asm ("sti");
+    u64 init_read = rdtsc();
+    u64 ticks_in_10ms = 0;
+    usleep(10000);
+    ticks_in_10ms = rdtsc() - init_read;
+    asm ("cli");
+    return ticks_in_10ms * 100; // Convert to Hz
 }
 
 // TODO: Make sure HPET is supported
@@ -100,7 +71,12 @@ void timer_init(u32 ms, struct hpet_info *info)
     idt_entry(0x20, (uintptr_t)timer_handler, __KERNEL_CS, 0, INT_GATE);
     ioapic_entry(0, 0x20, 0, 0);
     hpet_init(ms, info);
-    boot_unix_time = rtc_init();
+    hpet_enabled = 1;
+    tsc_freq_hz = calc_tsc_hz();
+    boot_unix_time = rtc_init() - rdtsc() / tsc_freq_hz;
+    klog(LOG_INFO, "TSC frequency: %llu Hz\n", tsc_freq_hz);
+    klog(LOG_INFO, "Boot Unix time: %lld seconds since epoch\n", boot_unix_time);
+    // invariant_tsc();
     kstatus(STATUS_OK, "HPET initialized\n");
 }
 
@@ -128,7 +104,7 @@ u64 get_sys_time(void)
     if (!hpet_enabled)
         return 0;
     u64 counter = hpet_read();
-    u64 time_ns = (counter * hpet_clk_period) / 1000000ULL;
+    u64 time_ns = (counter * hpet_get_clk_period()) / 1000000ULL;
     return time_ns;
 }
 

@@ -80,7 +80,8 @@ void ioapic_entry(u8 irq, u8 vector, u8 flags, u8 dest)
         .vector = vector,
         .flags = flags,
         .mask = 0,
-        .dest = dest
+        .dest = dest,
+        .reserved = {0, 0, 0, 0}
     };
 
 #ifdef DEBUG_APIC

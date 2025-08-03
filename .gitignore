@@ -10,7 +10,6 @@ lilac.iso
 kernel/.DS_Store
 libc/.DS_Store
 /user_code
-/docs
 debug.txt
 log.txt
 dump.txt

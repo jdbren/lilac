@@ -43,7 +43,9 @@
 #define bit_RDRND	(1 << 30)
 
 /* %edx */
+#define bit_MSR  (1 << 5)
 #define bit_CMPXCHG8B	(1 << 8)
+#define bit_LAPIC  (1 << 9) 
 #define bit_CMOV	(1 << 15)
 #define bit_MMX		(1 << 23)
 #define bit_FXSAVE	(1 << 24)

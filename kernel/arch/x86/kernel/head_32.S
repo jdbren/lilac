@@ -111,6 +111,8 @@ gdt_init:
 	addl %ecx, %eax
 	ret
 
+.global tss_init
+.type tss_init, @function
 tss_init:
 	push %ebp
 	mov  %esp, %ebp
@@ -157,6 +159,8 @@ set_tss_esp0:
 .data
 .align 4
 .word 0
+.global gdt
+gdt:
 gdt_descr:
 	.word 13 * 64 - 1
 	.long gdt_entries

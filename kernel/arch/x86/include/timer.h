@@ -6,8 +6,8 @@
 #include <lilac/types.h>
 #include <acpi/hpet.h>
 
-void hpet_init(u32 time, struct hpet_info *info);
 void timer_init(u32 ms, struct hpet_info *info);
 long long rtc_init(void);
+u64 rdtsc(void);
 
 #endif

@@ -4,7 +4,6 @@
 #include <asm/cpu-flags.h>
 #include <asm/msr.h>
 
-# TODO: Set up acutal stack and code to jump to
 
 # this code will be relocated to 0x8000, sets up environment for calling a C function
 .globl  ap_tramp
@@ -60,7 +59,6 @@ _L8060:
 	lock incb 	pa(aprunning)
 
 #ifdef __x86_64__
-.code32
 init_cpu:
 	# prepare jump into C code (should never return)
 	mov  $(X86_CR4_PAE|X86_CR4_MCE|X86_CR4_OSFXSR), %eax
@@ -96,4 +94,26 @@ init_cpu:
 	lretq
 ._high:
 	call ap_startup
+#else // 32-bit mode
+init_cpu:
+	# prepare jump into C code (should never return)
+	mov  $X86_CR4_OSFXSR, %eax
+	mov  %eax, %cr4
+
+	mov  $pa(page_directory), %eax
+	mov  %eax, %cr3
+
+	mov $(X86_CR0_PE|X86_CR0_PG|X86_CR0_WP|X86_CR0_AM \
+		|X86_CR0_NE|X86_CR0_ET|X86_CR0_MP), %eax
+	mov %eax, %cr0
+
+	lgdt gdt
+	mov $__KERNEL_DS, %ax
+	mov %ax, %ds
+	mov %ax, %es
+	mov %ax, %fs
+	mov %ax, %gs
+	mov %ax, %ss
+	add $__KERNEL_BASE, %esp
+	ljmp $__KERNEL_CS,$ap_startup
 #endif

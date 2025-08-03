@@ -1,16 +1,17 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include <cpuid.h>
 #include <lilac/lilac.h>
 #include <lilac/timer.h>
 #include <mm/kmm.h>
+
 #include <asm/msr.h>
+#include <asm/cpuid-bits.h>
+
 #include "timer.h"
 #include "idt.h"
 #include "apic.h"
 #include "paging.h"
 
-#define IA32_APIC_BASE_MSR_BSP 0x100
 #define IA32_APIC_BASE_MSR_ENABLE 0x800
 
 #define ICR_SELECT 0x310
@@ -56,7 +57,7 @@ static bool check_apic(void)
 {
     long eax, ebx, ecx, edx;
     __cpuid(1, eax, ebx, ecx, edx);
-    return edx & CPUID_FEAT_EDX_APIC;
+    return edx & bit_LAPIC;
 }
 
 /* Set the physical address for local APIC registers */
@@ -72,6 +73,41 @@ static void cpu_set_apic_base(uintptr_t apic)
         write_msr(IA32_APIC_BASE, eax, edx);
 }
 
+static inline unsigned int cpuid_get_crystal_clock(void)
+{
+    u32 a, b, c, d;
+    __cpuid(0x15, a, b, c, d);
+    return c;
+}
+
+
+
+static unsigned long apic_get_timer_hz(void)
+{
+    unsigned int crystal_clock = cpuid_get_crystal_clock();
+    if (crystal_clock > 0)
+        return crystal_clock;
+
+    // Manually calculate the bus frequency
+    unsigned long ticks_in_10ms = 0;
+    write_reg(APIC_TIMER_DIV, 0x3); // Set the timer to divide by 16
+    write_reg(APIC_LVT_TIMER, APIC_LVT_MASKED);
+    write_reg(APIC_TIMER_INIT, 0xFFFFFFFF); // Set the timer to the maximum value
+    sleep(10);
+    ticks_in_10ms = 0xFFFFFFFF - read_reg(APIC_TIMER_CURR); // Read the current timer value
+    return (ticks_in_10ms * 100); // Convert to Hz (10ms)
+}
+
+void apic_start_timer(int tick_ms)
+{
+    if (tick_ms < 1 || tick_ms > 1000)
+        kerror("Invalid timer interval\n");
+    unsigned long lapic_timer_hz = apic_get_timer_hz();
+    write_reg(APIC_LVT_TIMER, 32 | APIC_TIMER_PERIODIC);
+    write_reg(APIC_TIMER_DIV, 0x3);
+    write_reg(APIC_TIMER_INIT, lapic_timer_hz / (1000 / tick_ms));
+}
+
 void lapic_enable(uintptr_t addr) {
     if (!check_apic())
         kerror("CPU does not support APIC\n");
@@ -85,7 +121,6 @@ void lapic_enable(uintptr_t addr) {
 
     kstatus(STATUS_OK, "BSP local APIC enabled\n");
 }
-
 
 
 volatile u8 aprunning;
@@ -113,7 +148,6 @@ int ap_init(u8 numcores)
     for (int i = 0; i < numcores; i++) {
         if (i == bspid)
             continue;
-        klog(LOG_DEBUG, "Sending INIT IPI to AP %d\n", i);
 
         // send INIT IPI
         *((volatile u32*)(base + 0x280)) = 0;               // clear errors

@@ -25,16 +25,14 @@
 #ifndef __ASSEMBLY__
 
 #include <stdbool.h>
-#include <cpuid.h>
 #include <lilac/types.h>
-
-#define CPUID_FLAG_MSR (1 << 5)
+#include <asm/cpuid-bits.h>
 
 inline static bool cpu_has_msr()
 {
     u32 a, d, b, c;
     __cpuid(1, a, b, c, d);
-    return d & CPUID_FLAG_MSR;
+    return d & bit_MSR;
 }
 
 inline static void read_msr(u32 msr, u32 *lo, u32 *hi)

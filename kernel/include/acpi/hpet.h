@@ -36,5 +36,8 @@ struct hpet_info {
 
 struct hpet_info *parse_hpet(struct SDTHeader *addr);
 int dealloc_hpet(struct hpet_info *info);
+void hpet_init(u32 time, struct hpet_info *info);
+u64 hpet_read(void);
+u32 hpet_get_clk_period(void);
 
 #endif

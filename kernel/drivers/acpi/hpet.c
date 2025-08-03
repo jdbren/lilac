@@ -1,6 +1,22 @@
 #include <acpi/hpet.h>
+#include <mm/kmm.h>
 #include <mm/kmalloc.h>
+#include <lilac/log.h>
+#include <lilac/panic.h>
 
+#define HPET_ID_REG 0x0
+#define HPET_CONFIG_REG 0x10
+#define HPET_INTR_REG 0x20
+#define HPET_COUNTER_REG 0xf0
+#define HPET_TIMER_CONF_REG(N) (0x100 + 0x20 * N)
+#define HPET_TIMER_COMP_REG(N) (0x108 + 0x20 * N)
+
+struct __packed hpet_id_reg {
+    u8 rev_id;
+    u8 flags;
+    u16 vendor_id;
+    u32 counter_clk_period;
+};
 
 struct hpet_info *parse_hpet(struct SDTHeader *addr)
 {
@@ -20,4 +36,65 @@ int dealloc_hpet(struct hpet_info *info)
 {
     kfree(info);
     return 0;
+}
+
+static uintptr_t hpet_base;
+static u32 hpet_clk_period;
+static u64 hpet_frq;
+
+static inline u64 read_reg(const u32 offset)
+{
+    return *(volatile u64*)(hpet_base + offset);
+}
+
+static inline u32 read_reg32(const u32 offset)
+{
+    return *(volatile u32*)(hpet_base + offset);
+}
+
+static inline void write_reg(const u32 offset, const u64 val)
+{
+    *(volatile u64*)(hpet_base + offset) = val;
+}
+
+// time in ms
+void hpet_init(u32 time, struct hpet_info *info)
+{
+    if (time < 1 || time > 100)
+        kerror("Invalid timer interval\n");
+
+    u32 desired_freq = 1000 / time; // in Hz
+
+    hpet_base = (uintptr_t)map_phys((void*)(uintptr_t)info->address, PAGE_SIZE,
+        PG_WRITE | PG_STRONG_UC);
+
+    struct hpet_id_reg *id = (struct hpet_id_reg*)hpet_base;
+    hpet_clk_period = id->counter_clk_period;
+    hpet_frq = 1000000000000000ULL / hpet_clk_period; // in Hz
+
+    time = hpet_frq / desired_freq;
+
+    // Int enable, periodic, write to accumulator bit
+    u64 timer_reg = read_reg(HPET_TIMER_CONF_REG(info->hpet_number));
+    if (!(timer_reg & (1 << 4)))
+        kerror("HPET does not allow periodic mode\n");
+    u64 val = 0b1001100;
+
+    write_reg(HPET_CONFIG_REG, 0x0); // Disable
+    write_reg(HPET_TIMER_CONF_REG(info->hpet_number), val);
+    write_reg(HPET_TIMER_COMP_REG(info->hpet_number), time);
+    write_reg(HPET_COUNTER_REG, 0);	 // Reset counter
+    write_reg(HPET_CONFIG_REG, 0x3); // Enable counter
+
+    klog(LOG_INFO, "HPET interrupt running at %d Hz (%u fs period)\n", desired_freq, hpet_clk_period);
+}
+
+u64 hpet_read(void)
+{
+    return read_reg(HPET_COUNTER_REG);
+}
+
+u32 hpet_get_clk_period(void)
+{
+    return hpet_clk_period;
 }
