@@ -1,0 +1,23 @@
+{
+    "configurations": [
+        {
+            "name": "Lilac64",
+            "includePath": [
+                "${workspaceFolder}/kernel/include/**",
+                "${workspaceFolder}/kernel/arch/x86/include/**",
+                "${workspaceFolder}/kernel/drivers/acpi/acpica/**"
+            ],
+            "defines": [
+                "__lilac__",
+                "__KERNEL__"
+            ],
+            "compilerPath": "/usr/local/bin/x86_64-lilac-gcc",
+            "intelliSenseMode": "gcc-x64",
+            "cStandard": "gnu23",
+            "forcedInclude": [
+                "${workspaceFolder}/.vscode/undefs.h"
+            ]
+        }
+    ],
+    "version": 4
+}

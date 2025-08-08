@@ -15,22 +15,21 @@
 #define __KERNEL_BASE       0xffffffff80000000ULL
 #define __KERNEL_MAX_ADDR   0xffffffff80200000ULL
 #define __USER_STACK        0x0000800000000000ULL
-#define __USER_BRK          0x0000400000000000ULL
 #else
 #define __KERNEL_BASE       0xC0000000
 #define __KERNEL_MAX_ADDR   0xC0400000
 #define KHEAP_START_ADDR    0xC0400000
 #define KHEAP_MAX_ADDR      0xEFFFF000
 #define __USER_STACK        0x80000000
-#define __USER_BRK          0x40000000
 #endif
 
 #define __KERNEL_STACK_SZ   0x2000
 #define __USER_STACK_SZ     (PAGE_SIZE * 32)
 
 #define pa(X) ((X) - __KERNEL_BASE)
-
-#define __packed        [[gnu::packed]]
+#ifndef __packed
+    #define __packed        [[gnu::packed]]
+#endif
 #define __align(x)      [[gnu::aligned(x)]]
 #define __must_check    [[nodiscard]]
 #define __noreturn      [[noreturn]]

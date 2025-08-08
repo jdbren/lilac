@@ -19,12 +19,10 @@ cp ../gush/gush ./sysroot/sbin/
 fi
 sudo ./scripts/image.sh
 
-qemu-system-x86_64 \
-    -s \
+sudo qemu-system-x86_64 \
+    -s -enable-kvm -no-reboot -smp 4 -m 512M \
     -machine q35,firmware=./resources/OVMF-pure-efi.fd \
-    -cpu max -no-reboot -smp 4 -m 512M \
+    -cpu host,+tsc,+tsc-deadline,+invtsc,+rdtscp,+vmware-cpuid-freq \
     -drive file=./uefi.img,format=raw -snapshot \
     -net none \
     -monitor stdio -debugcon file:debug.txt -d int,cpu_reset,guest_errors -D log.txt
-
-# hdiutil create -size 48m -layout GPTSPUD -ov -fs fat32 -volname NEWOS -srcfolder sysroot -format UDIF -attach uefi2.img

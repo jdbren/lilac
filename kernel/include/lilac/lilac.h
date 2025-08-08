@@ -14,8 +14,9 @@
 #define KERNEL_VERSION "0.1.0"
 
 #define __no_stack_chk [[gnu::no_stack_protector]]
-#define __always_inline [[gnu::always_inline]]
-
+#ifndef __always_inline
+    #define __always_inline [[gnu::always_inline]]
+#endif
 
 #if defined __i386__ || defined __x86_64__
 static inline void arch_idle(void)

@@ -31,8 +31,13 @@
 
 typedef uint64_t UINT64;
 typedef int64_t INT64;
+#ifdef __x86_64__
 typedef uint32_t UINT32;
 typedef int32_t INT32;
+#else
+typedef long unsigned int UINT32;
+typedef long int INT32;
+#endif
 typedef uint16_t UINT16;
 typedef int16_t INT16;
 typedef uint8_t UINT8;

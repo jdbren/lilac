@@ -13,10 +13,10 @@ ARCH=${ARCH:-"x86_64"}
 HOST=${HOST:-"$ARCH-elf"}
 TARGET=${TARGET:-"$ARCH-lilac"}
 
-AR=${HOST}-ar
-AS=${HOST}-as
-CC=${HOST}-gcc
-CXX=${HOST}-g++
+AR=${TARGET}-ar
+AS=${TARGET}-as
+CC=${TARGET}-gcc
+CXX=${TARGET}-g++
 
 PREFIX=/usr/local
 EXEC_PREFIX=$PREFIX
@@ -28,8 +28,6 @@ CFLAGS="-g -O2 -DDEBUG"
 CXXFLAGS="-g"
 
 SYSROOT="$(pwd)/sysroot"
-CC="$CC --sysroot=$SYSROOT"
-CXX="$CXX --sysroot=$SYSROOT"
 
 echo "export PROJECTS=${PROJECTS}" >> kbuild.config
 echo "export MAKE=${MAKE}" >> kbuild.config
@@ -38,7 +36,7 @@ echo "export AR=${AR}" >> kbuild.config
 echo "export AS=${AS}" >> kbuild.config
 echo "export CC=${CC}" >> kbuild.config
 echo "export CXX=${CXX}" >> kbuild.config
-echo "export LD=${HOST}-ld" >> kbuild.config
+echo "export LD=${TARGET}-ld" >> kbuild.config
 echo "export CONFIG_${HOST}=y" >> kbuild.config
 echo "export PREFIX=${PREFIX}" >> kbuild.config
 echo "export EXEC_PREFIX=${EXEC_PREFIX}" >> kbuild.config

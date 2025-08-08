@@ -6,12 +6,16 @@ ifeq ($(V),1)
 export VERBOSE=1
 endif
 
-.PHONY: all clean init user libc install install-libc install-system
+.PHONY: all clean init user libc install install-libc install-system copy-headers
 
 all: lilac.ker libc init user
 
-lilac.ker:
+lilac.ker: copy-headers
 	$(MAKE) -C kernel
+
+copy-headers:
+	mkdir -p sysroot/usr
+	cp -r $(LIBC_DIR)/newlib/libc/include sysroot/usr/include
 
 libc:
 	@if [ ! -d build-libc ]; then \
@@ -20,6 +24,7 @@ libc:
 		$(LIBC_DIR)/configure \
 			--prefix=$(PREFIX) \
 			--target=$(TARGET) \
+			--disable-multilib \
 			--enable-newlib-multithread=no'; \
 	fi
 	$(MAKE) -s -C build-libc all

@@ -18,7 +18,7 @@ INCLUDEDIR?=$(PREFIX)/include
 
 FLAGS=-D__lilac__ -D__KERNEL__ -Iinclude -ffreestanding -Wall -Wextra \
 	-Wno-unused-parameter -Wno-unused-function -Wno-unused-variable
-CFLAGS:=$(CFLAGS) $(FLAGS) -fno-strict-aliasing -mno-red-zone -fanalyzer -fstack-protector 
+CFLAGS:=$(CFLAGS) $(FLAGS) -fno-strict-aliasing -mno-red-zone -fanalyzer -fstack-protector
 # -DDEBUG_VFS -DDEBUG_FORK -DDEBUG_KMM -DDEBUG_KMALLOC -DDEBUG_PAGING -DDEBUG_FAT -DDEBUG_TMPFS -DDEBUG_ELF
 CXXFLAGS:=$(CXXFLAGS) $(FLAGS) -fno-exceptions -fno-rtti
 LDFLAGS:=$(LDFLAGS)
@@ -111,16 +111,16 @@ all: lilac.ker
 
 lilac.ker: $(OBJS) $(LINKER_SCRIPT) acpi libk.a
 ifndef VERBOSE
-	@echo "\tLD\t$@"
+	@echo "	LD	$@"
 	@$(LD) -T $(LINKER_SCRIPT) -o $@ $(LINK_LIST)
 else
 	$(LD) -T $(LINKER_SCRIPT) -o $@ $(LINK_LIST)
 endif
-	grub-file --is-x86-multiboot2 lilac.ker
+	grub2-file --is-x86-multiboot2 lilac.ker
 
 $(ARCHDIR)/crtbegin.o $(ARCHDIR)/crtend.o:
 ifndef VERBOSE
-	@echo "\tCP\t$@"
+	@echo "	CP	$@"
 	@OBJ=`$(CC) $(CFLAGS) $(LDFLAGS) -print-file-name=$(@F)` && cp "$$OBJ" $@
 else
 	OBJ=`$(CC) $(CFLAGS) $(LDFLAGS) -print-file-name=$(@F)` && cp "$$OBJ" $@
@@ -128,7 +128,7 @@ endif
 
 libk.a: $(LIBK_OBJS)
 ifndef VERBOSE
-	@echo "\tAR\t$@"
+	@echo "	AR	$@"
 	@$(AR) rcs $@ $(LIBK_OBJS)
 else
 	$(AR) rcs $@ $(LIBK_OBJS)
@@ -136,7 +136,7 @@ endif
 
 .c.o:
 ifndef VERBOSE
-	@echo "\tCC\t$<"
+	@echo "	CC	$<"
 	@$(CC) -MD -c $< -o $@ $(CFLAGS)
 else
 	$(CC) -MD -c $< -o $@ $(CFLAGS)
@@ -144,7 +144,7 @@ endif
 
 .S.o:
 ifndef VERBOSE
-	@echo "\tCC\t$<"
+	@echo "	CC	$<"
 	@$(CC) -MD -c $< -o $@ $(CFLAGS)
 else
 	$(CC) -MD -c $< -o $@ $(CFLAGS)
@@ -152,7 +152,7 @@ endif
 
 .s.o:
 ifndef VERBOSE
-	@echo "\tAS\t$<"
+	@echo "	AS	$<"
 	@$(AS) -c $< -o $@
 else
 	$(AS) -c $< -o $@
@@ -160,7 +160,7 @@ endif
 
 .cpp.o:
 ifndef VERBOSE
-	@echo "\tCXX\t$<"
+	@echo "	CXX	$<"
 	@$(CXX) -MD -c $< -o $@ $(CXXFLAGS)
 else
 	$(CXX) -MD -c $< -o $@ $(CXXFLAGS)
@@ -169,10 +169,10 @@ endif
 clean:
 	rm -f lilac.ker
 	rm -f libk.a
-	@echo "CLEAN\tOBJS"
+	@echo "CLEAN	OBJS"
 	@rm -f $(OBJS)
 	@rm -f $(OBJS:.o=.d)
-	@echo "CLEAN\tLIBK_OBJS"
+	@echo "CLEAN	LIBK_OBJS"
 	@rm -f $(LIBK_OBJS)
 	@rm -f $(LIBK_OBJS:.o=.d)
 	@$(MAKE) -C drivers/acpi clean
