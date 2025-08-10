@@ -10,11 +10,11 @@
 #define TASK_GATE 0x85
 
 struct interrupt_frame {
-    unsigned long ip;
-    unsigned long cs;
-    unsigned long flags;
-    unsigned long sp;
-    unsigned long ss;
+    uintptr_t ip;
+    uintptr_t cs;
+    uintptr_t flags;
+    uintptr_t sp;
+    uintptr_t ss;
 };
 
 void idt_init(void);

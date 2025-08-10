@@ -4,36 +4,61 @@
 #include <asm/msr.h>
 #include <asm/regs.h>
 #include <asm/segments.h>
+#include <asm/gdt.h>
 #include "macros.S"
 
 #ifdef __x86_64__
 .macro isr_err name
-	.extern \name\()_handler
-	.global \name
-	\name:
-	push %rbp
-	mov  %rsp, %rbp
+.extern \name\()_handler
+.global \name
+\name:
+	cli
+	cld
+	testb $3, 16(%rsp)
+	jz 1f # if in kernel mode, skip
+	swapgs
+1:
+	popq %gs:TSS_rsp1     # store error code
 	PUSH_REGS
-	lea  16(%rbp), %rsi # interrupt stack frame
-	mov   8(%rbp), %rdi  # error code
+	xor  %rbp,%rbp
+
+	lea  RIP(%rsp),%rsi  	# interrupt stack frame
+	mov  %gs:TSS_rsp1,%rdi 	# error code
 	call \name\()_handler
-	addq $8, %rsp # pop err code
+
+	call x86_kernel_exit
+
+	testb $3, CS(%rsp)
+	jz 2f # if return to kernel mode, skip
+	swapgs
+2:
 	POP_REGS
-	pop  %rbp
 	iretq
 .endm
 
 .macro isr_no_err name
-	.extern \name\()_handler
-	.global \name
-	\name:
-	push %rbp
-	mov  %rsp, %rbp
+.extern \name\()_handler
+.global \name
+\name:
+	cli
+	cld
+	testb $3, 8(%rsp)
+	jz 1f # if in kernel mode, skip
+	swapgs
+1:
 	PUSH_REGS
-	mov  8(%rbp), %rdi   # interrupt stack frame
+	xor  %rbp,%rbp
+
+	lea  RIP(%rsp), %rdi   # interrupt stack frame
 	call \name\()_handler
+
+	call x86_kernel_exit
+
+	testb $3, CS(%rsp)
+	jz 2f # if return to kernel mode, skip
+	swapgs
+2:
 	POP_REGS
-	pop  %rbp
 	iretq
 .endm
 #else // ARCH_x86:
@@ -73,25 +98,24 @@
 #endif /* __x86_64__ */
 
 isr_no_err div0
-# isr_no_err debug
-# isr_no_err nmi
-# isr_no_err brkp
-# isr_no_err ovfl
-# isr_no_err bound
+isr_no_err debug
+isr_no_err nmi
+isr_no_err brkp
+isr_no_err ovflw
+isr_no_err bnd
 isr_no_err invldop
-# isr_no_err dna
+isr_no_err dna
 isr_err    dblflt
 # isr_no_err cso
-# isr_err    invldtss
-# isr_err    segnp
-# isr_err    ssflt
+isr_err    invldtss
+isr_err    segnp
+isr_err    ssflt
 isr_err    gpflt
 isr_err    pgflt
-# isr_no_err res
-# isr_no_err flpexc
-# isr_err    align
-# isr_no_err mchk
-# isr_no_err simd
+isr_no_err flpexc
+isr_err    align
+isr_no_err mchk
+isr_no_err simd
 
 # isr_no_err 20
 # isr_no_err 21

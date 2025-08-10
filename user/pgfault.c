@@ -1,6 +1,6 @@
-#include <fcntl.h>
 int main(void)
 {
-    char *test = (char*)0x12345678;
-    return open(test, 0);
+    int *test = (int*)0x12345678;
+    *test = 42;
+    return 0;
 }

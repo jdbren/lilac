@@ -54,10 +54,23 @@ void idt_init(void)
 {
     extern void syscall_handler(void);
     idt_entry(0, (uintptr_t)div0, __KERNEL_CS, 0, TRAP_GATE);
+    idt_entry(1, (uintptr_t)debug, __KERNEL_CS, 0, TRAP_GATE);
+    idt_entry(2, (uintptr_t)nmi, __KERNEL_CS, 0, INT_GATE);
+    idt_entry(3, (uintptr_t)brkp, __KERNEL_CS, 0, TRAP_GATE);
+    idt_entry(4, (uintptr_t)ovflw, __KERNEL_CS, 0, TRAP_GATE);
+    idt_entry(5, (uintptr_t)bnd, __KERNEL_CS, 0, TRAP_GATE);
     idt_entry(6, (uintptr_t)invldop, __KERNEL_CS, 0, TRAP_GATE);
+    idt_entry(7, (uintptr_t)dna, __KERNEL_CS, 0, TRAP_GATE);
     idt_entry(8, (uintptr_t)dblflt, __KERNEL_CS, 0, TRAP_GATE);
+    idt_entry(10, (uintptr_t)invldtss, __KERNEL_CS, 0, TRAP_GATE);
+    idt_entry(11, (uintptr_t)segnp, __KERNEL_CS, 0, TRAP_GATE);
+    idt_entry(12, (uintptr_t)ssflt, __KERNEL_CS, 0, TRAP_GATE);
     idt_entry(13, (uintptr_t)gpflt, __KERNEL_CS, 0, TRAP_GATE);
     idt_entry(14, (uintptr_t)pgflt, __KERNEL_CS, 0, TRAP_GATE);
+    idt_entry(16, (uintptr_t)flpexc, __KERNEL_CS, 0, TRAP_GATE);
+    idt_entry(17, (uintptr_t)align, __KERNEL_CS, 0, TRAP_GATE);
+    idt_entry(18, (uintptr_t)mchk, __KERNEL_CS, 0, TRAP_GATE);
+    idt_entry(19, (uintptr_t)simd, __KERNEL_CS, 0, TRAP_GATE);
     idt_entry(0x80, (uintptr_t)syscall_handler, __KERNEL_CS, 0, INT_GATE | DPL_3);
 
     pic_initialize();

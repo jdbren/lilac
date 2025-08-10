@@ -18,7 +18,7 @@ INCLUDEDIR?=$(PREFIX)/include
 
 FLAGS=-D__lilac__ -D__KERNEL__ -Iinclude -ffreestanding -Wall -Wextra \
 	-Wno-unused-parameter -Wno-unused-function -Wno-unused-variable
-CFLAGS:=$(CFLAGS) $(FLAGS) -fno-strict-aliasing -mno-red-zone -fanalyzer -fstack-protector
+CFLAGS:=$(CFLAGS) $(FLAGS) -fno-strict-aliasing -mno-red-zone -fanalyzer -fstack-protector -DLOG_CPUID
 # -DDEBUG_VFS -DDEBUG_FORK -DDEBUG_KMM -DDEBUG_KMALLOC -DDEBUG_PAGING -DDEBUG_FAT -DDEBUG_TMPFS -DDEBUG_ELF
 CXXFLAGS:=$(CXXFLAGS) $(FLAGS) -fno-exceptions -fno-rtti
 LDFLAGS:=$(LDFLAGS)
