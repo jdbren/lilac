@@ -3,7 +3,7 @@
 Updated 3/31/25 -
 Running in long mode (x86_64) is now supported. I have ported the newlib
 C library, and modified binutils and gcc sources to customize the compiler
-when it may be helpful. See those ports here:
+when it may be helpful. See those ports here on the lilac-os branch:
 
 https://github.com/jdbren/newlib/tree/lilac-os \
 https://github.com/jdbren/gcc/tree/lilac-os \
@@ -47,7 +47,9 @@ make install-gcc install-target-libgcc install-target-libstdc++-v3
 ```
 
 Now onto building the custom toolchain. There is a bit of bootstrapping
-since libgcc expects the system headers to be available.
+since libgcc expects the system headers to be available. You have to 
+clone the gcc, binutils, and newlib forks and switch to the lilac-os
+branch.
 ```bash
 # x86_64-lilac or i686-lilac
 export TARGET=x86_64-lilac
