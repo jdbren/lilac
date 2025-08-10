@@ -17,7 +17,7 @@ int handle_signal(void)
         return 0;
     }
 
-    struct ksigaction *ka = &current->sighandlers->actions[sig]; 
+    struct ksigaction *ka = &current->sighandlers->actions[sig];
     int sig_bit = (1 << sig);
     current->pending.signal &= ~sig_bit;
     if (current->pending.signal == 0)
@@ -83,11 +83,6 @@ SYSCALL_DECL2(signal, int, sig, __sighandler_t, handler)
 {
     if (sig < 0 || sig >= _NSIG)
         return -EINVAL;
-
-    if (handler != SIG_DFL && handler != SIG_IGN && !access_ok(handler, sizeof(void*))) {
-        klog(LOG_WARN, "signal: Invalid handler pointer %p for signal %d\n", handler, sig);
-        return -EFAULT;
-    }
 
     if (sig == SIGKILL || sig == SIGSTOP) {
         klog(LOG_WARN, "signal: Cannot change handler for signal %d\n", sig);
