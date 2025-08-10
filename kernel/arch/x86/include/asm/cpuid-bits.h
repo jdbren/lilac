@@ -35,6 +35,7 @@
 #define bit_SSE4_2	(1 << 20)
 #define bit_MOVBE	(1 << 22)
 #define bit_POPCNT	(1 << 23)
+#define bit_TSC_DL  (1 << 24)
 #define bit_AES		(1 << 25)
 #define bit_XSAVE	(1 << 26)
 #define bit_OSXSAVE	(1 << 27)
@@ -45,7 +46,7 @@
 /* %edx */
 #define bit_MSR  (1 << 5)
 #define bit_CMPXCHG8B	(1 << 8)
-#define bit_LAPIC  (1 << 9) 
+#define bit_LAPIC  (1 << 9)
 #define bit_CMOV	(1 << 15)
 #define bit_MMX		(1 << 23)
 #define bit_FXSAVE	(1 << 24)

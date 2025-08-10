@@ -137,7 +137,7 @@ void unmap_from_self(void *addr, int size)
 void *map_phys(void *to_map, int size, int flags)
 {
     int num_pages = PAGE_ROUND_UP(size) / PAGE_SIZE;
-    to_map = (void*)((uintptr_t)to_map & ~0xFFF);
+    to_map = (void*)((uintptr_t)to_map & ~0xFFFul);
     void *virt = find_vaddr(num_pages);
     map_pages(to_map, virt, flags, num_pages);
     return virt;
@@ -153,7 +153,7 @@ void *map_phys_at(void *phys, void *virt, int size, int flags)
 void unmap_phys(void *addr, int size)
 {
     int num_pages = PAGE_ROUND_UP(size) / PAGE_SIZE;
-    addr = (void*)((uintptr_t)addr & ~0xFFF);
+    addr = (void*)((uintptr_t)addr & ~0xFFFul);
     unmap_pages(addr, num_pages);
     free_vaddr(addr, num_pages);
 }

@@ -36,6 +36,9 @@ struct boot_info {
 	u64 rsdp;
 };
 
+extern struct multiboot_info mbd;
+extern struct acpi_info acpi;
+
 uintptr_t get_rsdp(void);
 void parse_multiboot(uintptr_t addr, struct multiboot_info *mbd);
 

@@ -21,7 +21,7 @@
 uintptr_t __stack_chk_guard = STACK_CHK_GUARD;
 
 struct multiboot_info mbd;
-static struct acpi_info acpi;
+struct acpi_info acpi;
 //static struct efi_info efi;
 
 extern u32 mbinfo; // defined in boot asm
@@ -39,7 +39,7 @@ void kernel_early(void)
     apic_init(acpi.madt);
     keyboard_init();
     timer_init(1, acpi.hpet); // 1ms interval
-    ap_init(acpi.madt->core_cnt);
+    // ap_init(acpi.madt->core_cnt);
     acpi_early_cleanup(&acpi);
 
     start_kernel();

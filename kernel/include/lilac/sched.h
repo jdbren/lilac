@@ -8,6 +8,7 @@
 void sched_init(void);
 void sched_clock_init(void);
 void schedule(void);
+void sched_tick(void);
 void yield(void);
 void schedule_task(struct task *new_task);
 struct task * get_current_task(void);

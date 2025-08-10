@@ -1,15 +1,14 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
+#include "apic.h"
+
 #include <lilac/lilac.h>
 #include <lilac/timer.h>
 #include <mm/kmm.h>
-
 #include <asm/msr.h>
-#include <asm/cpuid-bits.h>
-
 #include "timer.h"
+#include "cpu-features.h"
 #include "idt.h"
-#include "apic.h"
 #include "paging.h"
 
 #define IA32_APIC_BASE_MSR_ENABLE 0x800
@@ -76,11 +75,9 @@ static void cpu_set_apic_base(uintptr_t apic)
 static inline unsigned int cpuid_get_crystal_clock(void)
 {
     u32 a, b, c, d;
-    __cpuid(0x15, a, b, c, d);
+    cpuid(0x15, &a, &b, &c, &d);
     return c;
 }
-
-
 
 static unsigned long apic_get_timer_hz(void)
 {
@@ -90,22 +87,44 @@ static unsigned long apic_get_timer_hz(void)
 
     // Manually calculate the bus frequency
     unsigned long ticks_in_10ms = 0;
-    write_reg(APIC_TIMER_DIV, 0x3); // Set the timer to divide by 16
+    write_reg(APIC_TIMER_DIV, 0b1011);
     write_reg(APIC_LVT_TIMER, APIC_LVT_MASKED);
     write_reg(APIC_TIMER_INIT, 0xFFFFFFFF); // Set the timer to the maximum value
-    sleep(10);
+    usleep(10000);
     ticks_in_10ms = 0xFFFFFFFF - read_reg(APIC_TIMER_CURR); // Read the current timer value
     return (ticks_in_10ms * 100); // Convert to Hz (10ms)
 }
 
-void apic_start_timer(int tick_ms)
+
+
+extern u64 tsc_freq_hz;
+
+void tsc_deadline_set(u64 ns_from_now)
 {
-    if (tick_ms < 1 || tick_ms > 1000)
-        kerror("Invalid timer interval\n");
+    u64 tsc_now = rdtsc();
+    u64 delta_tsc = (tsc_freq_hz * ns_from_now) / 1000000000ull;
+    u64 deadline = tsc_now + delta_tsc;
+    write_msr(IA32_TSC_DEADLINE, (u32)(deadline & 0xFFFFFFFF), (u32)(deadline >> 32));
+}
+
+void apic_tsc_deadline(void)
+{
+    write_reg(APIC_LVT_TIMER, APIC_TIMER_DEADLINE | 0x20);
+    asm ("mfence");
+    tsc_deadline_set(1000000); // 1ms
+    klog(LOG_INFO, "APIC TSC deadline timer enabled\n");
+}
+
+void apic_periodic(u32 ms)
+{
+    if (ms < 1 || ms > 1000)
+        kerror("Invalid apic timer interval\n");
     unsigned long lapic_timer_hz = apic_get_timer_hz();
-    write_reg(APIC_LVT_TIMER, 32 | APIC_TIMER_PERIODIC);
-    write_reg(APIC_TIMER_DIV, 0x3);
-    write_reg(APIC_TIMER_INIT, lapic_timer_hz / (1000 / tick_ms));
+    klog(LOG_INFO, "APIC timer frequency: %lu Hz\n", lapic_timer_hz);
+    write_reg(APIC_LVT_TIMER, 0x20 | APIC_TIMER_PERIODIC);
+    write_reg(APIC_TIMER_DIV, 0b1011); // Divide by 1
+    write_reg(APIC_TIMER_INIT, lapic_timer_hz / (1000 / ms));
+    klog(LOG_INFO, "APIC periodic timer enabled at %u ms (%lu Hz)\n", ms, lapic_timer_hz / (1000 / ms));
 }
 
 void lapic_enable(uintptr_t addr) {
@@ -116,8 +135,10 @@ void lapic_enable(uintptr_t addr) {
 
     lapic_base = (uintptr_t)map_phys((void*)addr, 0x1000, PG_STRONG_UC | PG_WRITE);
 
+    klog(LOG_DEBUG, "Spur: %x\n", read_reg(APIC_REG_SPUR));
+
     /* Set the Spurious Interrupt Vector Register bit 8 to start receiving interrupts */
-    write_reg(0xF0, read_reg(0xF0) | 0x100);
+    write_reg(APIC_REG_SPUR, 0xff | 0x100);
 
     kstatus(STATUS_OK, "BSP local APIC enabled\n");
 }

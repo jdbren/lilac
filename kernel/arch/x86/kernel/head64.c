@@ -22,7 +22,7 @@ __noreturn void __stack_chk_fail(void)
 }
 
 struct multiboot_info mbd;
-static struct acpi_info acpi;
+struct acpi_info acpi;
 //static struct efi_info efi;
 
 // need to set up
@@ -58,7 +58,7 @@ void x86_64_kernel_early(void)
     apic_init(acpi.madt);
     keyboard_init();
     timer_init(1, acpi.hpet);
-    ap_init(acpi.madt->core_cnt);
+    // ap_init(acpi.madt->core_cnt);
     acpi_early_cleanup(&acpi);
     syscall_init();
 

@@ -2,12 +2,13 @@
 .globl _start
 #ifdef __x86_64__
 _start:
-	mov 	8(%rsp), %rsi # argv
-	mov 	(%rsp), %rdi  # argc
-
 	xor 	%rbp, %rbp    # mark the end of stack frames
 	xor 	%rax, %rax
 
+	call    __libc_init_array
+
+	mov 	8(%rsp), %rsi # argv
+	mov 	(%rsp), %rdi  # argc
 	call 	main          # call main
 
 	mov 	%rax, %rdi    # first argument of _exit
@@ -15,15 +16,12 @@ _start:
 	call 	exit          # call _exit
 #else
 _start:
-	mov 	%esp, %ebp    # set up the stack frame pointer
-	push 	4(%ebp)       # argv
-	push 	(%ebp)        # argc
-
 	xor 	%ebp, %ebp    # mark the end of stack frames
 	xor 	%eax, %eax
 
+	call    __libc_init_array
+	# argc, argv already on the stack
 	call 	main          # call main
-	addl 	$8, %esp      # clean up the stack
 
 	push 	%eax          # first argument of _exit
 	xor  	%eax, %eax

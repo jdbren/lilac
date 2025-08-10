@@ -3,6 +3,7 @@
 #include "timer.h"
 
 #include <lilac/timer.h>
+#include <lilac/sched.h>
 #include <acpi/hpet.h>
 #include <mm/kmm.h>
 #include <lilac/port.h>
@@ -10,8 +11,7 @@
 #include <lilac/log.h>
 
 #include <asm/segments.h>
-#include <asm/cpuid-bits.h>
-
+#include "cpu-features.h"
 #include "apic.h"
 #include "idt.h"
 
@@ -26,7 +26,12 @@ extern volatile u32 system_timer_ms;
 
 static int hpet_enabled = 0;
 
-static u64 tsc_freq_hz = 0;
+u64 tsc_freq_hz = 0;
+
+static inline void nop(void) {}
+
+static void (*handle_tick)(void) = nop;
+
 
 u64 rdtsc(void)
 {
@@ -35,49 +40,95 @@ u64 rdtsc(void)
     return ((u64)edx << 32) | eax;
 }
 
-static inline u64 cpuid_get_tsc_hz(void)
+static inline bool in_hypervisor(void)
 {
     u32 a, b, c, d;
-    __cpuid(0x15, a, b, c, d);
+    cpuid(0x1, &a, &b, &c, &d);
+    return c & (1 << 31);
+}
+
+static u64 cpuid_get_tsc_hz(void)
+{
+    u32 a, b, c, d;
+    cpuid(0x15, &a, &b, &c, &d);
+
+    if (a == 0) {
+        if (in_hypervisor()) {
+            // Try hypervisor-specific CPUID leaf
+            cpuid(0x40000010, &a, &b, &c, &d);
+            if (a != 0)
+                return a * 1000ull;
+        }
+        return 0;
+    }
     return a ? ((c ? c : (unsigned long)24e6) * (b / a)) : 0;
 }
 
-static bool invariant_tsc(void)
+static inline bool invariant_tsc(void)
 {
     u32 a, b, c, d;
-    __cpuid(0x8000'0007, a, b, c, d);
-    klog(LOG_DEBUG, "CPUID 0x8000'0007: a=%x, b=%x, c=%x, d=%x\n", a, b, c, d);
+    cpuid(0x80000007, &a, &b, &c, &d);
     return d & (1<<8); // Check if invariant TSC bit is set
+}
+
+static bool tsc_deadline(void)
+{
+    u32 a, b, c, d;
+    cpuid(0x1, &a, &b, &c, &d);
+    return c & bit_TSC_DL; // Check if TSC deadline timer is supported
 }
 
 static u64 calc_tsc_hz(void)
 {
     unsigned long tsc_hz = cpuid_get_tsc_hz();
-    if (tsc_hz > 0)
+    if (tsc_hz > 0) {
+        klog(LOG_DEBUG, "TSC frequency from CPUID: %lu Hz\n", tsc_hz);
         return tsc_hz;
+    }
 
-    asm ("sti");
     u64 init_read = rdtsc();
     u64 ticks_in_10ms = 0;
     usleep(10000);
     ticks_in_10ms = rdtsc() - init_read;
-    asm ("cli");
     return ticks_in_10ms * 100; // Convert to Hz
 }
 
-// TODO: Make sure HPET is supported
+void tsc_deadline_tick(void)
+{
+    // should calculate the next timer event to fire
+    // for now, just set it to 1ms from now
+    tsc_deadline_set(1000000);
+}
+
 void timer_init(u32 ms, struct hpet_info *info)
 {
     idt_entry(0x20, (uintptr_t)timer_handler, __KERNEL_CS, 0, INT_GATE);
     ioapic_entry(0, 0x20, 0, 0);
-    hpet_init(ms, info);
+
+    hpet_init(info);
     hpet_enabled = 1;
+
     tsc_freq_hz = calc_tsc_hz();
     boot_unix_time = rtc_init() - rdtsc() / tsc_freq_hz;
     klog(LOG_INFO, "TSC frequency: %llu Hz\n", tsc_freq_hz);
     klog(LOG_INFO, "Boot Unix time: %lld seconds since epoch\n", boot_unix_time);
-    // invariant_tsc();
-    kstatus(STATUS_OK, "HPET initialized\n");
+
+    if (tsc_deadline()) {
+        apic_tsc_deadline();
+        handle_tick = tsc_deadline_tick;
+    } else if (invariant_tsc()) {
+        apic_periodic(ms);
+    } else {
+        hpet_enable_int(ms);
+    }
+    kstatus(STATUS_OK, "System clock initialized\n");
+}
+
+
+void timer_tick(void)
+{
+    handle_tick();
+    sched_tick();
 }
 
 void sleep(u32 millis)

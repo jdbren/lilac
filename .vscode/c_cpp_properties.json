@@ -5,11 +5,14 @@
             "includePath": [
                 "${workspaceFolder}/kernel/include/**",
                 "${workspaceFolder}/kernel/arch/x86/include/**",
-                "${workspaceFolder}/kernel/drivers/acpi/acpica/**"
+                "${workspaceFolder}/kernel/drivers/acpi/acpica/**",
+                "${workspaceFolder}/sysroot/usr/local/include/**"
             ],
             "defines": [
                 "__lilac__",
-                "__KERNEL__"
+                "__KERNEL__",
+                "true=1",
+                "false=0"
             ],
             "compilerPath": "/usr/local/bin/x86_64-lilac-gcc",
             "intelliSenseMode": "gcc-x64",

@@ -8,6 +8,16 @@
 
 #define SHELL_PROMPT "lilacOS %s # "
 
+int y;
+int x;
+
+__attribute__((constructor))
+void init_stuff(void)
+{
+    x = 1;
+    y = 2;
+}
+
 int prompt(void)
 {
     char command[256];

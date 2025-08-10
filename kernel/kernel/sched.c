@@ -247,7 +247,7 @@ void schedule(void)
     context_switch(prev, next);
 }
 
-void sched_tick()
+void sched_tick(void)
 {
     if (sched_timer == -1)
         return;

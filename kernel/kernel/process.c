@@ -134,9 +134,12 @@ static void * prepare_task_args(struct task *p, uintptr_t *stack)
         klog(LOG_DEBUG, "Arg %d: %s\n", i, argv[i]);
     }
 
-    assert(is_aligned(stack, sizeof(void*)));
+    // Align stack
+    stack = (void*)((uintptr_t)stack & ~(sizeof(void*)*2 - 1));
     *--stack = (uintptr_t)argv;
     *--stack = argc;
+
+    assert(is_aligned(stack, sizeof(void*)*2));
     return stack;
 }
 
@@ -159,7 +162,7 @@ static void start_process(void)
 
     uintptr_t *stack = (void*)(__USER_STACK - 128); // Will place argv entries here
     if (!current->info.argv) {
-        *stack = 0;
+        *--stack = 0;
         *--stack = 0;
         goto skip;
     } else {
@@ -167,7 +170,7 @@ static void start_process(void)
     }
 
 skip:
-    klog(LOG_DEBUG, "Going to user mode, jmp = %x\n", jmp);
+    klog(LOG_DEBUG, "Going to user mode, jmp = %p, stack = %p\n", jmp, stack);
     jump_usermode(jmp, (void*)stack, current->kstack);
 }
 

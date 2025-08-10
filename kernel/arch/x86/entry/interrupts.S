@@ -161,7 +161,7 @@ do_timer_interrupt:
 	xor  %eax, %eax
 	call apic_eoi
 
-	call sched_tick
+	call timer_tick
 	ret
 
 

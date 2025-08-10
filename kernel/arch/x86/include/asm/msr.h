@@ -6,6 +6,7 @@
 #define IA32_APIC_BASE      0x1b
 #define IA32_TSC_ADJUST     0x3b
 #define IA32_MISC_ENABLE    0x1a0
+#define IA32_TSC_DEADLINE   0x6e0
 
 #define IA32_SYSENTER_CS    0x174
 #define IA32_SYSENTER_ESP   0x175
@@ -21,6 +22,7 @@
 #define IA32_FS_BASE        0xc0000100
 #define IA32_GS_BASE        0xc0000101
 #define IA32_KERNEL_GS_BASE 0xc0000102
+#define IA32_TSC_AUX        0xc0000103
 
 #ifndef __ASSEMBLY__
 

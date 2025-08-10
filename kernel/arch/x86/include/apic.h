@@ -72,4 +72,8 @@ void ioapic_entry(u8 irq, u8 vector, u8 flags, u8 dest);
 void apic_eoi(void);
 int ap_init(u8 numcores);
 
+void apic_tsc_deadline(void);
+void tsc_deadline_set(u64 ns_from_now);
+void apic_periodic(u32 ms);
+
 #endif
