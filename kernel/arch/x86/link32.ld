@@ -19,6 +19,10 @@ SECTIONS
 		_exception_end = .;
 	}
 
+	.sigtramp ALIGN (4K) : AT (ADDR (.sigtramp) - 0xC0000000) {
+		*(.sigtramp)
+	}
+
 	.rodata ALIGN (4K) : AT (ADDR (.rodata) - 0xC0000000) { *(.rodata) }
 
 	.data ALIGN (4K) : AT (ADDR (.data) - 0xC0000000) {

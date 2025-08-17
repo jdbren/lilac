@@ -75,7 +75,7 @@ void hpet_init(struct hpet_info *info)
     write_reg(HPET_CONFIG_REG, 0x3); // Enable counter
 
     klog(LOG_INFO, "HPET @ %p, clk period %u fs (%llu Hz), %u comparators\n",
-        (void*)info->address, hpet_clk_period, hpet_frq, info->comparator_count);
+        (void*)(uintptr_t)info->address, hpet_clk_period, hpet_frq, info->comparator_count);
 }
 
 void hpet_enable_int(u32 time)

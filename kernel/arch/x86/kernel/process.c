@@ -298,25 +298,56 @@ void restore_fp_regs(struct task *p)
     asm volatile("fxrstor %0" : : "m" (*(const char (*)[512])p->fp_regs) : "memory");
 }
 
+__section(".sigtramp") __noreturn
 void sigtramp(void)
 {
-
+#ifdef __x86_64__
+    asm volatile ("syscall": : "a"(31));
+#else
+    asm volatile ("int $0x80": : "a"(31));
+#endif
+    unreachable();
 }
 
 void arch_prepare_signal(void *pc, int signo)
 {
     struct regs_state *regs = (struct regs_state*)current->regs;
-    uintptr_t sp = regs->sp;
-    sp -= sizeof(struct regs_state);
-    memcpy((void*)sp, regs, sizeof(struct regs_state));
+    klog(LOG_DEBUG, "Pre signal orginal regs: ip=%lx sp=%lx\n", regs->ip, regs->sp);
+    uintptr_t *ustack = (uintptr_t*)regs->sp;
+    uintptr_t return_addr;
+
+    // copy bytecode of sigtramp to user stack
+    ustack = (uintptr_t*)((uintptr_t)ustack - 8);
+    memcpy(ustack, sigtramp, 8);
+    return_addr = (uintptr_t)(ustack);
+    // save registers onto user stack
+    ustack -= sizeof(struct regs_state) / sizeof(uintptr_t);
+    memcpy(ustack, regs, sizeof(struct regs_state));
 
     regs->ip = (uintptr_t)pc;
-    uintptr_t *stack = (uintptr_t*)sp;
 #ifdef __x86_64__
     regs->di = signo;
+    regs->si = 0; // siginfo
+    regs->dx = 0; // ucontext
 #else
-    *--stack = (u32)signo; // First argument: signo
+    *--ustack = 0; // ucontext
+    *--ustack = 0; // siginfo
+    *--ustack = (u32)signo; // First argument: signo
 #endif
-    *--stack = (uintptr_t)&sigtramp; // dummy return
-    regs->sp = (uintptr_t)stack;
+    *--ustack = return_addr;
+    regs->sp = (uintptr_t)ustack;
+}
+
+void arch_restore_post_signal(void)
+{
+    struct regs_state *regs = (struct regs_state*)current->regs;
+    uintptr_t *stack = (uintptr_t*)regs->sp;
+
+#ifndef __x86_64__
+    // on 32 bit, pop the signal argument
+    stack += 3; // skip args
+#endif
+    // Restore registers from user stack
+    memcpy(regs, stack, sizeof(struct regs_state));
+    klog(LOG_DEBUG, "Post signal restored regs: ip=%lx sp=%lx\n", regs->ip, regs->sp);
 }

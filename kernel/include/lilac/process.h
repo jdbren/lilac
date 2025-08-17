@@ -40,6 +40,7 @@ struct task_flags {
     u8 in_syscall   :1;
     u8 sig_pending  :1;
     u8 ptrace_stop  :1;
+    u8 sig_restore  :1;
 };
 
 struct task {
@@ -122,6 +123,7 @@ void             save_fp_regs(struct task *p);
 void             restore_fp_regs(struct task *p);
 void             copy_fp_regs(struct task *dst, struct task *src);
 void             arch_prepare_signal(void *pc, int signo);
+void             arch_restore_post_signal(void);
 
 // kernel mode jump
 void             jump_new_proc(struct task *next);

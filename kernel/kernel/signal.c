@@ -47,6 +47,9 @@ int handle_signal(void)
 
 SYSCALL_DECL0(sigreturn)
 {
+    klog(LOG_DEBUG, "sigreturn called by process %d\n", current->pid);
+    arch_restore_post_signal();
+    current->flags.sig_restore = 1;
     return 0;
 }
 

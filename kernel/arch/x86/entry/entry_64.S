@@ -62,7 +62,9 @@ syscall_entry:
 .bad_syscall:
 	push %rax
 	call x86_kernel_exit
-	pop %r12 # return value
+	pop  %r12 # orignal return value
+	test %rax,%rax
+	jnz  slow_return # not clean context
 
 	# reset interrupt stack
 	lea  40+15*8(%rsp), %rax
@@ -78,6 +80,18 @@ syscall_entry:
 	# prepare exit
 	mov -16(%rsp), %rsp
 	sysretq
+
+slow_return:
+	# reset interrupt stack
+	lea  40+15*8(%rsp), %rax
+	mov  %rax, %gs:TSS_rsp0
+
+	testb $3, CS(%rsp)
+	jz 1f # if return to kernel mode, skip
+	swapgs
+1:
+	POP_REGS
+	iretq
 
 # unused in 64 bit mode
 .globl syscall_handler

@@ -33,6 +33,7 @@
 #define __align(x)      [[gnu::aligned(x)]]
 #define __must_check    [[nodiscard]]
 #define __noreturn      [[noreturn]]
+#define __section(SEC)  [[gnu::section(SEC)]]
 
 #ifndef unreachable
 #define unreachable() __builtin_unreachable()
