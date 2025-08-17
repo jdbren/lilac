@@ -110,18 +110,11 @@ inline void set_console(int value)
     console = value;
 }
 
-[[gnu::interrupt]]
-void keyboard_int(struct interrupt_frame *frame)
-{
-    u8 keycode;
-#ifdef __x86_64__
-    int gs_base_high, gs_base_low;
-    if (frame->cs & 3) {
-        asm ("swapgs");
-    }
-#endif
+extern void kbd_handler(void);
 
-    keycode = inb(KEYBOARD_DATA_PORT);
+void keyboard_int(void)
+{
+    volatile u8 keycode = inb(KEYBOARD_DATA_PORT);
 
     //printf("Keycode: %x, Status: %x\n", keycode);
 
@@ -160,18 +153,11 @@ void keyboard_int(struct interrupt_frame *frame)
         if (console)
             console_intr((struct kbd_event){keycode, status});
     }
-#ifdef __x86_64__
-    if (frame->cs & 3) {
-        // read_msr(IA32_GS_BASE, (void*)&gs_base_low, (void*)&gs_base_high);
-        // if (gs_base_high < 0)
-            asm ("swapgs");
-    }
-#endif
 }
 
 void keyboard_init(void)
 {
-    idt_entry(0x20 + 1, (uintptr_t)keyboard_int, __KERNEL_CS, 0, INT_GATE);
+    idt_entry(0x20 + 1, (uintptr_t)kbd_handler, __KERNEL_CS, 0, INT_GATE);
     ioapic_entry(1, 0x20 + 1, 0, 0);
     kstatus(STATUS_OK, "Keyboard initialized\n");
 }

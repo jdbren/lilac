@@ -23,12 +23,9 @@ int handle_signal(void)
     if (current->pending.signal == 0)
         current->flags.sig_pending = 0;
 
-    if (ka->sa_handler == SIG_IGN) {
+    if (ka->sa.sa_handler == SIG_IGN) {
         klog(LOG_DEBUG, "Signal %d ignored by process %d\n", sig, current->pid);
-        return 0;
-    }
-
-    if (ka->sa_handler == SIG_DFL) {
+    } else if (ka->sa.sa_handler == SIG_DFL) {
         if (sig_bit & (TERM_SIG | CORE_SIG)) { // core dump not implemented
             klog(LOG_INFO, "Process %d received termination signal %d, exiting\n", current->pid, sig);
             current->exit_status = WSIGNALED(sig);
@@ -40,7 +37,16 @@ int handle_signal(void)
         } else {
             klog(LOG_WARN, "Unhandled signal %d in process %d\n", sig, current->pid);
         }
+    } else {
+        klog(LOG_DEBUG, "Delivering signal %d to process %d\n", sig, current->pid);
+        arch_prepare_signal(ka->sa.sa_handler, sig);
     }
+
+    return 0;
+}
+
+SYSCALL_DECL0(sigreturn)
+{
     return 0;
 }
 
@@ -90,8 +96,42 @@ SYSCALL_DECL2(signal, int, sig, __sighandler_t, handler)
     }
 
     struct ksigaction *ka = &current->sighandlers->actions[sig];
-    ka->sa_handler = handler;
+    ka->sa.sa_handler = handler;
 
     klog(LOG_DEBUG, "Signal %d handler set to %p\n", sig, handler);
+    return 0;
+}
+
+SYSCALL_DECL3(sigaction, int, signum, const struct sigaction *, act, struct sigaction *, oldact)
+{
+    if (signum <= 0 || signum >= _NSIG || signum == SIGKILL || signum == SIGSTOP)
+        return -EINVAL;
+
+    if (act && !access_ok(act, sizeof(struct sigaction))) {
+        klog(LOG_WARN, "sigaction: Invalid user memory for new action\n");
+        return -EFAULT;
+    }
+    if (oldact && !access_ok(oldact, sizeof(struct sigaction))) {
+        klog(LOG_WARN, "sigaction: Invalid user memory for old action\n");
+        return -EFAULT;
+    }
+
+    struct ksigaction *ka = &current->sighandlers->actions[signum];
+
+    if (oldact) {
+        // Return the old action
+        oldact->sa_handler = ka->sa.sa_handler;
+        oldact->sa_flags = ka->sa.sa_flags;
+        oldact->sa_mask = ka->sa.sa_mask;
+    }
+
+    if (act) {
+        // Set the new action
+        ka->sa.sa_handler = act->sa_handler;
+        ka->sa.sa_flags = act->sa_flags;
+        ka->sa.sa_mask = act->sa_mask;
+    }
+
+    klog(LOG_DEBUG, "sigaction: Signal %d action updated\n", signum);
     return 0;
 }

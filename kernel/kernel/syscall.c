@@ -13,6 +13,7 @@ int do_kernel_exit_work(void)
         if (current->flags.sig_pending) {
             klog(LOG_DEBUG, "Handling first pending signal\n");
             handle_signal();
+            break;
         }
     }
     return 0;

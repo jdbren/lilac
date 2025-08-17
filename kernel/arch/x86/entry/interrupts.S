@@ -139,9 +139,11 @@ isr_no_err simd
 	xor %rbp, %rbp
 
 	testb $3, CS(%rsp)
-	jz .kernel_entry # if in kernel mode, skip
+	jz 1f # if in kernel mode, skip
 	swapgs
-.kernel_entry:
+1:
+	mov  %rsp,%rdi
+	call x86_kernel_entry
 
 	lea  RIP(%rsp), %rdi   # interrupt stack frame
 	call \func
@@ -149,9 +151,9 @@ isr_no_err simd
 	call x86_kernel_exit
 
 	testb $3, CS(%rsp)
-	jz .kernel_exit # if return to kernel mode, skip
+	jz 2f # if return to kernel mode, skip
 	swapgs
-.kernel_exit:
+2:
 
 	POP_REGS
 	iretq
@@ -162,6 +164,9 @@ isr_no_err simd
 \name:
 	cld
 	PUSH_REGS
+	push %esp
+	call x86_kernel_entry
+	add $4,%esp
 	lea ESP(%esp), %eax
 	push %eax
 	call \func
@@ -190,3 +195,4 @@ do_timer_interrupt:
 
 
 isr_device timer_handler do_timer_interrupt
+isr_device kbd_handler keyboard_int

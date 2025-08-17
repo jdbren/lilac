@@ -18,11 +18,11 @@ static struct sighandlers root_sighand = {
     .ref_count = 1,
     .lock = (spinlock_t)SPINLOCK_INIT,
     .actions = {
-        [SIGINT] = {.sa_handler = SIG_IGN, .sa_flags = SA_RESTART},
-        [SIGQUIT] = {.sa_handler = SIG_IGN, .sa_flags = SA_RESTART},
-        [SIGTERM] = {.sa_handler = SIG_IGN, .sa_flags = SA_RESTART},
-        [SIGCHLD] = {.sa_handler = SIG_DFL, .sa_flags = SA_NOCLDSTOP | SA_NOCLDWAIT | SA_RESTART},
-        [SIGKILL] = {.sa_handler = SIG_IGN, .sa_flags = SA_RESTART},
+        [SIGINT] = {.sa.sa_handler = SIG_IGN, .sa.sa_flags = SA_RESTART},
+        [SIGQUIT] = {.sa.sa_handler = SIG_IGN, .sa.sa_flags = SA_RESTART},
+        [SIGTERM] = {.sa.sa_handler = SIG_IGN, .sa.sa_flags = SA_RESTART},
+        [SIGCHLD] = {.sa.sa_handler = SIG_DFL, .sa.sa_flags = SA_NOCLDSTOP | SA_NOCLDWAIT | SA_RESTART},
+        [SIGKILL] = {.sa.sa_handler = SIG_IGN, .sa.sa_flags = SA_RESTART},
     }
 };
 
@@ -256,4 +256,10 @@ void sched_tick(void)
         return;
     }
     current->flags.need_resched = 1;
+}
+
+SYSCALL_DECL0(sched_yield)
+{
+    yield();
+    return 0;
 }

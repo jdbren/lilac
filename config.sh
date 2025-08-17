@@ -18,7 +18,7 @@ AS=${TARGET}-as
 CC=${TARGET}-gcc
 CXX=${TARGET}-g++
 
-PREFIX=/usr/local
+PREFIX=/usr
 EXEC_PREFIX=$PREFIX
 BOOTDIR=/boot
 LIBDIR=$EXEC_PREFIX/lib

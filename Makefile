@@ -6,11 +6,11 @@ ifeq ($(V),1)
 export VERBOSE=1
 endif
 
-.PHONY: all clean init user libc install install-libc install-system copy-headers
+.PHONY: all clean kernel init user libc install install-libc install-system copy-headers shell
 
-all: lilac.ker libc init user
+all: kernel libc init
 
-lilac.ker: copy-headers
+kernel: copy-headers
 	$(MAKE) -C kernel
 
 copy-headers:
@@ -40,10 +40,17 @@ init: install-libc
 user: install-libc
 	$(MAKE) -C user
 
+shell: install-libc
+	@if [ -d ../gush ]; then \
+		$(MAKE) -C ../gush; \
+		mkdir -p ./sysroot/sbin; \
+		cp ../gush/gush ./sysroot/sbin/; \
+	fi
+
 install:
 	$(MAKE) -C kernel install
 
-install-system: lilac.ker install-libc init user
+install-system: kernel install-libc init user shell
 	$(MAKE) -C kernel install
 	$(MAKE) -C init install
 
@@ -51,5 +58,8 @@ clean:
 	@for PROJECT in $(PROJECTS); do \
   		($(MAKE) -C $$PROJECT clean) \
 	done
+	@if [ -d ../gush ]; then \
+		$(MAKE) -C ../gush clean; \
+	fi
 	rm -rf build-libc
 	rm -rf sysroot

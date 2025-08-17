@@ -250,13 +250,18 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
 }
 #endif
 
-int arch_do_fork(struct regs_state *regs)
+int arch_do_fork(void)
 {
-    klog(LOG_DEBUG, "Forking process\n");
-    klog(LOG_DEBUG, "\tIP: %x\n", regs->ip);
-    klog(LOG_DEBUG, "\tSP: %x\n", regs->sp);
-    current->regs = (void*)regs;
-    return do_fork();
+    return 0;
+}
+
+void *arch_get_user_sp(void)
+{
+    struct regs_state *regs = (struct regs_state*)current->regs;
+    if (!regs) {
+        kerror("Current task has no regs state\n");
+    }
+    return (void*)regs->sp;
 }
 
 void *arch_copy_regs(struct regs_state *src)
@@ -291,4 +296,27 @@ void restore_fp_regs(struct task *p)
     if (p->fp_regs == NULL)
         return;
     asm volatile("fxrstor %0" : : "m" (*(const char (*)[512])p->fp_regs) : "memory");
+}
+
+void sigtramp(void)
+{
+
+}
+
+void arch_prepare_signal(void *pc, int signo)
+{
+    struct regs_state *regs = (struct regs_state*)current->regs;
+    uintptr_t sp = regs->sp;
+    sp -= sizeof(struct regs_state);
+    memcpy((void*)sp, regs, sizeof(struct regs_state));
+
+    regs->ip = (uintptr_t)pc;
+    uintptr_t *stack = (uintptr_t*)sp;
+#ifdef __x86_64__
+    regs->di = signo;
+#else
+    *--stack = (u32)signo; // First argument: signo
+#endif
+    *--stack = (uintptr_t)&sigtramp; // dummy return
+    regs->sp = (uintptr_t)stack;
 }

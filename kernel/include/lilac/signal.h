@@ -1,13 +1,10 @@
 #ifndef _LILAC_SIGNAL_H
 #define _LILAC_SIGNAL_H
 
-/*
- * Basic signal handling related data type definitions:
- */
-
 #include <lilac/list.h>
-#include <user/signal.h>
-#include <user/siginfo.h>
+#include <lilac/signal-defs.h>
+#include <lilac/signo.h>
+// #include <user/siginfo.h>
 
 #define _SIGHUP		(1 << SIGHUP)
 #define _SIGINT		(1 << SIGINT)
@@ -45,13 +42,13 @@
 #define _SIGUNUSED	(1 << SIGUNUSED)
 
 #define _NSIG 32
-
 #define _NSIG_WORDS (_NSIG / (sizeof(unsigned long) * 8))
 
 typedef unsigned long sigset_t;
 
+
 typedef struct kernel_siginfo {
-    __SIGINFO;
+    //__SIGINFO;
 } kernel_siginfo_t;
 
 struct sigpending {
@@ -60,21 +57,25 @@ struct sigpending {
 };
 
 struct sigaction {
-    __sighandler_t	sa_handler;
+    union {
+        __sighandler_t	sa_handler;
+        // void		(*sa_sigaction)(int, kernel_siginfo_t*, void *);
+    };
     unsigned long	sa_flags;
-    sigset_t	    sa_mask;	/* mask last for extensibility */
+    sigset_t	    sa_mask;
 };
 
 struct ksigaction {
     struct sigaction sa;
+    __sigrestore_t sa_restorer;
 };
 
-#define sa_handler sa.sa_handler
-#define sa_flags sa.sa_flags
+// #define sa_handler sa.sa_handler
+// #define sa_flags sa.sa_flags
 
 struct ksignal {
     struct ksigaction ka;
-    kernel_siginfo_t info;
+    // kernel_siginfo_t info;
     int sig;
 };
 
@@ -83,4 +84,4 @@ struct task;
 int do_raise(struct task *p, int sig);
 int handle_signal(void);
 
-#endif /* _LINUX_SIGNAL_TYPES_H */
+#endif

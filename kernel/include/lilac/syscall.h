@@ -1,6 +1,8 @@
 #ifndef _LILAC_SYSCALL_H
 #define _LILAC_SYSCALL_H
 
+#ifndef __ASSEMBLY__
+
 #include <lilac/types.h>
 
 #ifdef ARCH_x86
@@ -34,5 +36,9 @@
 #define SYSCALL_DECL5(name, ...) SYSCALL_DECLn(5, name, __VA_ARGS__)
 
 int do_kernel_exit_work(void);
+
+#endif /* !__ASSEMBLY__ */
+
+#define MAX_SYSCALL 31
 
 #endif

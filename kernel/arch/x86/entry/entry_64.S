@@ -5,6 +5,7 @@
 #include <asm/msr.h>
 #include <asm/gdt.h>
 #include <lilac/errno.h>
+#include <lilac/syscall.h>
 
 #include "macros.S"
 
@@ -33,22 +34,42 @@ syscall_entry:
 	push %rcx         # rip
 	PUSH_REGS
 
+	mov  %rsp,%rdi
+	call x86_kernel_entry
+
+	mov  RAX(%rsp),%rax
+	cmp  $MAX_SYSCALL,%rax
+	jle  .do_syscall
+
+	mov  $-ENOSYS,%rax
+	jmp  .bad_syscall
+
+.do_syscall:
+	mov  RDI(%rsp),%rdi
+	mov  RSI(%rsp),%rsi
+	mov  RDX(%rsp),%rdx
+	mov  R10(%rsp),%rcx # C ABI expects 4th arg in rcx
+	mov  R8(%rsp),%r8
+	mov  R9(%rsp),%r9
+
 	# set up syscall
-	mov  R10(%rsp), %rcx # C ABI expects 4th arg in rcx
 	lea  syscall_table, %rbp
 	mov  (%rbp, %rax, 8), %rax
 	xor  %rbp, %rbp
 
 	call *%rax
 
-	mov  %rax, %r12 # save return value
+.bad_syscall:
+	push %rax
+	call x86_kernel_exit
+	pop %r12 # return value
+
 	# reset interrupt stack
 	lea  40+15*8(%rsp), %rax
 	mov  %rax, %gs:TSS_rsp0
 
 	swapgs
-# This should switch to using a trampoline stack
-1:
+
 	# restore registers
 	mov %r12,%rax # restore return value
 	POP_REGS pop_rax=0
@@ -64,12 +85,6 @@ syscall_handler:
 	mov $-ENOSYS, %rax
 	iretq
 
-
-.globl sys_fork
-sys_fork:
-	lea  8(%rsp), %rdi
-	call arch_do_fork
-	ret
 
 // void jump_usermode(void *entry, void *ustack, void *kstack)
 // rdi = entry, rsi = ustack, rdx = kstack
@@ -116,7 +131,6 @@ __context_switch_asm:
 	push %r12
 	push %rbx
 	pushf
-
 
 	mov  %rsp, TASK_KSTACK_OFFSET(%rdi)
 	mov  TASK_PGD_OFFSET(%rsi), %rax

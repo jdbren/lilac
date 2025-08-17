@@ -1,6 +1,13 @@
 #include <lilac/syscall.h>
 #include <lilac/sched.h>
+#include <asm/regs.h>
 #include "gdt.h"
+
+int x86_kernel_entry(struct regs_state *regs)
+{
+    current->regs = (void*)regs;
+    return 0;
+}
 
 void x86_kernel_exit(void)
 {

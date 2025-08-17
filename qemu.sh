@@ -13,10 +13,6 @@ get_ncpus() {
 }
 
 make -j $(get_ncpus) install-system
-if [[ -d ../gush ]]; then
-make -C ../gush
-cp ../gush/gush ./sysroot/sbin/
-fi
 sudo ./scripts/image.sh
 
 qemu-system-x86_64 \

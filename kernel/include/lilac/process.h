@@ -116,10 +116,12 @@ struct mm_info * arch_copy_mmap(struct mm_info *parent);
 void             arch_unmap_all_user_vm(struct mm_info *info);
 void             arch_reclaim_mem(struct task *p);
 void *           arch_user_stack(void);
+void *           arch_get_user_sp(void);
 void *           arch_copy_regs(struct regs_state *src);
 void             save_fp_regs(struct task *p);
 void             restore_fp_regs(struct task *p);
 void             copy_fp_regs(struct task *dst, struct task *src);
+void             arch_prepare_signal(void *pc, int signo);
 
 // kernel mode jump
 void             jump_new_proc(struct task *next);

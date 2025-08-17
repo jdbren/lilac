@@ -284,6 +284,11 @@ int do_fork(void)
     return child->pid;
 }
 
+SYSCALL_DECL0(fork)
+{
+    return do_fork();
+}
+
 __noreturn
 static void exec_and_return(void)
 {
