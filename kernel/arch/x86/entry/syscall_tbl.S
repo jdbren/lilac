@@ -56,6 +56,8 @@ syscall_table:
 	sc_tbl_entry getppid	# 29
 	sc_tbl_entry sigaction  # 30
 	sc_tbl_entry sigreturn  # 31
+	sc_tbl_entry sigprocmask
+	sc_tbl_entry sigpending # 33
 /*
 	sc_tbl_entry link		# 26
 	sc_tbl_entry unlink		# 27

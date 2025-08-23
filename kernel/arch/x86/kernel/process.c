@@ -309,6 +309,15 @@ void sigtramp(void)
     unreachable();
 }
 
+static void create_ucontext(ucontext_t *uc)
+{
+    uc->uc_link = NULL;
+    uc->uc_sigmask = current->blocked;
+    uc->uc_stack.ss_sp = NULL;
+    uc->uc_stack.ss_flags = 0;
+    uc->uc_stack.ss_size = 0;
+}
+
 void arch_prepare_signal(void *pc, int signo)
 {
     struct regs_state *regs = (struct regs_state*)current->regs;
@@ -320,6 +329,9 @@ void arch_prepare_signal(void *pc, int signo)
     ustack = (uintptr_t*)((uintptr_t)ustack - 8);
     memcpy(ustack, sigtramp, 8);
     return_addr = (uintptr_t)(ustack);
+    // create ucontext struct
+    ustack -= sizeof(ucontext_t) / sizeof(uintptr_t);
+    create_ucontext((ucontext_t*)ustack);
     // save registers onto user stack
     ustack -= sizeof(struct regs_state) / sizeof(uintptr_t);
     memcpy(ustack, regs, sizeof(struct regs_state));
@@ -342,11 +354,14 @@ void arch_restore_post_signal(void)
 {
     struct regs_state *regs = (struct regs_state*)current->regs;
     uintptr_t *stack = (uintptr_t*)regs->sp;
+    ucontext_t *uc;
 
 #ifndef __x86_64__
     // on 32 bit, pop the signal argument
     stack += 3; // skip args
 #endif
+    uc = (ucontext_t*)(stack + sizeof(struct regs_state) / sizeof(uintptr_t));
+    current->blocked = uc->uc_sigmask;
     // Restore registers from user stack
     memcpy(regs, stack, sizeof(struct regs_state));
     klog(LOG_DEBUG, "Post signal restored regs: ip=%lx sp=%lx\n", regs->ip, regs->sp);

@@ -79,6 +79,13 @@ struct ksignal {
     int sig;
 };
 
+typedef struct ucontext {
+    struct ucontext *uc_link;
+    sigset_t uc_sigmask;
+    stack_t uc_stack;
+    // struct mcontext uc_mcontext; // architecture-specific
+} ucontext_t;
+
 struct task;
 
 int do_raise(struct task *p, int sig);

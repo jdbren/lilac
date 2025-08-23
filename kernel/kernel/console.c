@@ -209,15 +209,15 @@ void console_intr(struct kbd_event event)
     } else if (event.status & KB_CTRL) {
         switch(c) {
         case 'c':
-            console_writestring(con, "^C\n");
-            do_raise(current, SIGINT);
+            if (!do_raise(current, SIGINT))
+                console_writestring(con, "^C");
             break;
         case 'd':
-            console_writestring(con, "^D\n");
+            console_writestring(con, "^D");
             break;
         case '\\':
-            console_writestring(con, "^\\\n");
-            do_raise(current, SIGQUIT);
+            if (!do_raise(current, SIGQUIT))
+                console_writestring(con, "^\\");
             break;
         }
         return;

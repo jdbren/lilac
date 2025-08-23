@@ -11,11 +11,17 @@
 
 int handle_signal(void)
 {
-    int sig = __builtin_ffs(current->pending.signal) - 1;
-    if (sig == -1) {
-        klog(LOG_DEBUG, "No pending signals to handle\n");
-        return 0;
-    }
+    int sig;
+    sigset_t pending = current->pending.signal & ~current->blocked;
+
+    if (pending == 0)
+        return 0; // No pending unblocked signals
+    else if (pending & _SIGKILL)
+        sig = SIGKILL;
+    else if (pending & _SIGSTOP)
+        sig = SIGSTOP;
+    else
+        sig = __builtin_ffs(pending) - 1;
 
     struct ksigaction *ka = &current->sighandlers->actions[sig];
     int sig_bit = (1 << sig);
@@ -24,7 +30,7 @@ int handle_signal(void)
         current->flags.sig_pending = 0;
 
     if (ka->sa.sa_handler == SIG_IGN) {
-        klog(LOG_DEBUG, "Signal %d ignored by process %d\n", sig, current->pid);
+        klog(LOG_WARN, "handle_signal: Signal %d ignored by process %d\n", sig, current->pid);
     } else if (ka->sa.sa_handler == SIG_DFL) {
         if (sig_bit & (TERM_SIG | CORE_SIG)) { // core dump not implemented
             klog(LOG_INFO, "Process %d received termination signal %d, exiting\n", current->pid, sig);
@@ -40,6 +46,9 @@ int handle_signal(void)
     } else {
         klog(LOG_DEBUG, "Delivering signal %d to process %d\n", sig, current->pid);
         arch_prepare_signal(ka->sa.sa_handler, sig);
+        current->blocked |= ka->sa.sa_mask;
+        if (!(ka->sa.sa_flags & SA_NODEFER))
+            current->blocked |= sig_bit;
     }
 
     return 0;
@@ -59,6 +68,20 @@ int do_raise(struct task *p, int sig)
         klog(LOG_ERROR, "Invalid signal %d\n", sig);
         return -EINVAL;
     }
+
+    sigset_t pending = p->pending.signal;
+    struct ksigaction *ka = &p->sighandlers->actions[sig];
+
+    if (sig & pending) {
+        klog(LOG_DEBUG, "Signal %d already pending for process %d\n", sig, p->pid);
+        return 0; // Signal already pending
+    }
+
+    if (ka->sa.sa_handler == SIG_IGN) {
+        klog(LOG_DEBUG, "Signal %d ignored by process %d\n", sig, p->pid);
+        return (int)SIG_IGN; // Ignored signal
+    }
+
     p->pending.signal |= (1 << sig);
     p->flags.sig_pending = 1;
     return 0;
@@ -99,10 +122,11 @@ SYSCALL_DECL2(signal, int, sig, __sighandler_t, handler)
     }
 
     struct ksigaction *ka = &current->sighandlers->actions[sig];
+    __sighandler_t old_handler = ka->sa.sa_handler;
     ka->sa.sa_handler = handler;
 
     klog(LOG_DEBUG, "Signal %d handler set to %p\n", sig, handler);
-    return 0;
+    return (long)old_handler;
 }
 
 SYSCALL_DECL3(sigaction, int, signum, const struct sigaction *, act, struct sigaction *, oldact)
@@ -136,5 +160,53 @@ SYSCALL_DECL3(sigaction, int, signum, const struct sigaction *, act, struct siga
     }
 
     klog(LOG_DEBUG, "sigaction: Signal %d action updated\n", signum);
+    return 0;
+}
+
+SYSCALL_DECL3(sigprocmask, int, how, const sigset_t *, set, sigset_t *, oldset)
+{
+    if (set && !access_ok(set, sizeof(sigset_t))) {
+        klog(LOG_WARN, "sigprocmask: Invalid user memory for new mask\n");
+        return -EFAULT;
+    }
+    if (oldset && !access_ok(oldset, sizeof(sigset_t))) {
+        klog(LOG_WARN, "sigprocmask: Invalid user memory for old mask\n");
+        return -EFAULT;
+    }
+
+    if (oldset) {
+        *oldset = current->blocked;
+    }
+
+    if (set) {
+        sigset_t new_mask = *set;
+        switch (how) {
+            case SIG_BLOCK:
+                current->blocked |= new_mask;
+                break;
+            case SIG_UNBLOCK:
+                current->blocked &= ~new_mask;
+                break;
+            case SIG_SETMASK:
+                current->blocked = new_mask;
+                break;
+            default:
+                return -EINVAL;
+        }
+        klog(LOG_DEBUG, "sigprocmask: Updated signal mask to 0x%lx\n", current->blocked);
+    }
+
+    return 0;
+}
+
+SYSCALL_DECL1(sigpending, sigset_t *, set)
+{
+    if (!access_ok(set, sizeof(sigset_t))) {
+        klog(LOG_WARN, "sigpending: Invalid user memory for pending signals\n");
+        return -EFAULT;
+    }
+
+    *set = current->pending.signal;
+    klog(LOG_DEBUG, "sigpending: Pending signals for process %d: 0x%lx\n", current->pid, *set);
     return 0;
 }
