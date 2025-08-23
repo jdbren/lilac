@@ -74,7 +74,8 @@
 	mov  4(%ebp), %eax
 	push %eax
 	call \name\()_handler
-	addl $12, %esp # err code and vals
+	add  $12, %esp # err code and vals
+	call x86_kernel_exit
 	popa
 	pop  %ebp
 	iret
@@ -85,12 +86,13 @@
 	.global \name
 	\name:
 	push %ebp
-	mov %esp, %ebp
+	mov  %esp, %ebp
 	pusha
-	mov 4(%ebp), %eax
+	lea  4(%ebp), %eax
 	push %eax
 	call \name\()_handler
-	addl  $4, %esp
+	add  $4, %esp
+	call x86_kernel_exit
 	popa
 	pop %ebp
 	iret
