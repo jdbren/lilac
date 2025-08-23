@@ -3,7 +3,9 @@
 #ifndef KERNEL_PANIC_H
 #define KERNEL_PANIC_H
 
+#include <lilac/config.h>
 #include <lilac/log.h>
+#include <lilac/libc.h>
 
 void print_bitmap(void);
 
@@ -13,12 +15,7 @@ void print_bitmap(void);
 #define assert(x) ((void)0)
 #endif
 
-[[noreturn]] static inline void kerror(const char *msg) {
-	klog(LOG_FATAL, "Kernel panic: %s\n", msg);
-	// print_bitmap();
-	asm("cli");
-	while (1)
-		asm("hlt");
-}
+__noreturn void kerror(const char *msg, ...);
+#define panic(msg, ...) kerror(msg __VA_OPT__(,) __VA_ARGS__)
 
 #endif

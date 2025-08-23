@@ -288,8 +288,12 @@ SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
 #endif
 
     file = get_file_handle(fd);
-    if (IS_ERR(file))
+    if (IS_ERR(file)) {
+#ifdef DEBUG_VFS
+        klog(LOG_DEBUG, "syscall read: Invalid fd %d\n", fd);
+#endif
         return PTR_ERR(file);
+    }
 
     kbuf = kmalloc(count);
     if (!kbuf)
@@ -330,9 +334,12 @@ SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
 #endif
 
     file = get_file_handle(fd);
-    if (IS_ERR(file))
+    if (IS_ERR(file)) {
+#ifdef DEBUG_VFS
+        klog(LOG_DEBUG, "syscall write: Invalid fd %d\n", fd);
+#endif
         return PTR_ERR(file);
-
+    }
     kbuf = kmalloc(count);
     if (!kbuf)
         return -ENOMEM;

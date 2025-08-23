@@ -41,4 +41,6 @@ struct vm_desc {
 int umem_alloc(uintptr_t vaddr, int num_pages);
 void vma_list_insert(struct vm_desc *vma, struct vm_desc **list);
 
+void * sbrk(intptr_t increment);
+
 #endif

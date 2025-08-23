@@ -231,8 +231,7 @@ void schedule(void)
     }
 
     if (next->state != TASK_RUNNING) {
-        klog(LOG_FATAL, "Task %d is not running\n", next->pid);
-        kerror("");
+        panic("Task %d is not running\n", next->pid);
     }
 
     // Simple way to make sure all tasks get to run

@@ -6,7 +6,6 @@ enum LOG_LEVEL {
     LOG_INFO,
     LOG_WARN,
     LOG_ERROR,
-    LOG_FATAL
 };
 
 enum LOG_STATUS {

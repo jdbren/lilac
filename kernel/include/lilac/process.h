@@ -99,9 +99,9 @@ struct mm_info {
     uintptr_t start_data, end_data;
     uintptr_t brk;
     uintptr_t start_stack;
-    // u32 arg_start, arg_end;
-    // u32 env_start, env_end;
-    u32 total_vm;
+    uintptr_t arg_start, arg_end;
+    uintptr_t env_start, env_end;
+    size_t total_vm;
 };
 
 struct task *init_process(void);

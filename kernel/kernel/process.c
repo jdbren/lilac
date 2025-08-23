@@ -115,18 +115,19 @@ static void set_vm_areas(struct mm_info *mem)
 #endif
 }
 
-static void * prepare_task_args(struct task *p, uintptr_t *stack)
+static unsigned int prepare_task_args(struct task *p, char **argv, char *argv_loc, char *argv_max)
 {
     // Write args to user stack
-    u32 argc = 0;
-    char **argv = (char**)(stack);
+    unsigned int argc = 0;
+    p->mm->arg_start = (uintptr_t)argv_loc;
     for (; p->info.argv[argc] && argc < 31; argc++) {
         u32 len = strlen(p->info.argv[argc]) + 1;
-        len = (len + sizeof(void*)-1) & ~(sizeof(void*)-1); // Align stack
-        stack = (void*)((uintptr_t)stack - len);
-        strcpy((char*)stack, p->info.argv[argc]);
-        argv[argc] = (char*)stack;
+        strcpy(argv_loc, p->info.argv[argc]);
+        argv[argc] = argv_loc;
+        argv_loc += len;
+        assert(argv_loc < argv_max);
     }
+    p->mm->arg_end = (uintptr_t)argv_loc;
     argv[argc] = NULL;
 
     // Print the arguments
@@ -134,13 +135,28 @@ static void * prepare_task_args(struct task *p, uintptr_t *stack)
         klog(LOG_DEBUG, "Arg %d: %s\n", i, argv[i]);
     }
 
-    // Align stack
-    stack = (void*)((uintptr_t)stack & ~(sizeof(void*)*2 - 1));
-    *--stack = (uintptr_t)argv;
-    *--stack = argc;
+    return argc;
+}
 
-    assert(is_aligned(stack, sizeof(void*)*2));
-    return stack;
+static void prepare_task_env(struct task *p, char **envp, char *env_loc, char *env_max)
+{
+    // Write env to user stack
+    u32 envc = 0;
+    p->mm->env_start = (uintptr_t)env_loc;
+    for (; p->info.envp[envc] && envc < 31; envc++) {
+        u32 len = strlen(p->info.envp[envc]) + 1;
+        strcpy(env_loc, p->info.envp[envc]);
+        envp[envc] = env_loc;
+        env_loc = env_loc + len;
+        assert(env_loc < env_max);
+    }
+    p->mm->env_end = (uintptr_t)env_loc;
+    envp[envc] = NULL;
+
+    // Print the environment variables
+    for (u32 i = 0; i < envc; i++) {
+        klog(LOG_DEBUG, "Env %d: %s\n", i, envp[i]);
+    }
 }
 
 static void start_process(void)
@@ -149,6 +165,10 @@ static void start_process(void)
     klog(LOG_DEBUG, "Process %d starting\n", current->pid);
 
     void *jmp = load_executable(current);
+    if (!jmp) {
+        klog(LOG_ERROR, "Failed to load executable, exiting\n");
+        exit(1);
+    }
 
     struct vm_desc *desc = mem->mmap;
     while (desc) { // after the data segment, this seems imprecise?
@@ -160,16 +180,34 @@ static void start_process(void)
     mem->start_stack = (uintptr_t)arch_user_stack();
     set_vm_areas(mem);
 
-    uintptr_t *stack = (void*)(__USER_STACK - 128); // Will place argv entries here
-    if (!current->info.argv) {
-        *--stack = 0;
-        *--stack = 0;
-        goto skip;
+    uintptr_t argv, argc, envp;
+    char *env_loc = (char*)mem->brk;
+    char *arg_loc = env_loc + 0x1400;
+    sbrk(0x2000);
+
+    uintptr_t *stack = (void*)(__USER_STACK - sizeof(void*)*16);
+    if (!current->info.envp) {
+        envp = 0;
     } else {
-        stack = prepare_task_args(current, stack);
+        envp = (uintptr_t)stack;
+        prepare_task_env(current, (char**)stack, env_loc, arg_loc);
     }
 
-skip:
+    stack = (void*)((uintptr_t)stack - sizeof(void*)*32);
+    if (!current->info.argv) {
+        argv = 0;
+        argc = 0;
+    } else {
+        argv = (uintptr_t)stack;
+        argc = prepare_task_args(current, (char**)stack, arg_loc, arg_loc + 0xc00);
+    }
+
+    stack = (void*)((uintptr_t)stack & ~(sizeof(void*)*2 - 1));
+    --stack;
+    *--stack = envp;
+    *--stack = argv;
+    *--stack = argc;
+
     klog(LOG_DEBUG, "Going to user mode, jmp = %p, stack = %p\n", jmp, stack);
     jump_usermode(jmp, (void*)stack, current->kstack);
 }
@@ -191,7 +229,10 @@ struct task *init_process(void)
     this->fs.files.max = 4;
     this->fs.root_d = get_root_dentry();
     this->fs.cwd_d = this->fs.root_d;
-    this->info.path = "/sbin/init";
+    this->info.path = strdup("/sbin/init");
+    this->info.argv = kcalloc(2, sizeof(char*));
+    this->info.argv[0] = strdup("init");
+    this->info.envp = kcalloc(1, sizeof(char*));
     memcpy(this->name, "init", 5);
     this->sighandlers = alloc_sighandlers();
     INIT_LIST_HEAD(&this->children);
@@ -254,6 +295,7 @@ static struct task * clone_process(struct task *parent)
 
     child->info.path = strdup(parent->info.path);
     child->info.argv = NULL;
+    child->info.envp = NULL;
     fget(child->info.exec_file);
     copy_fs_info(&child->fs, &parent->fs);
 
@@ -303,7 +345,7 @@ static void exec_and_return(void)
     task->state = TASK_RUNNING;
 
     jump_new_proc(task);
-    kerror("exec_and_return: Should never be reached\n");
+    panic("exec_and_return: Should never be reached\n");
     unreachable();
 }
 
@@ -330,16 +372,39 @@ static int set_task_args(struct task_info *info, char *const argv[])
     return 0;
 }
 
+static int set_task_env(struct task_info *info, char *const envp[])
+{
+    int i, err = 0;
+    if (info->envp) {
+        for (i = 0; info->envp[i]; i++)
+            kfree(info->envp[i]);
+        kfree(info->envp);
+    }
+    for (i = 0; envp[i]; i++) {
+        ssize_t len = strnlen_user(envp[i], 127) + 1;
+        if (len < 0)
+            return -EFAULT;
+        info->envp = krealloc(info->envp, (i + 1) * sizeof(char*));
+        info->envp[i] = kmalloc(len + 1);
+        err = strncpy_from_user(info->envp[i], envp[i], len + 1);
+        if (err < 0)
+            return err;
+    }
+    info->envp = krealloc(info->envp, (i + 1) * sizeof(char*));
+    info->envp[i] = 0;
+    return 0;
+}
+
 static int do_execve(const char *path, char *const argv[], char *const envp[])
 {
     struct task_info *info = &current->info;
     struct file *file = vfs_open(path, 0, 0);
 
     if (IS_ERR_OR_NULL(file)) {
-        klog(LOG_ERROR, "file %s not found\n", path);
+        klog(LOG_DEBUG, "file %s not found\n", path);
         return PTR_ERR(file);
     } else if (file->f_dentry->d_inode->i_type != TYPE_FILE) {
-        klog(LOG_ERROR, "file %s is not a regular file\n", path);
+        klog(LOG_DEBUG, "file %s is not a regular file\n", path);
         vfs_close(file);
         return -EACCES;
     } else {
@@ -357,6 +422,13 @@ static int do_execve(const char *path, char *const argv[], char *const envp[])
         return err;
     }
 
+    err = set_task_env(info, envp);
+    if (err) {
+        klog(LOG_ERROR, "Failed to set task environment\n");
+        vfs_close(file);
+        return err;
+    }
+
     klog(LOG_INFO, "Executing %s\n", info->path);
     exec_and_return();
     unreachable();
@@ -365,6 +437,9 @@ static int do_execve(const char *path, char *const argv[], char *const envp[])
 SYSCALL_DECL3(execve, const char*, path, char* const*, argv, char* const*, envp)
 {
     int err = 0;
+    if (!access_ok(path, 1) || !access_ok(argv, 1) || !access_ok(envp, 1))
+        return -EFAULT;
+
     char *path_buf = kmalloc(256);
     if (!path_buf)
         return -ENOMEM;
@@ -451,6 +526,8 @@ void reap_task(struct task *p)
 __noreturn void do_exit(void)
 {
     struct task *parent = NULL;
+    if (unlikely(current->pid == 1))
+        panic("Init tried to exit!\n");
     if (current->parent_wait || current->parent->waiting_any)
         parent = current->parent;
     cleanup_task(current);
@@ -466,7 +543,7 @@ __noreturn void exit(int status)
     current->exit_status = WEXITED(status);
     klog(LOG_INFO, "Process %d exited with status %d\n", current->pid, status);
     do_exit();
-    kerror("exit: Should never be reached\n");
+    panic("exit: Should never be reached\n");
     unreachable();
 }
 SYSCALL_DECL1(exit, int, status)
