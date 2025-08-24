@@ -2,7 +2,7 @@
 #include <lilac/err.h>
 #include <lilac/sync.h>
 #include <drivers/blkdev.h>
-#include <mm/kmalloc.h>
+#include <lilac/kmalloc.h>
 
 struct super_block * alloc_sb(struct block_device *bdev)
 {

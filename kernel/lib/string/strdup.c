@@ -1,5 +1,5 @@
 #include <lilac/libc.h>
-#include <mm/kmalloc.h>
+#include <lilac/kmalloc.h>
 
 char *strdup(const char *str)
 {

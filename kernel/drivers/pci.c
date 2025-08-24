@@ -5,8 +5,8 @@
 #include <lilac/device.h>
 #include <lilac/port.h>
 #include <lilac/panic.h>
-#include <mm/kmm.h>
-#include <mm/kmalloc.h>
+#include <lilac/kmm.h>
+#include <lilac/kmalloc.h>
 #include <drivers/ahci.h>
 
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"

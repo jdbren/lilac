@@ -6,7 +6,7 @@
 #include <lilac/process.h>
 #include <lilac/sched.h>
 #include <lilac/syscall.h>
-#include <mm/kmm.h>
+#include <lilac/kmm.h>
 
 
 void* mmap_internal(void *addr, unsigned long len, u32 prot, u32 flags,

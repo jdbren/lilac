@@ -7,8 +7,8 @@
 #include <lilac/panic.h>
 #include <lilac/config.h>
 #include <lilac/mm.h>
-#include <mm/kmm.h>
-#include <mm/kmalloc.h>
+#include <lilac/kmm.h>
+#include <lilac/kmalloc.h>
 #include "pgframe.h"
 #include "paging.h"
 #include <asm/regs.h>

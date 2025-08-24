@@ -8,7 +8,7 @@
 #include <lilac/wait.h>
 #include <lilac/fs.h>
 #include <drivers/framebuffer.h>
-#include <mm/kmm.h>
+#include <lilac/kmm.h>
 #include <utility/keymap.h>
 
 #include <cpuid.h>

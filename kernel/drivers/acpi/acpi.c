@@ -7,8 +7,8 @@
 #include <acpi/acpi.h>
 #include <acpi/madt.h>
 #include <acpi/hpet.h>
-#include <mm/kmm.h>
-#include <mm/kmalloc.h>
+#include <lilac/kmm.h>
+#include <lilac/kmalloc.h>
 #include "acpica/acpi.h"
 
 enum ACPI_BRIDGE_TYPE {

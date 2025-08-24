@@ -16,8 +16,8 @@
 #include <lilac/port.h>
 #include <lilac/process.h>
 #include <lilac/timer.h>
-#include <mm/kmm.h>
-#include <mm/kmalloc.h>
+#include <lilac/kmm.h>
+#include <lilac/kmalloc.h>
 #include <drivers/pci.h>
 #include "acpica/acpi.h"
 

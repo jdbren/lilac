@@ -1,7 +1,7 @@
 #include <lilac/fs.h>
 
 #include <lilac/log.h>
-#include <mm/kmalloc.h>
+#include <lilac/kmalloc.h>
 
 #define L1_CACHE_BYTES 64
 

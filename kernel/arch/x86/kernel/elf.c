@@ -6,7 +6,7 @@
 #include <lilac/libc.h>
 #include <lilac/process.h>
 #include <lilac/mm.h>
-#include <mm/kmm.h>
+#include <lilac/kmm.h>
 #include "paging.h"
 #include "pgframe.h"
 

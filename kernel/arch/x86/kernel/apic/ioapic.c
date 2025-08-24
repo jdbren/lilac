@@ -5,8 +5,8 @@
 #include <lilac/libc.h>
 #include <lilac/log.h>
 #include <acpi/madt.h>
-#include <mm/kmalloc.h>
-#include <mm/kmm.h>
+#include <lilac/kmalloc.h>
+#include <lilac/kmm.h>
 #include "apic.h"
 #include "pic.h"
 

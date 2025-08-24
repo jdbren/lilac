@@ -1,8 +1,8 @@
 #include <drivers/framebuffer.h>
 #include <lilac/lilac.h>
 #include <lilac/font.h>
-#include <mm/kmm.h>
-#include <mm/kmalloc.h>
+#include <lilac/kmm.h>
+#include <lilac/kmalloc.h>
 #include <utility/termius.h>
 
 #include <lilac/console.h>

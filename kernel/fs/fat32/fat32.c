@@ -9,8 +9,8 @@
 #include <lilac/list.h>
 #include <lilac/libc.h>
 #include <drivers/blkdev.h>
-#include <mm/kmm.h>
-#include <mm/kmalloc.h>
+#include <lilac/kmm.h>
+#include <lilac/kmalloc.h>
 
 #include "fat_internal.h"
 

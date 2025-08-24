@@ -4,7 +4,7 @@
 #include <lilac/syscall.h>
 #include <lilac/err.h>
 #include <lilac/log.h>
-#include <mm/kmalloc.h>
+#include <lilac/kmalloc.h>
 #include <lilac/uaccess.h>
 #include <drivers/blkdev.h>
 

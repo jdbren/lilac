@@ -1,7 +1,7 @@
 #include <lilac/file.h>
 #include <lilac/fs.h>
 #include <lilac/err.h>
-#include <mm/kmalloc.h>
+#include <lilac/kmalloc.h>
 
 struct file * alloc_file(struct dentry *d)
 {

@@ -6,7 +6,7 @@
 #include <lilac/lilac.h>
 #include <lilac/process.h>
 #include <lilac/syscall.h>
-#include <mm/kmm.h>
+#include <lilac/kmm.h>
 
 extern uintptr_t stack_top;
 

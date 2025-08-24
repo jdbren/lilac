@@ -12,8 +12,8 @@
 #include <lilac/timer.h>
 #include <lilac/syscall.h>
 #include <lilac/mm.h>
-#include <mm/kmm.h>
-#include <mm/kmalloc.h>
+#include <lilac/kmm.h>
+#include <lilac/kmalloc.h>
 
 #define INIT_STACK(KSTACK) ((uintptr_t)KSTACK + __KERNEL_STACK_SZ - sizeof(size_t))
 

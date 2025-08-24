@@ -2,7 +2,7 @@
 #include <lilac/boot.h>
 #include <lilac/keyboard.h>
 #include <drivers/framebuffer.h>
-#include <mm/kmm.h>
+#include <lilac/kmm.h>
 #include <asm/cpu-flags.h>
 #include <asm/msr.h>
 #include <asm/segments.h>
