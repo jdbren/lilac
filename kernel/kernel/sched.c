@@ -128,7 +128,11 @@ void rq_add(struct task *p)
 
 void set_task_running(struct task *p)
 {
-    if (p->state == TASK_SLEEPING) {
+    if (p->state == TASK_ZOMBIE) {
+        panic("Tried to wake up a zombie process %d\n", p->pid);
+    }
+
+    if (p->state != TASK_RUNNING) {
         p->state = TASK_RUNNING;
         if (!p->on_rq)
             rq_add(p);

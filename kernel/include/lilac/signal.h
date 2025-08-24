@@ -88,6 +88,9 @@ typedef struct ucontext {
 
 struct task;
 
+#define signal_blocked(t, sig) ((t)->blocked & (1 << (sig)))
+#define signal_pending(t) ((t)->flags.sig_pending)
+
 int do_raise(struct task *p, int sig);
 int handle_signal(void);
 

@@ -84,6 +84,12 @@ int do_raise(struct task *p, int sig)
 
     p->pending.signal |= (1 << sig);
     p->flags.sig_pending = 1;
+
+    if (p->state == TASK_SLEEPING && !signal_blocked(p, sig)) {
+        klog(LOG_DEBUG, "Waking up process %d for signal %d\n", p->pid, sig);
+        set_task_running(p);
+    }
+
     return 0;
 }
 

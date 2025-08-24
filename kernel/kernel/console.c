@@ -157,6 +157,8 @@ ssize_t console_read(struct file *file, void *buf, size_t count)
         if (con->input.rpos == con->input.wpos) {
             klog(LOG_DEBUG, "console_read: proc %d waiting for input\n", get_pid());
             sleep_on(&console_wq);
+            if (con->input.rpos == con->input.wpos) // interrupted
+                return -EINTR;
         }
 
         c = con->input.buf[con->input.rpos++ % INPUT_BUF_SIZE];

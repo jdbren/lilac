@@ -37,9 +37,11 @@ static void add_wait_entry(struct wq_entry *wait, struct waitqueue *wq)
 
 static void remove_wait_entry(struct wq_entry *wait, struct waitqueue *wq)
 {
-    acquire_lock(&wq->lock);
-    list_del(&wait->entry);
-    release_lock(&wq->lock);
+    if (!list_empty(&wait->entry)) {
+        acquire_lock(&wq->lock);
+        list_del_init(&wait->entry);
+        release_lock(&wq->lock);
+    }
 }
 
 static struct wq_entry *find_waiting_task(struct waitqueue *wq, int pid)
@@ -56,6 +58,13 @@ static struct wq_entry *find_waiting_task(struct waitqueue *wq, int pid)
     return NULL;
 }
 
+// Called by task when it wakes in case it was interrupted while waiting
+void finish_wait(struct waitqueue *wq, struct wq_entry *wq_ent)
+{
+    set_task_running(current);
+    remove_wait_entry(wq_ent, wq);
+    release_wq_entry(wq_ent);
+}
 
 static void sleep_task_on(struct task *p, struct waitqueue *wq)
 {
@@ -67,6 +76,8 @@ static void sleep_task_on(struct task *p, struct waitqueue *wq)
         return;
     }
     add_wait_entry(wait, wq);
+    yield();
+    finish_wait(wq, wait);
 }
 
 static pid_t wait_for(struct task *p, int *status, bool nohang)
@@ -77,18 +88,17 @@ static pid_t wait_for(struct task *p, int *status, bool nohang)
             return 0;
         }
         klog(LOG_DEBUG, "Process %d: Waiting for task %d\n", get_pid(), p->pid);
-        sleep_task_on(current, &wait_q);
         p->parent_wait = true;
-        yield();
+        sleep_task_on(current, &wait_q);
     }
 
     pid_t pid = p->pid;
     if (status)
         *status = p->exit_status;
     reap_task(p);
-    klog(LOG_DEBUG, "Task %d has exited, continuing task %d\n", p->pid, get_pid());
+    klog(LOG_DEBUG, "Task %d has exited, continuing task %d\n", pid, get_pid());
     kfree(p);
-    return 0;
+    return pid;
 }
 
 static struct task * find_exited_child(struct task *parent, int pid)
@@ -125,7 +135,6 @@ static pid_t wait_any(int *status, bool nohang)
     // No child has exited yet, so wait for one
     current->waiting_any = true;
     sleep_task_on(current, &wait_q);
-    yield();
 
     // After being woken up, check for exited children again
     child = find_exited_child(current, WAIT_ANY);
@@ -161,7 +170,6 @@ SYSCALL_DECL3(waitpid, int, pid, int*, status, int, options)
 void sleep_on(struct waitqueue *wq)
 {
     sleep_task_on(current, wq);
-    yield();
 }
 
 static void wakeup_by_pid_on(int pid, struct waitqueue *wq)
@@ -171,7 +179,6 @@ static void wakeup_by_pid_on(int pid, struct waitqueue *wq)
         return;
     remove_wait_entry(wq_ent, wq);
     set_task_running(wq_ent->task);
-    release_wq_entry(wq_ent);
 }
 
 struct task * wake_first(struct waitqueue *wq)
@@ -179,18 +186,15 @@ struct task * wake_first(struct waitqueue *wq)
     struct wq_entry *wait = NULL;
     struct task *task = NULL;
 
-    acquire_lock(&wq->lock);
     if (!list_empty(&wq->task_list)) {
         wait = list_first_entry(&wq->task_list, struct wq_entry, entry);
-        list_del(&wait->entry);
         task = wait->task;
-        release_wq_entry(wait);
+        remove_wait_entry(wait, wq);
     }
-    release_lock(&wq->lock);
 
-    if (task) {
+    if (task)
         set_task_running(task);
-    }
+
     return task;
 }
 
