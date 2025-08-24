@@ -150,6 +150,36 @@ void set_task_sleeping(struct task *p)
     }
 }
 
+void set_task_uninterruptible(struct task *p)
+{
+    if (p->state == TASK_RUNNING) {
+        if (p->on_rq)
+            rq_del(p);
+        p->state = TASK_UNINTERRUPTIBLE;
+        klog(LOG_DEBUG, "Task %d is now uninterruptible\n", p->pid);
+    }
+}
+
+void set_current_state(u8 state)
+{
+    switch (state) {
+        case TASK_RUNNING:
+            set_task_running(current);
+            break;
+        case TASK_SLEEPING:
+            set_task_sleeping(current);
+            break;
+        case TASK_UNINTERRUPTIBLE:
+            set_task_uninterruptible(current);
+            break;
+        case TASK_ZOMBIE:
+            current->state = TASK_ZOMBIE;
+            if (current->on_rq)
+                rq_del(current);
+            break;
+    }
+}
+
 void yield(void)
 {
     sched_timer = timer_reset;

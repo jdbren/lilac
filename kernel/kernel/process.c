@@ -21,7 +21,7 @@ static int num_tasks;
 
 void exit(int status);
 
-inline u32 get_pid(void)
+inline int get_pid(void)
 {
     return current->pid;
 }

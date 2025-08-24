@@ -14,10 +14,7 @@ typedef atomic_flag spinlock_t;
 #define pause __builtin_ia32_pause
 #endif
 
-static inline void spin_lock_init(spinlock_t *spin)
-{
-    atomic_flag_clear(spin);
-}
+#define spin_lock_init(spin) atomic_flag_clear(spin);
 
 static inline void acquire_lock(spinlock_t *spin)
 {
@@ -45,18 +42,20 @@ void sem_wait_timeout(sem_t *sem, int timeout);
 void sem_post(sem_t *sem);
 
 
+struct mutex_waiter {
+    struct list_head list;
+    struct task *t;
+};
 
-typedef volatile struct mutex {
-    atomic_int owner;
+typedef struct mutex {
+    atomic_long owner;
     struct list_head waiters;
-    atomic_bool locked;
+    spinlock_t wait_lock;
 } mutex_t;
 
 void mutex_init(mutex_t *mutex);
 void mutex_lock(mutex_t *mutex);
 void mutex_unlock(mutex_t *mutex);
 void mutex_destroy(mutex_t *mutex);
-
-#define MUTEX_INIT { .owner = -1, .locked = false }
 
 #endif

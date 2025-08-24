@@ -107,7 +107,7 @@ struct mm_info {
 };
 
 struct task *init_process(void);
-u32 get_pid(void);
+int get_pid(void);
 void reap_task(struct task *p);
 __noreturn void do_exit(void);
 
