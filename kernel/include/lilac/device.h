@@ -88,7 +88,7 @@ static inline struct device *device_alloc(void)
 }
 
 struct file_operations;
-int add_device(const char *, struct file_operations *);
-
+struct inode_operations;
+int add_device(const char *, const struct file_operations *, const struct inode_operations *);
 
 #endif

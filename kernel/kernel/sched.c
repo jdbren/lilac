@@ -26,7 +26,7 @@ static struct sighandlers root_sighand = {
     }
 };
 
-static struct task root = {
+struct task __root = {
     .state = TASK_RUNNING,
     .name = "idle",
     .priority = 20,
@@ -53,8 +53,8 @@ static struct rq rqs[4] = {
         .lock = SPINLOCK_INIT,
         .cpu = 0,
         .nr_running = 0,
-        .curr = &root,
-        .idle = &root,
+        .curr = &__root,
+        .idle = &__root,
         .queue = RB_ROOT_CACHED,
     }
 };
@@ -199,10 +199,10 @@ void schedule_task(struct task *new_task)
 
 void sched_init(void)
 {
-    rqs[0].idle = &root;
-    rqs[0].curr = &root;
+    rqs[0].idle = &__root;
+    rqs[0].curr = &__root;
     rqs[0].nr_running = 1;
-    root.pgd = arch_get_pgd();
+    __root.pgd = arch_get_pgd();
     struct task *pid1 = init_process();
     schedule_task(pid1);
     timer_reset = 100;

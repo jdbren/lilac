@@ -1,40 +1,33 @@
 #include <lilac/console.h>
+#include <lilac/tty.h>
 #include <lilac/lilac.h>
 #include <lilac/keyboard.h>
-#include <lilac/signal.h>
 #include <lilac/timer.h>
 #include <lilac/device.h>
-#include <lilac/sched.h>
-#include <lilac/wait.h>
 #include <lilac/fs.h>
 #include <drivers/framebuffer.h>
 #include <lilac/kmm.h>
-#include <utility/keymap.h>
 
 #include <cpuid.h>
 
 
-static struct console consoles[5] = {0};
-static unsigned active_console = 0;
 #if (!defined(DEBUG_KMM) && !defined(DEBUG_PAGING))
 int write_to_screen = 1;
 #else
 int write_to_screen = 0;
 #endif
 
-struct file_operations console_fops = {
-    .read = console_read,
-    .write = console_write
+static struct console console = {
+    .lock = SPINLOCK_INIT,
+    .cx = 0,
+    .cy = 0,
+    .height = 30,
+    .width = 80,
+    .list = LIST_HEAD_INIT(console.list),
+    .data = NULL,
+    .file = NULL
 };
 
-void init_con(int num)
-{
-    struct console *con = &consoles[num];
-    con->cx = 0;
-    con->cy = 0;
-    con->height = 30;
-    con->width = 80;
-}
 
 void console_newline(struct console *con)
 {
@@ -82,12 +75,21 @@ void console_clear(struct console *con)
     con->cy = 0;
 }
 
+ssize_t console_write(struct file *file, const void *buf, size_t count)
+{
+    char *bufp = (char*)buf;
+    struct console *con = &console;
+    acquire_lock(&con->lock);
+    for (size_t i = 0; i < count; i++)
+        console_putchar(con, bufp[i] & 0xff);
+    release_lock(&con->lock);
+    return count;
+}
+
 void console_init(void)
 {
-    add_device("/dev/console", &console_fops);
-    set_console(1);
-
-    struct console *con = &consoles[active_console];
+    // add_device("/dev/console", &console_fops);
+    struct console *con = &console;
 
     console_clear(con);
     graphics_setcolor(RGB_MAGENTA, RGB_BLACK);
@@ -137,59 +139,16 @@ void console_init(void)
     write_to_screen = 0;
 }
 
-
-static struct waitqueue console_wq = {
-    .lock = SPINLOCK_INIT,
-    .task_list = LIST_HEAD_INIT(console_wq.task_list)
-};
-
-ssize_t console_read(struct file *file, void *buf, size_t count)
+int fbcon_open(struct tty *tty, struct file *file)
 {
-    u32 target;
-    int c;
-    char cbuf;
-    struct console *con = &consoles[active_console];
-
-    target = count;
-    while(count > 0) {
-        // wait until interrupt handler has put some
-        // input into cons.buffer.
-        if (con->input.rpos == con->input.wpos) {
-            klog(LOG_DEBUG, "console_read: proc %d waiting for input\n", get_pid());
-            sleep_on(&console_wq);
-            if (con->input.rpos == con->input.wpos) // interrupted
-                return -EINTR;
-        }
-
-        c = con->input.buf[con->input.rpos++ % INPUT_BUF_SIZE];
-
-        // if(c == C('D')){  // end-of-file
-        //     if(count < target){
-        //         // Save ^D for next time, to make sure
-        //         // caller gets a 0-byte result.
-        //         con.rpos--;
-        //     }
-        //     break;
-        // }
-
-        // copy the input byte to the buffer.
-        cbuf = c;
-        memcpy(buf, &cbuf, 1);
-
-        buf++;
-        --count;
-
-        if(c == '\n')
-            break;
-    }
-
-    return target - count;
+    tty->console = &console;
+    return 0;
 }
 
-ssize_t console_write(struct file *file, const void *buf, size_t count)
+ssize_t fbcon_write(struct tty *tty, const u8 *buf, size_t count)
 {
     char *bufp = (char*)buf;
-    struct console *con = &consoles[active_console];
+    struct console *con = tty->console;
     acquire_lock(&con->lock);
     for (size_t i = 0; i < count; i++)
         console_putchar(con, bufp[i] & 0xff);
@@ -197,59 +156,8 @@ ssize_t console_write(struct file *file, const void *buf, size_t count)
     return count;
 }
 
-void console_intr(struct kbd_event event)
-{
-    char c = keyboard_map[event.keycode];
-    struct console *con = &consoles[active_console];
-
-    if (event.status & KB_ALT) {
-        // if (c == '1')
-        //     graphics_setfb(0);
-        // else if (c == '2')
-        //     graphics_setfb(1);
-        // return;
-    } else if (event.status & KB_CTRL) {
-        switch(c) {
-        case 'c':
-            if (!do_raise(current, SIGINT))
-                console_writestring(con, "^C");
-            break;
-        case 'd':
-            console_writestring(con, "^D");
-            break;
-        case '\\':
-            if (!do_raise(current, SIGQUIT))
-                console_writestring(con, "^\\");
-            break;
-        }
-        return;
-    } else if (event.status & KB_SHIFT) {
-        c = keyboard_map_shift[event.keycode];
-    }
-    switch(c) {
-    case '\b': // Backspace
-    case '\x7f': // Delete key
-        if(con->input.epos > con->input.wpos) {
-            con->input.epos--;
-            console_putchar(con, c);
-        }
-    break;
-    default:
-        if (c != 0 && con->input.epos - con->input.rpos < INPUT_BUF_SIZE) {
-            c = (c == '\r') ? '\n' : c;
-
-            // store for consumption by consoleread().
-            con->input.buf[con->input.epos++ % INPUT_BUF_SIZE] = c;
-
-            // echo back to the user.
-            console_putchar(con, c);
-
-            if (c == '\n' || con->input.epos - con->input.rpos == INPUT_BUF_SIZE) {
-                // wake up console_read() if a whole line (or end-of-file)
-                // has arrived.
-                con->input.wpos = con->input.epos;
-                wake_first(&console_wq);
-            }
-        }
-    }
-}
+const struct tty_operations fbcon_tty_ops = {
+    .open = fbcon_open,
+    .close = NULL,
+    .write = fbcon_write,
+};

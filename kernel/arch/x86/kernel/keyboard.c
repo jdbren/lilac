@@ -3,14 +3,12 @@
 #include <lilac/keyboard.h>
 
 #include <asm/segments.h>
-#include <asm/msr.h>
 #include <lilac/log.h>
-#include <lilac/console.h>
+#include <lilac/tty.h>
 #include <drivers/framebuffer.h>
 #include <utility/keymap.h>
 #include "idt.h"
 #include "io.h"
-#include "pic.h"
 #include "apic.h"
 
 unsigned char keyboard_map[128] = {
@@ -89,7 +87,6 @@ unsigned char keyboard_map_shift[128] = {
 
 #define KEYBOARD_DATA_PORT 0x60
 
-static int console = 0;
 static volatile u8 key_status_map[256];
 
 #define SHIFT_PRESSED 0x2A
@@ -100,15 +97,7 @@ static volatile u8 key_status_map[256];
 #define ALT_RELEASED 0xB8
 #define CAPS_LOCK 0x3A
 
-inline u8 keyboard_read(void)
-{
-    return inb(KEYBOARD_DATA_PORT);
-}
 
-inline void set_console(int value)
-{
-    console = value;
-}
 
 extern void kbd_handler(void);
 
@@ -147,11 +136,23 @@ void keyboard_int(void)
 
     if (keycode < sizeof keyboard_map && keyboard_map[keycode]) {
         u8 status = key_status_map[SHIFT_PRESSED] | key_status_map[CTRL_PRESSED] | key_status_map[ALT_PRESSED];
+        char c;
+
         if (key_status_map[CAPS_LOCK])
             status |= KB_CAPSLOCK;
 
-        if (console)
-            console_intr((struct kbd_event){keycode, status});
+        if (status & KB_SHIFT)
+            c = keyboard_map_shift[keycode];
+        else
+            c = keyboard_map[keycode];
+
+        if (status & KB_CTRL)
+            c = CTRL(c);
+
+        if (status & KB_ALT)
+            c = ALT(c);
+
+        tty_recv_char(c);
     }
 }
 

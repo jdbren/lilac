@@ -69,6 +69,10 @@ struct task {
     u64 timeslice;
     struct rb_node rq_node;
 
+    // struct list_head tasks; // all tasks
+    int pgrp;
+    struct list_head pgrp_list; // will refactor this to hash table
+
     struct task *parent;
     struct list_head children;
     struct list_head sibling;
@@ -110,6 +114,7 @@ struct task *init_process(void);
 int get_pid(void);
 void reap_task(struct task *p);
 __noreturn void do_exit(void);
+struct task * get_task_by_pid(int pid);
 
 // Architecture-specific functions
 void             arch_prepare_context_switch(struct task *next);

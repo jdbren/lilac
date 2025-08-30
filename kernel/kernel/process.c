@@ -17,6 +17,7 @@
 
 #define INIT_STACK(KSTACK) ((uintptr_t)KSTACK + __KERNEL_STACK_SZ - sizeof(size_t))
 
+static struct task *tasks[1024];
 static int num_tasks;
 
 void exit(int status);
@@ -34,6 +35,13 @@ SYSCALL_DECL0(getpid)
 SYSCALL_DECL0(getppid)
 {
     return current->ppid;
+}
+
+inline struct task * get_task_by_pid(int pid)
+{
+    if (pid < 0 || pid >= 1024)
+        return NULL;
+    return tasks[pid];
 }
 
 static inline void get_sighandlers(struct sighandlers *sh)
@@ -214,12 +222,16 @@ static void start_process(void)
 
 struct task *init_process(void)
 {
+    extern struct task __root;
     num_tasks = 1;
     struct task *this = kzmalloc(sizeof(*this));
     struct mm_info *mem = arch_process_mmap(sizeof(void*) == 8);
 
     this->pid = 1;
     this->ppid = 0;
+    this->parent = &__root;
+    this->pgrp = this->pid;
+    INIT_LIST_HEAD(&this->pgrp_list);
     this->mm = mem;
     this->pgd = mem->pgd;
     this->kstack = (void*)INIT_STACK(mem->kstack);
@@ -237,6 +249,8 @@ struct task *init_process(void)
     this->sighandlers = alloc_sighandlers();
     INIT_LIST_HEAD(&this->children);
 
+    tasks[0] = &__root;
+    tasks[this->pid] = this;
     return this;
 }
 
@@ -285,6 +299,7 @@ static struct task * clone_process(struct task *parent)
     child->parent = parent;
     child->ppid = parent->pid;
     list_add_tail(&child->sibling, &parent->children);
+    list_add_tail(&child->pgrp_list, &parent->pgrp_list);
 
     child->mm = arch_copy_mmap(parent->mm);
     child->pgd = child->mm->pgd;
@@ -318,6 +333,8 @@ int do_fork(void)
     struct task *child = clone_process(parent);
     if (!child)
         return -ENOMEM;
+
+    tasks[child->pid] = child;
 
     child->pc = (uintptr_t)return_from_fork;
     child->state = TASK_RUNNING;
@@ -518,6 +535,7 @@ void reap_task(struct task *p)
     kfree(p->fp_regs);
     p->fp_regs = NULL;
     list_del(&p->sibling);
+    list_del(&p->pgrp_list);
     // kfree(p->regs); // ISSUE This is sometimes stack memory, so can't free currently
     kvirtual_free(p->mm->kstack, __KERNEL_STACK_SZ);
     kfree(p->mm);

@@ -12,6 +12,9 @@
 
 // #define FN(code) (code >= 59 && code <= 68 ? code % 58 : 0)
 
+#define CTRL(x) (x & 0x1f)
+#define ALT(x) (x | 0x80)
+
 struct kbd_event {
     u8 keycode;
     u8 status;

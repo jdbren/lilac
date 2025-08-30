@@ -81,6 +81,8 @@ drivers/pci.o \
 drivers/ahci.o \
 drivers/framebuffer.o \
 drivers/vga.o \
+drivers/tty/core.o \
+drivers/tty/ldisc.o \
 lib/icxxabi.o \
 lib/multiboot.o \
 lib/rbtree.o

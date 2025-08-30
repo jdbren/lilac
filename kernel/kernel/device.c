@@ -10,7 +10,8 @@ int device_register(struct device *dev)
     return 0;
 }
 
-int add_device(const char *path, struct file_operations *fops)
+int add_device(const char *path, const struct file_operations *fops,
+        const struct inode_operations *iops)
 {
     int err = 0;
     if ((err = vfs_create(path, 0))) {
@@ -25,6 +26,7 @@ int add_device(const char *path, struct file_operations *fops)
     if (!inode)
         return -ENOENT;
     inode->i_fop = fops;
+    inode->i_op = iops;
     inode->i_type = TYPE_DEV;
 
     return 0;

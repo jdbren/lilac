@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 void sigint_handler(int signum)
 {
@@ -10,11 +11,11 @@ void sigint_handler(int signum)
 
 int main()
 {
+    char buf[100];
     signal(SIGINT, sigint_handler);
 
-    printf("Press Ctrl+C to trigger SIGINT...\n");
-    while (1)
-        __builtin_ia32_pause();
+    printf("Entering read syscall...\n");
+    read(STDIN_FILENO, buf, 1); // Enter blocking syscall
 
     return 0;
 }

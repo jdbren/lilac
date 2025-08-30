@@ -93,6 +93,11 @@ static pid_t wait_for(struct task *p, int *status, bool nohang)
     }
 
     pid_t pid = p->pid;
+    if (p->state != TASK_ZOMBIE) {
+        klog(LOG_INFO, "Task %d has not exited yet after being woken up\n", pid);
+        return -EINTR;
+    }
+
     if (status)
         *status = p->exit_status;
     reap_task(p);
@@ -145,6 +150,9 @@ static pid_t wait_any(int *status, bool nohang)
         reap_task(child);
         kfree(child);
         return child_pid;
+    } else if (!list_empty(&current->children)) {
+        klog(LOG_INFO, "wait_any: No child has exited after being woken up, returning -EINTR\n");
+        return -EINTR; // interrupted by signal
     }
 
     return -ECHILD; // no children at all

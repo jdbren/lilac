@@ -4,6 +4,7 @@
 #include <lilac/fs.h>
 #include <lilac/sched.h>
 #include <lilac/console.h>
+#include <lilac/tty.h>
 #include <acpi/acpi.h>
 
 __noreturn __no_stack_chk
@@ -19,6 +20,7 @@ void start_kernel(void)
 
     arch_enable_interrupts();
     console_init();
+    tty_init();
     sched_clock_init(); // kernel is live, will jmp to init task
 
     idle();

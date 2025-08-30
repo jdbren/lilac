@@ -49,7 +49,7 @@ struct inode {
     struct hlist_head	i_dentry;
 
     dev_t i_rdev;
-    struct file_operations *i_fop;
+    const struct file_operations *i_fop;
 
     void *i_private; /* fs or device private pointer */
 };

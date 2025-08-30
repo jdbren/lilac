@@ -3,6 +3,7 @@
 
 #include <lilac/types.h>
 #include <lilac/sync.h>
+#include <lilac/wait.h>
 #include <user/termbits.h>
 
 /*
@@ -104,9 +105,9 @@
 #define L_EXTPROC(tty)	_L_FLAG((tty), EXTPROC)
 
 struct file;
+struct console;
 struct device;
 struct tty;
-struct tty_ldisc;
 struct tty_operations;
 
 
@@ -121,19 +122,27 @@ struct tty_operations {
     int (*open)(struct tty *tty, struct file *file);
     void (*close)(struct tty *tty, struct file *file);
     ssize_t (*write)(struct tty *tty, const u8 *buf, size_t count);
-    void (*set_termios)(struct tty *tty, struct ktermios *old);
+    // void (*set_termios)(struct tty *tty, struct ktermios *old);
 };
 
 struct tty_ldisc_ops {
-    ssize_t (*read)(struct tty *tty, struct file *file, u8 *buf, size_t nr, void **cookie, unsigned long offset);
+    ssize_t (*read)(struct tty *tty, struct file *file, u8 *buf, size_t nr, unsigned long offset);
     ssize_t (*write)(struct tty *tty, struct file *file, const u8 *buf, size_t nr);
     void (*set_termios)(struct tty *tty, const struct ktermios *old);
     void (*receive_buf)(struct tty *tty, const u8 *cp, const u8 *fp, size_t count);
 };
 
-struct tty_ldisc {
-    const struct tty_ldisc_ops *ops;
-    struct tty *tty;
+#define INPUT_BUF_SIZE 256
+
+struct tty_data {
+    struct {
+        char buf[INPUT_BUF_SIZE];
+        int rpos;
+        int wpos;
+        int epos;
+    } input;
+
+    struct mutex read_lock;
 };
 
 struct tty {
@@ -143,7 +152,7 @@ struct tty {
     const struct tty_operations *ops;
 
     mutex_t ldisc_lock;
-    struct tty_ldisc *ldisc;
+    const struct tty_ldisc_ops *ldisc_ops;
 
     mutex_t write_lock;
     unsigned long flags;
@@ -161,8 +170,17 @@ struct tty {
         int session;
     } ctrl;
 
+    struct waitqueue read_wait;
+
     char name[32];
-    struct list_head files; // struct tty_file_private
+    union {
+        struct tty_data *data;
+        void *ldisc_data;
+    };
+    union {
+        struct console *console;
+        void *driver_data;
+    };
 };
 
 struct tty_file_private {
@@ -170,5 +188,10 @@ struct tty_file_private {
     struct file *file;
     struct list_head list;
 };
+
+extern const struct tty_ldisc_ops default_tty_ldisc_ops;
+
+void tty_init(void);
+int tty_recv_char(char c);
 
 #endif // _LILAC_TTY_H

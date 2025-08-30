@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <signal.h>
 #include <sys/wait.h>
 #include <sys/syscall.h>
 
@@ -74,9 +75,13 @@ int prompt(void)
 
 int main(void)
 {
-    open("/dev/console", 0);
-    open("/dev/console", 0);
-    open("/dev/console", 0);
+    open("/dev/tty", 0);
+    open("/dev/tty", 0);
+    open("/dev/tty", 0);
+
+    signal(SIGINT, SIG_IGN);
+    signal(SIGQUIT, SIG_IGN);
+
     while (1)
         prompt();
 
