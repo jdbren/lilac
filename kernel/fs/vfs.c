@@ -8,6 +8,7 @@
 #include <lilac/device.h>
 #include <lilac/sched.h>
 #include <lilac/timer.h>
+#include <lilac/uaccess.h>
 #include <drivers/blkdev.h>
 #include <fs/fat32.h>
 #include <fs/tmpfs.h>
@@ -210,7 +211,7 @@ struct file *vfs_open(const char *path, int flags, int mode)
     new_file = alloc_file(dentry);
     if (IS_ERR_OR_NULL(new_file))
         return ERR_PTR(-ENOMEM);
-    
+
     fget(new_file);
 
     if ((err = inode->i_op->open(inode, new_file)) < 0) {

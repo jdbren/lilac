@@ -3,6 +3,7 @@
 #include <lilac/lilac.h>
 #include <lilac/sched.h>
 #include <lilac/syscall.h>
+#include <lilac/uaccess.h>
 
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 

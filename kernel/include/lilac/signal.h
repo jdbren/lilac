@@ -93,5 +93,6 @@ struct task;
 
 int do_raise(struct task *p, int sig);
 int handle_signal(void);
+int kill_pgrp(int pgid, int sig);
 
 #endif

@@ -1,6 +1,7 @@
 #include <lilac/lilac.h>
 #include <lilac/syscall.h>
 #include <lilac/process.h>
+#include <lilac/sched.h>
 #include <lilac/signal.h>
 
 int do_kernel_exit_work(void)

@@ -2,6 +2,7 @@
 
 #include <stdatomic.h>
 #include <lilac/lilac.h>
+#include <lilac/sched.h>
 #include <lilac/device.h>
 #include <lilac/fs.h>
 #include <lilac/console.h>

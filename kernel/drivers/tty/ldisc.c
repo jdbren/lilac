@@ -1,35 +1,26 @@
 #include <lilac/tty.h>
 #include <lilac/lilac.h>
+#include <lilac/sched.h>
+#include <lilac/signal.h>
 
 //
 // TTY line discipline
 //
 
-static void raise_signal_for_pgrp(struct task *p, int sig)
-{
-    struct task *iter;
-    // send signal to all processes in the process group
-    do_raise(p, sig);
-    list_for_each_entry(iter, &p->pgrp_list, pgrp_list) {
-        do_raise(iter, sig);
-    }
-}
-
 void default_tty_receive_buf(struct tty *tty, const u8 *cp, const u8 *fp, size_t count)
 {
     unsigned char c;
     struct tty_data *data = tty->data;
-    struct task *p = get_task_by_pid(tty->ctrl.pgrp);
 
     while (count--) {
         c = *cp++;
         if (c == INTR_CHAR(tty)) {
-            raise_signal_for_pgrp(p, SIGINT);
+            kill_pgrp(tty->ctrl.pgrp, SIGINT);
             tty->ops->write(tty, (u8*)"^C", 2);
         } else if (c == EOF_CHAR(tty)) {
             tty->ops->write(tty, (u8*)"^D", 2);
         } else if (c == QUIT_CHAR(tty)) {
-            raise_signal_for_pgrp(p, SIGQUIT);
+            kill_pgrp(tty->ctrl.pgrp, SIGQUIT);
             tty->ops->write(tty, (u8*)"^\\", 2);
         } else {
             switch(c) {

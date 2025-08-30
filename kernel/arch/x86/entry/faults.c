@@ -1,6 +1,8 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/lilac.h>
+#include <lilac/signal.h>
+#include <lilac/sched.h>
 
 #include "idt.h"
 

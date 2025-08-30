@@ -1,12 +1,8 @@
 #ifndef _USER_H
 #define _USER_H
 
-#include <lilac/config.h>
-#include <lilac/types.h>
-#include <lilac/libc.h>
-#include <lilac/errno.h>
+#include <lilac/lilac.h>
 #include <lilac/sched.h>
-#include <lilac/log.h>
 
 extern int arch_user_copy(void *dst, const void *src, size_t size);
 extern int arch_strncpy_from_user(char *dst, const char *src, size_t max_size);

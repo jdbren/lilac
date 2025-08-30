@@ -3,6 +3,7 @@
 #include <lilac/fs.h>
 #include <lilac/syscall.h>
 #include <lilac/kmm.h>
+#include <lilac/uaccess.h>
 
 ssize_t pipe_read(struct file *f, void *buf, size_t count);
 ssize_t pipe_write(struct file *f, const void *buf, size_t count);

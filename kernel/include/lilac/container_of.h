@@ -1,14 +1,7 @@
 #ifndef _LILAC_CONTAINER_OF_H
 #define _LILAC_CONTAINER_OF_H
 
-#define typeof_member(T, m)	typeof(((T*)0)->m)
-
-/* Are two types/vars the same type (ignoring qualifiers)? */
-#ifndef __same_type
-# define __same_type(a, b) __builtin_types_compatible_p(typeof(a), typeof(b))
-#endif
-
-#define static_assert(expr, msg) _Static_assert(expr, msg)
+#include <lilac/compiler.h>
 
 /**
  * container_of - cast a member of a structure out to the containing structure

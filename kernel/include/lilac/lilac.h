@@ -8,7 +8,6 @@
 #include <lilac/log.h>
 #include <lilac/panic.h>
 #include <lilac/types.h>
-#include <lilac/uaccess.h>
 #include <lilac/kmalloc.h>
 
 #define KERNEL_VERSION "0.1.0"

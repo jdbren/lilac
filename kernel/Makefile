@@ -46,7 +46,6 @@ $(patsubst %.c,%.o,$(wildcard drivers/acpi/acpica/*.c))
 KERNEL_OBJS=\
 $(KERNEL_ARCH_OBJS) \
 kernel/kmain.o \
-kernel/console.o \
 kernel/device.o \
 kernel/log.o \
 kernel/pipe.o \
@@ -77,6 +76,7 @@ fs/mount.o \
 fs/stat.o \
 fs/name_utils.o \
 drivers/blkdev.o \
+drivers/console.o \
 drivers/pci.o \
 drivers/ahci.o \
 drivers/framebuffer.o \

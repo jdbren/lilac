@@ -7,8 +7,8 @@
 #include <lilac/file.h>
 #include <lilac/rbtree.h>
 #include <lilac/signal.h>
+#include <lilac/hashtable.h>
 
-struct file;
 struct regs_state;
 
 #define TASK_RUNNING 0
@@ -50,11 +50,13 @@ struct task {
     int ppid;
 
     struct mm_info *mm;
+    // Fields currently used in asm
     uintptr_t pgd;  // 12 (32-bit) or 16 (64-bit)
     uintptr_t pc;   // 16 (32-bit) or 24 (64-bit)
     void *kstack;   // 20 (32-bit) or 32 (64-bit)
-    void *regs; // CPU registers
-    void *fp_regs;
+    // ---
+    void *regs;     // CPU registers
+    void *fp_regs;  // Floating point / SIMD registers
 
     spinlock_t lock;
 
@@ -62,25 +64,26 @@ struct task {
     struct task_flags flags;
     u8 priority;
     u8 policy;
-
     u8 cpu;
     bool on_rq;
     u64 runtime;
     u64 timeslice;
     struct rb_node rq_node;
 
-    // struct list_head tasks; // all tasks
-    int pgrp;
-    struct list_head pgrp_list; // will refactor this to hash table
-
     struct task *parent;
     struct list_head children;
     struct list_head sibling;
+    struct hlist_node pid_hash;
+
+    int pgid;
+    int sid;
+    struct hlist_node pgid_hash;
+    struct hlist_node sid_hash;
 
     int exit_status;
-
     bool parent_wait;
     bool waiting_any;
+
     struct fs_info fs;
     struct task_info info;
 
@@ -137,5 +140,14 @@ void             jump_new_proc(struct task *next);
 // user mode jumps
 extern void      jump_usermode(void *addr, void *ustack, void *kstack);
 extern int       arch_return_from_fork(void *regs, void *kstack);
+
+#define PID_HASH_BITS 12
+
+extern DECLARE_HASHTABLE(pid_table, PID_HASH_BITS);
+extern DECLARE_HASHTABLE(pgid_table, PID_HASH_BITS);
+extern DECLARE_HASHTABLE(sid_table, PID_HASH_BITS);
+
+#define pgrp_for_each(p, pgid) hash_for_each_possible(pgid_table, p, pgid_hash, pgid) \
+    if (p->pgid == pgid)
 
 #endif

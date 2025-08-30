@@ -3,6 +3,7 @@
 #include <lilac/process.h>
 #include <stdatomic.h>
 #include <lilac/rbtree.h>
+#include <lilac/hashtable.h>
 #include <lilac/libc.h>
 #include <lilac/lilac.h>
 #include <lilac/elf.h>
@@ -14,11 +15,14 @@
 #include <lilac/mm.h>
 #include <lilac/kmm.h>
 #include <lilac/kmalloc.h>
+#include <lilac/uaccess.h>
 
 #define INIT_STACK(KSTACK) ((uintptr_t)KSTACK + __KERNEL_STACK_SZ - sizeof(size_t))
 
-static struct task *tasks[1024];
 static int num_tasks;
+DEFINE_HASHTABLE(pid_table, PID_HASH_BITS);
+DEFINE_HASHTABLE(pgid_table, PID_HASH_BITS);
+DEFINE_HASHTABLE(sid_table, PID_HASH_BITS);
 
 void exit(int status);
 
@@ -39,9 +43,12 @@ SYSCALL_DECL0(getppid)
 
 inline struct task * get_task_by_pid(int pid)
 {
-    if (pid < 0 || pid >= 1024)
-        return NULL;
-    return tasks[pid];
+    struct task *p;
+    hash_for_each_possible(pid_table, p, pid_hash, pid) {
+        if (p->pid == pid)
+            return p;
+    }
+    return NULL;
 }
 
 static inline void get_sighandlers(struct sighandlers *sh)
@@ -222,16 +229,14 @@ static void start_process(void)
 
 struct task *init_process(void)
 {
-    extern struct task __root;
     num_tasks = 1;
     struct task *this = kzmalloc(sizeof(*this));
     struct mm_info *mem = arch_process_mmap(sizeof(void*) == 8);
 
     this->pid = 1;
     this->ppid = 0;
-    this->parent = &__root;
-    this->pgrp = this->pid;
-    INIT_LIST_HEAD(&this->pgrp_list);
+    this->pgid = this->pid;
+    this->sid = this->pid;
     this->mm = mem;
     this->pgd = mem->pgd;
     this->kstack = (void*)INIT_STACK(mem->kstack);
@@ -248,9 +253,10 @@ struct task *init_process(void)
     memcpy(this->name, "init", 5);
     this->sighandlers = alloc_sighandlers();
     INIT_LIST_HEAD(&this->children);
+    hash_add(pid_table, &this->pid_hash, this->pid);
+    hash_add(pgid_table, &this->pgid_hash, this->pgid);
+    hash_add(sid_table, &this->sid_hash, this->sid);
 
-    tasks[0] = &__root;
-    tasks[this->pid] = this;
     return this;
 }
 
@@ -299,7 +305,9 @@ static struct task * clone_process(struct task *parent)
     child->parent = parent;
     child->ppid = parent->pid;
     list_add_tail(&child->sibling, &parent->children);
-    list_add_tail(&child->pgrp_list, &parent->pgrp_list);
+    hash_add(pid_table, &child->pid_hash, child->pid);
+    hash_add(pgid_table, &child->pgid_hash, parent->pgid);
+    hash_add(sid_table, &child->sid_hash, parent->sid);
 
     child->mm = arch_copy_mmap(parent->mm);
     child->pgd = child->mm->pgd;
@@ -333,8 +341,6 @@ int do_fork(void)
     struct task *child = clone_process(parent);
     if (!child)
         return -ENOMEM;
-
-    tasks[child->pid] = child;
 
     child->pc = (uintptr_t)return_from_fork;
     child->state = TASK_RUNNING;
@@ -535,7 +541,9 @@ void reap_task(struct task *p)
     kfree(p->fp_regs);
     p->fp_regs = NULL;
     list_del(&p->sibling);
-    list_del(&p->pgrp_list);
+    hash_del(&p->pid_hash);
+    hash_del(&p->pgid_hash);
+    hash_del(&p->sid_hash);
     // kfree(p->regs); // ISSUE This is sometimes stack memory, so can't free currently
     kvirtual_free(p->mm->kstack, __KERNEL_STACK_SZ);
     kfree(p->mm);
