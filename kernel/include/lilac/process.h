@@ -42,7 +42,7 @@ struct task_flags {
     u8 in_syscall   :1;
     u8 sig_pending  :1;
     u8 ptrace_stop  :1;
-    u8 sig_restore  :1;
+    u8 signaled     :1;
 };
 
 struct task {

@@ -12,8 +12,8 @@ int x86_kernel_entry(struct regs_state *regs)
 int x86_kernel_exit(void)
 {
     do_kernel_exit_work();
-    if (current->flags.sig_restore) {
-        current->flags.sig_restore = 0;
+    if (current->flags.signaled) {
+        current->flags.signaled = 0;
         return -1;
     }
     return 0;

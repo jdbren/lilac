@@ -51,6 +51,7 @@ int handle_signal(void)
         current->blocked |= ka->sa.sa_mask;
         if (!(ka->sa.sa_flags & SA_NODEFER))
             current->blocked |= sig_bit;
+        current->flags.signaled = 1;
     }
 
     return 0;
@@ -60,7 +61,7 @@ SYSCALL_DECL0(sigreturn)
 {
     klog(LOG_DEBUG, "sigreturn called by process %d\n", current->pid);
     arch_restore_post_signal();
-    current->flags.sig_restore = 1;
+    current->flags.signaled = 1;
     return 0;
 }
 

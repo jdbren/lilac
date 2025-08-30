@@ -6,7 +6,7 @@
 
 int main(int argc, char *argv[])
 {
-    dirent buf[12] = {0};
+    struct dirent buf[12] = {0};
     char *dir = NULL;
 
     if (argc == 1)
