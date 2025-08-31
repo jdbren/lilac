@@ -50,8 +50,7 @@ shell: install-libc
 install:
 	$(MAKE) -C kernel install
 
-install-system: kernel install-libc init user shell
-	$(MAKE) -C kernel install
+install-system: install install-libc init user shell
 	$(MAKE) -C init install
 
 clean:

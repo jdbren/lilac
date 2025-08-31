@@ -28,15 +28,20 @@
 
 #define pa(X) ((X) - __KERNEL_BASE)
 #ifndef __packed
-    #define __packed        [[gnu::packed]]
+# define __packed     __attribute__((packed))
 #endif
-#define __align(x)      [[gnu::aligned(x)]]
-#define __must_check    [[nodiscard]]
-#define __noreturn      [[noreturn]]
-#define __section(SEC)  [[gnu::section(SEC)]]
-
+#ifndef __align
+# define __align(x)      __attribute__((aligned(x)))
+#endif
+#define __must_check    __attribute__((warn_unused_result))
+#ifndef __noreturn
+# define __noreturn     __attribute__((noreturn))
+#endif
+#ifndef __section
+# define __section(x)  __attribute__((section(x)))
+#endif
 #ifndef unreachable
-#define unreachable() __builtin_unreachable()
+# define unreachable() __builtin_unreachable()
 #endif
 
 #define __cacheline_align __align(64)

@@ -18,13 +18,10 @@ struct input_buffer {
 
 struct console {
     spinlock_t lock;
-    u32 cx; // cursor position before write
-    u32 cy;
-    u32 height;
-    u32 width;
-    struct list_head list;
+    u32 cx, cy; //cursor
+    u32 height, width;
     char *data;
-    struct file *file;
+    int first_row;
 };
 
 extern int write_to_screen;
@@ -32,7 +29,7 @@ extern int write_to_screen;
 void console_init(void);
 ssize_t console_write(struct file *file, const void *buf, size_t count);
 void console_writestring(struct console *con, const char *data);
-
+void console_redraw(struct console *con);
 
 extern const struct tty_operations fbcon_tty_ops;
 

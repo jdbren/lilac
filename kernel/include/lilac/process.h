@@ -91,6 +91,8 @@ struct task {
     struct sigpending pending;
     sigset_t blocked;
 
+    struct tty *ctty;
+
     char name[32];
 };
 
@@ -118,6 +120,7 @@ int get_pid(void);
 void reap_task(struct task *p);
 __noreturn void do_exit(void);
 struct task * get_task_by_pid(int pid);
+struct task * get_pgrp_leader(int pgid);
 
 // Architecture-specific functions
 void             arch_prepare_context_switch(struct task *next);

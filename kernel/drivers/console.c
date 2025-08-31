@@ -1,8 +1,6 @@
 #include <lilac/console.h>
 #include <lilac/tty.h>
 #include <lilac/lilac.h>
-#include <lilac/keyboard.h>
-#include <lilac/timer.h>
 #include <lilac/device.h>
 #include <lilac/fs.h>
 #include <drivers/framebuffer.h>
@@ -17,17 +15,21 @@ int write_to_screen = 1;
 int write_to_screen = 0;
 #endif
 
-static struct console console = {
-    .lock = SPINLOCK_INIT,
-    .cx = 0,
-    .cy = 0,
-    .height = 30,
-    .width = 80,
-    .list = LIST_HEAD_INIT(console.list),
-    .data = NULL,
-    .file = NULL
+char default_buf[30*80];
+
+static struct console consoles[8] = {
+    [0 ... 7] = {
+        .lock = SPINLOCK_INIT,
+        .cx = 0,
+        .cy = 0,
+        .height = 30,
+        .width = 80,
+        .data = default_buf,
+        .first_row = 0
+    }
 };
 
+#define con_pos(con) ((( ((con)->first_row + (con)->cy) % (con)->height ) * (con)->width ) + (con)->cx)
 
 void console_newline(struct console *con)
 {
@@ -35,6 +37,8 @@ void console_newline(struct console *con)
     if ((con->cy += 1) >= con->height) {
         graphics_scroll();
         con->cy = con->height - 1;
+        u32 phys_r = (con->first_row + con->cy) % con->height;
+        memset(&con->data[phys_r * con->width], ' ', con->width);
     }
 }
 
@@ -51,15 +55,29 @@ void console_putchar(struct console *con, int c)
     } else if (c == '\b') {
         if (con->cx > 0) {
             con->cx--;
+            con->data[con_pos(con)] = ' ';
             graphics_putc(' ', con->cx, con->cy);
         }
         return;
     }
+    con->data[con_pos(con)] = (char)c;
     graphics_putc((u16)c, con->cx, con->cy);
     if (++(con->cx) >= con->width) {
         console_newline(con);
     }
 }
+
+void console_redraw(struct console *con)
+{
+    for (u32 y = 0; y < con->height; y++) {
+        u32 phys_r = (con->first_row + y) % con->height;
+        for (u32 x = 0; x < con->width; x++) {
+            char c = con->data[phys_r * con->width + x];
+            graphics_putc(c, x, y);
+        }
+    }
+}
+
 
 void console_writestring(struct console *con, const char *data)
 {
@@ -71,6 +89,7 @@ void console_writestring(struct console *con, const char *data)
 void console_clear(struct console *con)
 {
     graphics_clear();
+    memset(con->data, ' ', con->height*con->width);
     con->cx = 0;
     con->cy = 0;
 }
@@ -78,7 +97,7 @@ void console_clear(struct console *con)
 ssize_t console_write(struct file *file, const void *buf, size_t count)
 {
     char *bufp = (char*)buf;
-    struct console *con = &console;
+    struct console *con = &consoles[0];
     acquire_lock(&con->lock);
     for (size_t i = 0; i < count; i++)
         console_putchar(con, bufp[i] & 0xff);
@@ -88,60 +107,21 @@ ssize_t console_write(struct file *file, const void *buf, size_t count)
 
 void console_init(void)
 {
-    // add_device("/dev/console", &console_fops);
-    struct console *con = &console;
-
+    struct console *con = &consoles[0];
     console_clear(con);
-    graphics_setcolor(RGB_MAGENTA, RGB_BLACK);
-    console_writestring(con, "LilacOS v0.1.0\n\n");
-
-    graphics_setcolor(RGB_CYAN, RGB_BLACK);
-    unsigned int regs[12];
-    char str[sizeof(regs) + 1];
-    memset(str, 0, sizeof(str));
-
-    __cpuid(0, regs[0], regs[1], regs[2], regs[3]);
-    memcpy(str, &regs[1], 4);
-    memcpy(str + 4, &regs[3], 4);
-    memcpy(str + 8, &regs[2], 4);
-    str[12] = '\0';
-    printf("CPU Vendor: %s, ", str);
-
-    __cpuid(0x80000000, regs[0], regs[1], regs[2], regs[3]);
-
-    if (regs[0] < 0x80000004)
-        return;
-
-    __cpuid(0x80000002, regs[0], regs[1], regs[2], regs[3]);
-    __cpuid(0x80000003, regs[4], regs[5], regs[6], regs[7]);
-    __cpuid(0x80000004, regs[8], regs[9], regs[10], regs[11]);
-
-    memcpy(str, regs, sizeof(regs));
-    str[sizeof(regs)] = '\0';
-    printf("%s\n", str);
-
-    __cpuid(0x80000005, regs[0], regs[1], regs[2], regs[3]);
-    printf("Cache line: %u bytes, ", regs[2] & 0xff);
-    printf("L1 Cache: %u KB, ", regs[2] >> 24);
-
-    __cpuid(0x80000006, regs[0], regs[1], regs[2], regs[3]);
-    printf("L2 Cache: %u KB\n", regs[2] >> 16);
-
-    size_t mem_sz_mb = arch_get_mem_sz() / 0x400;
-    printf("Memory: %u MB\n", mem_sz_mb);
-
-    u64 sys_time_ms = get_sys_time() / 1000000;
-    printf("System clock running for %llu ms\n", sys_time_ms);
-    struct timestamp ts = get_timestamp();
-    printf("Current time: " TIME_FORMAT "\n\n",
-        ts.year, ts.month, ts.day, ts.hour, ts.minute, ts.second);
-    graphics_setcolor(RGB_WHITE, RGB_BLACK);
+    print_system_info();
     write_to_screen = 0;
 }
 
 int fbcon_open(struct tty *tty, struct file *file)
 {
-    tty->console = &console;
+    struct console *con = &consoles[tty->index];
+    if (!tty->console) {
+        tty->console = con;
+        con->data = kmalloc(con->height * con->width);
+        memset(con->data, ' ', con->height * con->width);
+        memcpy(con->data, "HELLO WORLD!", 12);
+    }
     return 0;
 }
 

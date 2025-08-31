@@ -26,6 +26,43 @@ DEFINE_HASHTABLE(sid_table, PID_HASH_BITS);
 
 void exit(int status);
 
+static inline bool is_session_leader(struct task *p)
+{
+    return p->pid == p->sid;
+}
+
+static inline bool is_child_of(struct task *cld)
+{
+    struct task *p_itr;
+    list_for_each_entry(p_itr, &current->children, sibling) {
+        if (cld == p_itr) return true;
+    }
+    return false;
+}
+
+inline struct task * get_task_by_pid(int pid)
+{
+    struct task *p;
+    if (pid < 1) return NULL;
+    hash_for_each_possible(pid_table, p, pid_hash, pid) {
+        if (p->pid == pid)
+            return p;
+    }
+    return NULL;
+}
+
+inline struct task * get_pgrp_leader(int pgid)
+{
+    struct task *p;
+    if (pgid < 0) return NULL;
+    hash_for_each_possible(pgid_table, p, pgid_hash, pgid) {
+        if (p->pgid == pgid && p->pid == pgid)
+            return p;
+    }
+    return NULL;
+}
+
+
 inline int get_pid(void)
 {
     return current->pid;
@@ -41,14 +78,56 @@ SYSCALL_DECL0(getppid)
     return current->ppid;
 }
 
-inline struct task * get_task_by_pid(int pid)
+SYSCALL_DECL1(getpgid, pid_t, pid)
 {
-    struct task *p;
-    hash_for_each_possible(pid_table, p, pid_hash, pid) {
-        if (p->pid == pid)
-            return p;
+    if (pid == 0)
+        return current->pgid;
+    struct task *p = get_task_by_pid(pid);
+    return p ? p->pgid : -ESRCH;
+}
+
+SYSCALL_DECL1(getsid, pid_t, pid)
+{
+    if (pid == 0)
+        return current->sid;
+    struct task *p = get_task_by_pid(pid);
+    return p ? p->sid : -ESRCH;
+}
+
+SYSCALL_DECL2(setpgid, pid_t, pid, pid_t, pgid)
+{
+    struct task *p, *target;
+    if (pgid < 0) return -EINVAL;
+
+    if (pid == 0 || pid == current->pid) {
+        p = current;
+    } else {
+        p = get_task_by_pid(pid);
+        if (!p || !is_child_of(p))
+            return -ESRCH;
     }
-    return NULL;
+
+    if (is_session_leader(p))
+        return -EPERM;
+
+    target = get_pgrp_leader(pgid);
+    if (pid != pgid && (!target || target->sid != p->sid))
+        return -EPERM;
+
+    p->pgid = pgid;
+    return 0;
+}
+
+SYSCALL_DECL0(setsid)
+{
+    int pid = current->pid;
+    if (current->pgid == pid)
+        return -EPERM;
+
+    current->sid  = pid;
+    current->pgid = pid;
+    current->ctty = NULL;
+    return pid;
 }
 
 static inline void get_sighandlers(struct sighandlers *sh)

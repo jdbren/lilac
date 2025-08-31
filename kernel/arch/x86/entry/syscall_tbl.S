@@ -58,6 +58,10 @@ syscall_table:
 	sc_tbl_entry sigreturn  # 31
 	sc_tbl_entry sigprocmask
 	sc_tbl_entry sigpending # 33
+	sc_tbl_entry getpgid    # 34
+	sc_tbl_entry setpgid    # 35
+	sc_tbl_entry getsid     # 36
+	sc_tbl_entry setsid     # 37
 /*
 	sc_tbl_entry link		# 26
 	sc_tbl_entry unlink		# 27

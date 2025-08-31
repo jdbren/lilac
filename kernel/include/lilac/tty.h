@@ -155,9 +155,9 @@ struct tty {
     const struct tty_ldisc_ops *ldisc_ops;
 
     mutex_t write_lock;
-    unsigned long flags;
-    unsigned int count;
-    spinlock_t files_lock;
+    // unsigned long flags;
+    // unsigned int count;
+    // spinlock_t files_lock;
     spinlock_t termios_lock; // could be rw_sem
     struct ktermios termios;
 
@@ -192,6 +192,6 @@ struct tty_file_private {
 extern const struct tty_ldisc_ops default_tty_ldisc_ops;
 
 void tty_init(void);
-int tty_recv_char(char c);
+int tty_recv_char(u8 c);
 
 #endif // _LILAC_TTY_H

@@ -75,9 +75,9 @@ int prompt(void)
 
 int main(void)
 {
-    open("/dev/tty", 0);
-    open("/dev/tty", 0);
-    open("/dev/tty", 0);
+    open("/dev/tty0", 0);
+    open("/dev/tty0", 0);
+    open("/dev/tty0", 0);
 
     signal(SIGINT, SIG_IGN);
     signal(SIGQUIT, SIG_IGN);
