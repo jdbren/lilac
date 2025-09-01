@@ -14,6 +14,5 @@ int main()
     dup(fd);
     dup(fd);
 
-    execl("/sbin/gush", "gush", NULL);
-    return 1;
+    return execl("/sbin/gush", "gush", NULL);
 }

@@ -112,7 +112,6 @@ startup_64:
 	lretq
 .high:
 	add $__KERNEL_BASE, %rsp
-	call _init
 	call gdt_init
 
 /*

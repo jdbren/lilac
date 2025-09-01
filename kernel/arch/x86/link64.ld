@@ -13,7 +13,7 @@ SECTIONS {
 
 	. += 0xffffffff80000000;
 
-	.text ALIGN (4K) : AT (ADDR (.text) - 0xffffffff80000000) { *(.text) }
+	.text ALIGN (4K) : AT (ADDR (.text) - 0xffffffff80000000) { *(.text .text.*) }
 
 	.exception ALIGN (4K) : AT (ADDR (.exception) - 0xffffffff80000000) {
 		_exception_start = .;
@@ -23,12 +23,20 @@ SECTIONS {
 
 	.sigtramp ALIGN (4K) : AT (ADDR (.sigtramp) - 0xffffffff80000000) { *(.sigtramp) }
 
-	.rodata ALIGN (4K) : AT (ADDR (.rodata) - 0xffffffff80000000) { *(.rodata) }
+	.rodata ALIGN (4K) : AT (ADDR (.rodata) - 0xffffffff80000000) { *(.rodata .rodata.*) }
 
 	.data ALIGN (4K) : AT (ADDR (.data) - 0xffffffff80000000) {
 		_data_start = .;
 		*(.data)
 	}
+
+	.init_array : AT (ADDR (.init_array) - 0xffffffff80000000) {
+		PROVIDE_HIDDEN(__init_array_start = .);
+		KEEP(*(SORT_BY_INIT_PRIORITY(.init_array.*) SORT_BY_INIT_PRIORITY(.ctors.*)))
+		KEEP(*(.init_array EXCLUDE_FILE (*crtbegin.o *crtbegin?.o *crtend.o *crtend?.o ) .ctors))
+		PROVIDE_HIDDEN(__init_array_end = .);
+	}
+
 
 	.bss ALIGN (4K) : AT (ADDR (.bss) - 0xffffffff80000000) {
 		_bss_start = .;

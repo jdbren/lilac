@@ -3,7 +3,14 @@
 
 #include <stdatomic.h>
 #include <lilac/types.h>
+
+#ifndef __cplusplus
 #include <lilac/list.h>
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef atomic_flag spinlock_t;
 #define SPINLOCK_INIT ATOMIC_FLAG_INIT
@@ -41,7 +48,7 @@ void sem_wait(sem_t *sem);
 void sem_wait_timeout(sem_t *sem, int timeout);
 void sem_post(sem_t *sem);
 
-
+#ifndef __cplusplus
 struct mutex_waiter {
     struct list_head list;
     struct task *t;
@@ -57,5 +64,10 @@ void mutex_init(mutex_t *mutex);
 void mutex_lock(mutex_t *mutex);
 void mutex_unlock(mutex_t *mutex);
 void mutex_destroy(mutex_t *mutex);
+#endif // !__cplusplus
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
 
 #endif

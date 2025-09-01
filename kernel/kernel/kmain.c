@@ -6,11 +6,27 @@
 #include <lilac/console.h>
 #include <lilac/tty.h>
 #include <acpi/acpi.h>
+#include <lib/icxxabi.h>
+
+extern void (*__init_array_start[])(void);
+extern void (*__init_array_end[])(void);
+
+void _init_ctors(void)
+{
+    // Get the count of constructors
+    size_t count = (uintptr_t)__init_array_end - (uintptr_t)__init_array_start;
+    count /= sizeof(void*);
+
+    for (size_t i = 0; i < count; i++) {
+        __init_array_start[i]();
+    }
+}
 
 __noreturn __no_stack_chk
 void start_kernel(void)
 {
     kstatus(STATUS_OK, "Starting kernel\n");
+    _init_ctors();
 
     acpi_full_init();
     scan_sys_bus();

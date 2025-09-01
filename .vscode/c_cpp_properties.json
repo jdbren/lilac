@@ -19,7 +19,8 @@
             "cStandard": "gnu23",
             "forcedInclude": [
                 "${workspaceFolder}/.vscode/undefs.h"
-            ]
+            ],
+            "cppStandard": "c++23"
         }
     ],
     "version": 4

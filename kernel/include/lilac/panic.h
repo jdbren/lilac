@@ -7,6 +7,10 @@
 #include <lilac/log.h>
 #include <lilac/libc.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void print_bitmap(void);
 
 #ifdef DEBUG
@@ -17,5 +21,9 @@ void print_bitmap(void);
 
 __noreturn void kerror(const char *msg, ...);
 #define panic(msg, ...) kerror(msg __VA_OPT__(,) __VA_ARGS__)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

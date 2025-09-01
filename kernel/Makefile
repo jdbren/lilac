@@ -20,9 +20,9 @@ FLAGS=-D__lilac__ -D__KERNEL__ -Iinclude -ffreestanding -Wall -Wextra \
 	-Wno-unused-parameter -Wno-unused-function -Wno-unused-variable
 CFLAGS:=$(CFLAGS) $(FLAGS) -fno-strict-aliasing -mno-red-zone -fanalyzer -fstack-protector -DLOG_CPUID
 # -DDEBUG_VFS -DDEBUG_FORK -DDEBUG_KMM -DDEBUG_KMALLOC -DDEBUG_PAGING -DDEBUG_FAT -DDEBUG_TMPFS -DDEBUG_ELF
-CXXFLAGS:=$(CXXFLAGS) $(FLAGS) -fno-exceptions -fno-rtti
-LDFLAGS:=$(LDFLAGS)
-LIBS:=$(LIBS) -nostdlib $(COMPILER_DIR)/lib/gcc/*/*/libgcc.a
+CXXFLAGS:=$(CXXFLAGS) $(FLAGS) -D_GLIBCXX_NO_ASSERTIONS -fno-exceptions -fno-rtti -fpermissive -std=c++23
+LDFLAGS:=$(LDFLAGS) -nostdlib
+LIBS:=$(LIBS) -lgcc -lstdc++
 
 ARCHDIR=arch/$(HOSTARCH)
 
@@ -33,6 +33,7 @@ include $(ARCHDIR)/make32.config
 endif
 
 CFLAGS:=$(CFLAGS) $(KERNEL_ARCH_CFLAGS)
+CXXFLAGS:=$(CXXFLAGS) $(KERNEL_ARCH_CFLAGS)
 LDFLAGS:=$(LDFLAGS) $(KERNEL_ARCH_LDFLAGS)
 LIBS:=$(LIBS) $(KERNEL_ARCH_LIBS)
 
@@ -84,26 +85,24 @@ drivers/vga.o \
 drivers/tty/core.o \
 drivers/tty/ldisc.o \
 lib/icxxabi.o \
+lib/operators.o \
 lib/multiboot.o \
-lib/rbtree.o
+lib/rbtree.o \
+kernel/cplusplus_test.o
 
 LIBK_OBJS=$(patsubst %.c,%.o,$(wildcard lib/*/*.c))
 
 OBJS=\
-$(ARCHDIR)/boot/crti.o \
 $(ARCHDIR)/crtbegin.o \
 $(KERNEL_OBJS) \
-$(ARCHDIR)/crtend.o \
-$(ARCHDIR)/boot/crtn.o \
+$(ARCHDIR)/crtend.o
 
 LINK_LIST=\
 $(LDFLAGS) \
-$(ARCHDIR)/boot/crti.o \
 $(ARCHDIR)/crtbegin.o \
 $(KERNEL_OBJS) \
-$(LIBS) \
 $(ARCHDIR)/crtend.o \
-$(ARCHDIR)/boot/crtn.o
+$(LIBS)
 
 
 .PHONY: all clean install install-headers install-kernel acpi
@@ -114,9 +113,9 @@ all: lilac.ker
 lilac.ker: $(OBJS) $(LINKER_SCRIPT) acpi libk.a
 ifndef VERBOSE
 	@echo "	LD	$@"
-	@$(LD) -T $(LINKER_SCRIPT) -o $@ $(LINK_LIST)
+	@$(CXX) -T $(LINKER_SCRIPT) -o $@ $(LINK_LIST)
 else
-	$(LD) -T $(LINKER_SCRIPT) -o $@ $(LINK_LIST)
+	$(CXX) -T $(LINKER_SCRIPT) -o $@ $(LINK_LIST)
 endif
 	grub2-file --is-x86-multiboot2 lilac.ker
 
@@ -131,9 +130,9 @@ endif
 libk.a: $(LIBK_OBJS)
 ifndef VERBOSE
 	@echo "	AR	$@"
-	@$(AR) rcs $@ $(LIBK_OBJS)
+	@$(AR) rcs $@ $^
 else
-	$(AR) rcs $@ $(LIBK_OBJS)
+	$(AR) rcs $@ $^
 endif
 
 .c.o:
@@ -169,14 +168,9 @@ else
 endif
 
 clean:
-	rm -f lilac.ker
-	rm -f libk.a
-	@echo "CLEAN	OBJS"
-	@rm -f $(OBJS)
-	@rm -f $(OBJS:.o=.d)
-	@echo "CLEAN	LIBK_OBJS"
-	@rm -f $(LIBK_OBJS)
-	@rm -f $(LIBK_OBJS:.o=.d)
+	rm -f lilac.ker libk.a
+	@rm -f $(OBJS) $(OBJS:.o=.d)
+	@rm -f $(LIBK_OBJS) $(LIBK_OBJS:.o=.d)
 	@$(MAKE) -C drivers/acpi clean
 
 install: lilac.ker

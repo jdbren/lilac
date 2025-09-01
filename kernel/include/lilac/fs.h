@@ -125,12 +125,12 @@ struct super_operations {
 };
 
 struct dirent {
-	u64 d_ino;		/* file number of entry */
-	s64 d_off;		/* directory offset of entry */
-	u16 d_reclen;		/* length of this record */
-	u8  d_type;		/* file type, see below */
-	u16 d_namlen;		/* length of string in d_name */
-	char d_name[64];	/* name must be no longer than this */
+	unsigned long   d_ino;		/* file number of entry */
+	long            d_off;		/* directory offset of entry */
+	unsigned short  d_reclen;	/* length of this record */
+	unsigned char   d_type;		/* file type, see below */
+	unsigned short  d_namlen;	/* length of string in d_name */
+	char            d_name[64];	/* name must be no longer than this */
 };
 
 struct vfsmount {

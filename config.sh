@@ -25,7 +25,7 @@ LIBDIR=$EXEC_PREFIX/lib
 INCLUDEDIR=$PREFIX/include
 
 CFLAGS="-g -O2 -DDEBUG"
-CXXFLAGS="-g"
+CXXFLAGS="-g -O2"
 
 SYSROOT="$(pwd)/sysroot"
 

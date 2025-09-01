@@ -85,8 +85,6 @@ startup_32:
 	# Adjust the stack pointer.
 	addl $__KERNEL_BASE, %esp
 
-	call _init
-
 	call kernel_early
 
 5:	hlt

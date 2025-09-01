@@ -77,7 +77,7 @@ uintptr_t get_rsdp(void)
 void print_system_info(void)
 {
     graphics_setcolor(RGB_MAGENTA, RGB_BLACK);
-    puts("LilacOS v0.1.0\n\n");
+    puts("LilacOS v0.1.0 (compiled for x86_64)\n\n");
 
     graphics_setcolor(RGB_CYAN, RGB_BLACK);
     unsigned int regs[12];
