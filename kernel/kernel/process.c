@@ -114,19 +114,26 @@ SYSCALL_DECL2(setpgid, pid_t, pid, pid_t, pgid)
     if (pid != pgid && (!target || target->sid != p->sid))
         return -EPERM;
 
+    hash_del(&p->pgid_hash);
     p->pgid = pgid;
+    hash_add(pgid_table, &p->pgid_hash, p->pgid);
     return 0;
 }
 
 SYSCALL_DECL0(setsid)
 {
-    int pid = current->pid;
-    if (current->pgid == pid)
+    struct task *p = current;
+    int pid = p->pid;
+    if (p->pgid == pid)
         return -EPERM;
 
-    current->sid  = pid;
-    current->pgid = pid;
-    current->ctty = NULL;
+    hash_del(&p->sid_hash);
+    hash_del(&p->pgid_hash);
+    p->sid  = pid;
+    p->pgid = pid;
+    p->ctty = NULL;
+    hash_add(sid_table, &p->sid_hash, p->sid);
+    hash_add(pgid_table, &p->pgid_hash, p->pgid);
     return pid;
 }
 
@@ -458,6 +465,7 @@ static int set_task_args(struct task_info *info, char *const argv[])
         for (i = 0; info->argv[i]; i++)
             kfree(info->argv[i]);
         kfree(info->argv);
+        info->argv = NULL;
     }
     for (i = 0; argv[i]; i++) {
         ssize_t len = strnlen_user(argv[i], 127) + 1;
@@ -481,6 +489,7 @@ static int set_task_env(struct task_info *info, char *const envp[])
         for (i = 0; info->envp[i]; i++)
             kfree(info->envp[i]);
         kfree(info->envp);
+        info->envp = NULL;
     }
     for (i = 0; envp[i]; i++) {
         ssize_t len = strnlen_user(envp[i], 127) + 1;

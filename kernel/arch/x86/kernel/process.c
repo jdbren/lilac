@@ -286,6 +286,8 @@ void save_fp_regs(struct task *p)
 void copy_fp_regs(struct task *dst, struct task *src)
 {
     dst->fp_regs = kmalloc(512);
+    if (!src->fp_regs)
+        save_fp_regs(src);
     if (!dst->fp_regs || !src->fp_regs)
         kerror("FP regs not allocated for copy\n");
     memcpy(dst->fp_regs, src->fp_regs, 512);

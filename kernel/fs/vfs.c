@@ -565,6 +565,7 @@ int vfs_dup(int oldfd, int newfd)
     }
     if (newfd < (int)files->max && current->fs.files.fdarray[newfd]) {
         vfs_close(current->fs.files.fdarray[newfd]);
+        current->fs.files.fdarray[newfd] = NULL;
     }
     fget(f);
     current->fs.files.fdarray[newfd] = f;

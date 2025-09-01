@@ -103,9 +103,7 @@ void tty_get(struct tty *tty)
 
 void tty_put(struct tty *tty)
 {
-    if (atomic_fetch_sub(&tty->refcount, 1) == 1) {
-        kfree(tty);
-    }
+    atomic_fetch_sub(&tty->refcount, 1);
 }
 
 int tty_recv_char(u8 c)

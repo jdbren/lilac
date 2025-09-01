@@ -75,15 +75,14 @@ int prompt(void)
 
 int main(void)
 {
-    open("/dev/tty0", 0);
-    open("/dev/tty0", 0);
-    open("/dev/tty0", 0);
+    pid_t pid = fork();
 
-    signal(SIGINT, SIG_IGN);
-    signal(SIGQUIT, SIG_IGN);
-
-    while (1)
-        prompt();
+    if (pid == 0) {
+        execl("/bin/login", "login", NULL);
+        exit(1);
+    } else {
+        wait(NULL);
+    }
 
     return 0;
 }
