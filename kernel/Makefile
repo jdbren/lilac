@@ -84,6 +84,7 @@ drivers/framebuffer.o \
 drivers/vga.o \
 drivers/tty/core.o \
 drivers/tty/ldisc.o \
+drivers/tty/vt.o \
 lib/icxxabi.o \
 lib/operators.o \
 lib/multiboot.o \

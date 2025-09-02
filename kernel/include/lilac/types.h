@@ -23,7 +23,8 @@ typedef unsigned short umode_t;
 typedef unsigned int   dev_t;
 typedef unsigned short uid_t;
 typedef unsigned short gid_t;
-typedef long long      time_t;
+typedef s64 time_t;
+typedef s64 suseconds_t;
 
 #ifdef __x86_64__
 #define BITS_PER_LONG 64
