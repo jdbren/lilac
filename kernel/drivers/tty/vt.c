@@ -182,7 +182,7 @@ static short savex, savey, saveattr = XA_NORMAL, savecol = 112;
 
 void vt_scroll(struct vt_state *v) {
     // console_scroll_region(v->scroll_top, v->scroll_bottom);
-    
+    console_newline(&consoles[0]);
     v->cursor_y = v->scroll_bottom;
 }
 
@@ -195,7 +195,7 @@ void mc_wlocate(struct vt_state *v, int x, int y) {
     if (y >= v->height) y = v->height - 1;
     v->cursor_x = x;
     v->cursor_y = y;
-    console_set_cursor(x, y); // your console driver
+    // console_set_cursor(x, y); // your console driver
 }
 
 // Set scroll region (DECSTBM)
@@ -211,7 +211,7 @@ void mc_wsetregion(struct vt_state *v, int top, int bottom) {
 
 // Write one character at cursor
 void mc_wputc(struct vt_state *v, char c) {
-    console_putc_at(v->cursor_x, v->cursor_y, c, v->attr, v->color);
+    console_putchar_at(&consoles[0], c, v->cursor_x, v->cursor_y);
 
     v->cursor_x++;
     if (v->cursor_x >= v->width) {
@@ -233,29 +233,154 @@ void mc_wputc(struct vt_state *v, char c) {
 
 // Insert mode version (shift chars right, then insert)
 void mc_winschar2(struct vt_state *v, char c, int count) {
-    console_insert_char_at(v->cursor_x, v->cursor_y, c, v->attr, v->color, count);
+    // console_insert_char_at(v->cursor_x, v->cursor_y, c, v->attr, v->color, count);
     // Usually console driver handles shifting + drawing
 }
 
 // Clear entire window
 void mc_wclear(struct vt_state *v) {
-    console_clear();
+    console_clear(&consoles[0]);
     v->cursor_x = 0;
     v->cursor_y = 0;
 }
+
+// Clear a single line completely
+void mc_wclrch(struct vt_state *vt, int y)
+{
+    for (int x = 0; x < vt->width; x++) {
+        console_putchar_at(&consoles[0], ' ', x, y);
+    }
+}
+
+// Clear from cursor → end of line
+void mc_wclreol(struct vt_state *vt)
+{
+    for (int x = vt->cursor_x; x < vt->width; x++) {
+        console_putchar_at(&consoles[0], ' ', x, vt->cursor_y);
+    }
+}
+
+// Clear from beginning of line → cursor
+void mc_wclrel(struct vt_state *vt)
+{
+    for (int x = 0; x <= vt->cursor_x; x++) {
+        console_putchar_at(&consoles[0], ' ', x, vt->cursor_y);
+    }
+}
+
+// Clear from cursor → end of screen
+void mc_wclreos(struct vt_state *vt)
+{
+    // current line
+    mc_wclreol(vt);
+
+    // all lines below
+    for (int y = vt->cursor_y + 1; y < vt->height; y++) {
+        mc_wclrch(vt, y);
+    }
+}
+
+// Clear from beginning of screen → cursor
+void mc_wclrbos(struct vt_state *vt)
+{
+    // all lines above
+    for (int y = 0; y < vt->cursor_y; y++) {
+        mc_wclrch(vt, y);
+    }
+
+    // current line up to cursor
+    mc_wclrel(vt);
+}
+
+// Clear entire screen
+void mc_winclr(struct vt_state *vt)
+{
+    for (int y = 0; y < vt->height; y++) {
+        mc_wclrch(vt, y);
+    }
+}
+
+// Insert a blank line at cursor_y, scroll down inside scroll region
+void mc_winsline(struct vt_state *vt)
+{
+    // if (vt->cursor_y < vt->scroll_bottom) {
+    //     for (int y = vt->scroll_bottom; y > vt->cursor_y; y--) {
+    //         for (int x = 0; x < vt->width; x++) {
+    //             char c = vt->data[(y - 1) * vt->width + x];
+    //             vt->data[y * vt->width + x] = c;
+    //             console_putchar_at(c, x, y);
+    //         }
+    //     }
+    //     // clear the cursor line
+    //     for (int x = 0; x < vt->width; x++) {
+    //         vt->data[vt->cursor_y * vt->width + x] = ' ';
+    //         console_putchar_at(' ', x, vt->cursor_y);
+    //     }
+    // }
+}
+
+// Delete current line, scroll up inside scroll region
+void mc_wdelline(struct vt_state *vt)
+{
+    // if (vt->cursor_y < vt->scroll_bottom) {
+    //     for (int y = vt->cursor_y; y < vt->scroll_bottom; y++) {
+    //         for (int x = 0; x < vt->width; x++) {
+    //             char c = vt->data[(y + 1) * vt->width + x];
+    //             vt->data[y * vt->width + x] = c;
+    //             console_putchar_at(c, x, y);
+    //         }
+    //     }
+    //     // clear bottom line
+    //     for (int x = 0; x < vt->width; x++) {
+    //         vt->data[vt->scroll_bottom * vt->width + x] = ' ';
+    //         console_putchar_at(' ', x, vt->scroll_bottom);
+    //     }
+    // }
+}
+
+// Delete char at cursor, shift rest of line left
+void mc_wdelchar(struct vt_state *vt)
+{
+    int y = vt->cursor_y;
+    int x = vt->cursor_x;
+    // for (int i = x; i < vt->width - 1; i++) {
+    //     char c = vt->data[y * vt->width + (i + 1)];
+    //     vt->data[y * vt->width + i] = c;
+    //     console_putchar_at(c, i, y);
+    // }
+    // // clear last cell in line
+    // vt->data[y * vt->width + (vt->width - 1)] = ' ';
+    // console_putchar_at(' ', vt->width - 1, y);
+}
+
+// Insert blank char at cursor, shift rest of line right
+void mc_winschar(struct vt_state *vt)
+{
+    // int y = vt->cursor_y;
+    // int x = vt->cursor_x;
+    // for (int i = vt->width - 1; i > x; i--) {
+    //     char c = vt->data[y * vt->width + (i - 1)];
+    //     vt->data[y * vt->width + i] = c;
+    //     console_putchar_at(c, i, y);
+    // }
+    // // place blank at cursor
+    // vt->data[y * vt->width + x] = ' ';
+    // console_putchar_at(' ', x, y);
+}
+
 
 #define S_UP   1
 #define S_DOWN 2
 
 void mc_wscroll(struct vt_state *v, int dir) {
     if (dir == S_UP) {
-        console_scroll_region_up(v->scroll_top, v->scroll_bottom);
-        if (v->cursor_y > v->scroll_bottom)
-            v->cursor_y = v->scroll_bottom;
+        // console_scroll_region_up(v->scroll_top, v->scroll_bottom);
+        // if (v->cursor_y > v->scroll_bottom)
+        //     v->cursor_y = v->scroll_bottom;
     } else if (dir == S_DOWN) {
-        console_scroll_region_down(v->scroll_top, v->scroll_bottom);
-        if (v->cursor_y < v->scroll_top)
-            v->cursor_y = v->scroll_top;
+        // console_scroll_region_down(v->scroll_top, v->scroll_bottom);
+        // if (v->cursor_y < v->scroll_top)
+        //     v->cursor_y = v->scroll_top;
     }
 }
 
@@ -363,7 +488,7 @@ static void v_termout(const char *s, int len)
       if (!vt_addlf && *p == '\r')
         vt_out('\n');
     }
-    mc_wflush();
+    // mc_wflush();
   }
 
 //   (*termout)(s, len);
@@ -796,7 +921,7 @@ static void dec_mode(int on_off)
         vt_win->autowrap = on_off;
         break;
       case 25: /* Cursor on/off */
-        mc_wcursor(vt_win, on_off ? CNORMAL : CNONE);
+        // mc_wcursor(vt_win, on_off ? CNORMAL : CNONE);
         break;
       case 67: /* Backspace key sends. (FIXME: vt420) */
         /* setbackspace(on_off ? 8 : 127); */
@@ -907,7 +1032,7 @@ static void state6(int c)
       }
       mc_wlocate(vt_win, 0, 0);
       vt_win->scroll_enable = 1;
-      mc_wredraw(vt_win, 1);
+      // mc_wredraw(vt_win, 1);
       break;
     default:
       /* IGNORED */
@@ -943,10 +1068,10 @@ static void state7(int c)
     if (c != '\\')
       return;
     /* Process string here! */
-    if (!strcmp(buf, "cursor.on"))
-      mc_wcursor(vt_win, CNORMAL);
-    if (!strcmp(buf, "cursor.off"))
-      mc_wcursor(vt_win, CNONE);
+    // if (!strcmp(buf, "cursor.on"))
+    //   mc_wcursor(vt_win, CNORMAL);
+    // if (!strcmp(buf, "cursor.off"))
+    //   mc_wcursor(vt_win, CNONE);
     if (!strcmp(buf, "linewrap.on")) {
       vt_wrap = -1;
       vt_win->autowrap = 1;
@@ -982,7 +1107,7 @@ void vt_out(int ch)
   int f;
   unsigned char c;
   int go_on = 0;
-  wchar_t wc;
+  // wchar_t wc;
   struct vt_state *vt_win = &vt;
 
   if (!ch)
@@ -1065,9 +1190,9 @@ void vt_out(int ch)
   switch (esc_s) {
     case 0: /* Normal character */
         if (vt_insert)
-          mc_winschar2(vt_win, wc, 1);
+          mc_winschar2(vt_win, c, 1);
         else
-          mc_wputc(vt_win, wc);
+          mc_wputc(vt_win, c);
       break;
     case 1: /* ESC seen */
       state1(c);
@@ -1137,3 +1262,6 @@ void vt_send(int c)
   } else
     v_termout(vt_keys[f].ansi, 0);
 }
+
+const struct tty_operations vt_tty_ops = {
+};

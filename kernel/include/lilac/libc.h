@@ -35,6 +35,7 @@ int puts(const char *str);
 
 int printf(const char *__restrict__ format, ...);
 int vprintf(const char *__restrict__ format, va_list args);
+int sprintf(char *__restrict__ str, const char *__restrict__ fmt, ...);
 int snprintf(char *__restrict__ str, size_t size, const char *__restrict__ format, ...);
 int vsnprintf(char *__restrict__ buf, size_t size, const char *__restrict__ fmt, va_list args);
 

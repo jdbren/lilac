@@ -81,6 +81,18 @@ int vsnprintf(char *restrict buf, size_t size, const char *restrict fmt,
     return str - buf;
 }
 
+int sprintf(char *__restrict__ str, const char *__restrict__ fmt, ...)
+{
+    va_list args;
+    int written;
+
+    va_start(args, fmt);
+    written = vsnprintf(str, 4096, fmt, args);
+    va_end(args);
+
+    return written;
+}
+
 int snprintf(char *restrict buf, size_t size, const char *restrict fmt, ...)
 {
     va_list args;

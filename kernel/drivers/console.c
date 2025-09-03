@@ -17,7 +17,7 @@ int write_to_screen = 0;
 
 char default_buf[30*80];
 
-static struct console consoles[8] = {
+struct console consoles[8] = {
     [0 ... 7] = {
         .lock = SPINLOCK_INIT,
         .cx = 0,
@@ -41,6 +41,19 @@ void console_newline(struct console *con)
         memset(&con->data[phys_r * con->width], ' ', con->width);
     }
 }
+
+/* Put a character at an absolute position (x, y) */
+void console_putchar_at(struct console *con, int c, int x, int y)
+{
+    if (x < 0 || x >= con->width || y < 0 || y >= con->height)
+        return;  // out of bounds, ignore
+
+    int pos = y * con->width + x;
+    // con->data[pos] = (char)c;
+
+    graphics_putc((u16)c, x, y);
+}
+
 
 void console_putchar(struct console *con, int c)
 {
