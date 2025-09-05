@@ -97,17 +97,51 @@ static volatile u8 key_status_map[256];
 #define ALT_RELEASED 0xB8
 #define CAPS_LOCK 0x3A
 
+// symbolic values outside ASCII range
+#define KEY_UP     0x100
+#define KEY_DOWN   0x101
+#define KEY_LEFT   0x102
+#define KEY_RIGHT  0x103
+#define KEY_HOME   0x104
+#define KEY_END    0x105
+#define KEY_PGUP   0x106
+#define KEY_PGDN   0x107
+#define KEY_INS    0x108
+#define KEY_DEL    0x109
+
+
+void kbd_send(int keycode)
+{
+    if (keycode < 0x100) {
+        tty_recv_char(keycode);
+    } else {
+        // Special keys → escape sequences
+        switch (keycode) {
+        // case KEY_UP:    tty_send_str("\033[A"); break;
+        // case KEY_DOWN:  tty_send_str("\033[B"); break;
+        // case KEY_RIGHT: tty_send_str("\033[C"); break;
+        // case KEY_LEFT:  tty_send_str("\033[D"); break;
+        // case KEY_HOME:  tty_send_str("\033[H"); break;
+        // case KEY_END:   tty_send_str("\033[F"); break;
+        // case KEY_PGUP:  tty_send_str("\033[5~"); break;
+        // case KEY_PGDN:  tty_send_str("\033[6~"); break;
+        // case KEY_INS:   tty_send_str("\033[2~"); break;
+        // case KEY_DEL:   tty_send_str("\033[3~"); break;
+        }
+    }
+}
 
 
 extern void kbd_handler(void);
 
 void keyboard_int(void)
 {
-    volatile u8 keycode = inb(KEYBOARD_DATA_PORT);
+    int c = 0;
+    u8 scancode = inb(KEYBOARD_DATA_PORT);
 
     //printf("Keycode: %x, Status: %x\n", keycode);
 
-    switch (keycode) {
+    switch (scancode) {
         case SHIFT_PRESSED:
             key_status_map[SHIFT_PRESSED] = KB_SHIFT;
             break;
@@ -129,31 +163,43 @@ void keyboard_int(void)
         case CAPS_LOCK:
             key_status_map[CAPS_LOCK] = !key_status_map[CAPS_LOCK];
             break;
+        case 72:
+            c = KEY_UP;
+            break;
+        case 80:
+            c = KEY_DOWN;
+            break;
+        case 75:
+            c = KEY_LEFT;
+            break;
+        case 77:
+            c = KEY_RIGHT;
+            break;
+        // etc for Home/End/PgUp/PgDn
+        default:
+        if (keyboard_map[scancode]) {
+            u8 status = key_status_map[SHIFT_PRESSED] | key_status_map[CTRL_PRESSED] | key_status_map[ALT_PRESSED];
+
+            if (key_status_map[CAPS_LOCK])
+                status |= KB_CAPSLOCK;
+
+            if (status & KB_SHIFT)
+                c = keyboard_map_shift[scancode];
+            else
+                c = keyboard_map[scancode];
+
+            if (status & KB_CTRL)
+                c = CTRL(c);
+
+            if (status & KB_ALT)
+                c = ALT(c);
+        }
     }
 
     /* Send End of Interrupt (EOI) */
     apic_eoi();
 
-    if (keycode < sizeof keyboard_map && keyboard_map[keycode]) {
-        u8 status = key_status_map[SHIFT_PRESSED] | key_status_map[CTRL_PRESSED] | key_status_map[ALT_PRESSED];
-        char c;
-
-        if (key_status_map[CAPS_LOCK])
-            status |= KB_CAPSLOCK;
-
-        if (status & KB_SHIFT)
-            c = keyboard_map_shift[keycode];
-        else
-            c = keyboard_map[keycode];
-
-        if (status & KB_CTRL)
-            c = CTRL(c);
-
-        if (status & KB_ALT)
-            c = ALT(c);
-
-        tty_recv_char(c);
-    }
+    kbd_send(c);
 }
 
 void keyboard_init(void)

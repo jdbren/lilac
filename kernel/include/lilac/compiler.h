@@ -16,6 +16,6 @@
 #define __must_be_array(a)	__BUILD_BUG_ON_ZERO_MSG(!__is_array(a), \
 							"must be array")
 
-
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 #endif /* _LILAC_COMPILER_H */
