@@ -7,6 +7,8 @@
 #include <lilac/fs.h>
 #include <lilac/console.h>
 
+#include "vt100.h"
+
 ssize_t tty_read(struct file *f, void *buf, size_t count);
 ssize_t tty_write(struct file *f, const void *buf, size_t count);
 int tty_open(struct inode *inode, struct file *file);
@@ -52,7 +54,7 @@ const struct winsize default_winsize = {
 
 static struct tty ttys[NUM_STATIC_TTYS] = {
     [0 ... NUM_STATIC_TTYS-1] = {
-        .ops = &fbcon_tty_ops,
+        .ops = &vt_tty_ops,
         .ldisc_ops = &default_tty_ldisc_ops,
         .termios = default_termios,
         .winsize = default_winsize,

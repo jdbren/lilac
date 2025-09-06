@@ -6,6 +6,7 @@
 #include <lilac/keyboard.h>
 
 struct file;
+struct tty;
 
 #define INPUT_BUF_SIZE 256
 
@@ -37,5 +38,7 @@ void console_clear(struct console *con);
 
 extern struct console consoles[8];
 extern const struct tty_operations fbcon_tty_ops;
+
+int fbcon_open(struct tty *tty, struct file *file);
 
 #endif

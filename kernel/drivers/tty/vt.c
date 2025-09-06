@@ -23,6 +23,7 @@
  *    jl 06.07.98 use conversion tables with the capture file
  *    mark.einon@gmail.com 16/02/11 - Added option to timestamp terminal output
  */
+#pragma GCC diagnostic ignored "-Wunterminated-string-initialization"
 #include "vt100.h"
 
 #include <lilac/types.h>
@@ -155,9 +156,12 @@ static struct vt_state vt_cons[8] = {
         .vt_insert = 0,
         .vt_crlf = 0,
         .vt_om = 0,
+        .vt_doscroll = 1,
         .newy1 = 0,
         .newy2 = 23,
         .savecol = 112,
+        .xs = 80,
+        .ys = 24,
     }
 };
 
@@ -165,8 +169,11 @@ void vt_out(struct vt_state *vt, int ch, wchar_t wc);
 
 int vt_open(struct tty *tty, struct file *file)
 {
-    if (!tty->driver_data)
+    fbcon_open(tty, file);
+    if (!tty->driver_data) {
         tty->driver_data = &vt_cons[tty->index];
+    }
+    console_clear(&consoles[0]);
     return 0;
 }
 
@@ -220,25 +227,104 @@ void mc_wsetregion(struct vt_state *v, int top, int bottom) {
 }
 
 // Write one character at cursor
-void mc_wputc(struct vt_state *v, char c) {
-    console_putchar_at(&consoles[0], c, v->curx, v->cury);
+// void mc_wputc(struct vt_state *v, char c) {
+//     console_putchar_at(&consoles[0], c, v->curx, v->cury);
 
-    v->curx++;
-    if (v->curx >= v->xs) {
-        if (v->vt_wrap) {
-            v->curx = 0;
-            v->cury++;
-        } else {
-            v->curx = v->xs - 1;
+//     v->curx++;
+//     if (v->curx >= v->xs) {
+//         if (v->vt_wrap) {
+//             v->curx = 0;
+//             v->cury++;
+//         } else {
+//             v->curx = v->xs - 1;
+//         }
+//     }
+
+//     if (v->cury > v->newy2) {
+//         if (v->vt_doscroll)
+//             vt_scroll(v);
+//         else
+//             v->cury = v->newy2;
+//     }
+// }
+
+void mc_wscroll(struct vt_state *v, int dir) {
+    if (dir == S_UP) {
+        console_newline(&consoles[0]);
+        // if (v->cury > v->newy2)
+        //     v->cury = v->newy2;
+    } else if (dir == S_DOWN) {
+        // console_scroll_region_down(v->scroll_top, v->newy2);
+        // if (v->cury < v->scroll_top)
+        //     v->cury = v->scroll_top;
+    }
+}
+
+/*
+ * Print a character in a window.
+ */
+void mc_wputc(struct vt_state *vt, wchar_t c)
+{
+  int mv = 0;
+
+  switch(c) {
+    case '\r':
+      vt->curx = 0;
+      mv++;
+      break;
+    case '\b':
+      if (vt->curx == 0)
+        break;
+      vt->curx--;
+      mv++;
+      break;
+    case '\007':
+      // mc_wbell();
+      break;
+    case '\t':
+      do {
+        mc_wputc(vt, ' '); /* Recursion! */
+      } while (vt->curx % 8);
+      break;
+    case '\n':
+      // if (vt->autocr)
+        vt->curx = 0;
+      /* FALLTHRU */
+    default:
+      /* See if we need to scroll/move. (vt100 behaviour!) */
+      if (c == '\n' || (vt->curx >= vt->xs && vt->vt_wrap)) {
+        if (c != '\n')
+          vt->curx = 0;
+        vt->cury++;
+        mv++;
+        if (vt->cury == vt->ys - 1) {
+          if (vt->vt_doscroll)
+            mc_wscroll(vt, S_UP);
+          else
+            vt->cury = vt->ys;
         }
-    }
+        if (vt->cury >= vt->ys)
+          vt->cury = vt->ys - 1;
+      }
+      /* Now write the character. */
+      if (c != '\n') {
+	if (!vt->vt_wrap && vt->curx >= vt->xs)
+	  c = '>';
+        console_putchar_at(&consoles[0], c, vt->curx,
+               vt->cury);
+        if (++vt->curx >= vt->xs && !vt->vt_wrap) {
+          // vt->curx--;
+          vt->curx = 0; /* Force to move */
+          mv++;
+        }
+      }
+      break;
+  }
+  // if (mv && vt->vt_direct)
+  //   _gotoxy(vt->curx, vt->cury);
 
-    if (v->cury > v->newy2) {
-        if (v->vt_doscroll)
-            vt_scroll(v);
-        else
-            v->cury = v->newy2;
-    }
+  // if (vt->direct && dirflush && !_intern)
+  //   mc_wflush();
 }
 
 // Insert mode version (shift chars right, then insert)
@@ -394,18 +480,6 @@ void mc_winschar(struct vt_state *vt)
 #define S_UP   1
 #define S_DOWN 2
 
-void mc_wscroll(struct vt_state *v, int dir) {
-    if (dir == S_UP) {
-        // console_scroll_region_up(v->scroll_top, v->newy2);
-        // if (v->cury > v->newy2)
-        //     v->cury = v->newy2;
-    } else if (dir == S_DOWN) {
-        // console_scroll_region_down(v->scroll_top, v->newy2);
-        // if (v->cury < v->scroll_top)
-        //     v->cury = v->scroll_top;
-    }
-}
-
 // Write a null-terminated string to the VT
 void mc_wputs(struct vt_state *v, const char *s) {
     while (*s) {
@@ -423,7 +497,7 @@ static void v_termout(struct vt_state *vt, const char *s, int len)
   const char *p;
 
   if (vt->vt_echo) {
-    for (p = s; *p; p++) {
+    for (p = s; *p && p < s+len; p++) {
       vt_out(vt, *p, 0);
       if (!vt->vt_addlf && *p == '\r')
         vt_out(vt, '\n', 0);

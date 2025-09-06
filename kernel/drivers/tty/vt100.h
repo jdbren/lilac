@@ -184,10 +184,6 @@ struct vt_state {
 #define K_ERA       '\b'
 #define K_KILL      ((int) -2)
 
-/* Internal structure. */
-struct key {
-    char *cap;
-    char len;
-};
+extern const struct tty_operations vt_tty_ops;
 
 #endif /* ! __MINICOM__SRC__VT100_H__ */
