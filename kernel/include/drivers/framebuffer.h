@@ -37,5 +37,6 @@ void graphics_scroll(void);
 
 struct framebuffer_color graphics_getcolor(void);
 void graphics_setcolor(u32 fg, u32 bg);
+void graphics_print_cursor(int x, int y);
 
 #endif

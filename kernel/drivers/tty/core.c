@@ -121,6 +121,14 @@ int tty_recv_char(u8 c)
     return 0;
 }
 
+int tty_recv_buf(char *buf, size_t size)
+{
+    struct tty *tty = &ttys[active];
+    if (tty->ldisc_ops && tty->ldisc_ops->receive_buf)
+        tty->ldisc_ops->receive_buf(tty, buf, NULL, size);
+    return 0;
+}
+
 
 
 // VFS interface

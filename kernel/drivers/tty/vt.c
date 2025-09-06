@@ -133,7 +133,7 @@ static char * vt_map[] = {
 
 
 int vt_open(struct tty *tty, struct file *file);
-void vt_close(struct tty *tty, struct file *file);
+void vt_close(struct tty *tty, struct file *f);
 ssize_t vt_write(struct tty *tty, const u8 *buf, size_t count);
 
 const struct tty_operations vt_tty_ops = {
@@ -194,7 +194,7 @@ void mc_wcursor(struct vt_state *vt, int type)
 
 void mc_wredraw(struct vt_state *vt, int i)
 {
-    
+
 }
 
 // Move cursor to (x,y)
@@ -1270,6 +1270,10 @@ void vt_out(struct vt_state *vt, int ch, wchar_t wc)
 
 ssize_t vt_write(struct tty *tty, const u8 *buf, size_t count)
 {
-    v_termout(tty->driver_data, buf, count);
+    v_termout(tty->driver_data, (const char*)buf, count);
     return count;
+}
+
+void vt_close(struct tty *tty, struct file *f)
+{
 }

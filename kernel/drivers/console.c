@@ -58,7 +58,9 @@ void console_putchar_at(struct console *con, int c, int x, int y)
 void console_putchar(struct console *con, int c)
 {
     if (c == '\n') {
+        graphics_putc(' ', con->cx, con->cy);
         console_newline(con);
+        graphics_print_cursor(con->cx, con->cy);
         return;
     } else if (c == '\t') {
         do {
@@ -67,17 +69,20 @@ void console_putchar(struct console *con, int c)
         return;
     } else if (c == '\b') {
         if (con->cx > 0) {
+            graphics_putc(' ', con->cx, con->cy);
             con->cx--;
             con->data[con_pos(con)] = ' ';
-            graphics_putc(' ', con->cx, con->cy);
+            graphics_print_cursor(con->cx, con->cy);
         }
         return;
     }
     con->data[con_pos(con)] = (char)c;
     graphics_putc((u16)c, con->cx, con->cy);
     if (++(con->cx) >= con->width) {
+        graphics_putc(' ', con->cx, con->cy);
         console_newline(con);
     }
+    graphics_print_cursor(con->cx, con->cy);
 }
 
 void console_redraw(struct console *con)
@@ -132,6 +137,8 @@ int fbcon_open(struct tty *tty, struct file *file)
     if (!tty->console) {
         tty->console = con;
         con->data = kmalloc(con->height * con->width);
+        if (!con->data)
+            panic("Out of memory");
         memset(con->data, ' ', con->height * con->width);
         memcpy(con->data, "HELLO WORLD!", 12);
     }

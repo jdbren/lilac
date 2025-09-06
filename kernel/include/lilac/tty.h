@@ -193,5 +193,6 @@ extern const struct tty_ldisc_ops default_tty_ldisc_ops;
 
 void tty_init(void);
 int tty_recv_char(u8 c);
+int tty_recv_buf(char *buf, size_t size);
 
 #endif // _LILAC_TTY_H

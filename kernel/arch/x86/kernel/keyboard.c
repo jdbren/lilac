@@ -117,16 +117,16 @@ void kbd_send(int keycode)
     } else {
         // Special keys → escape sequences
         switch (keycode) {
-        // case KEY_UP:    tty_send_str("\033[A"); break;
-        // case KEY_DOWN:  tty_send_str("\033[B"); break;
-        // case KEY_RIGHT: tty_send_str("\033[C"); break;
-        // case KEY_LEFT:  tty_send_str("\033[D"); break;
-        // case KEY_HOME:  tty_send_str("\033[H"); break;
-        // case KEY_END:   tty_send_str("\033[F"); break;
-        // case KEY_PGUP:  tty_send_str("\033[5~"); break;
-        // case KEY_PGDN:  tty_send_str("\033[6~"); break;
-        // case KEY_INS:   tty_send_str("\033[2~"); break;
-        // case KEY_DEL:   tty_send_str("\033[3~"); break;
+        case KEY_UP:    tty_recv_buf("\033[A", 3); break;
+        case KEY_DOWN:  tty_recv_buf("\033[B", 3); break;
+        case KEY_RIGHT: tty_recv_buf("\033[C", 3); break;
+        case KEY_LEFT:  tty_recv_buf("\033[D", 3); break;
+        case KEY_HOME:  tty_recv_buf("\033[H", 3); break;
+        case KEY_END:   tty_recv_buf("\033[F", 3); break;
+        case KEY_PGUP:  tty_recv_buf("\033[5~", 4); break;
+        case KEY_PGDN:  tty_recv_buf("\033[6~", 4); break;
+        case KEY_INS:   tty_recv_buf("\033[2~", 4); break;
+        case KEY_DEL:   tty_recv_buf("\033[3~", 4); break;
         }
     }
 }
@@ -177,7 +177,7 @@ void keyboard_int(void)
             break;
         // etc for Home/End/PgUp/PgDn
         default:
-        if (keyboard_map[scancode]) {
+        if (scancode < sizeof keyboard_map && keyboard_map[scancode]) {
             u8 status = key_status_map[SHIFT_PRESSED] | key_status_map[CTRL_PRESSED] | key_status_map[ALT_PRESSED];
 
             if (key_status_map[CAPS_LOCK])
@@ -199,7 +199,10 @@ void keyboard_int(void)
     /* Send End of Interrupt (EOI) */
     apic_eoi();
 
-    kbd_send(c);
+    if (c) {
+        // klog(LOG_DEBUG, "Keycode: %x\n", c);
+        kbd_send(c);
+    }
 }
 
 void keyboard_init(void)

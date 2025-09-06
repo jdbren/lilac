@@ -85,6 +85,8 @@ struct framebuffer_color graphics_getcolor(void)
     return (struct framebuffer_color){fb->fb_fg, fb->fb_bg};
 }
 
+static void print_font_info(struct font *terminal_font);
+
 void graphics_init(struct multiboot_tag_framebuffer *mfb)
 {
     if (mfb->common.framebuffer_type != MULTIBOOT_FRAMEBUFFER_TYPE_RGB
@@ -119,6 +121,10 @@ void graphics_setcolor(u32 fg, u32 bg)
     fb->fb_bg = bg;
 }
 
+void graphics_print_cursor(int x, int y)
+{
+    graphics_putc(197, x, y);
+}
 
 /**********************************/
 
