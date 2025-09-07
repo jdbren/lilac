@@ -20,62 +20,9 @@
 
 #include <stdint.h>
 
-struct vt_state {
-    char *vt_trans[2];
-    int vt_charset;             /* Character set. */
-
-    const struct console_ops *con_ops;
-
-    int esc_s;
-    int attr;
-    int curx, cury;
-    int xs, ys;
-    int color;
-    int vt_fg;                  /* Standard foreground color. */
-    int vt_bg;                  /* Standard background color. */
-    // int vt_bs = 8;       /* Code that backspace key sends. */
-
-    int vt_echo         : 1;    /* Local echo on/off. */
-    int vt_wrap         : 1;    /* Line wrap on/off */
-    int vt_addlf        : 1;    /* Add linefeed on/off */
-    int vt_addcr        : 1;    /* Add carriagereturn on/off */
-    int vt_keypad       : 2;    /* Keypad mode. */
-    int vt_cursor       : 1;    /* cursor key mode. */
-    int vt_asis         : 1;    /* 8bit clean mode. */
-    int vt_insert       : 1;    /* Insert mode */
-    int vt_crlf         : 1;    /* Return sends CR/LF */
-    int vt_om           : 1;    /* Origin mode. */
-    int vt_doscroll     : 1;
-    int vt_direct       : 1;
-
-    void (*vt_keyb)(int, int);/* Gets called for NORMAL/APPL switch. */
-    void (*termout)(const char *, int);/* Gets called to output a string. */
-
-    int escparms[8];        /* Accumulated escape sequence. */
-    int ptr;                /* Index into escparms array. */
-    unsigned vt_tabs[5];    /* Tab stops for max. 32*5 = 160 columns. */
-
-    short newy1;     /* Current size of scrolling region. */
-    short newy2;
-
-    /* Saved color and positions */
-    short savex, savey, saveattr;
-    short savecol;
-    short savecharset;
-    char *savetrans[2];
-};
-
 /* Keypad and cursor key modes. */
 #define NORMAL      1
 #define APPL        2
-
-/* Prototypes from vt100.c */
-// void vt_install(void(*)(const char *, int), void (*)(int, int), WIN *);
-// void vt_init(int, int, int, int, int, int);
-// void vt_pinit(WIN *, int, int);
-// void vt_set(int, int, int, int, int, int, int, int, int);
-// void vt_out(int);
-// void vt_send(int ch);
 
 /* We want the ANSI offsetof macro to do some dirty stuff. */
 #ifndef offsetof

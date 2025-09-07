@@ -49,7 +49,7 @@ void console_putchar_at(struct console *con, int c, int x, int y)
         return;  // out of bounds, ignore
 
     int pos = y * con->width + x;
-    // con->data[pos] = (char)c;
+    con->data[pos] = (char)c;
 
     graphics_putc((u16)c, x, y);
 }
@@ -96,6 +96,13 @@ void console_redraw(struct console *con)
     }
 }
 
+void console_display_cursor(struct console *con, int x, int y)
+{
+    static int oldx = 79, oldy = 23;
+    graphics_putc(con->data[(( (con->first_row + oldy) % con->height ) * con->width ) + oldx], oldx, oldy);
+    graphics_print_cursor(x, y);
+    oldx = x; oldy = y;
+}
 
 void console_writestring(struct console *con, const char *data)
 {
@@ -133,15 +140,17 @@ void console_init(void)
 
 int fbcon_open(struct tty *tty, struct file *file)
 {
-    struct console *con = &consoles[tty->index];
-    if (!tty->console) {
-        tty->console = con;
-        con->data = kmalloc(con->height * con->width);
-        if (!con->data)
-            panic("Out of memory");
-        memset(con->data, ' ', con->height * con->width);
-        memcpy(con->data, "HELLO WORLD!", 12);
-    }
+    // struct console *con = &consoles[tty->index];
+    // if (!tty->console) {
+    //     tty->console = con;
+    //     con->data = kmalloc(con->height * con->width);
+    //     if (!con->data)
+    //         panic("Out of memory");
+    //     memset(con->data, ' ', con->height * con->width);
+    //     memcpy(con->data, "HELLO WORLD!", 12);
+
+    // }
+
     return 0;
 }
 
@@ -155,9 +164,3 @@ ssize_t fbcon_write(struct tty *tty, const u8 *buf, size_t count)
     release_lock(&con->lock);
     return count;
 }
-
-const struct tty_operations fbcon_tty_ops = {
-    .open = fbcon_open,
-    .close = NULL,
-    .write = fbcon_write,
-};

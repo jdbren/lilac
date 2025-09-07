@@ -3,19 +3,10 @@
 
 #include <lilac/types.h>
 #include <lilac/sync.h>
-#include <lilac/keyboard.h>
 
 struct file;
 struct tty;
-
-#define INPUT_BUF_SIZE 256
-
-struct input_buffer {
-    char buf[INPUT_BUF_SIZE];
-    int rpos;
-    int wpos;
-    int epos;
-};
+struct vc_state;
 
 struct console {
     spinlock_t lock;
@@ -24,6 +15,81 @@ struct console {
     char *data;
     int first_row;
 };
+
+
+struct con_display_ops {
+    struct module *owner;
+    const char *(*con_startup)(void);
+    void    (*con_init)(struct vc_state *, int);
+    void    (*con_deinit)(struct vc_state *);
+    void    (*con_clear)(struct vc_state *, int, int, int, int);
+    void    (*con_putc)(struct vc_state *, int, int, int);
+    void    (*con_putcs)(struct vc_state *, const unsigned short *, int, int, int);
+    void    (*con_cursor)(struct vc_state *, int);
+    int     (*con_scroll)(struct vc_state *, int, int, int, int);
+    void    (*con_bmove)(struct vc_state *, int, int, int, int, int, int);
+    int     (*con_switch)(struct vc_state *);
+    int     (*con_blank)(struct vc_state *, int, int);
+    int     (*con_font_set)(struct vc_state *, struct console_font *, unsigned);
+    int     (*con_font_get)(struct vc_state *, struct console_font *);
+    int     (*con_font_default)(struct vc_state *, struct console_font *, char *);
+    int     (*con_font_copy)(struct vc_state *, int);
+    int     (*con_resize)(struct vc_state *, unsigned int, unsigned int, unsigned int);
+    int     (*con_set_palette)(struct vc_state *, unsigned char *);
+    int     (*con_scrolldelta)(struct vc_state *, int);
+    int     (*con_set_origin)(struct vc_state *);
+    void    (*con_save_screen)(struct vc_state *);
+    u8      (*con_build_attr)(struct vc_state *, u8, u8, u8, u8, u8, u8);
+    void    (*con_invert_region)(struct vc_state *, u16 *, int);
+    u16     *(*con_screen_pos)(struct vc_state *, int);
+    unsigned long (*con_getxy)(struct vc_state *, unsigned long, int *, int *);
+};
+
+struct vc_state {
+    const struct con_display_ops *con_ops;
+    char *screen_buf;
+    void *display_data;
+
+    int esc_s;
+    int attr;
+    int curx, cury;
+    int xs, ys;
+    int color;
+    int vt_fg;                  /* Standard foreground color. */
+    int vt_bg;                  /* Standard background color. */
+    char *vt_trans[2];
+    int vt_charset;             /* Character set. */
+    // int vt_bs = 8;           /* Code that backspace key sends. */
+
+    int vt_echo         : 1;    /* Local echo on/off. */
+    int vt_wrap         : 1;    /* Line wrap on/off */
+    int vt_addlf        : 1;    /* Add linefeed on/off */
+    int vt_addcr        : 1;    /* Add carriagereturn on/off */
+    int vt_keypad       : 2;    /* Keypad mode. */
+    int vt_cursor       : 1;    /* cursor key mode. */
+    int vt_asis         : 1;    /* 8bit clean mode. */
+    int vt_insert       : 1;    /* Insert mode */
+    int vt_crlf         : 1;    /* Return sends CR/LF */
+    int vt_om           : 1;    /* Origin mode. */
+    int vt_doscroll     : 1;
+    int vt_direct       : 1;
+
+    int escparms[8];        /* Accumulated escape sequence. */
+    int ptr;                /* Index into escparms array. */
+    unsigned vt_tabs[5];    /* Tab stops for max. 32*5 = 160 columns. */
+
+    short scroll_top;     /* Current size of scrolling region. */
+    short scroll_bottom;
+
+    /* Saved color and positions */
+    int savex, savey, saveattr;
+    int savecol;
+    int savecharset;
+    char *savetrans[2];
+};
+
+#define S_UP 1
+#define S_DOWN 2
 
 extern int write_to_screen;
 
@@ -35,10 +101,13 @@ void console_newline(struct console *con);
 void console_putchar_at(struct console *con, int c, int x, int y);
 void console_putchar(struct console *con, int c);
 void console_clear(struct console *con);
+void console_display_cursor(struct console *con, int x, int y);
 
 extern struct console consoles[8];
 extern const struct tty_operations fbcon_tty_ops;
 
 int fbcon_open(struct tty *tty, struct file *file);
+
+extern const struct con_display_ops fbcon_ops;
 
 #endif

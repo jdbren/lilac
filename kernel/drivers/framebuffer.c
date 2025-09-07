@@ -106,6 +106,7 @@ void graphics_init(struct multiboot_tag_framebuffer *mfb)
 
     psf_init_font();
     graphics_clear();
+    fb->font = &termius_font;
 
     kstatus(STATUS_OK, "Graphics mode terminal initialized\n");
 }

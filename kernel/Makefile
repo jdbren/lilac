@@ -78,6 +78,7 @@ fs/stat.o \
 fs/name_utils.o \
 drivers/blkdev.o \
 drivers/console.o \
+drivers/fbcon.o \
 drivers/pci.o \
 drivers/ahci.o \
 drivers/framebuffer.o \

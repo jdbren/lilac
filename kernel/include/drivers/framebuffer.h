@@ -2,6 +2,7 @@
 #define _FRAMEBUFFER_H
 
 #include <lilac/types.h>
+#include <lilac/font.h>
 #include <utility/multiboot2.h>
 
 #define RGB_WHITE 0xFFFFFFFF
@@ -28,6 +29,7 @@ struct framebuffer {
     u16 fb_pitch;
     u32 fb_fg;
     u32 fb_bg;
+    struct font *font;
 };
 
 void graphics_init(struct multiboot_tag_framebuffer *fb);
