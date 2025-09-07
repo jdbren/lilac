@@ -18,8 +18,6 @@ struct console {
 
 
 struct con_display_ops {
-    struct module *owner;
-    const char *(*con_startup)(void);
     void    (*con_init)(struct vc_state *, int);
     void    (*con_deinit)(struct vc_state *);
     void    (*con_clear)(struct vc_state *, int, int, int, int);
@@ -30,19 +28,6 @@ struct con_display_ops {
     void    (*con_bmove)(struct vc_state *, int, int, int, int, int, int);
     int     (*con_switch)(struct vc_state *);
     int     (*con_blank)(struct vc_state *, int, int);
-    int     (*con_font_set)(struct vc_state *, struct console_font *, unsigned);
-    int     (*con_font_get)(struct vc_state *, struct console_font *);
-    int     (*con_font_default)(struct vc_state *, struct console_font *, char *);
-    int     (*con_font_copy)(struct vc_state *, int);
-    int     (*con_resize)(struct vc_state *, unsigned int, unsigned int, unsigned int);
-    int     (*con_set_palette)(struct vc_state *, unsigned char *);
-    int     (*con_scrolldelta)(struct vc_state *, int);
-    int     (*con_set_origin)(struct vc_state *);
-    void    (*con_save_screen)(struct vc_state *);
-    u8      (*con_build_attr)(struct vc_state *, u8, u8, u8, u8, u8, u8);
-    void    (*con_invert_region)(struct vc_state *, u16 *, int);
-    u16     *(*con_screen_pos)(struct vc_state *, int);
-    unsigned long (*con_getxy)(struct vc_state *, unsigned long, int *, int *);
 };
 
 struct vc_state {
@@ -72,7 +57,6 @@ struct vc_state {
     int vt_crlf         : 1;    /* Return sends CR/LF */
     int vt_om           : 1;    /* Origin mode. */
     int vt_doscroll     : 1;
-    int vt_direct       : 1;
 
     int escparms[8];        /* Accumulated escape sequence. */
     int ptr;                /* Index into escparms array. */
@@ -107,6 +91,8 @@ extern struct console consoles[8];
 extern const struct tty_operations fbcon_tty_ops;
 
 int fbcon_open(struct tty *tty, struct file *file);
+void set_cursor(struct vc_state *vt, int x, int y);
+void clear_cursor(struct vc_state *vt, int x, int y);
 
 extern const struct con_display_ops fbcon_ops;
 
