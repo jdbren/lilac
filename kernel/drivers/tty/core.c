@@ -146,6 +146,7 @@ int tty_open(struct inode *inode, struct file *file)
 
     if (!strcmp("tty", name)) {
         tty = current->ctty;
+        if (!tty) return -ENXIO;
     } else {
         index = atoi(&lastc);
         if (index >= NUM_STATIC_TTYS || index < 0)

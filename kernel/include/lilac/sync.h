@@ -29,10 +29,7 @@ static inline void acquire_lock(spinlock_t *spin)
 		pause();
 }
 
-static inline void release_lock(spinlock_t *spin)
-{
-    atomic_flag_clear(spin);
-}
+#define release_lock(spin) atomic_flag_clear(spin)
 
 struct lockref {
     spinlock_t lock;

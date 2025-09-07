@@ -53,10 +53,6 @@ void fbcon_putcs(struct vc_state *vt, const unsigned short *s, int count, int x,
 
 }
 
-void fbcon_cursor(struct vc_state *vt, int on)
-{
-    vt->vt_cursor = !!on;
-}
 
 int fbcon_scroll(struct vc_state *conp, int t, int b, int dir, int count)
 {

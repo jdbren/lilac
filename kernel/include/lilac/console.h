@@ -51,7 +51,8 @@ struct vc_state {
     int vt_addlf        : 1;    /* Add linefeed on/off */
     int vt_addcr        : 1;    /* Add carriagereturn on/off */
     int vt_keypad       : 2;    /* Keypad mode. */
-    int vt_cursor       : 1;    /* cursor key mode. */
+    int vt_cursor_mode  : 1;    /* cursor key mode. */
+    int vt_cursor_on    : 1;    /* cursor on/off */
     int vt_asis         : 1;    /* 8bit clean mode. */
     int vt_insert       : 1;    /* Insert mode */
     int vt_crlf         : 1;    /* Return sends CR/LF */

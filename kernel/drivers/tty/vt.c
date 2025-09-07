@@ -1,4 +1,7 @@
 /*
+ * This file has been substantially modified, but the logic is taken from
+ * Minicom source code (vt100.c). Original header below.
+ *
  * vt100.c	ANSI/VT102 emulator code.
  *		This code was integrated to the Minicom communications
  *		package, but has been reworked to allow usage as a separate
@@ -130,7 +133,7 @@ static char * vt_map[] = {
 };
 
 #define mc_wgetattr(w) ( (w)->attr )
-#define mc_wsetattr(w,a) ( (w)->attr = (a) )
+#define wsetattr(w,a) ( (w)->attr = (a) )
 
 int vt_open(struct tty *tty, struct file *file);
 void vt_close(struct tty *tty, struct file *f);
@@ -152,7 +155,7 @@ static struct vc_state vt_cons[8] = {
         .vt_addlf = 0,
         .vt_addcr = 1,
         .vt_keypad = 0,
-        .vt_cursor = 1,
+        .vt_cursor_mode = 1,
         .vt_asis = 0,
         .vt_insert = 0,
         .vt_crlf = 0,
@@ -232,19 +235,12 @@ static void del(struct vc_state *vc)
 * Cursor and scroll settings
 */
 
-// cursor type
-static inline void mc_wcursor(struct vc_state *vt, int type)
+static void wredraw(struct vc_state *vt, int i)
 {
-    vt->vt_cursor = type;
-}
-
-static void mc_wredraw(struct vc_state *vt, int i)
-{
-
 }
 
 // Move cursor to (x,y)
-static void mc_wlocate(struct vc_state *v, int x, int y)
+static void locate_curs(struct vc_state *v, int x, int y)
 {
     if (x < 0) x = 0;
     if (x >= v->xs) x = v->xs - 1;
@@ -255,25 +251,25 @@ static void mc_wlocate(struct vc_state *v, int x, int y)
 }
 
 // Set scroll region (DECSTBM)
-static void mc_wsetregion(struct vc_state *v, int top, int bottom)
+static void set_scrl_reg(struct vc_state *vt, int top, int bottom)
 {
     if (top < 0) top = 0;
-    if (bottom >= v->ys) bottom = v->ys - 1;
+    if (bottom >= vt->ys) bottom = vt->ys - 1;
     if (top >= bottom) {
         top = 0;
-        bottom = v->ys - 1;
+        bottom = vt->ys - 1;
     }
-    v->scroll_top = top;
-    v->scroll_bottom = bottom;
+    vt->scroll_top = top;
+    vt->scroll_bottom = bottom;
 }
 
-static inline void mc_wsetfgcol(struct vc_state *vt, int col)
+static inline void wsetfgcol(struct vc_state *vt, int col)
 {
     // graphics_setcolor()
     vt->vt_fg = col;
 }
 
-static inline void mc_wsetbgcol(struct vc_state *vt, int col)
+static inline void wsetbgcol(struct vc_state *vt, int col)
 {
     // graphics_setcolor()
     vt->vt_bg = col;
@@ -285,44 +281,44 @@ static inline void mc_wsetbgcol(struct vc_state *vt, int col)
 */
 
 // Clear a single line completely
-static inline void mc_wclrch(struct vc_state *vt, int y)
+static inline void wclrch(struct vc_state *vt, int y)
 {
     for (int x = 0; x < vt->xs; x++)
         vt->con_ops->con_putc(vt, ' ', x, y);
 }
 
 // Clear from cursor → end of line
-static inline void mc_wclreol(struct vc_state *vt)
+static inline void wclreol(struct vc_state *vt)
 {
     for (int x = vt->curx; x < vt->xs; x++)
         vt->con_ops->con_putc(vt, ' ', x, vt->cury);
 }
 
 // Clear from beginning of line → cursor
-static inline void mc_wclrel(struct vc_state *vt)
+static inline void wclrel(struct vc_state *vt)
 {
     for (int x = 0; x <= vt->curx; x++)
         vt->con_ops->con_putc(vt, ' ', x, vt->cury);
 }
 
 // Clear from cursor → end of screen
-static inline void mc_wclreos(struct vc_state *vt)
+static inline void wclreos(struct vc_state *vt)
 {
-    mc_wclreol(vt);
+    wclreol(vt);
     for (int y = vt->cury + 1; y < vt->ys; y++)
-        mc_wclrch(vt, y);
+        wclrch(vt, y);
 }
 
 // Clear from beginning of screen → cursor
-static inline void mc_wclrbos(struct vc_state *vt)
+static inline void wclrbos(struct vc_state *vt)
 {
     for (int y = 0; y < vt->cury; y++)
-        mc_wclrch(vt, y);
-    mc_wclrel(vt);
+        wclrch(vt, y);
+    wclrel(vt);
 }
 
 // Clear entire screen
-static inline void mc_winclr(struct vc_state *vt)
+static inline void winclr(struct vc_state *vt)
 {
     vt->con_ops->con_clear(vt, 0, 0, vt->ys, vt->xs);
     vt->curx = 0;
@@ -330,7 +326,7 @@ static inline void mc_winclr(struct vc_state *vt)
 }
 
 // scroll one line up or down
-static inline void mc_wscroll(struct vc_state *v, int dir)
+static inline void wscroll(struct vc_state *v, int dir)
 {
     v->con_ops->con_scroll(v, v->scroll_top, v->scroll_bottom, dir, 1);
 }
@@ -339,18 +335,16 @@ static inline void mc_wscroll(struct vc_state *v, int dir)
 /*
  * Print a character in a window.
  */
-void mc_wputc(struct vc_state *vt, char c)
+void wputc(struct vc_state *vt, char c)
 {
     /* See if we need to scroll/move. (vt100 behaviour!) */
     if (c == '\n' || (vt->curx >= vt->xs && vt->vt_wrap)) {
         if (c != '\n')
             vt->curx = 0;
         vt->cury++;
-        if (vt->cury == vt->ys - 1) {
+        if (vt->cury >= vt->ys - 1) {
             if (vt->vt_doscroll)
-                mc_wscroll(vt, S_UP);
-            else
-                vt->cury = vt->ys;
+                wscroll(vt, S_UP);
         }
         if (vt->cury >= vt->ys)
             vt->cury = vt->ys - 1;
@@ -462,11 +456,8 @@ static void fb_clear_chars(struct framebuffer *fb, int row, int start_col, int c
 
 /**
  * Insert characters at the current cursor position
- * @param v virtual console state
- * @param c character to insert
- * @param count number of times to insert the character
  */
-void mc_winschar2(struct vc_state *v, char c, int count)
+void winsnchar(struct vc_state *v, char c, int count)
 {
     struct framebuffer *fb = v->display_data;
 
@@ -491,11 +482,11 @@ void mc_winschar2(struct vc_state *v, char c, int count)
     // Clear the positions where we'll insert new characters
     fb_clear_chars(fb, cur_y, cur_x, count);
 
-    // Insert the new characters using mc_wputc
+    // Insert the new characters using wputc
     int original_x = v->curx;
     for (int i = 0; i < count; i++) {
         v->curx = original_x + i;
-        mc_wputc(v, c);
+        wputc(v, c);
     }
 
     // Restore cursor to original position (some implementations expect this)
@@ -705,17 +696,16 @@ void mc_wdelchar(struct vc_state *vt)
 }
 
 // Insert blank char at cursor, shift rest of line right
-void mc_winschar(struct vc_state *vt)
+void winschar(struct vc_state *vt)
 {
-    mc_winschar2(vt, ' ', 1);
+    winsnchar(vt, ' ', 1);
 }
 
-
 // Write a null-terminated string to the VT
-void mc_wputs(struct vc_state *v, const char *s)
+void wputs(struct vc_state *v, const char *s)
 {
     while (*s)
-        mc_wputc(v, *s++);
+        wputc(v, *s++);
 }
 
 
@@ -756,20 +746,20 @@ static void state1(struct vc_state *vt, int c)
         if (c == 'D') { /* Down. */
             y = vt->cury + 1;
             if (y == vt->scroll_bottom + 1)
-                mc_wscroll(vt, S_UP);
+                wscroll(vt, S_UP);
             else if (vt->cury < vt->ys)
-                mc_wlocate(vt, x, y);
+                locate_curs(vt, x, y);
         }
         if (c == 'M')  { /* Up. */
             y = vt->cury - 1;
             if (y == vt->scroll_top - 1)
-                mc_wscroll(vt, S_DOWN);
+                wscroll(vt, S_DOWN);
             else if (y >= 0)
-                mc_wlocate(vt, x, y);
+                locate_curs(vt, x, y);
         }
         break;
     case 'E': /* CR + NL */
-        mc_wputs(vt, "\r\n");
+        wputs(vt, "\r\n");
         break;
     case '7': /* Save attributes and cursor position */
     case 's':
@@ -786,9 +776,9 @@ static void state1(struct vc_state *vt, int c)
         vt->vt_charset = vt->savecharset;
         vt->vt_trans[0] = vt->savetrans[0];
         vt->vt_trans[1] = vt->savetrans[1];
-        vt->color = vt->savecol; /* HACK should use mc_wsetfgcol etc */
-        mc_wsetattr(vt, vt->saveattr);
-        mc_wlocate(vt, vt->savex, vt->savey);
+        vt->color = vt->savecol; /* HACK should use wsetfgcol etc */
+        wsetattr(vt, vt->saveattr);
+        locate_curs(vt, vt->savex, vt->savey);
         break;
     case '=': /* Keypad into applications mode */
         vt->vt_keypad = APPL;
@@ -801,11 +791,11 @@ static void state1(struct vc_state *vt, int c)
         break;
     case 'c': /* Reset to initial state */
         f = XA_NORMAL;
-        mc_wsetattr(vt, f);
+        wsetattr(vt, f);
         vt->vt_wrap = 1;
         vt->vt_crlf = vt->vt_insert = 0;
         //   vt_init(vt_type, vt->vt_fg, vt->vt_bg, vt->vt_wrap, 0, 0);
-        mc_wlocate(vt, 0, 0);
+        locate_curs(vt, 0, 0);
         break;
     case 'H': /* Set tab in current position */
         x = vt->curx;
@@ -894,23 +884,23 @@ static void state2(struct vc_state *vt, int c)
             if (y <= vt->scroll_top - 1)
             y = vt->scroll_top;
         }
-        mc_wlocate(vt, x, y);
+        locate_curs(vt, x, y);
         break;
     case 'X': /* Character erasing (ECH) */
         if ((f = vt->escparms[0]) == 0)
             f = 1;
-        mc_wclrch(vt, f);
+        wclrch(vt, f);
         break;
     case 'K': /* Line erasing */
         switch (vt->escparms[0]) {
         case 0:
-            mc_wclreol(vt);
+            wclreol(vt);
             break;
         case 1:
             //mc_wclrbol(vt);
             break;
         case 2:
-            mc_wclrel(vt);
+            wclrel(vt);
             break;
         }
         break;
@@ -919,13 +909,13 @@ static void state2(struct vc_state *vt, int c)
         y = vt->attr;
         switch (vt->escparms[0]) {
         case 0:
-            mc_wclreos(vt);
+            wclreos(vt);
             break;
         case 1:
-            mc_wclrbos(vt);
+            wclrbos(vt);
             break;
         case 2:
-            mc_winclr(vt);
+            winclr(vt);
             break;
         }
         break;
@@ -961,9 +951,9 @@ static void state2(struct vc_state *vt, int c)
         vt->vt_charset = vt->savecharset;
         vt->vt_trans[0] = vt->savetrans[0];
         vt->vt_trans[1] = vt->savetrans[1];
-        vt->color = vt->savecol; /* HACK should use mc_wsetfgcol etc */
-        mc_wsetattr(vt, vt->saveattr);
-        mc_wlocate(vt, vt->savex, vt->savey);
+        vt->color = vt->savecol; /* HACK should use wsetfgcol etc */
+        wsetattr(vt, vt->saveattr);
+        locate_curs(vt, vt->savex, vt->savey);
         break;
     case 'h':
         ansi_mode(vt, 1);
@@ -979,13 +969,13 @@ static void state2(struct vc_state *vt, int c)
             x = 1;
         if (vt->vt_om)
             y += vt->scroll_top;
-        mc_wlocate(vt, x - 1, y - 1);
+        locate_curs(vt, x - 1, y - 1);
         break;
     case 'G': /* HPA: Cursor to column x */
     case '`':
         if ((x = vt->escparms[1]) == 0)
             x = 1;
-        mc_wlocate(vt, x - 1, vt->cury);
+        locate_curs(vt, x - 1, vt->cury);
         break;
     case 'g': /* Clear tab stop(s) */
         if (vt->escparms[0] == 0) {
@@ -1002,14 +992,14 @@ static void state2(struct vc_state *vt, int c)
         attr = mc_wgetattr((vt));
         for (f = 0; f <= vt->ptr; f++) {
             if (vt->escparms[f] >= 30 && vt->escparms[f] <= 37)
-                mc_wsetfgcol(vt, vt->escparms[f] - 30);
+                wsetfgcol(vt, vt->escparms[f] - 30);
             if (vt->escparms[f] >= 40 && vt->escparms[f] <= 47)
-                mc_wsetbgcol(vt, vt->escparms[f] - 40);
+                wsetbgcol(vt, vt->escparms[f] - 40);
             switch (vt->escparms[f]) {
             case 0:
                 attr = XA_NORMAL;
-                mc_wsetfgcol(vt, vt->vt_fg);
-                mc_wsetbgcol(vt, vt->vt_bg);
+                wsetfgcol(vt, vt->vt_fg);
+                wsetbgcol(vt, vt->vt_bg);
                 break;
             case 1:
                 attr |= XA_BOLD;
@@ -1036,14 +1026,14 @@ static void state2(struct vc_state *vt, int c)
                 attr &= ~XA_REVERSE;
                 break;
             case 39: /* Default fg color */
-                mc_wsetfgcol(vt, vt->vt_fg);
+                wsetfgcol(vt, vt->vt_fg);
                 break;
             case 49: /* Default bg color */
-                mc_wsetbgcol(vt, vt->vt_bg);
+                wsetbgcol(vt, vt->vt_bg);
                 break;
             }
         }
-        mc_wsetattr(vt, attr);
+        wsetattr(vt, attr);
         break;
     case 'L': /* Insert lines */
         if ((x = vt->escparms[0]) == 0)
@@ -1067,37 +1057,17 @@ static void state2(struct vc_state *vt, int c)
         if ((x = vt->escparms[0]) == 0)
             x = 1;
         for (f = 0; f < x; f++)
-            mc_winschar(vt);
+            winschar(vt);
         break;
     case 'r': /* Set scroll region */
-        if ((vt->scroll_top = vt->escparms[0]) == 0)
-            vt->scroll_top = 1;
-        if ((vt->scroll_bottom = vt->escparms[1]) == 0)
-            vt->scroll_bottom = vt->ys;
-        vt->scroll_top-- ; vt->scroll_bottom--;
-        if (vt->scroll_top < 0)
-            vt->scroll_top = 0;
-        if (vt->scroll_bottom < 0)
-            vt->scroll_bottom = 0;
-        if (vt->scroll_top >= vt->ys)
-            vt->scroll_top = vt->ys - 1;
-        if (vt->scroll_bottom >= vt->ys)
-            vt->scroll_bottom = vt->ys - 1;
-        if (vt->scroll_top >= vt->scroll_bottom) {
-            vt->scroll_top = 0;
-            vt->scroll_bottom = vt->ys - 1;
-        }
-        mc_wsetregion(vt, vt->scroll_top, vt->scroll_bottom);
-        mc_wlocate(vt, 0, vt->scroll_top);
+        set_scrl_reg(vt, vt->escparms[0], vt->escparms[1]);
+        locate_curs(vt, 0, vt->scroll_top);
         break;
     case 'i': /* Printing */
     case 'y': /* Self test modes */
     default:
         /* IGNORED */
-        if (0)
-            {
-            printf("minicom-debug: Unknown ESC sequence '%c'\n", c);
-            }
+        // printf("minicom-debug: Unknown ESC sequence '%c'\n", c);
         break;
     }
     /* Ok, our escape sequence is all done */
@@ -1115,17 +1085,17 @@ static void dec_mode(struct vc_state *vt, int on_off)
     for (i = 0; i <= vt->ptr; i++) {
         switch (vt->escparms[i]) {
         case 1: /* Cursor keys in cursor/appl mode */
-            vt->vt_cursor = on_off ? APPL : NORMAL;
+            vt->vt_cursor_mode = on_off ? APPL : NORMAL;
             break;
         case 6: /* Origin mode. */
             vt->vt_om = on_off;
-            mc_wlocate(vt, 0, vt->scroll_top);
+            locate_curs(vt, 0, vt->scroll_top);
             break;
         case 7: /* Auto wrap */
             vt->vt_wrap = on_off;
             break;
         case 25: /* Cursor on/off */
-            mc_wcursor(vt, on_off ? CNORMAL : CNONE);
+            vt->vt_cursor_on = on_off ? CNORMAL : CNONE;
             break;
         case 67: /* Backspace key sends. (FIXME: vt420) */
             /* setbackspace(on_off ? 8 : 127); */
@@ -1157,7 +1127,7 @@ static void dec_mode(struct vc_state *vt, int on_off)
                         "\e[?%d%c", vt->escparms[i], on_off ? 'h' : 'l');
                 b[sizeof(b) - 1] = 0;
 
-                mc_wputs(stdwin, b);
+                wputs(stdwin, b);
             }
 
             if (on_off)
@@ -1251,15 +1221,15 @@ static void state6(struct vc_state *vt, int c)
     case '8':
         /* Selftest: fill screen with E's */
         vt->vt_doscroll = 0;
-        mc_wlocate(vt, 0, 0);
+        locate_curs(vt, 0, 0);
         for (y = 0; y < vt->ys; y++) {
-            mc_wlocate(vt, 0, y);
+            locate_curs(vt, 0, y);
             for (x = 0; x < vt->xs; x++)
-                mc_wputc(vt, 'E');
+                wputc(vt, 'E');
         }
-        mc_wlocate(vt, 0, 0);
+        locate_curs(vt, 0, 0);
         vt->vt_doscroll = 1;
-        mc_wredraw(vt, 1);
+        wredraw(vt, 1);
         break;
     default:
         /* IGNORED */
@@ -1295,9 +1265,9 @@ static void state7(struct vc_state *vt, int c)
             return;
         /* Process string here! */
         if (!strcmp(buf, "cursor.on"))
-            mc_wcursor(vt, CNORMAL);
+            vt->vt_cursor_on = 1;
         if (!strcmp(buf, "cursor.off"))
-            mc_wcursor(vt, CNONE);
+            vt->vt_cursor_on = 0;
         if (!strcmp(buf, "linewrap.on"))
             vt->vt_wrap = 1;
         if (!strcmp(buf, "linewrap.off"))
@@ -1344,17 +1314,16 @@ static void state8(struct vc_state *vt, int c)
 
 static void output_s(struct vc_state *vt, const char *s)
 {
-    mc_wputs(vt, s);
+    wputs(vt, s);
 }
 
 static void output_c(struct vc_state *vt, const char c)
 {
-    mc_wputc(vt, c);
+    wputc(vt, c);
 }
 
 static void vt_out(struct vc_state *vt, int ch, wchar_t wc)
 {
-    static unsigned char last_ch;
     int f;
     unsigned char c;
     int go_on = 0;
@@ -1363,7 +1332,6 @@ static void vt_out(struct vc_state *vt, int ch, wchar_t wc)
         return;
 
     c = (unsigned char)ch;
-    last_ch = c;
 
     /* Process <31 chars first, even in an escape sequence. */
     switch (c) {
@@ -1382,14 +1350,14 @@ static void vt_out(struct vc_state *vt, int ch, wchar_t wc)
             break;
         if (f >= vt->xs)
             f = vt->xs - 1;
-        mc_wlocate(vt, f, vt->cury);
+        locate_curs(vt, f, vt->cury);
         break;
     case 013: /* Old Minix: CTRL-K = up */
-        mc_wlocate(vt, vt->curx, vt->cury - 1);
+        locate_curs(vt, vt->curx, vt->cury - 1);
         break;
     case '\f': /* Form feed: clear screen. */
-        mc_winclr(vt);
-        mc_wlocate(vt, 0, 0);
+        winclr(vt);
+        locate_curs(vt, 0, 0);
         break;
     case 14:
         vt->vt_charset = 1;
@@ -1432,9 +1400,9 @@ static void vt_out(struct vc_state *vt, int ch, wchar_t wc)
     switch (vt->esc_s) {
     case 0:
         if (vt->vt_insert)
-            mc_winschar2(vt, c, 1);
+            winsnchar(vt, c, 1);
         else
-            mc_wputc(vt, c);
+            wputc(vt, c);
         break;
     case 1: /* ESC seen */
         state1(vt, c);
@@ -1499,7 +1467,7 @@ static void vt_out(struct vc_state *vt, int ch, wchar_t wc)
 //   /* Now send appropriate escape code. */
 //   v_termout("\033", 0);
 //   if (vt_type == VT100) {
-//     if (vt->vt_cursor == NORMAL)
+//     if (vt->vt_cursor_mode == NORMAL)
 //       v_termout(vt_keys[f].vt100_st, 0);
 //     else
 //       v_termout(vt_keys[f].vt100_app, 0);
@@ -1515,8 +1483,8 @@ static void v_termout(struct vc_state *vt, const char *s, int len)
     clear_cursor(vt, vt->curx, vt->cury);
     for (p = s; *p && p < s+len; p++) {
         vt_out(vt, *p, 0);
-        if (!vt->vt_addlf && *p == '\r')
-            vt_out(vt, '\n', 0);
+        // if (!vt->vt_addlf && *p == '\r')
+        //     vt_out(vt, '\n', 0);
     }
     set_cursor(vt, vt->curx, vt->cury);
 }
