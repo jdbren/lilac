@@ -19,6 +19,7 @@ typedef struct {
 struct font {
     PSF_font *font;
     u16 *unicode;
+    u32 height, width;
 };
 
 #endif

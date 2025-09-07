@@ -39,7 +39,6 @@ struct vc_state {
     int attr;
     int curx, cury;
     int xs, ys;
-    int color;
     int vt_fg;                  /* Standard foreground color. */
     int vt_bg;                  /* Standard background color. */
     char *vt_trans[2];
@@ -68,7 +67,7 @@ struct vc_state {
 
     /* Saved color and positions */
     int savex, savey, saveattr;
-    int savecol;
+    int save_fg, save_bg;
     int savecharset;
     char *savetrans[2];
 };
@@ -91,8 +90,7 @@ void console_display_cursor(struct console *con, int x, int y);
 extern struct console consoles[8];
 extern const struct tty_operations fbcon_tty_ops;
 
-int fbcon_open(struct tty *tty, struct file *file);
-void set_cursor(struct vc_state *vt, int x, int y);
+void display_cursor(struct vc_state *vt, int x, int y);
 void clear_cursor(struct vc_state *vt, int x, int y);
 
 extern const struct con_display_ops fbcon_ops;

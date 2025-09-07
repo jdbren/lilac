@@ -24,12 +24,13 @@ struct framebuffer_color {
 
 struct framebuffer {
     u8 *fb;
-    s32 fb_width;
-    s32 fb_height;
-    u16 fb_pitch;
+    u32 fb_width;
+    u32 fb_height;
+    u32 fb_pitch;
     u32 fb_fg;
     u32 fb_bg;
     struct font *font;
+    u32 bypp;
 };
 
 void graphics_init(struct multiboot_tag_framebuffer *fb);
@@ -39,6 +40,5 @@ void graphics_scroll(void);
 
 struct framebuffer_color graphics_getcolor(void);
 void graphics_setcolor(u32 fg, u32 bg);
-void graphics_print_cursor(int x, int y);
 
 #endif

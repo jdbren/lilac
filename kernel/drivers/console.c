@@ -60,7 +60,6 @@ void console_putchar(struct console *con, int c)
     if (c == '\n') {
         graphics_putc(' ', con->cx, con->cy);
         console_newline(con);
-        graphics_print_cursor(con->cx, con->cy);
         return;
     } else if (c == '\t') {
         do {
@@ -72,7 +71,6 @@ void console_putchar(struct console *con, int c)
             graphics_putc(' ', con->cx, con->cy);
             con->cx--;
             con->data[con_pos(con)] = ' ';
-            graphics_print_cursor(con->cx, con->cy);
         }
         return;
     }
@@ -82,7 +80,6 @@ void console_putchar(struct console *con, int c)
         graphics_putc(' ', con->cx, con->cy);
         console_newline(con);
     }
-    graphics_print_cursor(con->cx, con->cy);
 }
 
 void console_redraw(struct console *con)
@@ -96,13 +93,6 @@ void console_redraw(struct console *con)
     }
 }
 
-void console_display_cursor(struct console *con, int x, int y)
-{
-    static int oldx = 79, oldy = 23;
-    graphics_putc(con->data[(( (con->first_row + oldy) % con->height ) * con->width ) + oldx], oldx, oldy);
-    graphics_print_cursor(x, y);
-    oldx = x; oldy = y;
-}
 
 void console_writestring(struct console *con, const char *data)
 {

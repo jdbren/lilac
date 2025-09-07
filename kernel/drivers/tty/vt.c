@@ -155,33 +155,33 @@ static struct vc_state vt_cons[8] = {
         .vt_addlf = 0,
         .vt_addcr = 1,
         .vt_keypad = 0,
-        .vt_cursor_mode = 1,
+        .vt_cursor_on = 1,
         .vt_asis = 0,
         .vt_insert = 0,
         .vt_crlf = 0,
         .vt_om = 0,
         .vt_doscroll = 1,
-        .scroll_top = 0,
-        .scroll_bottom = 24,
-        .savecol = 112,
         .xs = 80,
         .ys = 24,
+        .scroll_top = 0,
+        .scroll_bottom = 24,
         .vt_tabs = { [0] = 0x01010100, [1 ... 4] = 0x01010101 },
         .vt_fg = WHITE,
         .vt_bg = BLACK,
+        .attr = XA_NORMAL,
+        .curx = 0,
+        .cury = 0,
+        .save_fg = WHITE
     }
 };
 
 
 int vt_open(struct tty *tty, struct file *file)
 {
-    extern struct framebuffer *fb;
-    // fbcon_open(tty, file);
     struct vc_state *vt = &vt_cons[tty->index];
     if (!tty->driver_data) {
+        vt->con_ops->con_init(vt, 0);
         tty->driver_data = &vt_cons[tty->index];
-        vt->display_data = fb;
-        vt->screen_buf = fb->fb;
     }
     vt->con_ops->con_clear(vt, 0, 0, vt->ys, vt->xs);
     return 0;
@@ -766,7 +766,8 @@ static void state1(struct vc_state *vt, int c)
         vt->savex = vt->curx;
         vt->savey = vt->cury;
         vt->saveattr = vt->attr;
-        vt->savecol = vt->color;
+        vt->save_fg = vt->vt_fg;
+        vt->save_bg = vt->vt_bg;
         vt->savecharset = vt->vt_charset;
         vt->savetrans[0] = vt->vt_trans[0];
         vt->savetrans[1] = vt->vt_trans[1];
@@ -776,7 +777,8 @@ static void state1(struct vc_state *vt, int c)
         vt->vt_charset = vt->savecharset;
         vt->vt_trans[0] = vt->savetrans[0];
         vt->vt_trans[1] = vt->savetrans[1];
-        vt->color = vt->savecol; /* HACK should use wsetfgcol etc */
+        wsetfgcol(vt, vt->save_fg);
+        wsetbgcol(vt, vt->save_bg);
         wsetattr(vt, vt->saveattr);
         locate_curs(vt, vt->savex, vt->savey);
         break;
@@ -905,8 +907,6 @@ static void state2(struct vc_state *vt, int c)
         }
         break;
     case 'J': /* Screen erasing */
-        x = vt->color;
-        y = vt->attr;
         switch (vt->escparms[0]) {
         case 0:
             wclreos(vt);
@@ -942,7 +942,8 @@ static void state2(struct vc_state *vt, int c)
         vt->savex = vt->curx;
         vt->savey = vt->cury;
         vt->saveattr = vt->attr;
-        vt->savecol = vt->color;
+        vt->save_fg = vt->vt_fg;
+        vt->save_bg = vt->vt_bg;
         vt->savecharset = vt->vt_charset;
         vt->savetrans[0] = vt->vt_trans[0];
         vt->savetrans[1] = vt->vt_trans[1];
@@ -951,7 +952,8 @@ static void state2(struct vc_state *vt, int c)
         vt->vt_charset = vt->savecharset;
         vt->vt_trans[0] = vt->savetrans[0];
         vt->vt_trans[1] = vt->savetrans[1];
-        vt->color = vt->savecol; /* HACK should use wsetfgcol etc */
+        wsetfgcol(vt, vt->save_fg);
+        wsetbgcol(vt, vt->save_bg);
         wsetattr(vt, vt->saveattr);
         locate_curs(vt, vt->savex, vt->savey);
         break;
@@ -1481,12 +1483,9 @@ static void v_termout(struct vc_state *vt, const char *s, int len)
 {
     const char *p;
     clear_cursor(vt, vt->curx, vt->cury);
-    for (p = s; *p && p < s+len; p++) {
+    for (p = s; *p && p < s+len; p++)
         vt_out(vt, *p, 0);
-        // if (!vt->vt_addlf && *p == '\r')
-        //     vt_out(vt, '\n', 0);
-    }
-    set_cursor(vt, vt->curx, vt->cury);
+    display_cursor(vt, vt->curx, vt->cury);
 }
 
 ssize_t vt_write(struct tty *tty, const u8 *buf, size_t count)

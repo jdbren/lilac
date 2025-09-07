@@ -2,10 +2,7 @@
 #include <lilac/lilac.h>
 #include <lilac/font.h>
 #include <lilac/kmm.h>
-#include <lilac/kmalloc.h>
 #include <utility/termius.h>
-
-#include <lilac/console.h>
 
 #define WINDOW_BORDER 16
 
@@ -85,6 +82,17 @@ struct framebuffer_color graphics_getcolor(void)
     return (struct framebuffer_color){fb->fb_fg, fb->fb_bg};
 }
 
+void graphics_clear(void)
+{
+    memset(fb->fb, 0, fb->fb_pitch * fb->fb_height);
+}
+
+void graphics_setcolor(u32 fg, u32 bg)
+{
+    fb->fb_fg = fg;
+    fb->fb_bg = bg;
+}
+
 static void print_font_info(struct font *terminal_font);
 
 void graphics_init(struct multiboot_tag_framebuffer *mfb)
@@ -103,6 +111,7 @@ void graphics_init(struct multiboot_tag_framebuffer *mfb)
     fb->fb_pitch = mfb->common.framebuffer_pitch;
     fb->fb_fg = RGB_WHITE;
     fb->fb_bg = RGB_BLACK;
+    fb->bypp = mfb->common.framebuffer_bpp ? mfb->common.framebuffer_bpp / 8 : 4;
 
     psf_init_font();
     graphics_clear();
@@ -111,21 +120,6 @@ void graphics_init(struct multiboot_tag_framebuffer *mfb)
     kstatus(STATUS_OK, "Graphics mode terminal initialized\n");
 }
 
-void graphics_clear(void)
-{
-    memset(fb->fb, 0, fb->fb_pitch * fb->fb_height);
-}
-
-void graphics_setcolor(u32 fg, u32 bg)
-{
-    fb->fb_fg = fg;
-    fb->fb_bg = bg;
-}
-
-void graphics_print_cursor(int x, int y)
-{
-    graphics_putc(197, x, y);
-}
 
 /**********************************/
 
@@ -141,6 +135,8 @@ typedef struct {
 void psf_init_font()
 {
     termius_font.font = (PSF_font*)Lat2_Terminus16;
+    termius_font.height = termius_font.font->height;
+    termius_font.width = termius_font.font->width;
     // no unicode yet
 }
 
