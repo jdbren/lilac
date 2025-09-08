@@ -131,6 +131,4 @@
 #define K_ERA       '\b'
 #define K_KILL      ((int) -2)
 
-extern const struct tty_operations vt_tty_ops;
-
 #endif /* ! __MINICOM__SRC__VT100_H__ */

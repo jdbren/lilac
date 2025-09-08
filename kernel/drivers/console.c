@@ -6,8 +6,6 @@
 #include <drivers/framebuffer.h>
 #include <lilac/kmm.h>
 
-#include <cpuid.h>
-
 
 #if (!defined(DEBUG_KMM) && !defined(DEBUG_PAGING))
 int write_to_screen = 1;
@@ -126,31 +124,4 @@ void console_init(void)
     console_clear(con);
     print_system_info();
     write_to_screen = 0;
-}
-
-int fbcon_open(struct tty *tty, struct file *file)
-{
-    // struct console *con = &consoles[tty->index];
-    // if (!tty->console) {
-    //     tty->console = con;
-    //     con->data = kmalloc(con->height * con->width);
-    //     if (!con->data)
-    //         panic("Out of memory");
-    //     memset(con->data, ' ', con->height * con->width);
-    //     memcpy(con->data, "HELLO WORLD!", 12);
-
-    // }
-
-    return 0;
-}
-
-ssize_t fbcon_write(struct tty *tty, const u8 *buf, size_t count)
-{
-    char *bufp = (char*)buf;
-    struct console *con = tty->console;
-    acquire_lock(&con->lock);
-    for (size_t i = 0; i < count; i++)
-        console_putchar(con, bufp[i] & 0xff);
-    release_lock(&con->lock);
-    return count;
 }

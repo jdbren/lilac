@@ -78,12 +78,12 @@ fs/stat.o \
 fs/name_utils.o \
 drivers/blkdev.o \
 drivers/console.o \
-drivers/fbcon.o \
 drivers/pci.o \
 drivers/ahci.o \
 drivers/framebuffer.o \
 drivers/vga.o \
 drivers/tty/core.o \
+drivers/tty/fbcon.o \
 drivers/tty/ldisc.o \
 drivers/tty/vt.o \
 lib/icxxabi.o \

@@ -188,6 +188,7 @@ struct tty_file_private {
 };
 
 extern const struct tty_ldisc_ops default_tty_ldisc_ops;
+extern const struct tty_operations vt_tty_ops;
 
 void tty_init(void);
 int tty_recv_char(u8 c);

@@ -85,11 +85,6 @@ void console_newline(struct console *con);
 void console_putchar_at(struct console *con, int c, int x, int y);
 void console_putchar(struct console *con, int c);
 void console_clear(struct console *con);
-void console_display_cursor(struct console *con, int x, int y);
-
-extern struct console consoles[8];
-extern const struct tty_operations fbcon_tty_ops;
-
 void display_cursor(struct vc_state *vt, int x, int y);
 void clear_cursor(struct vc_state *vt, int x, int y);
 

@@ -35,7 +35,6 @@
 #include <lilac/timer.h>
 #include <lilac/tty.h>
 #include <lilac/console.h>
-#include <drivers/framebuffer.h>
 
 /*
  * The variable vt->esc_s holds the escape sequence status:
@@ -182,8 +181,8 @@ int vt_open(struct tty *tty, struct file *file)
     if (!tty->driver_data) {
         vt->con_ops->con_init(vt, 0);
         tty->driver_data = &vt_cons[tty->index];
+        vt->con_ops->con_clear(vt, 0, 0, vt->ys, vt->xs);
     }
-    vt->con_ops->con_clear(vt, 0, 0, vt->ys, vt->xs);
     return 0;
 }
 
@@ -359,262 +358,46 @@ void wputc(struct vc_state *vt, char c)
     }
 }
 
-/**
- * Shift characters horizontally in the framebuffer
- * @param fb: framebuffer structure
- * @param row: character row to shift
- * @param start_col: starting column for the shift
- * @param shift_count: number of character positions to shift (positive = right, negative = left)
- * @param total_cols: total number of columns in the console
- */
-static void fb_shift_chars_horizontal(struct framebuffer *fb, int row, int start_col,
-                                    int shift_count, int total_cols)
-{
-    if (!fb || !fb->fb || !fb->font || shift_count == 0) {
-        return;
-    }
-
-    int char_width = fb->font->font->width;
-    int char_height = fb->font->font->height;
-    int bytes_per_pixel = 4; // Assume 32-bit RGBA
-
-    // Convert to pixel coordinates
-    int row_start_pixel = row * char_height;
-    int start_col_pixel = start_col * char_width;
-    int char_width_bytes = char_width * bytes_per_pixel;
-
-    // Calculate how many characters we can actually shift
-    int chars_to_shift;
-    if (shift_count > 0) {
-        // Shifting right - limit by remaining space
-        chars_to_shift = total_cols - start_col - shift_count;
-        if (chars_to_shift <= 0) {
-            return; // Nothing to shift
-        }
-    } else {
-        // Shifting left - limit by available characters
-        chars_to_shift = total_cols - start_col;
-        if (chars_to_shift <= 0) {
-            return; // Nothing to shift
-        }
-    }
-
-    // Perform the shift for each row of pixels in the character
-    for (int y = 0; y < char_height; y++) {
-        u8 *row_base = fb->fb + ((row_start_pixel + y) * fb->fb_pitch);
-
-        if (shift_count > 0) {
-            // Shift right - work backwards to avoid overwriting
-            for (int col = chars_to_shift - 1; col >= 0; col--) {
-                u8 *src = row_base + ((start_col + col) * char_width_bytes);
-                u8 *dst = row_base + ((start_col + col + shift_count) * char_width_bytes);
-                memmove(dst, src, char_width_bytes);
-            }
-        } else {
-            // Shift left - work forwards
-            int abs_shift = -shift_count;
-            for (int col = 0; col < chars_to_shift - abs_shift; col++) {
-                u8 *src = row_base + ((start_col + col + abs_shift) * char_width_bytes);
-                u8 *dst = row_base + ((start_col + col) * char_width_bytes);
-                memmove(dst, src, char_width_bytes);
-            }
-        }
-    }
-}
-
-/**
- * Clear character positions in the framebuffer
- * @param fb: framebuffer structure
- * @param row: character row to clear
- * @param start_col: starting column to clear
- * @param count: number of characters to clear
- */
-static void fb_clear_chars(struct framebuffer *fb, int row, int start_col, int count)
-{
-    if (!fb || !fb->fb || !fb->font || count <= 0)
-        return;
-
-    int char_width = fb->font->font->width;
-    int char_height = fb->font->font->height;
-    int bytes_per_pixel = 4;
-
-    // Convert to pixel coordinates
-    int row_start_pixel = row * char_height;
-    int start_col_pixel = start_col * char_width;
-    int clear_width_pixels = count * char_width;
-
-    // Clear each row of pixels
-    for (int y = 0; y < char_height; y++) {
-        u8 *row_ptr = fb->fb + ((row_start_pixel + y) * fb->fb_pitch) + (start_col_pixel * bytes_per_pixel);
-
-        for (int x = 0; x < clear_width_pixels; x++) {
-            u32 *pixel = (u32 *)(row_ptr + (x * bytes_per_pixel));
-            *pixel = fb->fb_bg;
-        }
-    }
-}
 
 /**
  * Insert characters at the current cursor position
  */
 void winsnchar(struct vc_state *v, char c, int count)
 {
-    struct framebuffer *fb = v->display_data;
-
-    if (!v || !fb || count <= 0)
-        return;
-
-    int console_width_chars = fb->fb_width / fb->font->font->width;
     int cur_x = v->curx;
     int cur_y = v->cury;
 
-    if (cur_x >= console_width_chars || cur_y < 0)
-        return;
-
-    int available_space = console_width_chars - cur_x;
+    int available_space = v->xs - cur_x;
     if (count > available_space)
         count = available_space;
 
     // Shift existing characters to the right to make room
-    if (cur_x + count < console_width_chars)
-        fb_shift_chars_horizontal(fb, cur_y, cur_x, count, console_width_chars);
+    if (cur_x + count < v->xs) {
+        int chars_to_move = v->xs - cur_x - count;
+        v->con_ops->con_bmove(v,
+                              cur_y, cur_x,           // source
+                              cur_y, cur_x + count,   // destination
+                              1, chars_to_move);       // height, width
+                              //false);                 // don't clear source
+    }
 
     // Clear the positions where we'll insert new characters
-    fb_clear_chars(fb, cur_y, cur_x, count);
+    v->con_ops->con_clear(v, cur_y, cur_x, 1, count);
 
-    // Insert the new characters using wputc
-    int original_x = v->curx;
+    int x = v->curx;
     for (int i = 0; i < count; i++) {
-        v->curx = original_x + i;
-        wputc(v, c);
-    }
-
-    // Restore cursor to original position (some implementations expect this)
-    v->curx = original_x;
-}
-
-
-/**
- * Shift lines vertically in the framebuffer within a scroll region
- * @param fb: framebuffer structure
- * @param top_line: top of scroll region (inclusive)
- * @param bottom_line: bottom of scroll region (inclusive)
- * @param start_line: line where shift starts
- * @param shift_count: number of lines to shift (positive = down, negative = up)
- */
-static void fb_shift_lines_vertical(struct framebuffer *fb, int top_line, int bottom_line,
-                                  int start_line, int shift_count)
-{
-    if (!fb || !fb->fb || !fb->font || shift_count == 0) {
-        return;
-    }
-
-    int char_height = fb->font->font->height;
-    int char_width = fb->font->font->width;
-    int console_width_chars = fb->fb_width / char_width;
-    int line_width_bytes = console_width_chars * char_width * 4; // 4 bytes per pixel
-
-    // Convert to pixel coordinates
-    int top_pixel = top_line * char_height;
-    int bottom_pixel = (bottom_line + 1) * char_height - 1;
-    int start_pixel = start_line * char_height;
-
-    if (shift_count > 0) {
-        // Shifting down - work from bottom to top to avoid overwriting
-        int lines_to_move = bottom_line - start_line + 1 - shift_count;
-        if (lines_to_move <= 0) {
-            return; // Nothing to move
-        }
-
-        for (int line = lines_to_move - 1; line >= 0; line--) {
-            int src_line = start_line + line;
-            int dst_line = start_line + line + shift_count;
-
-            // Move each pixel row of the character line
-            for (int y = 0; y < char_height; y++) {
-                u8 *src_row = fb->fb + ((src_line * char_height + y) * fb->fb_pitch);
-                u8 *dst_row = fb->fb + ((dst_line * char_height + y) * fb->fb_pitch);
-                memmove(dst_row, src_row, line_width_bytes);
-            }
-        }
-    } else {
-        // Shifting up - work from top to bottom
-        int abs_shift = -shift_count;
-        int lines_to_move = bottom_line - start_line + 1 - abs_shift;
-        if (lines_to_move <= 0) {
-            return; // Nothing to move
-        }
-
-        for (int line = 0; line < lines_to_move; line++) {
-            int src_line = start_line + line + abs_shift;
-            int dst_line = start_line + line;
-
-            // Move each pixel row of the character line
-            for (int y = 0; y < char_height; y++) {
-                u8 *src_row = fb->fb + ((src_line * char_height + y) * fb->fb_pitch);
-                u8 *dst_row = fb->fb + ((dst_line * char_height + y) * fb->fb_pitch);
-                memmove(dst_row, src_row, line_width_bytes);
-            }
-        }
-    }
-}
-
-/**
- * Clear complete lines in the framebuffer
- * @param fb: framebuffer structure
- * @param start_line: starting line to clear
- * @param line_count: number of lines to clear
- */
-static void fb_clear_lines(struct framebuffer *fb, int start_line, int line_count)
-{
-    if (!fb || !fb->fb || !fb->font || line_count <= 0)
-        return;
-
-    int char_height = fb->font->font->height;
-    int char_width = fb->font->font->width;
-    int console_width_chars = fb->fb_width / char_width;
-    int bytes_per_pixel = 4;
-
-    // Clear each line
-    for (int line = 0; line < line_count; line++) {
-        int current_line = start_line + line;
-
-        // Clear each pixel row in the character line
-        for (int y = 0; y < char_height; y++) {
-            u8 *row = fb->fb + ((current_line * char_height + y) * fb->fb_pitch);
-
-            for (int x = 0; x < console_width_chars * char_width; x++) {
-                u32 *pixel = (u32 *)(row + (x * bytes_per_pixel));
-                *pixel = fb->fb_bg;
-            }
-        }
+        x++;
+        v->con_ops->con_putc(v, c, x, v->cury);
     }
 }
 
 /**
  * Insert a blank line at the current cursor position
  * Lines below are pushed down, bottom line in scroll region is lost
- * @param vt: virtual console state
  */
-void mc_winsline(struct vc_state *vt)
+void winsline(struct vc_state *vt)
 {
-    struct framebuffer *fb = vt->display_data;
-
-    if (!vt || !fb || !fb->font) {
-        return;
-    }
-
-    int char_height = fb->font->font->height;
-    int console_height_chars = fb->fb_height / char_height;
-
     int cur_y = vt->cury;
-
-    // Bounds checking
-    if (cur_y < 0 || cur_y >= console_height_chars) {
-        return;
-    }
-
-    // If we have explicit scroll region support in vt, use it:
     int scroll_top = vt->scroll_top;
     int scroll_bottom = vt->scroll_bottom;
 
@@ -623,77 +406,72 @@ void mc_winsline(struct vc_state *vt)
         return;
 
     // Shift lines down from current position to make room
-    if (cur_y < scroll_bottom)
-        fb_shift_lines_vertical(fb, scroll_top, scroll_bottom, cur_y, 1);
+    if (cur_y < scroll_bottom) {
+        int lines_to_move = scroll_bottom - cur_y;
+        vt->con_ops->con_bmove(vt,
+                               cur_y, 0,                    // source
+                               cur_y + 1, 0,                // destination
+                               lines_to_move, vt->xs);  // height, width
+                               //false);                      // don't clear source
+    }
 
     // Clear the current line
-    fb_clear_lines(fb, cur_y, 1);
+    vt->con_ops->con_clear(vt, cur_y, 0, 1, vt->xs);
 }
 
 /**
  * Delete the current line
  * Lines below are pulled up, blank line appears at bottom of scroll region
- * @param vt: virtual console state
  */
-void mc_wdelline(struct vc_state *vt)
+void wdelline(struct vc_state *vt)
 {
-    if (!vt || !vt->con_ops || !vt->con_ops->con_scroll) {
-        return;
-    }
-
     int cur_y = vt->cury;
 
     // Bounds checking - ensure cursor is within scroll region
-    if (cur_y < vt->scroll_top || cur_y > vt->scroll_bottom) {
+    if (cur_y < vt->scroll_top || cur_y > vt->scroll_bottom)
         return;
+
+    // Pull lines up from below cursor position
+    if (cur_y < vt->scroll_bottom) {
+        int lines_to_move = vt->scroll_bottom - cur_y;
+        vt->con_ops->con_bmove(vt,
+                               cur_y + 1, 0,                // source
+                               cur_y, 0,                    // destination
+                               lines_to_move, vt->xs);  // height, width
+                               //false);                      // don't clear source
     }
 
-    // Temporarily adjust scroll region to start from cursor position + 1
-    int old_scroll_top = vt->scroll_top;
-    vt->scroll_top = cur_y + 1;
-
-    // Scroll up (dir=1) to pull lines up and fill the deleted line
-    if (vt->scroll_top <= vt->scroll_bottom)
-        vt->con_ops->con_scroll(vt, vt->scroll_top, vt->scroll_bottom, 1, 1);
-
-    // Restore original scroll region
-    vt->scroll_top = old_scroll_top;
-
-    // Clear the bottom line of the original scroll region
-    struct framebuffer *fb = vt->display_data;
-    if (fb)
-        fb_clear_lines(fb, vt->scroll_bottom, 1);
+    // Clear the bottom line of the scroll region
+    vt->con_ops->con_clear(vt, vt->scroll_bottom, 0, 1, vt->xs);
 }
 
 /**
  * Delete character at current cursor position
  * Characters to the right are pulled left, space appears at end of line
- * @param vt: virtual console state
  */
-void mc_wdelchar(struct vc_state *vt)
+void wdelchar(struct vc_state *vt)
 {
-    struct framebuffer *fb = vt->display_data;
-
-    if (!vt || !fb || !fb->font)
-        return;
-
-    int char_width = fb->font->font->width;
-    int console_width_chars = fb->fb_width / char_width;
-
     int cur_x = vt->curx;
     int cur_y = vt->cury;
 
     // Bounds checking
-    if (cur_x < 0 || cur_x >= console_width_chars || cur_y < 0)
+    if (cur_x < 0 || cur_x >= vt->xs || cur_y < 0)
         return;
 
     // Shift characters left to fill the deleted character position
-    if (cur_x < console_width_chars - 1)
-        fb_shift_chars_horizontal(fb, cur_y, cur_x + 1, -1, console_width_chars);
+    if (cur_x < vt->xs - 1) {
+        int chars_to_move = vt->xs - cur_x - 1;
+        vt->con_ops->con_bmove(vt,
+                               cur_y, cur_x + 1,    // source
+                               cur_y, cur_x,        // destination
+                               1, chars_to_move);    // height, width
+                               //false);              // don't clear source
+    }
 
     // Clear the last character position on the line
-    fb_clear_chars(fb, cur_y, console_width_chars - 1, 1);
+    vt->con_ops->con_clear(vt, cur_y, vt->xs - 1, 1, 1);
 }
+
 
 // Insert blank char at cursor, shift rest of line right
 void winschar(struct vc_state *vt)
@@ -1041,19 +819,19 @@ static void state2(struct vc_state *vt, int c)
         if ((x = vt->escparms[0]) == 0)
             x = 1;
         for (f = 0; f < x; f++)
-            mc_winsline(vt);
+            winsline(vt);
         break;
     case 'M': /* Delete lines */
         if ((x = vt->escparms[0]) == 0)
             x = 1;
         for (f = 0; f < x; f++)
-            mc_wdelline(vt);
+            wdelline(vt);
         break;
     case 'P': /* Delete Characters */
         if ((x = vt->escparms[0]) == 0)
             x = 1;
         for (f = 0; f < x; f++)
-            mc_wdelchar(vt);
+            wdelchar(vt);
         break;
     case '@': /* Insert Characters */
         if ((x = vt->escparms[0]) == 0)
