@@ -24,13 +24,13 @@ struct framebuffer_color {
 
 struct framebuffer {
     u8 *fb;
-    u32 fb_width;
-    u32 fb_height;
+    struct font *font;
+    u32 fb_width, fb_height;
     u32 fb_pitch;
     u32 fb_fg;
     u32 fb_bg;
-    struct font *font;
-    u32 bypp;
+    u16 bypp;
+    u16 width_pad;
 };
 
 void graphics_init(struct multiboot_tag_framebuffer *fb);

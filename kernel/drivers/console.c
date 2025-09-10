@@ -40,18 +40,6 @@ void console_newline(struct console *con)
     }
 }
 
-/* Put a character at an absolute position (x, y) */
-void console_putchar_at(struct console *con, int c, int x, int y)
-{
-    if (x < 0 || x >= con->width || y < 0 || y >= con->height)
-        return;  // out of bounds, ignore
-
-    int pos = y * con->width + x;
-    con->data[pos] = (char)c;
-
-    graphics_putc((u16)c, x, y);
-}
-
 
 void console_putchar(struct console *con, int c)
 {

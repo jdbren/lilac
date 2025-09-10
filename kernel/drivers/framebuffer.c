@@ -36,7 +36,7 @@ void graphics_putc(u16 c, u32 cx, u32 cy)
     /* upper left corner on screen where we want to display */
     u32 offs =
         (cy * font->height * fb->fb_pitch) +
-        (cx * (font->width + 1) * sizeof(PIXEL));
+        (cx * (font->width + fb->width_pad) * sizeof(PIXEL));
     /* display pixels according to the bitmap */
     u32 x, y, line, mask;
     for(y = 0; y < font->height; y++) {
@@ -112,11 +112,11 @@ void graphics_init(struct multiboot_tag_framebuffer *mfb)
     fb->fb_fg = RGB_WHITE;
     fb->fb_bg = RGB_BLACK;
     fb->bypp = mfb->common.framebuffer_bpp ? mfb->common.framebuffer_bpp / 8 : 4;
-
+    fb->width_pad = 0;
     psf_init_font();
     graphics_clear();
     fb->font = &termius_font;
-
+    // print_font_info(&termius_font);
     kstatus(STATUS_OK, "Graphics mode terminal initialized\n");
 }
 

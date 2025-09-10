@@ -28,7 +28,7 @@ void default_tty_receive_buf(struct tty *tty, const u8 *cp, const u8 *fp, size_t
             // case '\x7f': // Delete key
                 if (data->input.epos > data->input.wpos) {
                     data->input.epos--;
-                    tty->ops->write(tty, "\b \b", 3);
+                    tty->ops->write(tty, (u8*)"\b \b", 3);
                 }
             break;
             default:

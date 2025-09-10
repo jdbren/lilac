@@ -51,6 +51,9 @@
 
 #define ESC 27
 
+#define VT100	1
+#define ANSI	3
+
 /* Structure to hold escape sequences. */
 struct escseq {
   int code;
@@ -164,6 +167,7 @@ static struct vc_state vt_cons[8] = {
         .ys = 24,
         .scroll_top = 0,
         .scroll_bottom = 24,
+        .vt_bs = '\b',
         .vt_tabs = { [0] = 0x01010100, [1 ... 4] = 0x01010101 },
         .vt_fg = WHITE,
         .vt_bg = BLACK,
@@ -264,14 +268,14 @@ static void set_scrl_reg(struct vc_state *vt, int top, int bottom)
 
 static inline void wsetfgcol(struct vc_state *vt, int col)
 {
-    // graphics_setcolor()
     vt->vt_fg = col;
+    vt->con_ops->con_color(vt, vt->vt_fg, vt->vt_bg);
 }
 
 static inline void wsetbgcol(struct vc_state *vt, int col)
 {
-    // graphics_setcolor()
     vt->vt_bg = col;
+    vt->con_ops->con_color(vt, vt->vt_fg, vt->vt_bg);
 }
 
 
@@ -334,7 +338,7 @@ static inline void wscroll(struct vc_state *v, int dir)
 /*
  * Print a character in a window.
  */
-void wputc(struct vc_state *vt, char c)
+static void wputc(struct vc_state *vt, char c)
 {
     /* See if we need to scroll/move. (vt100 behaviour!) */
     if (c == '\n' || (vt->curx >= vt->xs && vt->vt_wrap)) {
@@ -362,26 +366,20 @@ void wputc(struct vc_state *vt, char c)
 /**
  * Insert characters at the current cursor position
  */
-void winsnchar(struct vc_state *v, char c, int count)
+static void winsnchar(struct vc_state *v, char c, int count)
 {
-    int cur_x = v->curx;
-    int cur_y = v->cury;
+    register int cur_x = v->curx;
+    register int cur_y = v->cury;
 
     int available_space = v->xs - cur_x;
     if (count > available_space)
         count = available_space;
 
-    // Shift existing characters to the right to make room
     if (cur_x + count < v->xs) {
-        int chars_to_move = v->xs - cur_x - count;
-        v->con_ops->con_bmove(v,
-                              cur_y, cur_x,           // source
-                              cur_y, cur_x + count,   // destination
-                              1, chars_to_move);       // height, width
-                              //false);                 // don't clear source
+        int chars = v->xs - cur_x - count;
+        v->con_ops->con_bmove(v, cur_y, cur_x, cur_y, cur_x + count, 1, chars);
     }
 
-    // Clear the positions where we'll insert new characters
     v->con_ops->con_clear(v, cur_y, cur_x, 1, count);
 
     int x = v->curx;
@@ -395,27 +393,20 @@ void winsnchar(struct vc_state *v, char c, int count)
  * Insert a blank line at the current cursor position
  * Lines below are pushed down, bottom line in scroll region is lost
  */
-void winsline(struct vc_state *vt)
+static void winsline(struct vc_state *vt)
 {
-    int cur_y = vt->cury;
+    register int cur_y = vt->cury;
     int scroll_top = vt->scroll_top;
     int scroll_bottom = vt->scroll_bottom;
 
-    // Only operate within scroll region
     if (cur_y < scroll_top || cur_y > scroll_bottom)
         return;
 
-    // Shift lines down from current position to make room
     if (cur_y < scroll_bottom) {
-        int lines_to_move = scroll_bottom - cur_y;
-        vt->con_ops->con_bmove(vt,
-                               cur_y, 0,                    // source
-                               cur_y + 1, 0,                // destination
-                               lines_to_move, vt->xs);  // height, width
-                               //false);                      // don't clear source
+        int lines = scroll_bottom - cur_y;
+        vt->con_ops->con_bmove(vt, cur_y, 0, cur_y + 1, 0, lines, vt->xs);
     }
 
-    // Clear the current line
     vt->con_ops->con_clear(vt, cur_y, 0, 1, vt->xs);
 }
 
@@ -423,25 +414,18 @@ void winsline(struct vc_state *vt)
  * Delete the current line
  * Lines below are pulled up, blank line appears at bottom of scroll region
  */
-void wdelline(struct vc_state *vt)
+static void wdelline(struct vc_state *vt)
 {
-    int cur_y = vt->cury;
+    register int cur_y = vt->cury;
 
-    // Bounds checking - ensure cursor is within scroll region
     if (cur_y < vt->scroll_top || cur_y > vt->scroll_bottom)
         return;
 
-    // Pull lines up from below cursor position
     if (cur_y < vt->scroll_bottom) {
-        int lines_to_move = vt->scroll_bottom - cur_y;
-        vt->con_ops->con_bmove(vt,
-                               cur_y + 1, 0,                // source
-                               cur_y, 0,                    // destination
-                               lines_to_move, vt->xs);  // height, width
-                               //false);                      // don't clear source
+        int lines = vt->scroll_bottom - cur_y;
+        vt->con_ops->con_bmove(vt, cur_y + 1, 0, cur_y, 0, lines, vt->xs);
     }
 
-    // Clear the bottom line of the scroll region
     vt->con_ops->con_clear(vt, vt->scroll_bottom, 0, 1, vt->xs);
 }
 
@@ -449,38 +433,25 @@ void wdelline(struct vc_state *vt)
  * Delete character at current cursor position
  * Characters to the right are pulled left, space appears at end of line
  */
-void wdelchar(struct vc_state *vt)
+static void wdelchar(struct vc_state *vt)
 {
-    int cur_x = vt->curx;
-    int cur_y = vt->cury;
-
-    // Bounds checking
-    if (cur_x < 0 || cur_x >= vt->xs || cur_y < 0)
-        return;
-
-    // Shift characters left to fill the deleted character position
-    if (cur_x < vt->xs - 1) {
-        int chars_to_move = vt->xs - cur_x - 1;
-        vt->con_ops->con_bmove(vt,
-                               cur_y, cur_x + 1,    // source
-                               cur_y, cur_x,        // destination
-                               1, chars_to_move);    // height, width
-                               //false);              // don't clear source
+    if (vt->curx < vt->xs - 1) {
+        int count = vt->xs - vt->curx - 1;
+        vt->con_ops->con_bmove(vt, vt->cury, vt->curx + 1, vt->cury, vt->curx, 1, count);
     }
 
-    // Clear the last character position on the line
-    vt->con_ops->con_clear(vt, cur_y, vt->xs - 1, 1, 1);
+    vt->con_ops->con_clear(vt, vt->cury, vt->xs - 1, 1, 1);
 }
 
 
 // Insert blank char at cursor, shift rest of line right
-void winschar(struct vc_state *vt)
+static void winschar(struct vc_state *vt)
 {
     winsnchar(vt, ' ', 1);
 }
 
 // Write a null-terminated string to the VT
-void wputs(struct vc_state *v, const char *s)
+static void wputs(struct vc_state *v, const char *s)
 {
     while (*s)
         wputc(v, *s++);
@@ -596,18 +567,18 @@ static void state1(struct vc_state *vt, int c)
 /* ESC [ ... [hl] seen. */
 static void ansi_mode(struct vc_state *vt, int on_off)
 {
-  int i;
+    int i;
 
-  for (i = 0; i <= vt->ptr; i++) {
-    switch (vt->escparms[i]) {
-      case 4: /* Insert mode  */
-        vt->vt_insert = on_off;
-        break;
-      case 20: /* Return key mode */
-        vt->vt_crlf = on_off;
-        break;
+    for (i = 0; i <= vt->ptr; i++) {
+        switch (vt->escparms[i]) {
+        case 4: /* Insert mode  */
+            vt->vt_insert = on_off;
+            break;
+        case 20: /* Return key mode */
+            vt->vt_crlf = on_off;
+            break;
+        }
     }
-  }
 }
 
 /*
@@ -685,6 +656,11 @@ static void state2(struct vc_state *vt, int c)
         }
         break;
     case 'J': /* Screen erasing */
+        if (vt->vt_type == ANSI) {
+            wsetattr(vt, XA_NORMAL);
+            wsetfgcol(vt, WHITE);
+            wsetbgcol(vt, BLACK);
+        }
         switch (vt->escparms[0]) {
         case 0:
             wclreos(vt);
@@ -1092,15 +1068,6 @@ static void state8(struct vc_state *vt, int c)
     state = 0;
 }
 
-static void output_s(struct vc_state *vt, const char *s)
-{
-    wputs(vt, s);
-}
-
-static void output_c(struct vc_state *vt, const char c)
-{
-    wputc(vt, c);
-}
 
 static void vt_out(struct vc_state *vt, int ch, wchar_t wc)
 {
@@ -1167,7 +1134,7 @@ static void vt_out(struct vc_state *vt, int ch, wchar_t wc)
         if (vt->esc_s == 8)
             go_on = 1;
         else
-            output_c(vt, c);
+            wputc(vt, c);
         break;
     default:
         go_on = 1;
@@ -1212,64 +1179,65 @@ static void vt_out(struct vc_state *vt, int ch, wchar_t wc)
 }
 
 /* Translate keycode to escape sequence. */
-// void vt_send(int c)
-// {
-//   char s[3];
-//   int f;
-//   int len = 1;
+void vt_send(struct vc_state *vt, int c)
+{
+    char s[3];
+    int f;
+    int len = 1;
 
-//   /* Special key? */
-//   if (c < 256) {
-//     /* Translate backspace key? */
-//     if (c == K_ERA)
-//       c = vt_bs;
-//     s[0] = vt_outmap[c];  /* conversion 04.09.97 / jl */
-//     s[1] = 0;
-//     /* CR/LF mode? */
-//     if (c == '\r' && vt->vt_crlf) {
-//       s[1] = '\n';
-//       s[2] = 0;
-//       len = 2;
-//     }
-//     v_termout(s, len);
-//     if (vt_nl_delay > 0 && c == '\r')
-//       usleep(1000 * vt_nl_delay);
-//     return;
-//   }
+    /* Special key? */
+    if (c < 256) {
+        /* Translate backspace key? */
+        if (c == K_ERA)
+            c = '\b';// vt_bs;
+        s[0] = vt_outmap[c];  /* conversion 04.09.97 / jl */
+        s[1] = 0;
+        /* CR/LF mode? */
+        if (c == '\r' && vt->vt_crlf) {
+            s[1] = '\n';
+            s[2] = 0;
+            len = 2;
+        }
+        v_termout(vt, s, len);
+        if (vt->vt_nl_delay > 0 && c == '\r')
+            usleep(1000 * vt->vt_nl_delay);
+        return;
+    }
 
-//   /* Look up code in translation table. */
-//   for (f = 0; vt_keys[f].code; f++)
-//     if (vt_keys[f].code == c)
-//       break;
-//   if (vt_keys[f].code == 0)
-//     return;
+    /* Look up code in translation table. */
+    for (f = 0; vt_keys[f].code; f++)
+        if (vt_keys[f].code == c)
+            break;
+    if (vt_keys[f].code == 0)
+        return;
 
-//   /* Now send appropriate escape code. */
-//   v_termout("\033", 0);
-//   if (vt_type == VT100) {
-//     if (vt->vt_cursor_mode == NORMAL)
-//       v_termout(vt_keys[f].vt100_st, 0);
-//     else
-//       v_termout(vt_keys[f].vt100_app, 0);
-//   } else
-//     v_termout(vt_keys[f].ansi, 0);
-// }
+    /* Now send appropriate escape code. */
+    v_termout(vt, "\033", 0);
+    if (vt->vt_type == VT100) {
+        if (vt->vt_cursor_mode == NORMAL)
+            v_termout(vt, vt_keys[f].vt100_st, 0);
+        else
+            v_termout(vt, vt_keys[f].vt100_app, 0);
+    } else {
+        v_termout(vt, vt_keys[f].ansi, 0);
+    }
+}
 
 
 /* Output a string to the modem. */
 static void v_termout(struct vc_state *vt, const char *s, int len)
 {
     const char *p;
-    clear_cursor(vt, vt->curx, vt->cury);
+    vt->con_ops->con_cursor(vt, CURSOR_OFF);
     for (p = s; *p && p < s+len; p++)
         vt_out(vt, *p, 0);
-    display_cursor(vt, vt->curx, vt->cury);
+    vt->con_ops->con_cursor(vt, CURSOR_ON);
 }
 
 ssize_t vt_write(struct tty *tty, const u8 *buf, size_t count)
 {
     v_termout(tty->driver_data, (const char*)buf, count);
-    return MIN(strlen(buf), count);
+    return MIN(strlen((char*)buf), count);
 }
 
 void vt_close(struct tty *tty, struct file *f)

@@ -16,41 +16,49 @@ struct console {
     int first_row;
 };
 
-
+// TODO make param order consistent
 struct con_display_ops {
     void    (*con_init)(struct vc_state *, int);
     void    (*con_deinit)(struct vc_state *);
-    void    (*con_clear)(struct vc_state *, int, int, int, int);
-    void    (*con_putc)(struct vc_state *, int, int, int);
+    void    (*con_clear)(struct vc_state *, int y, int x, int h, int w);
+    void    (*con_putc)(struct vc_state *, int c, int x, int y);
     void    (*con_putcs)(struct vc_state *, const unsigned short *, int, int, int);
-    void    (*con_cursor)(struct vc_state *, int);
-    int     (*con_scroll)(struct vc_state *, int, int, int, int);
-    void    (*con_bmove)(struct vc_state *, int, int, int, int, int, int);
+    void    (*con_cursor)(struct vc_state *, int mode);
+    void    (*con_scroll)(struct vc_state *, int top, int bot, int dir, int count);
+    void    (*con_bmove)(struct vc_state *, int sy, int sx, int dy, int dx, int h, int w);
     int     (*con_switch)(struct vc_state *);
     int     (*con_blank)(struct vc_state *, int, int);
+    void    (*con_color)(struct vc_state *, unsigned fg, unsigned bg);
 };
+
+#define CURSOR_ON 1
+#define CURSOR_OFF 2
 
 struct vc_state {
     const struct con_display_ops *con_ops;
-    char *screen_buf;
+    unsigned char *screen_buf;
     void *display_data;
 
-    int esc_s;
-    int attr;
+    u8 esc_s;
+    u8 vt_type;
+    u32 attr;
     int curx, cury;
     int xs, ys;
     int vt_fg;                  /* Standard foreground color. */
     int vt_bg;                  /* Standard background color. */
+
+
     char *vt_trans[2];
     int vt_charset;             /* Character set. */
-    // int vt_bs = 8;           /* Code that backspace key sends. */
+    int vt_bs;                  /* Code that backspace key sends. */
+    int vt_nl_delay;
 
     int vt_echo         : 1;    /* Local echo on/off. */
     int vt_wrap         : 1;    /* Line wrap on/off */
     int vt_addlf        : 1;    /* Add linefeed on/off */
     int vt_addcr        : 1;    /* Add carriagereturn on/off */
     int vt_keypad       : 2;    /* Keypad mode. */
-    int vt_cursor_mode  : 1;    /* cursor key mode. */
+    int vt_cursor_mode  : 2;    /* cursor key mode. */
     int vt_cursor_on    : 1;    /* cursor on/off */
     int vt_asis         : 1;    /* 8bit clean mode. */
     int vt_insert       : 1;    /* Insert mode */
@@ -85,8 +93,6 @@ void console_newline(struct console *con);
 void console_putchar_at(struct console *con, int c, int x, int y);
 void console_putchar(struct console *con, int c);
 void console_clear(struct console *con);
-void display_cursor(struct vc_state *vt, int x, int y);
-void clear_cursor(struct vc_state *vt, int x, int y);
 
 extern const struct con_display_ops fbcon_ops;
 
