@@ -6,10 +6,10 @@
 
 #pragma GCC diagnostic ignored "-Wsign-compare"
 
-extern struct framebuffer *fb;
 
 void fbcon_init(struct vc_state *vc, int)
 {
+    extern struct framebuffer *fb;
     vc->display_data = fb;
     vc->screen_buf = fb->fb;
 }

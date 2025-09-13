@@ -39,6 +39,7 @@ struct vc_state {
     const struct con_display_ops *con_ops;
     unsigned char *screen_buf; // raw fb
     void *display_data; // display driver data
+    struct tty *tty;
 
     u8 esc_s;
     u8 vt_type;

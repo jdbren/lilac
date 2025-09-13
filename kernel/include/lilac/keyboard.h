@@ -20,9 +20,7 @@ struct kbd_event {
     u8 status;
 };
 
-
-u8 keyboard_read(void);
 void keyboard_init(void);
-void set_console(int value);
+void kb_code(int);
 
 #endif

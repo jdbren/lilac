@@ -149,6 +149,7 @@ isr_no_err simd
 
 	lea  RIP(%rsp), %rdi   # interrupt stack frame
 	call \func
+	call apic_eoi
 
 	call x86_kernel_exit
 
@@ -173,6 +174,7 @@ isr_no_err simd
 	push %eax
 	call \func
 	addl $4, %esp
+	call apic_eoi
 	call x86_kernel_exit
 	POP_REGS
 	iret

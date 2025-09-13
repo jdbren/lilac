@@ -191,6 +191,8 @@ struct tty_file_private {
     struct list_head list;
 };
 
+#define NUM_STATIC_TTYS 8
+
 extern const struct tty_ldisc_ops default_tty_ldisc_ops;
 extern const struct tty_operations vt_tty_ops;
 

@@ -50,8 +50,6 @@ const struct winsize default_winsize = {
     .ws_ypixel = 0
 };
 
-#define NUM_STATIC_TTYS 8
-
 static struct tty ttys[NUM_STATIC_TTYS] = {
     [0 ... NUM_STATIC_TTYS-1] = {
         .ops = &vt_tty_ops,
@@ -125,6 +123,7 @@ int tty_recv_char(u8 c)
 
 int tty_recv_buf(char *buf, size_t size)
 {
+    klog(LOG_DEBUG, "tty_recv_buf: received \"%s\"\n", buf);
     struct tty *tty = &ttys[active];
     if (tty->ldisc_ops && tty->ldisc_ops->receive_buf)
         tty->ldisc_ops->receive_buf(tty, (u8*)buf, NULL, size);

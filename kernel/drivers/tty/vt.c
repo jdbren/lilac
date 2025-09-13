@@ -51,43 +51,10 @@
 
 #define ESC 27
 
-#define VT100	1
-#define ANSI	3
+#define VT100   1
+#define ANSI    3
 
-/* Structure to hold escape sequences. */
-struct escseq {
-  int code;
-  const char *vt100_st;
-  const char *vt100_app;
-  const char *ansi;
-};
 
-/* Escape sequences for different terminal types. */
-static struct escseq vt_keys[] = {
-  { K_F1,	"OP",	"OP",	"OP" },
-  { K_F2,	"OQ",	"OQ",	"OQ" },
-  { K_F3,	"OR",	"OR",	"OR" },
-  { K_F4,	"OS",	"OS",	"OS" },
-  { K_F5,	"[16~",	"[16~",	"OT" },
-  { K_F6,	"[17~",	"[17~",	"OU" },
-  { K_F7,	"[18~",	"[18~",	"OV" },
-  { K_F8,	"[19~",	"[19~",	"OW" },
-  { K_F9,	"[20~",	"[20~",	"OX" },
-  { K_F10,	"[21~",	"[21~",	"OY" },
-  { K_F11,	"[23~",	"[23~",	"OY" },
-  { K_F12,	"[24~",	"[24~",	"OY" },
-  { K_HOME,	"[1~",	"[1~",	"[H" },
-  { K_PGUP,	"[5~",	"[5~",	"[V" },
-  { K_UP,	"[A",	"OA",	"[A" },
-  { K_LT,	"[D",	"OD",	"[D" },
-  { K_RT,	"[C",	"OC",	"[C" },
-  { K_DN,	"[B",	"OB",	"[B" },
-  { K_END,	"[4~",	"[4~",	"[Y" },
-  { K_PGDN,	"[6~",	"[6~",	"[U" },
-  { K_INS,	"[2~",	"[2~",	"[@" },
-  { K_DEL,	"[3~",	"[3~",	"\177" },
-  { 0,		NULL,	NULL,	NULL }
-};
 
 /* Two tables for user-defined character map conversions.
  * defmap.h should contain all characters 0-255 in ascending order
@@ -149,8 +116,8 @@ const struct tty_operations vt_tty_ops = {
     .write = vt_write,
 };
 
-static struct vc_state vt_cons[8] = {
-    [0 ... 7] = {
+static struct vc_state vt_cons[NUM_STATIC_TTYS] = {
+    [0 ... NUM_STATIC_TTYS-1] = {
         .con_ops = &fbcon_ops,
         .vt_echo = 1,
         .vt_wrap = 1,
@@ -185,6 +152,7 @@ int vt_open(struct tty *tty, struct file *file)
     if (!tty->driver_data) {
         vt->con_ops->con_init(vt, 0);
         tty->driver_data = &vt_cons[tty->index];
+        vt->tty = tty;
         // vt->con_ops->con_clear(vt, 0, 0, vt->ys, vt->xs);
     }
     return 0;
@@ -1011,35 +979,36 @@ static void state7(struct vc_state *vt, int c)
     * uses these sequences. We can only turn cursor on or off, because
     * that's the only one supported in termcap. The rest is ignored.
     */
-    static char buf[17];
-    static int pos = 0;
-    static int state = 0;
+    static char buf[NUM_STATIC_TTYS][17];
+    static int pos[NUM_STATIC_TTYS] = {0};
+    static int state[NUM_STATIC_TTYS] = {0};
+    int i = vt->tty->index;
 
     if (c == ESC) {
-        state = 1;
+        state[i] = 1;
         return;
     }
-    if (state == 1) {
-        buf[pos] = 0;
-        pos = 0;
-        state = 0;
+    if (state[i] == 1) {
+        buf[i][pos[i]] = 0;
+        pos[i] = 0;
+        state[i] = 0;
         vt->esc_s = 0;
         if (c != '\\')
             return;
         /* Process string here! */
-        if (!strcmp(buf, "cursor.on"))
+        if (!strcmp(buf[i], "cursor.on"))
             vt->vt_cursor_on = 1;
-        if (!strcmp(buf, "cursor.off"))
+        if (!strcmp(buf[i], "cursor.off"))
             vt->vt_cursor_on = 0;
-        if (!strcmp(buf, "linewrap.on"))
+        if (!strcmp(buf[i], "linewrap.on"))
             vt->vt_wrap = 1;
-        if (!strcmp(buf, "linewrap.off"))
+        if (!strcmp(buf[i], "linewrap.off"))
             vt->vt_wrap = 0;
         return;
     }
-    if (pos > 15)
+    if (pos[i] > 15)
         return;
-    buf[pos++] = c;
+    buf[i][pos[i]++] = c;
 }
 
 /*
@@ -1052,27 +1021,28 @@ static void state8(struct vc_state *vt, int c)
    * No support is currently implemented, they are simply thrown away.
    * The sequences end with '\a' (BEL, terminal bell) or ESC-\ (ST).
    */
-    static int state = 0;
+    static int state[NUM_STATIC_TTYS] = {0};
+    int i = vt->tty->index;
     switch (c) {
     case 7:
         /* Got BEL - done */
-        state = 0;
+        state[i] = 0;
         vt->esc_s = 0;
         return;
     case ESC:
         /* Possibly start of ST */
-        state = 1;
+        state[i] = 1;
         return;
     case '\\':
         /* Possibly end of ST */
-        if (state == 1) {
-            state = 0;
+        if (state[i] == 1) {
+            state[i] = 0;
             vt->esc_s = 0;
             return;
         }
         break;
     };
-    state = 0;
+    state[i] = 0;
 }
 
 
@@ -1182,51 +1152,6 @@ static void vt_out(struct vc_state *vt, int ch, wchar_t wc)
     case 8:
         state8(vt, c);
         break;
-    }
-}
-
-/* Translate keycode to escape sequence. */
-void vt_send(struct vc_state *vt, int c)
-{
-    char s[3];
-    int f;
-    int len = 1;
-
-    /* Special key? */
-    if (c < 256) {
-        /* Translate backspace key? */
-        if (c == K_ERA)
-            c = '\b';// vt_bs;
-        s[0] = vt_outmap[c];  /* conversion 04.09.97 / jl */
-        s[1] = 0;
-        /* CR/LF mode? */
-        if (c == '\r' && vt->vt_crlf) {
-            s[1] = '\n';
-            s[2] = 0;
-            len = 2;
-        }
-        v_termout(vt, s, len);
-        if (vt->vt_nl_delay > 0 && c == '\r')
-            usleep(1000 * vt->vt_nl_delay);
-        return;
-    }
-
-    /* Look up code in translation table. */
-    for (f = 0; vt_keys[f].code; f++)
-        if (vt_keys[f].code == c)
-            break;
-    if (vt_keys[f].code == 0)
-        return;
-
-    /* Now send appropriate escape code. */
-    v_termout(vt, "\033", 1);
-    if (vt->vt_type == VT100) {
-        if (vt->vt_cursor_mode == NORMAL)
-            v_termout(vt, vt_keys[f].vt100_st, strlen(vt_keys[f].vt100_st));
-        else
-            v_termout(vt, vt_keys[f].vt100_app, strlen(vt_keys[f].vt100_app));
-    } else {
-        v_termout(vt, vt_keys[f].ansi, strlen(vt_keys[f].ansi));
     }
 }
 

@@ -184,7 +184,7 @@ void AcpiOsDeleteLock(ACPI_SPINLOCK Handle)
 {
     if (!Handle)
         return;
-    kfree(Handle);
+    kfree((void*)Handle);
 }
 
 ACPI_CPU_FLAGS AcpiOsAcquireLock(ACPI_SPINLOCK Handle)
