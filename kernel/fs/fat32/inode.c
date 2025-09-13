@@ -31,6 +31,7 @@ struct inode *fat_alloc_inode(struct super_block *sb)
     new_node->i_sb = sb;
     new_node->i_op = &fat_iops;
     new_node->i_count = 1;
+    new_node->i_mode = S_IEXEC|S_IWRITE|S_IREAD;
     new_node->i_private = kzmalloc(sizeof(struct fat_inode));
 
     return new_node;

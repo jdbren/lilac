@@ -35,15 +35,17 @@ void default_tty_receive_buf(struct tty *tty, const u8 *cp, const u8 *fp, size_t
                 if (c != 0 && data->input.epos - data->input.rpos < INPUT_BUF_SIZE) {
                     c = (c == '\r') ? '\n' : c;
 
-                    // store for consumption by read().
                     data->input.buf[data->input.epos++ % INPUT_BUF_SIZE] = c;
 
-                    // echo back to the user.
-                    tty->ops->write(tty, &c, 1);
+                    // echo
+                    if (L_ECHO(tty)) {
+                        if (c == '\x1b')
+                            tty->ops->write(tty, (u8*)"^[", 2);
+                        else
+                            tty->ops->write(tty, &c, 1);
+                    }
 
                     if (c == '\n' || data->input.epos - data->input.rpos == INPUT_BUF_SIZE) {
-                        // wake up console_read() if a whole line (or end-of-file)
-                        // has arrived.
                         data->input.wpos = data->input.epos;
                         wake_first(&tty->read_wait);
                     }

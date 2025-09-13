@@ -20,5 +20,10 @@ int main()
     read(0, &name, 63);
     setenv("USER", name, 1);
 
-    return execl("/sbin/gush", "gush", NULL);
+    // Try to run a shell
+    execl("/bin/bash", "bash", NULL); // will not work yet
+    execl("/bin/dash", "sh", NULL); // kind of works
+    execl("/bin/sh", "sh", NULL);
+    execl("/sbin/gush", "gush", NULL); // my custom shell
+    return 1;
 }

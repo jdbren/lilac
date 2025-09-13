@@ -33,26 +33,39 @@ struct dentry * get_root_dentry(void)
     return root_dentry;
 }
 
+static int set_fdtsize(struct fdtable *files, unsigned int size)
+{
+    if (size <= files->max)
+        return files->max;
+    if (files->max >= 1024 || size >= 1024)
+        return -EMFILE;
+
+    void *tmp = krealloc(files->fdarray, sizeof(struct file*) * size);
+    if (!tmp)
+        return -ENOMEM;
+    files->fdarray = tmp;
+    for (size_t i = files->max; i < size; i++)
+        files->fdarray[i] = NULL;
+    files->max = size;
+    klog(LOG_DEBUG, "Increased max file descriptors to %d\n", size);
+    return files->max;
+}
+
 static int get_fd_for(struct fdtable *files)
 {
-    for (size_t i = 0; i < files->max; i++) {
+    unsigned int cur_max = files->max;
+
+    for (size_t i = 0; i < cur_max; i++) {
         if (!files->fdarray[i]) {
             return i;
         }
     }
 
     if (files->max < 256) {
-        unsigned int new_max = files->max * 2;
-        void *tmp = krealloc(files->fdarray, sizeof(struct file*) * new_max);
-        if (!tmp)
-            return -ENOMEM;
-        files->fdarray = tmp;
-        for (size_t i = files->max; i < new_max; i++)
-            files->fdarray[i] = NULL;
-        int fd = files->max;
-        files->max = new_max;
-        klog(LOG_DEBUG, "Increased max file descriptors to %d\n", new_max);
-        return fd;
+        int new_size = set_fdtsize(files, files->max * 2);
+        if (new_size < 0)
+            return new_size;
+        return cur_max;
     } else {
         return -EMFILE;
     }
@@ -78,7 +91,7 @@ int get_next_fd(struct fdtable *files, struct file *file)
     return fd;
 }
 
-static struct file * get_file_handle(int fd)
+struct file * get_file_handle(int fd)
 {
     struct file *file;
     struct fdtable *files = &current->fs.files;
@@ -559,9 +572,12 @@ int vfs_dup(int oldfd, int newfd)
 #ifdef DEBUG_VFS
     klog(LOG_DEBUG, "vfs_dup: file %p, dentry %p, oldfd %d, newfd %d\n", f, f->f_dentry, oldfd, newfd);
 #endif
-    if (newfd < 0 || newfd >= (int)files->max) {
+    if (newfd < 0 || newfd >= 1024) {
         klog(LOG_ERROR, "VFS: vfs_dup invalid newfd %d\n", newfd);
         return -EBADF;
+    }
+    if (newfd >= (int)files->max) {
+        set_fdtsize(files, 1 << (32 - __builtin_clz(newfd - 1)));
     }
     if (newfd < (int)files->max && current->fs.files.fdarray[newfd]) {
         vfs_close(current->fs.files.fdarray[newfd]);

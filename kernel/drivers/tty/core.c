@@ -56,6 +56,9 @@ static struct tty ttys[NUM_STATIC_TTYS] = {
         .ldisc_ops = &default_tty_ldisc_ops,
         .termios = default_termios,
         .winsize = default_winsize,
+        .termios_lock = SPINLOCK_INIT,
+        .ctrl.lock = SPINLOCK_INIT,
+        .read_wait.lock = SPINLOCK_INIT,
     }
 };
 static spinlock_t ttys_lock = SPINLOCK_INIT;
@@ -73,19 +76,13 @@ void set_active_term(int x)
     // console_redraw(ttys[active].console);
 }
 
+// init remaining fields at runtime
 int init_tty_struct(struct tty *tty, int i)
 {
     mutex_init(&tty->ldisc_lock);
     mutex_init(&tty->write_lock);
-    spin_lock_init(&tty->termios_lock);
     mutex_init(&tty->winsize_lock);
-    spin_lock_init(&tty->ctrl.lock);
-    spin_lock_init(&tty->read_wait.lock);
     INIT_LIST_HEAD(&tty->read_wait.task_list);
-    tty->termios = default_termios;
-    tty->winsize = default_winsize;
-    tty->ctrl.pgrp = 0;
-    tty->ctrl.session = 0;
     tty->data = kzmalloc(sizeof(*tty->data));
     tty->index = i;
     strcpy(tty->name, "tty");

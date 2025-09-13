@@ -90,7 +90,7 @@ int fat32_readdir(struct file *file, struct dirent *dir_buf, unsigned int count)
 }
 
 // This is awful, need to rewrite
-int fat32_mkdir(struct inode *dir, struct dentry *new, unsigned short mode)
+int fat32_mkdir(struct inode *dir, struct dentry *new, umode_t mode)
 {
     struct fat_file *entry = NULL;
     struct fat_disk *disk = (struct fat_disk*)dir->i_sb->private;

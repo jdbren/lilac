@@ -17,16 +17,22 @@ int vfs_stat(const struct file *f, struct stat *st)
     st->st_nlink = 0;
     st->st_uid = 0;
     st->st_gid = 0;
-    if (i_ptr->i_type == TYPE_DEV)
+    if (i_ptr->i_type == TYPE_DEV) {
         st->st_rdev = i_ptr->i_rdev;
-    else
+        st->st_mode |= S_IFCHR;
+    } else {
         st->st_rdev = 0;
+    }
+    if (i_ptr->i_type == TYPE_DIR)
+        st->st_mode |= S_IFDIR;
+    if (i_ptr->i_type == TYPE_FILE)
+        st->st_mode |= S_IFREG;
     st->st_size = i_ptr->i_size;
-    st->st_size = i_ptr->i_sb->s_blocksize;
+    st->st_blksize = i_ptr->i_sb->s_blocksize;
     st->st_blocks = i_ptr->i_blocks;
-    st->st_atime = i_ptr->i_atime;
-    st->st_mtime = i_ptr->i_mtime;
-    st->st_ctime = i_ptr->i_ctime;
+    st->st_atim = (struct timespec){i_ptr->i_atime, 0};
+    st->st_mtim = (struct timespec){i_ptr->i_mtime, 0};
+    st->st_ctim = (struct timespec){i_ptr->i_ctime, 0};
     return 0;
 }
 
@@ -45,12 +51,13 @@ SYSCALL_DECL2(stat, const char*, path, struct stat*, buf)
         return -ENAMETOOLONG;
     }
 
-    // Get the file handle
+    if (!access_ok(buf, sizeof(struct stat)))
+        return -EFAULT;
+
     file = vfs_open(path_buf, 0, 0);
     if (IS_ERR(file))
         return PTR_ERR(file);
 
-    // Get the stat structure
     err = vfs_stat(file, buf);
     if (err < 0) {
         vfs_close(file);
@@ -60,4 +67,14 @@ SYSCALL_DECL2(stat, const char*, path, struct stat*, buf)
     vfs_close(file);
     kfree(path_buf);
     return 0;
+}
+
+SYSCALL_DECL2(fstat, int, fd, struct stat*, buf)
+{
+    struct file *f = get_file_handle(fd);
+    if (IS_ERR_OR_NULL(f))
+        return -EBADF;
+    if (!access_ok(buf, sizeof(struct stat)))
+        return -EFAULT;
+    return vfs_stat(f, buf);
 }

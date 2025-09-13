@@ -63,6 +63,7 @@ syscall_table:
 	sc_tbl_entry getsid     # 36
 	sc_tbl_entry setsid     # 37
 	sc_tbl_entry sched_yield
+	sc_tbl_entry fstat		# 39
 /*
 	sc_tbl_entry link		# 26
 	sc_tbl_entry unlink		# 27

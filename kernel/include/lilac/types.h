@@ -19,8 +19,15 @@ typedef int32_t s32;
 typedef int64_t s64;
 
 typedef signed long    ssize_t;
-typedef unsigned short umode_t;
+typedef unsigned int   umode_t;
+typedef unsigned int   mode_t;
+typedef unsigned long  ino_t;
 typedef unsigned int   dev_t;
+typedef long           off_t;
+typedef long long      off64_t;
+typedef unsigned short nlink_t;
+typedef unsigned int   blksize_t;
+typedef unsigned long  blkcnt_t;
 typedef unsigned short uid_t;
 typedef unsigned short gid_t;
 typedef s64 time_t;
@@ -53,6 +60,11 @@ enum disk_cmd {
     DISK_READ,
     DISK_WRITE,
     DISK_FLUSH
+};
+
+struct timespec {
+    time_t tv_spec;
+    suseconds_t tv_nsec;
 };
 
 #endif
