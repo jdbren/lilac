@@ -13,7 +13,6 @@ extern void (*__init_array_end[])(void);
 
 void _init_ctors(void)
 {
-    // Get the count of constructors
     size_t count = (uintptr_t)__init_array_end - (uintptr_t)__init_array_start;
     count /= sizeof(void*);
 

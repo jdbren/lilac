@@ -185,7 +185,7 @@ int vt_open(struct tty *tty, struct file *file)
     if (!tty->driver_data) {
         vt->con_ops->con_init(vt, 0);
         tty->driver_data = &vt_cons[tty->index];
-        vt->con_ops->con_clear(vt, 0, 0, vt->ys, vt->xs);
+        // vt->con_ops->con_clear(vt, 0, 0, vt->ys, vt->xs);
     }
     return 0;
 }

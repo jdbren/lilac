@@ -1,5 +1,4 @@
 #include <lilac/console.h>
-#include <lilac/tty.h>
 #include <lilac/lilac.h>
 #include <lilac/device.h>
 #include <lilac/fs.h>

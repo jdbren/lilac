@@ -8,6 +8,7 @@ struct file;
 struct tty;
 struct vc_state;
 
+// old basic output
 struct console {
     spinlock_t lock;
     u32 cx, cy; //cursor
@@ -36,8 +37,8 @@ struct con_display_ops {
 
 struct vc_state {
     const struct con_display_ops *con_ops;
-    unsigned char *screen_buf;
-    void *display_data;
+    unsigned char *screen_buf; // raw fb
+    void *display_data; // display driver data
 
     u8 esc_s;
     u8 vt_type;
@@ -87,12 +88,6 @@ extern int write_to_screen;
 
 void console_init(void);
 ssize_t console_write(struct file *file, const void *buf, size_t count);
-void console_writestring(struct console *con, const char *data);
-void console_redraw(struct console *con);
-void console_newline(struct console *con);
-void console_putchar_at(struct console *con, int c, int x, int y);
-void console_putchar(struct console *con, int c);
-void console_clear(struct console *con);
 
 extern const struct con_display_ops fbcon_ops;
 

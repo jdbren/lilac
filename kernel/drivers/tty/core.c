@@ -72,7 +72,7 @@ void set_active_term(int x)
 {
     active = x;
     klog(LOG_DEBUG, "Set term to %d\n", x);
-    console_redraw(ttys[active].console);
+    // console_redraw(ttys[active].console);
 }
 
 int init_tty_struct(struct tty *tty, int i)
@@ -220,4 +220,7 @@ void tty_init(void)
         klog(LOG_DEBUG, "Creating %s\n", path);
         add_device(path, &tty_fops, &tty_iops);
     }
+
+    tty = &ttys[0];
+    tty->vc->cury = 10;
 }

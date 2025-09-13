@@ -177,8 +177,12 @@ struct tty {
         struct tty_data *data;
         void *ldisc_data;
     };
-    struct console *console;
-    void *driver_data;
+
+    union {
+        struct console *console;
+        struct vc_state *vc;
+        void *driver_data;
+    };
 };
 
 struct tty_file_private {
