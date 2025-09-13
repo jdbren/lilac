@@ -86,14 +86,14 @@ void fbcon_move_chars(struct vc_state *vc,
         return;
 
     int char_h = fb->font->height;
-    bool copy_backwards = (dy > sy) || (dy == sy && dx > sx);
+    int copy_bytes = width * fb->font->width * fb->bypp;
 
-    if (copy_backwards) {
+    if ((dy > sy) || (dy == sy && dx > sx)) {
         for (int row = height - 1; row >= 0; row--) {
             for (int py = char_h - 1; py >= 0; py--) {
                 u8 *src = fb_get_char_pixel(fb, sy + row, sx, py);
                 u8 *dst = fb_get_char_pixel(fb, dy + row, dx, py);
-                memmove(dst, src, fb->fb_pitch);
+                memmove(dst, src, copy_bytes);
             }
         }
     } else {
@@ -101,7 +101,7 @@ void fbcon_move_chars(struct vc_state *vc,
             for (int py = 0; py < char_h; py++) {
                 u8 *src = fb_get_char_pixel(fb, sy + row, sx, py);
                 u8 *dst = fb_get_char_pixel(fb, dy + row, dx, py);
-                memmove(dst, src, fb->fb_pitch);
+                memmove(dst, src, copy_bytes);
             }
         }
     }

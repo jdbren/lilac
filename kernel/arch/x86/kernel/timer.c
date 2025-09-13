@@ -131,6 +131,7 @@ void timer_tick(void)
     sched_tick();
 }
 
+__attribute__((optimize("O0")))
 void sleep(u32 millis)
 {
     timer_cnt = millis;
@@ -139,6 +140,7 @@ void sleep(u32 millis)
     }
 }
 
+__attribute__((optimize("O0")))
 void usleep(u32 micros)
 {
     // Get current time

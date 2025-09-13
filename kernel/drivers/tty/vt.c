@@ -469,6 +469,7 @@ static void wputs(struct vc_state *v, const char *s)
 static void state1(struct vc_state *vt, int c)
 {
     short x, y, f;
+    const char *fmt;
 
     switch(c) {
     case '[': /* ESC [ */
@@ -538,7 +539,8 @@ static void state1(struct vc_state *vt, int c)
         vt->vt_keypad = NORMAL;
         break;
     case 'Z': /* Report terminal type */
-        v_termout(vt, "\033[?1;0c", 0);
+        fmt = "\033[?1;0c";
+        v_termout(vt, fmt, strlen(fmt));
         break;
     case 'c': /* Reset to initial state */
         f = XA_NORMAL;
@@ -588,6 +590,7 @@ static void state2(struct vc_state *vt, int c)
 {
     short x, y, attr, f;
     char temp[32];
+    const char *fmt = NULL;
 
     /* See if a number follows */
     if (c >= '0' && c <= '9') {
@@ -676,21 +679,25 @@ static void state2(struct vc_state *vt, int c)
     case 'n': /* Requests / Reports */
         switch(vt->escparms[0]) {
         case 5: /* Status */
-            v_termout(vt, "\033[0n", 0);
+            fmt = "\033[0n";
+            v_termout(vt, fmt, strlen(fmt));
             break;
         case 6:	/* Cursor Position */
-            sprintf(temp, "\033[%d;%dR", vt->cury + 1, vt->curx + 1);
-            v_termout(vt, temp, 0);
+            fmt = "\033[%d;%dR";
+            int len = sprintf(temp, fmt, vt->cury + 1, vt->curx + 1);
+            v_termout(vt, temp, len);
             break;
         }
         break;
     case 'c': /* Identify Terminal Type */
-        v_termout(vt, "\033[?1;2c", 0);
+        fmt = "\033[?1;2c";
+        v_termout(vt, fmt, strlen(fmt));
         break;
     case 'x': /* Request terminal parameters. */
         /* Always answers 19200-8N1 no options. */
-        sprintf(temp, "\033[%c;1;1;120;120;1;0x", vt->escparms[0] == 1 ? '3' : '2');
-        v_termout(vt, temp, 0);
+        fmt = "\033[%c;1;1;120;120;1;0x";
+        int len = sprintf(temp, fmt, vt->escparms[0] == 1 ? '3' : '2');
+        v_termout(vt, temp, len);
         break;
     case 's': /* Save attributes and cursor position */
         vt->savex = vt->curx;
@@ -1212,14 +1219,14 @@ void vt_send(struct vc_state *vt, int c)
         return;
 
     /* Now send appropriate escape code. */
-    v_termout(vt, "\033", 0);
+    v_termout(vt, "\033", 1);
     if (vt->vt_type == VT100) {
         if (vt->vt_cursor_mode == NORMAL)
-            v_termout(vt, vt_keys[f].vt100_st, 0);
+            v_termout(vt, vt_keys[f].vt100_st, strlen(vt_keys[f].vt100_st));
         else
-            v_termout(vt, vt_keys[f].vt100_app, 0);
+            v_termout(vt, vt_keys[f].vt100_app, strlen(vt_keys[f].vt100_app));
     } else {
-        v_termout(vt, vt_keys[f].ansi, 0);
+        v_termout(vt, vt_keys[f].ansi, strlen(vt_keys[f].ansi));
     }
 }
 

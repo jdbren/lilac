@@ -12,7 +12,7 @@
 extern "C" {
 #endif
 
-typedef atomic_flag spinlock_t;
+typedef volatile atomic_flag spinlock_t;
 #define SPINLOCK_INIT ATOMIC_FLAG_INIT
 
 #ifdef __x86_64__
