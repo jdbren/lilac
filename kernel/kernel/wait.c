@@ -60,25 +60,29 @@ static struct wq_entry *find_waiting_task(struct waitqueue *wq, int pid)
 }
 
 // Called by task when it wakes in case it was interrupted while waiting
-void finish_wait(struct waitqueue *wq, struct wq_entry *wq_ent)
+int finish_wait(struct waitqueue *wq, struct wq_entry *wq_ent)
 {
     set_task_running(current);
     remove_wait_entry(wq_ent, wq);
     release_wq_entry(wq_ent);
+    if (task_interrupted_ack())
+        return -EINTR;
+    return 0;
 }
 
-static void sleep_task_on(struct task *p, struct waitqueue *wq)
+static int sleep_task_on(struct task *p, struct waitqueue *wq, wq_wake_func_t callback)
 {
     struct wq_entry *wait;
     set_task_sleeping(p);
     wait = alloc_wq_entry(p, wq);
     if (!wait) {
         klog(LOG_ERROR, "Failed to allocate wait entry for task %d\n", p->pid);
-        return;
+        return -ENOMEM;
     }
+    wait->wakeup = callback;
     add_wait_entry(wait, wq);
     yield();
-    finish_wait(wq, wait);
+    return finish_wait(wq, wait);
 }
 
 static pid_t wait_for(struct task *p, int *status, bool nohang)
@@ -90,7 +94,7 @@ static pid_t wait_for(struct task *p, int *status, bool nohang)
         }
         klog(LOG_DEBUG, "Process %d: Waiting for task %d\n", get_pid(), p->pid);
         p->parent_wait = true;
-        sleep_task_on(current, &wait_q);
+        sleep_task_on(current, &wait_q, NULL);
     }
 
     pid_t pid = p->pid;
@@ -140,7 +144,7 @@ static pid_t wait_any(int *status, bool nohang)
 
     // No child has exited yet, so wait for one
     current->waiting_any = true;
-    sleep_task_on(current, &wait_q);
+    sleep_task_on(current, &wait_q, NULL);
 
     // After being woken up, check for exited children again
     child = find_exited_child(current, WAIT_ANY);
@@ -176,9 +180,9 @@ SYSCALL_DECL3(waitpid, int, pid, int*, status, int, options)
     return wait_for(p, status, options & WNOHANG);
 }
 
-void sleep_on(struct waitqueue *wq)
+int sleep_on(struct waitqueue *wq)
 {
-    sleep_task_on(current, wq);
+    return sleep_task_on(current, wq, NULL);
 }
 
 static void wakeup_by_pid_on(int pid, struct waitqueue *wq)

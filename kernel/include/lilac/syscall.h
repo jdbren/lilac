@@ -39,6 +39,6 @@ int do_kernel_exit_work(void);
 
 #endif /* !__ASSEMBLY__ */
 
-#define MAX_SYSCALL 39
+#define MAX_SYSCALL 43
 
 #endif

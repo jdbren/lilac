@@ -10,8 +10,8 @@ CFLAGS?=-Og
 LDFLAGS?=
 LIBS?=./libk.a ./drivers/acpi/acpi.lib
 
-DESTDIR?=
-PREFIX?=/usr/local
+DESTDIR?=sysroot
+PREFIX?=/usr
 EXEC_PREFIX?=$(PREFIX)
 BOOTDIR?=$(EXEC_PREFIX)/boot
 INCLUDEDIR?=$(PREFIX)/include
@@ -48,6 +48,7 @@ KERNEL_OBJS=\
 $(KERNEL_ARCH_OBJS) \
 kernel/kmain.o \
 kernel/device.o \
+kernel/ioctl.o \
 kernel/log.o \
 kernel/pipe.o \
 kernel/process.o \
@@ -75,6 +76,7 @@ fs/inode.o \
 fs/dcache.o \
 fs/mount.o \
 fs/stat.o \
+fs/fcntl.o \
 fs/name_utils.o \
 drivers/blkdev.o \
 drivers/console.o \
@@ -129,6 +131,10 @@ ifndef VERBOSE
 else
 	OBJ=`$(CC) $(CFLAGS) $(LDFLAGS) -print-file-name=$(@F)` && cp "$$OBJ" $@
 endif
+
+install-headers:
+	mkdir -p $(DESTDIR)$(INCLUDEDIR)/asm
+	cp -r include/user/* $(DESTDIR)$(INCLUDEDIR)/asm/
 
 libk.a: $(LIBK_OBJS)
 ifndef VERBOSE

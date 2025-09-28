@@ -65,8 +65,14 @@ void pgflt_handler(long error_code, struct interrupt_frame *frame)
 
 void gpflt_handler(long error_code, struct interrupt_frame *frame)
 {
+    uintptr_t addr = 0;
+    asm volatile ("mov %%cr2,%0\n\t" : "=r"(addr));
     klog(LOG_WARN, "General protection fault at %p, error code %x\n", frame->ip, error_code);
-    if (frame->ip < __USER_STACK) { // user space fault
+    void *handler = find_exception(frame->ip);
+    if (handler && addr < __KERNEL_BASE) {
+        do_raise(current, SIGSEGV);
+        frame->ip = (uintptr_t)handler;
+    } else if (frame->ip < __USER_STACK) { // user space fault
         klog(LOG_WARN, "GP fault in user space at %p, sending SIGSEGV\n", frame->ip);
         do_raise(current, SIGSEGV);
     } else {

@@ -4,6 +4,7 @@
 #include <lilac/syscall.h>
 #include <lilac/kmm.h>
 #include <lilac/uaccess.h>
+#include <lilac/timer.h>
 
 ssize_t pipe_read(struct file *f, void *buf, size_t count);
 ssize_t pipe_write(struct file *f, const void *buf, size_t count);
@@ -15,6 +16,19 @@ static const struct file_operations pipe_fops = {
     .release = pipe_close,
 };
 
+struct inode * pipe_alloc_inode()
+{
+    struct inode *ino = kzmalloc(sizeof(*ino));
+    if (!ino)
+        return NULL;
+    ino->i_mode = S_IFIFO|S_IREAD|S_IWRITE;
+    ino->i_count = 1;
+    ino->i_atime = ino->i_ctime = ino->i_mtime = get_sys_time();
+    ino->i_type = TYPE_SPECIAL;
+    ino->i_size = PAGE_SIZE;
+    return ino;
+}
+
 struct pipe_buf * create_pipe(size_t buf_size)
 {
     buf_size = PAGE_ROUND_UP(buf_size);
@@ -22,6 +36,12 @@ struct pipe_buf * create_pipe(size_t buf_size)
     struct pipe_buf *p = kzmalloc(sizeof(*p));
     if (!p) {
         klog(LOG_ERROR, "Failed to allocate pipe structure\n");
+        return ERR_PTR(-ENOMEM);
+    }
+
+    p->p_inode = pipe_alloc_inode();
+    if (IS_ERR_OR_NULL(p->p_inode)) {
+        kfree(p);
         return ERR_PTR(-ENOMEM);
     }
 
@@ -46,6 +66,9 @@ void destroy_pipe(struct pipe_buf *p)
 {
     if (!p)
         return;
+
+    if (p->p_inode)
+        kfree(p->p_inode);
 
     if (p->buffer)
         kvirtual_free(p->buffer, p->buf_size);
@@ -173,10 +196,12 @@ SYSCALL_DECL1(pipe, int, pipefd[2])
     read_end->f_op = &pipe_fops;
     read_end->f_mode = O_RDONLY;
     read_end->pipe = p;
+    read_end->f_inode = p->p_inode;
 
     write_end->f_op = &pipe_fops;
     write_end->f_mode = O_WRONLY;
     write_end->pipe = p;
+    write_end->f_inode = p->p_inode;
 
     int rfd = get_next_fd(&current->fs.files, read_end);
     int wfd = get_next_fd(&current->fs.files, write_end);

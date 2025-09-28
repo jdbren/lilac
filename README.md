@@ -47,7 +47,7 @@ make install-gcc install-target-libgcc install-target-libstdc++-v3
 ```
 
 Now onto building the custom toolchain. There is a bit of bootstrapping
-since libgcc expects the system headers to be available. You have to 
+since libgcc expects the system headers to be available. You have to
 clone the gcc, binutils, and newlib forks and switch to the lilac-os
 branch.
 ```bash
@@ -73,6 +73,11 @@ make install-gcc install-target-libgcc
 x86_64-elf-gcc -o crt0.o -c ~/lilac/init/crt0.S
 mv crt0.o /usr/local/lib/gcc/x86_64-lilac/16.0.0/ # or where ever the compiler is
 ```
+```bash
+# C++ support
+make all-target-libstdc++-v3
+make install-target-libstdc++-v3
+```
 
 ### Kernel image
 
@@ -82,3 +87,10 @@ See scripts/create-image.sh
 
 First run config.sh. ARCH defaults to x86_64.
 You can now build and boot into a vm using qemu.sh.
+
+ncurses
+./configure --build=x86_64-linux-gnu --host=x86_64-lilac --disable-widec --without-cxx --prefix="$HOME/lilac/sysroot/usr" --bindir="$HOME/lilac/sysroot/bin"
+
+libedit
+CFLAGS="-I$HOME/lilac/sysroot/usr/include/ncurses" ./configure --build=x86_64-linux-gnu --host=x86_64-lilac --disable-widec
+--with-sysroot="$HOME/lilac/sysroot"

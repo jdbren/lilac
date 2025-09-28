@@ -23,7 +23,7 @@ struct super_block;
 struct dirent;
 
 enum file_type {
-    TYPE_FILE, TYPE_DIR, TYPE_DEV, TYPE_SPECIAL
+    TYPE_FILE, TYPE_DIR, TYPE_DEV, TYPE_SPECIAL, TYPE_TTY
 };
 
 struct inode {
@@ -152,6 +152,8 @@ int vfs_mount(const char *source, const char *target,
         const char *filesystemtype, unsigned long mountflags,
         const void *data);
 int vfs_umount(const char *target);
+int vfs_dupf(int fd);
+int vfs_dup(int oldfd, int newfd);
 
 struct dentry * vfs_lookup(const char *path);
 

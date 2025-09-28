@@ -26,13 +26,15 @@ struct waitqueue {
     struct list_head task_list;
 };
 
+typedef int (*wq_wake_func_t)();
+
 struct wq_entry {
     struct task *task;
-    //wait_queue_func_t func; // callback function, e.g. try_to_wake_up()
+    wq_wake_func_t wakeup;
     struct list_head entry;
 };
 
-void sleep_on(struct waitqueue *wq);
+int sleep_on(struct waitqueue *wq);
 struct task * wake_first(struct waitqueue *wq);
 
 void notify_parent(struct task *parent, struct task *child);

@@ -40,13 +40,11 @@ int atoi(const char *s)
     int result = 0;
     int sign = 1;
 
-    // Skip leading whitespace
     while (*s == ' ' || *s == '\t' || *s == '\n' ||
            *s == '\r' || *s == '\f' || *s == '\v') {
         s++;
     }
 
-    // Handle optional sign
     if (*s == '-') {
         sign = -1;
         s++;
@@ -54,7 +52,6 @@ int atoi(const char *s)
         s++;
     }
 
-    // Convert digits
     while (*s >= '0' && *s <= '9') {
         result = result * 10 + (*s - '0');
         s++;

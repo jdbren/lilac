@@ -13,6 +13,7 @@ struct pipe_buf {
     unsigned int read_pos;      // read position in buffer
     unsigned int write_pos;     // write position in buffer
     unsigned int data_size;     // amount of data currently in buffer
+    struct inode *p_inode;
     struct waitqueue read_wq;   // wait queue for readers
     struct waitqueue write_wq;  // wait queue for writers
     spinlock_t lock;            // lock to protect pipe structure

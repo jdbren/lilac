@@ -2,7 +2,7 @@
 #define _LILAC_SIGNAL_H
 
 #include <lilac/list.h>
-#include <lilac/signal-defs.h>
+#include <user/signal-defs.h>
 #include <lilac/signo.h>
 // #include <user/siginfo.h>
 

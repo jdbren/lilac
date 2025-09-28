@@ -14,8 +14,8 @@ kernel: copy-headers
 	$(MAKE) -C kernel
 
 copy-headers:
-	mkdir -p sysroot/usr
-	cp -r $(LIBC_DIR)/newlib/libc/include sysroot/usr/include
+	mkdir -p sysroot/usr/include/asm
+	$(MAKE) -C kernel install-headers
 
 libc:
 	@if [ ! -d build-libc ]; then \
@@ -29,7 +29,7 @@ libc:
 	fi
 	$(MAKE) -s -C build-libc all
 
-install-libc: libc
+install-libc: copy-headers libc
 	$(MAKE) -s DESTDIR=$(DESTDIR) -C build-libc install
 	cp -r $(DESTDIR)$(PREFIX)/$(TARGET)/* $(SYSROOT)$(PREFIX)/ || true
 	rm -rf $(DESTDIR)$(PREFIX)/$(TARGET) || true

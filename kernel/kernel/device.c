@@ -33,6 +33,30 @@ int add_device(const char *path, const struct file_operations *fops,
 }
 
 
+int dev_create(const char *path, const struct file_operations *fops,
+        const struct inode_operations *iops, umode_t mode, dev_t dev)
+{
+    int err = 0;
+    if ((err = vfs_create(path, 0))) {
+        klog(LOG_ERROR, "Failed to create %s with %d\n", path, -err);
+        return err;
+    }
+    struct dentry *dentry = lookup_path(path);
+    if (IS_ERR(dentry))
+        return PTR_ERR(dentry);
+
+    struct inode *inode = dentry->d_inode;
+    if (!inode)
+        return -ENOENT;
+    inode->i_fop = fops;
+    inode->i_op = iops;
+    inode->i_type = dev;
+    inode->i_mode = mode;
+
+    return 0;
+}
+
+
 int dev_mknod(struct inode *parent_dir, struct dentry *node, umode_t mode, dev_t dev)
 {
     struct inode *inode = kzmalloc(sizeof(*inode));

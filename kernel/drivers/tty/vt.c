@@ -35,6 +35,7 @@
 #include <lilac/timer.h>
 #include <lilac/tty.h>
 #include <lilac/console.h>
+#include <lilac/log.h>
 
 /*
  * The variable vt->esc_s holds the escape sequence status:
@@ -1107,11 +1108,11 @@ static void vt_out(struct vc_state *vt, int ch, wchar_t wc)
     case '\b':
         bs(vt); /* Backspace */
         break;
-    case 7: /* Bell */
+    case '\a': /* Bell */
         if (vt->esc_s == 8)
             go_on = 1;
-        else
-            wputc(vt, c);
+        // else
+        //     wputc(vt, c);
         break;
     default:
         go_on = 1;
@@ -1155,11 +1156,25 @@ static void vt_out(struct vc_state *vt, int ch, wchar_t wc)
     }
 }
 
+// #define DEBUG_VT
 
 /* Output a string to the modem. */
 static void v_termout(struct vc_state *vt, const char *s, int len)
 {
     const char *p;
+#ifdef DEBUG_VT
+    char log_buf[512] = {0};
+    int pos = 0;
+    pos += snprintf(log_buf + pos, sizeof(log_buf) - pos, "vt: ");
+    for (int i = 0; i < len && pos < (int)sizeof(log_buf) - 3; i++) {
+        pos += snprintf(log_buf + pos, sizeof(log_buf) - pos, "0x%x ", (unsigned char)s[i]);
+    }
+    if (pos > 0 && log_buf[pos - 1] == ' ')
+        log_buf[pos - 1] = 0; // Remove trailing space
+    else
+        log_buf[sizeof(log_buf) - 1] = 0;
+    klog(LOG_DEBUG, "%s\n", log_buf);
+#endif
     vt->con_ops->con_cursor(vt, CURSOR_OFF);
     for (p = s; *p && p < s+len; p++)
         vt_out(vt, *p, 0);

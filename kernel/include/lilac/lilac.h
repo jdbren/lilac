@@ -11,6 +11,13 @@
 #include <lilac/kmalloc.h>
 
 #define KERNEL_VERSION "0.1.0"
+#ifdef __x86_64__
+#define KERNEL_ARCH "x86_64"
+#elif __i386__
+#define KERNEL_ARCH "x86"
+#else
+#error "Invalid arch detected"
+#endif
 
 void print_system_info(void);
 

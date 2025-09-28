@@ -1,11 +1,13 @@
 #include <lilac/tty.h>
 
-#include <stdatomic.h>
 #include <lilac/lilac.h>
 #include <lilac/sched.h>
 #include <lilac/device.h>
 #include <lilac/fs.h>
 #include <lilac/console.h>
+#include <lilac/syscall.h>
+#include <lilac/uaccess.h>
+#include <lilac/ioctl.h>
 
 #include "vt100.h"
 
@@ -13,6 +15,7 @@ ssize_t tty_read(struct file *f, void *buf, size_t count);
 ssize_t tty_write(struct file *f, const void *buf, size_t count);
 int tty_open(struct inode *inode, struct file *file);
 int tty_release(struct inode *inode, struct file *file);
+int tty_ioctl(struct file *f, int op, void *argp);
 
 const struct file_operations tty_fops = {
     .read = tty_read,
@@ -21,6 +24,7 @@ const struct file_operations tty_fops = {
     .flush = NULL,
     .lseek = NULL,
     .readdir = NULL,
+    .ioctl = tty_ioctl
 };
 
 const struct inode_operations tty_iops = {
@@ -31,13 +35,13 @@ const struct inode_operations tty_iops = {
 // TTY handling
 //
 
-const struct ktermios default_termios = {
+const struct termios default_termios = {
     .c_iflag = 0,
     .c_oflag = 0,
     .c_cflag = B38400 | CS8 | CREAD | HUPCL | CLOCAL,
-    .c_lflag = ISIG | ICANON | ECHO | ECHOE | ECHOK | ECHONL | IEXTEN,
+    .c_lflag = ISIG | ICANON | ECHO | ECHOE | ECHOK | ECHONL | ECHOCTL | IEXTEN,
     .c_line = 0,
-    .c_cc = { [VINTR] = 3, [VERASE] = 0x7f, [VKILL] = 21, [VEOF] = 4,
+    .c_cc = { [VINTR] = 3, [VERASE] = 8, [VKILL] = 21, [VEOF] = 4,
               [VSTART] = 17, [VSTOP] = 19, [VSUSP] = 26, [VQUIT] = 28 },
     .c_ispeed = B38400,
     .c_ospeed = B38400
@@ -207,16 +211,136 @@ void tty_init(void)
 {
     struct tty *tty;
     char path[32];
-    add_device("/dev/tty", &tty_fops, &tty_iops);
+    umode_t mode = S_IFCHR|S_IREAD|S_IWRITE;
+    dev_create("/dev/tty", &tty_fops, &tty_iops, mode, TYPE_TTY);
     for (int i = 0; i < NUM_STATIC_TTYS; i++) {
         tty = &ttys[i];
         init_tty_struct(tty, i);
         strcpy(path, "/dev/");
         strcat(path, tty->name);
         klog(LOG_DEBUG, "Creating %s\n", path);
-        add_device(path, &tty_fops, &tty_iops);
+        dev_create(path, &tty_fops, &tty_iops, mode, TYPE_TTY);
     }
 
     tty = &ttys[0];
     tty->vc->cury = 10;
+}
+
+
+static int tcgetattr(struct tty *t, struct termios *term)
+{
+    if (copy_to_user(term, &t->termios, sizeof(struct termios)))
+        return -EFAULT;
+    return 0;
+}
+
+static bool valid_baud(speed_t speed) {
+    switch (speed) {
+        case B0: case B50: case B75: case B110: case B134: case B150:
+        case B200: case B300: case B600: case B1200: case B1800: case B2400:
+        case B4800: case B9600: case B19200: case B38400: case B57600:
+        case B115200: case B230400:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static bool valid_cflag(tcflag_t cflag) {
+    // Only allow CS5, CS6, CS7, CS8 for character size
+    switch (cflag & CSIZE) {
+        case CS5: case CS6: case CS7: case CS8:
+            break;
+        default:
+            return false;
+    }
+    if (!valid_baud(cflag & CBAUD))
+        return false;
+    return true;
+}
+
+static int tcsetattr(struct tty *t, struct termios *term)
+{
+    struct termios tmp;
+    if (copy_from_user(&tmp, term, sizeof(struct termios)))
+        return -EFAULT;
+
+    if (!valid_baud(tmp.c_ispeed) || !valid_baud(tmp.c_ospeed))
+        return -EINVAL;
+
+    if (!valid_cflag(tmp.c_cflag))
+        return -EINVAL;
+
+    struct termios old = t->termios;
+    t->termios = tmp;
+
+    if (t->ldisc_ops->set_termios)
+        t->ldisc_ops->set_termios(t, &old);
+
+    return 0;
+}
+
+static pid_t tcgetpgrp(struct tty *t)
+{
+    return t->ctrl.pgrp;
+}
+
+static int tcsetpgrp(struct tty *t, pid_t pgrp)
+{
+    if (pgrp < 0)
+        return -EINVAL;
+    struct task *p = get_pgrp_leader(pgrp);
+    if (p && p->sid == current->sid) {
+        t->ctrl.pgrp = pgrp;
+        return 0;
+    } else {
+        klog(LOG_DEBUG, "tcsetpgrp: no such process group %d in session %d\n", pgrp, current->sid);
+        return -EPERM;
+    }
+    return 0;
+}
+
+
+int tty_ioctl(struct file *f, int op, void *argp)
+{
+    if (f->f_dentry->d_inode->i_type != TYPE_TTY)
+        return -ENOTTY;
+
+    struct tty *tty = file_get_tty(f);
+    if (IS_ERR_OR_NULL(tty))
+        return -ENOTTY;
+
+    klog(LOG_DEBUG, "Entered tty_ioctl(0x%p,0x%x,0x%p)\n", f, op, argp);
+
+    switch (op) {
+    case TCGETS:
+    case TCGETA:
+        return tcgetattr(tty, argp);
+    case TCSETS:
+    case TCSETA:
+        return tcsetattr(tty, argp);
+    // todo handle drain
+    case TCSETSW:
+    case TCSETAW:
+        return tcsetattr(tty, argp);
+    case TCSETSF:
+    case TCSETAF:
+    // todo handle flush
+        return tcsetattr(tty, argp);
+    case TIOCGPGRP:
+        if (access_ok(argp, sizeof(pid_t))) {
+            *(pid_t*)argp = tcgetpgrp(tty);
+            return 0;
+        } else {
+            return -EFAULT;
+        }
+    case TIOCSPGRP:
+        if (!access_ok(argp, sizeof(pid_t)))
+            return -EFAULT;
+        if (current->sid != tty->ctrl.session)
+            return -ENOTTY;
+        return tcsetpgrp(tty, *(pid_t*)argp);
+    default:
+        return -EINVAL;
+    }
 }

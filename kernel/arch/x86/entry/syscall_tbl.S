@@ -64,6 +64,10 @@ syscall_table:
 	sc_tbl_entry setsid     # 37
 	sc_tbl_entry sched_yield
 	sc_tbl_entry fstat		# 39
+	sc_tbl_entry ioctl      # 40
+	sc_tbl_entry memfd_create
+	sc_tbl_entry sigsuspend # 42
+	sc_tbl_entry fcntl      # 43
 /*
 	sc_tbl_entry link		# 26
 	sc_tbl_entry unlink		# 27

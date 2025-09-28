@@ -49,7 +49,6 @@ struct vc_state {
     int vt_fg;                  /* Standard foreground color. */
     int vt_bg;                  /* Standard background color. */
 
-
     char *vt_trans[2];
     int vt_charset;             /* Character set. */
     int vt_bs;                  /* Code that backspace key sends. */

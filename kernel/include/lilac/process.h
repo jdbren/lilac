@@ -43,6 +43,7 @@ struct task_flags {
     u8 sig_pending  :1;
     u8 ptrace_stop  :1;
     u8 signaled     :1;
+    u8 interrupted  :1;
 };
 
 struct task {

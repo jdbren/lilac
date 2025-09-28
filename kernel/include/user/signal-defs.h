@@ -2,9 +2,7 @@
 #ifndef __ASM_GENERIC_SIGNAL_DEFS_H
 #define __ASM_GENERIC_SIGNAL_DEFS_H
 
-#ifndef __ASSEMBLY__
-#include <lilac/types.h>
-#endif
+#include <stddef.h>
 
 /*
  * SA_FLAGS values:
@@ -71,13 +69,13 @@
 #define SA_ONESHOT	SA_RESETHAND
 
 #ifndef SIG_BLOCK
-#define SIG_BLOCK          0	/* for blocking signals */
+#define SIG_BLOCK          1	/* for blocking signals */
 #endif
 #ifndef SIG_UNBLOCK
-#define SIG_UNBLOCK        1	/* for unblocking signals */
+#define SIG_UNBLOCK        2	/* for unblocking signals */
 #endif
 #ifndef SIG_SETMASK
-#define SIG_SETMASK        2	/* for setting the signal mask */
+#define SIG_SETMASK        0	/* for setting the signal mask */
 #endif
 
 #ifndef __ASSEMBLY__

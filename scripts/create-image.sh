@@ -1,4 +1,5 @@
 #!/bin/bash
+set -eu
 # Create guest disk image for Linux host
 
 # On Mac try
@@ -8,7 +9,7 @@ if [[ -f "uefi.img" ]]; then
     mv uefi.img uefi.img.old
 fi
 
-dd if=/dev/zero of=uefi.img bs=512 count=93750
+dd if=/dev/zero of=uefi.img bs=512 count=937500
 
 parted uefi.img --script mklabel gpt
 parted uefi.img --script mkpart ESP fat32 1MiB 100%
@@ -24,7 +25,7 @@ mkdir -p sysroot/EFI/BOOT
 mkdir -p sysroot/boot/grub
 cp resources/EFI/BOOT/BOOTIA32.EFI sysroot/EFI/BOOT/BOOTIA32.EFI
 cp resources/grub/grub.cfg sysroot/boot/grub/grub.cfg
-sudo cp -r sysroot/* /mnt/lilac/
+sudo cp -rL sysroot/* /mnt/lilac/
 
 sync
 sudo umount /mnt/lilac

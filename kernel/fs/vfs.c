@@ -37,7 +37,7 @@ static int set_fdtsize(struct fdtable *files, unsigned int size)
 {
     if (size <= files->max)
         return files->max;
-    if (files->max >= 1024 || size >= 1024)
+    if (files->max >= 1024 || size > 1024)
         return -EMFILE;
 
     void *tmp = krealloc(files->fdarray, sizeof(struct file*) * size);
@@ -77,6 +77,26 @@ static int get_fd(void)
     return get_fd_for(files);
 }
 
+int get_fd_at(struct fdtable *files, int start)
+{
+    if (start < 0 || (unsigned)start >= 1023)
+        return -EINVAL;
+
+    if (start >= (int)files->max) {
+        int new_size = set_fdtsize(files, MIN(start * 2, 1024));
+        if (new_size < 0)
+            return new_size;
+    }
+
+    for (int i = start; i < (int)files->max; i++) {
+        if (!files->fdarray[i]) {
+            return i;
+        }
+    }
+
+    klog(LOG_DEBUG, "get_fd_at: No available file descriptors\n");
+    return -EMFILE;
+}
 
 int get_next_fd(struct fdtable *files, struct file *file)
 {
@@ -219,6 +239,17 @@ struct file *vfs_open(const char *path, int flags, int mode)
         } else {
             return ERR_PTR(-ENOENT);
         }
+    } else if ((flags & O_CREAT) && (flags & O_EXCL)) {
+        klog(LOG_DEBUG, "VFS: File %s already exists\n", path);
+        return ERR_PTR(-EEXIST);
+    }
+
+    if (inode->i_type == TYPE_DIR && (flags & O_ACCMODE) != O_RDONLY) {
+        klog(LOG_DEBUG, "VFS: Cannot open directory %s with write access\n", path);
+        return ERR_PTR(-EISDIR);
+    } else if (inode->i_type != TYPE_DIR && flags & O_DIRECTORY) {
+        klog(LOG_DEBUG, "VFS: Not a directory: %s\n", path);
+        return ERR_PTR(-ENOTDIR);
     }
 
     new_file = alloc_file(dentry);
@@ -231,6 +262,8 @@ struct file *vfs_open(const char *path, int flags, int mode)
         fput(new_file);
         return ERR_PTR(err);
     }
+
+    new_file->f_mode = flags | (flags & ~(O_CREAT|O_EXCL|O_NOCTTY|O_TRUNC));
 
     return new_file;
 }
@@ -309,6 +342,9 @@ SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
         return PTR_ERR(file);
     }
 
+    if ((file->f_mode & O_ACCMODE) == O_WRONLY)
+        return -EBADF;
+
     kbuf = kmalloc(count);
     if (!kbuf)
         return -ENOMEM;
@@ -336,6 +372,7 @@ ssize_t vfs_write(struct file *file, const void *buf, size_t count)
         file->f_pos += bytes;
     return bytes;
 }
+
 SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
 {
     struct file *file;
@@ -354,6 +391,10 @@ SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
 #endif
         return PTR_ERR(file);
     }
+
+    if ((file->f_mode & O_ACCMODE) == O_RDONLY)
+        return -EBADF;
+
     kbuf = kmalloc(count);
     if (!kbuf)
         return -ENOMEM;
@@ -591,14 +632,17 @@ int vfs_dup(int oldfd, int newfd)
     return newfd;
 }
 
-SYSCALL_DECL1(dup, int, oldfd)
+int vfs_dupf(int fd)
 {
     int newfd = get_fd();
-    if (newfd < 0) {
+    if (newfd < 0)
         return newfd; // -EMFILE
-    }
+    return vfs_dup(fd, newfd);
+}
 
-    return vfs_dup(oldfd, newfd);
+SYSCALL_DECL1(dup, int, oldfd)
+{
+    return vfs_dupf(oldfd);
 }
 
 SYSCALL_DECL2(dup2, int, oldfd, int, newfd)

@@ -25,4 +25,13 @@ void set_task_running(struct task *p);
 void set_task_sleeping(struct task *p);
 void set_current_state(u8 state);
 
+static inline bool task_interrupted_ack(void)
+{
+    if (current->flags.interrupted) {
+        current->flags.interrupted = 0;
+        return true;
+    }
+    return false;
+}
+
 #endif

@@ -10,9 +10,19 @@
 
 int vfs_stat(const struct file *f, struct stat *st)
 {
-    struct inode *i_ptr = f->f_dentry->d_inode;
+    struct inode *i_ptr;
+    if (f->f_inode) {
+        i_ptr = f->f_inode;
+    } else if (f->f_dentry) {
+        i_ptr = f->f_dentry->d_inode;
+    } else {
+        klog(LOG_WARN, "vfs_stat: unexpected missing inode on %p", f);
+        return -EBADF;
+    }
+
     st->st_ino = i_ptr->i_ino;
-    st->st_dev = i_ptr->i_sb->s_bdev->devnum;
+    // st->st_dev = i_ptr->i_sb->s_bdev->devnum;
+    st->st_dev = 0;
     st->st_mode = i_ptr->i_mode;
     st->st_nlink = 0;
     st->st_uid = 0;
@@ -28,7 +38,8 @@ int vfs_stat(const struct file *f, struct stat *st)
     if (i_ptr->i_type == TYPE_FILE)
         st->st_mode |= S_IFREG;
     st->st_size = i_ptr->i_size;
-    st->st_blksize = i_ptr->i_sb->s_blocksize;
+    // st->st_blksize = i_ptr->i_sb->s_blocksize;
+    st->st_blksize = 512;
     st->st_blocks = i_ptr->i_blocks;
     st->st_atim = (struct timespec){i_ptr->i_atime, 0};
     st->st_mtim = (struct timespec){i_ptr->i_mtime, 0};

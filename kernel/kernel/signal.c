@@ -90,6 +90,7 @@ int do_raise(struct task *p, int sig)
 
     if (p->state == TASK_SLEEPING && !signal_blocked(p, sig)) {
         klog(LOG_DEBUG, "Waking up process %d for signal %d\n", p->pid, sig);
+        p->flags.interrupted = 1;
         set_task_running(p);
     }
 
@@ -192,7 +193,7 @@ SYSCALL_DECL3(sigaction, int, signum, const struct sigaction *, act, struct siga
         ka->sa.sa_mask = act->sa_mask;
     }
 
-    klog(LOG_DEBUG, "sigaction: Signal %d action updated\n", signum);
+    klog(LOG_DEBUG, "sigaction: Signal %d action updated to %p\n", signum, ka->sa.sa_handler);
     return 0;
 }
 
@@ -242,4 +243,23 @@ SYSCALL_DECL1(sigpending, sigset_t *, set)
     *set = current->pending.signal;
     klog(LOG_DEBUG, "sigpending: Pending signals for process %d: 0x%lx\n", current->pid, *set);
     return 0;
+}
+
+// TODO: Actually sleep until sig
+SYSCALL_DECL1(sigsuspend, sigset_t*, set)
+{
+    if (!access_ok(set, sizeof(sigset_t))) {
+        klog(LOG_WARN, "sigsuspend: Invalid user memory for pending signals\n");
+        return -EFAULT;
+    }
+
+    sigset_t oldmask = current->blocked;
+    klog(LOG_DEBUG, "sigsuspend: changing mask from %lx to %lx", oldmask, *set);
+    current->blocked = *set;
+
+    // while (!current->flags.sig_pending)
+    //     yield();
+
+    current->blocked = oldmask;
+    return -EINTR;
 }

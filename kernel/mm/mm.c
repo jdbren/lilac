@@ -7,6 +7,8 @@
 #include <lilac/sched.h>
 #include <lilac/syscall.h>
 #include <lilac/kmm.h>
+#include <lilac/fs.h>
+#include <lilac/libc.h>
 
 
 void* mmap_internal(void *addr, unsigned long len, u32 prot, u32 flags,
@@ -121,4 +123,16 @@ SYSCALL_DECL1(sbrk, intptr_t, increment)
         return PTR_ERR(_brk);
     }
     return (uintptr_t)_brk;
+}
+
+// TODO: flimsy HACK, not POSIX
+SYSCALL_DECL2(memfd_create, const char *, name, unsigned int, flags)
+{
+    static int n = 0;
+    char buf[64];
+    while (*name && *name == '/')
+        name++;
+    snprintf(buf, 64, "/tmp/%s/%d", name, n);
+    struct file *f = vfs_open(buf, O_CREAT, S_IREAD|S_IWRITE);
+    return get_next_fd(&current->fs.files, f);
 }

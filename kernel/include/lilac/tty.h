@@ -122,17 +122,17 @@ struct tty_operations {
     int (*open)(struct tty *tty, struct file *file);
     void (*close)(struct tty *tty, struct file *file);
     ssize_t (*write)(struct tty *tty, const u8 *buf, size_t count);
-    // void (*set_termios)(struct tty *tty, struct ktermios *old);
+    // void (*set_termios)(struct tty *tty, struct termios *old);
 };
 
 struct tty_ldisc_ops {
     ssize_t (*read)(struct tty *tty, struct file *file, u8 *buf, size_t nr, unsigned long offset);
     ssize_t (*write)(struct tty *tty, struct file *file, const u8 *buf, size_t nr);
-    void (*set_termios)(struct tty *tty, const struct ktermios *old);
+    void (*set_termios)(struct tty *tty, const struct termios *old);
     void (*receive_buf)(struct tty *tty, const u8 *cp, const u8 *fp, size_t count);
 };
 
-#define INPUT_BUF_SIZE 256
+#define INPUT_BUF_SIZE 1024
 
 struct tty_data {
     struct {
@@ -142,7 +142,13 @@ struct tty_data {
         int epos;
     } input;
 
+    int line_start;
+    int vmin_cnt;
+
     struct mutex read_lock;
+
+    bool line_ready;
+    bool at_eof;
 };
 
 struct tty {
@@ -159,7 +165,7 @@ struct tty {
     // unsigned int count;
     // spinlock_t files_lock;
     spinlock_t termios_lock; // could be rw_sem
-    struct ktermios termios;
+    struct termios termios;
 
     mutex_t winsize_lock;
     struct winsize winsize;
@@ -168,6 +174,8 @@ struct tty {
         spinlock_t lock;
         int pgrp;
         int session;
+        bool stopped;
+        unsigned short column;
     } ctrl;
 
     struct waitqueue read_wait;
@@ -199,5 +207,6 @@ extern const struct tty_operations vt_tty_ops;
 void tty_init(void);
 int tty_recv_char(u8 c);
 int tty_recv_buf(char *buf, size_t size);
+bool tty_input_available(struct tty *tty);
 
 #endif // _LILAC_TTY_H
