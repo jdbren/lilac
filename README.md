@@ -94,3 +94,6 @@ ncurses
 libedit
 CFLAGS="-I$HOME/lilac/sysroot/usr/include/ncurses" ./configure --build=x86_64-linux-gnu --host=x86_64-lilac --disable-widec
 --with-sysroot="$HOME/lilac/sysroot"
+
+dash
+./configure --build=x86_64-linux-gnu --host=x86_64-lilac --with-libedit

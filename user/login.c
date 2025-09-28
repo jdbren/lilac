@@ -46,7 +46,7 @@ int main()
     tcsetattr(0, TCSANOW, &tio);
 
     setenv("TERM", "vt100", 1);   /* or linux, vt100, etc. */
-    setenv("HOME", "/", 1);
+    setenv("HOME", "/root", 1);
     setenv("SHELL", "/bin/dash", 1);
 
     // Try to run a shell

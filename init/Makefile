@@ -12,5 +12,5 @@ clean:
 	rm -f init *.o *.d
 
 install: all
-	mkdir -p ../sysroot/sbin ../sysroot/bin ../sysroot/etc
+	mkdir -p ../sysroot/sbin ../sysroot/bin ../sysroot/etc ../sysroot/root
 	cp init ../sysroot/sbin
