@@ -25,36 +25,43 @@ void set_log_level(int level)
     log_level = level;
 }
 
-void klog(int level, const char *data, ...)
+void kvlog(int level, const char *data, va_list args)
 {
     int orig_write_to_screen = write_to_screen;
     acquire_lock(&log_lock);
-    u32 text_color = graphics_getcolor().fg;
-    va_list args;
+    struct framebuffer_color text_color = graphics_getcolor();
+
     if (!data || log_level > level) return;
     if (level == LOG_ERROR)
         write_to_screen = 1;
-    u64 stime = get_sys_time();
-    printf("[%4lld.%09lld] (pid: %d) ", (long long)(stime / 1000000000ll),
-        (long long)(stime % 1000000000ll), get_pid());
-    switch (level)
-    {
+
+    long long stime = (long long) get_sys_time();
+    printf(LOG_PREFIX, stime / 1000000000ll, stime % 1000000000ll, get_pid());
+
+    switch (level) {
     case LOG_WARN:
         graphics_setcolor(RGB_YELLOW, RGB_BLACK);
+        printf(KERN_WARN);
         break;
     case LOG_ERROR:
         graphics_setcolor(RGB_RED, RGB_BLACK);
-        printf("ERROR: ");
+        printf(KERN_ERR);
         break;
     }
-    graphics_setcolor(text_color, RGB_BLACK);
+    graphics_setcolor(text_color.fg, text_color.bg);
 
-    va_start(args, data);
     vprintf(data, args);
-    va_end(args);
 
     write_to_screen = orig_write_to_screen;
     release_lock(&log_lock);
+}
+
+void klog(int level, const char *data, ...)
+{
+    va_list args;
+    va_start(args, data);
+    kvlog(level, data, args);
+    va_end(args);
 }
 
 void kstatus(int status, const char *message, ...)

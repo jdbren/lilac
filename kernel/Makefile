@@ -1,10 +1,5 @@
-HOST?=$(shell uname -m)-elf
-HOSTARCH=$(shell ../scripts/target-triplet-to-arch.sh $(HOST))
+ARCHNAME=$(shell ../scripts/target-triplet-to-arch.sh $(HOST))
 COMPILER_DIR?=$(shell dirname $(shell which $(CC)))/..
-
-ifeq ($(HOST), x86_64-elf)
-CONFIG_x86_64-elf := 1
-endif
 
 CFLAGS?=-Og
 LDFLAGS?=
@@ -24,9 +19,8 @@ CXXFLAGS:=$(CXXFLAGS) $(FLAGS) -D_GLIBCXX_NO_ASSERTIONS -fno-exceptions -fno-rtt
 LDFLAGS:=$(LDFLAGS) -nostdlib
 LIBS:=$(LIBS) -lgcc -lstdc++
 
-ARCHDIR=arch/$(HOSTARCH)
-
-ifdef CONFIG_x86_64-elf
+ARCHDIR=arch/$(ARCHNAME)
+ifdef CONFIG_x86_64
 include $(ARCHDIR)/make64.config
 else
 include $(ARCHDIR)/make32.config
@@ -133,8 +127,10 @@ else
 endif
 
 install-headers:
-	mkdir -p $(DESTDIR)$(INCLUDEDIR)/asm
-	cp -r include/user/* $(DESTDIR)$(INCLUDEDIR)/asm/
+	@if [ ! -d $(DESTDIR)$(INCLUDEDIR)/asm ]; then \
+		mkdir -p $(DESTDIR)$(INCLUDEDIR)/asm; \
+		cp -r include/user/* $(DESTDIR)$(INCLUDEDIR)/asm/; \
+	fi
 
 libk.a: $(LIBK_OBJS)
 ifndef VERBOSE
@@ -154,7 +150,7 @@ endif
 
 .S.o:
 ifndef VERBOSE
-	@echo "	CC	$<"
+	@echo "	CCAS	$<"
 	@$(CC) -MD -c $< -o $@ $(CFLAGS)
 else
 	$(CC) -MD -c $< -o $@ $(CFLAGS)

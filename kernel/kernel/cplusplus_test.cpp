@@ -2,6 +2,7 @@
 #include <lilac/types.h>
 #include <lilac/libc.h>
 
+#ifdef DEBUG_CPP_INTEGRATION
 // ------------------------------------------------------
 // Test C++ objects and constructors
 // ------------------------------------------------------
@@ -43,3 +44,4 @@ extern "C" void cpptest() {
 
     puts("=== cpptest end ===\n");
 }
+#endif

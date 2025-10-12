@@ -193,7 +193,7 @@ ssize_t tty_read(struct file *f, void *buf, size_t count)
     if (!tty || !tty->ldisc_ops->read)
         return -EIO;
 
-    return tty->ldisc_ops->read(tty, f, buf, count, f->f_pos);;
+    return tty->ldisc_ops->read(tty, f, buf, count, f->f_pos);
 }
 
 ssize_t tty_write(struct file *f, const void *buf, size_t count)

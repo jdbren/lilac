@@ -1,3 +1,5 @@
+PROJECTS=kernel init libc user
+
 include kbuild.config
 export DESTDIR=$(SYSROOT)
 export LIBC_DIR?=$(HOME)/newlib
@@ -6,18 +8,25 @@ ifeq ($(V),1)
 export VERBOSE=1
 endif
 
-.PHONY: all clean kernel init user libc install install-libc install-system copy-headers shell
+.PHONY: all clean install install-libc install-system
+.PHONY: kernel init user libc shell copy-headers
 
-all: kernel libc init
+all: kernel init libc
 
 kernel: copy-headers
 	$(MAKE) -C kernel
 
 copy-headers:
-	mkdir -p sysroot/usr/include/asm
 	$(MAKE) -C kernel install-headers
 
-libc:
+install:
+	$(MAKE) -C kernel install
+
+install-system: install install-libc init user shell
+	$(MAKE) -C init install
+
+# LIBC
+libc: copy-headers
 	@if [ ! -d build-libc ]; then \
 		mkdir -p build-libc; \
 		env -i PATH="$$PATH" /bin/sh -c 'cd build-libc; \
@@ -29,11 +38,12 @@ libc:
 	fi
 	$(MAKE) -s -C build-libc all
 
-install-libc: copy-headers libc
+install-libc: libc
 	$(MAKE) -s DESTDIR=$(DESTDIR) -C build-libc install
 	cp -r $(DESTDIR)$(PREFIX)/$(TARGET)/* $(SYSROOT)$(PREFIX)/ || true
 	rm -rf $(DESTDIR)$(PREFIX)/$(TARGET) || true
 
+# USERSPACE
 init: install-libc
 	$(MAKE) -C init
 
@@ -47,12 +57,7 @@ shell: install-libc
 		cp ../gush/gush ./sysroot/sbin/; \
 	fi
 
-install:
-	$(MAKE) -C kernel install
-
-install-system: install install-libc init user shell
-	$(MAKE) -C init install
-
+# CLEAN
 clean:
 	@for PROJECT in $(PROJECTS); do \
   		($(MAKE) -C $$PROJECT clean) \

@@ -15,7 +15,7 @@ SYSCALL_DECL3(fcntl, int, fd, int, cmd, unsigned long, arg)
         case F_DUPFD_CLOEXEC:
             if (fd < 0)
                 return -EBADF;
-            if (arg < 0)
+            if ((int)arg < 0)
                 return -EINVAL;
             if (arg == 0)
                 return vfs_dupf(fd);

@@ -21,6 +21,10 @@
 // #define ACPI_DEBUG_OUTPUT
 // #define ACPI_NO_ERROR_MESSAGES
 
+#define ACPI_MSG_INFO           "ACPI: "
+#define ACPI_MSG_WARNING        "ACPI Warning: "
+#define ACPI_MSG_ERROR          "ACPI Error: "
+
 #if BITS_PER_LONG == 64
 #define COMPILER_DEPENDENT_INT64    long
 #define COMPILER_DEPENDENT_UINT64   unsigned long
