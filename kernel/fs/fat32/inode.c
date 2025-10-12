@@ -13,6 +13,9 @@
 
 static inline bool check_entry(struct fat_file *entry, const char *name)
 {
+#ifdef DEBUG_FAT_FULL
+    klog(LOG_DEBUG, "Comparing entry %.8s with %.8s\n", entry->name, name);
+#endif
     if (entry->attributes != LONG_FNAME && entry->name[0] != FAT_UNUSED) {
         if (!memcmp(entry->name, name, 11))
             return true;
@@ -58,7 +61,7 @@ static struct inode *fat_iget(struct super_block *sb, unsigned long pos)
 
     list_for_each_entry(tmp, &sb->s_inodes, i_list) {
         info = (struct fat_file*)tmp->i_private;
-        i_pos = (u32)info->cl_low + (u32)info->cl_high;
+        i_pos = (u32)info->cl_low + ((u32)info->cl_high << 16);
         if (i_pos == pos)
             return tmp;
     }
@@ -69,7 +72,7 @@ static struct inode *fat_iget(struct super_block *sb, unsigned long pos)
 struct inode *fat_build_inode(struct super_block *sb, struct fat_inode *info)
 {
     struct inode *inode;
-    unsigned long pos = (u32)info->entry.cl_low + (u32)info->entry.cl_high;
+    unsigned long pos = (u32)info->entry.cl_low + ((u32)info->entry.cl_high << 16);
 
     inode = fat_iget(sb, pos);
     if (inode) {
@@ -93,23 +96,22 @@ struct inode *fat_build_inode(struct super_block *sb, struct fat_inode *info)
 }
 
 // Read a directory and return a buffer containing the directory entries
-static void *__fat32_read_dir(struct fat_file *entry, struct fat_disk *disk,
-    struct gendisk *hd)
+static size_t __fat32_read_dir(struct fat_file *entry, struct fat_disk *disk,
+    struct gendisk *hd, volatile u8**buffer)
 {
     size_t bytes_read = 0;
-    u32 clst = (u32)entry->cl_low + (u32)entry->cl_high;
-    volatile unsigned char *current;
-    volatile unsigned char *buffer = NULL;
+    u32 clst = (u32)entry->cl_low + ((u32)entry->cl_high << 16);
+    volatile u8 *current;
 
     while (clst < 0x0FFFFFF8) {
-        buffer = krealloc((void*)buffer, bytes_read + disk->bytes_per_clst);
-        current = buffer + bytes_read;
+        *buffer = krealloc((void*)*buffer, bytes_read + disk->bytes_per_clst);
+        current = *buffer + bytes_read;
         __fat_read_clst(disk, hd, clst, (void*)current);
-        clst = __get_FAT_val(clst, disk);
+        clst = fat_value(clst, disk);
         bytes_read += disk->bytes_per_clst;
     }
 
-    return (void*)buffer;
+    return bytes_read;
 }
 
 static int fat32_find(struct inode *dir, const char *name,
@@ -118,16 +120,16 @@ static int fat32_find(struct inode *dir, const char *name,
     int ret = -1;
     struct fat_file *entry = (struct fat_file*)dir->i_private;
     struct fat_disk *disk = (struct fat_disk*)dir->i_sb->private;
-    volatile unsigned char *buffer;
+    volatile u8 *buffer = NULL;
 
-    buffer = __fat32_read_dir(entry, disk, dir->i_sb->s_bdev->disk);
+    ret = __fat32_read_dir(entry, disk, dir->i_sb->s_bdev->disk, &buffer);
     if (!buffer) {
         klog(LOG_ERROR, "Failed to read directory entries\n");
         return ret;
     }
     entry = (struct fat_file*)buffer;
 
-    while (entry->name[0]) {
+    while (entry < (struct fat_file*)(buffer + ret)) {
         if (check_entry(entry, name)) {
             memcpy(&info->entry, entry, sizeof(info->entry));
             ret = 0;

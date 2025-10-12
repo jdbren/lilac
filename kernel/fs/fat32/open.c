@@ -53,7 +53,7 @@ int fat32_create(struct inode *parent, struct dentry *new, umode_t mode)
         if (entry->name[0] == 0 || entry->name[0] == FAT_UNUSED)
             break;
 
-        clst = __get_FAT_val(clst, disk);
+        clst = fat_value(clst, disk);
     }
 
     if (clst >= 0x0FFFFFF8)

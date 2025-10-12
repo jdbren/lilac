@@ -1,9 +1,0 @@
-- Implement a proper scheduler / preemption
-- Implement non-contiguous memory allocation
-- Users and file permissions
-- User space memory allocation
-- Dynamic linking
-- Implement SMP and synchronization
-- Implement blocking I/O system calls in disk driver
-- Finsih the file system
-- Process signals

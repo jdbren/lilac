@@ -40,7 +40,7 @@ x86_user_copy_asm:
 	si - source address
 	di - destination address
 	cx - max number of bytes
-	returns: number of bytes remaining in cx
+	returns: number of bytes copied
 */
 .global x86_strncpy_from_user_asm
 #ifdef __x86_64__
@@ -48,10 +48,12 @@ x86_strncpy_from_user_asm:
 	push %rbp
 	mov  %rsp, %rbp
 	cld
+	mov %rcx, %r8
 2:	cmpb $0, (%rsi)
 	movsb
 	loopnz 2b
-	mov %ecx, %eax
+    mov %r8d, %eax
+    sub %ecx, %eax
 	pop %rbp
 	ret
 .section .exception, "a"
@@ -62,10 +64,12 @@ x86_strncpy_from_user_asm:
 	push %ebp
 	mov %esp, %ebp
 	cld
+	mov %ecx, %edx
 2:	cmpb $0, (%esi)
 	movsb
 	loopnz 2b
-	mov %ecx, %eax
+    mov %edx, %eax
+    sub %ecx, %eax
 	pop %ebp
 	ret
 .section .exception, "a"

@@ -1,0 +1,2 @@
+[X] FAT32 directory searching, did not account for bit shifting the high cluster bits.
+  Once fixed, the terminfo database worked correctly.

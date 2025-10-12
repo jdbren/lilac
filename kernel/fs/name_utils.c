@@ -1,5 +1,8 @@
 #include <lilac/libc.h>
 #include <lilac/err.h>
+#include <lilac/fs.h>
+#include <lilac/kmalloc.h>
+#include <lilac/uaccess.h>
 
 /**
  * dirname - extract directory part of a pathname into dst buffer.
@@ -120,4 +123,21 @@ int path_component_len(const char *path, int n_pos)
         i++; n_pos++;
     }
     return i;
+}
+
+char * get_user_path(const char *path)
+{
+    char *kpath = kmalloc(PATH_MAX);
+    if (!kpath)
+        return ERR_PTR(-ENOMEM);
+
+    long err = strncpy_from_user(kpath, path, PATH_MAX);
+    if (err < 0) {
+        kfree(kpath);
+        return ERR_PTR(err);
+    } else if (err == PATH_MAX) {
+        kfree(kpath);
+        return ERR_PTR(-ENAMETOOLONG);
+    }
+    return kpath;
 }

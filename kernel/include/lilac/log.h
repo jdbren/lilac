@@ -16,10 +16,10 @@ enum LOG_STATUS {
 };
 
 #define LOG_PREFIX "[%4lld.%09lld] (%d) "
-#define KERN_DEBUG LOG_PREFIX
-#define KERN_INFO  LOG_PREFIX
-#define KERN_WARN  LOG_PREFIX "WARNING: "
-#define KERN_ERR   LOG_PREFIX "ERROR: "
+// #define KERN_DEBUG LOG_PREFIX
+// #define KERN_INFO  LOG_PREFIX
+#define KERN_WARN  "WARNING: "
+#define KERN_ERR   "ERROR: "
 
 void set_log_level(int level);
 void klog(int level, const char* message, ...);

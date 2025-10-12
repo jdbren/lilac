@@ -55,8 +55,11 @@ static inline int copy_from_user(void *dst, const void *src, size_t size)
     return arch_user_copy(dst, src, size);
 }
 
-__must_check
-static inline int strncpy_from_user(char *dst, const char *src, size_t max_size)
+/**
+ * Copies a NUL-terminated string from user space to kernel space.
+ * Returns the number of bytes copied.
+ */
+static __must_check inline int strncpy_from_user(char *dst, const char *src, size_t max_size)
 {
     if (!access_ok(src, 1)) {
         klog(LOG_WARN, "strncpy_from_user: src (%x) not accessible\n", src);

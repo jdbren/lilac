@@ -50,19 +50,14 @@ int vfs_stat(const struct file *f, struct stat *st)
 SYSCALL_DECL2(stat, const char*, path, struct stat*, buf)
 {
     struct file *file;
-    char *path_buf = kmalloc(256);
+    char *path_buf;
     long err;
 
-    err = strncpy_from_user(path_buf, path, 255);
-    if (err < 0) {
-        kfree(path_buf);
-        return err;
-    } else if (err == 0) {
-        kfree(path_buf);
-        return -ENAMETOOLONG;
-    }
+    path_buf = get_user_path(path);
+    if (IS_ERR(path_buf))
+        return PTR_ERR(path_buf);
 
-    if (!access_ok(buf, sizeof(struct stat)))
+    if (!access_ok(buf, sizeof(*buf)))
         return -EFAULT;
 
     file = vfs_open(path_buf, 0, 0);

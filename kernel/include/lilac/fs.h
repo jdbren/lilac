@@ -7,6 +7,7 @@
 #include <lilac/list_bl.h>
 #include <lilac/sync.h>
 #include <lilac/file.h>
+#include <fs/path.h>
 #include <fs/types.h>
 
 /**

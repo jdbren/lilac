@@ -3,6 +3,7 @@
 
 #include <lilac/types.h>
 #include <lilac/config.h>
+#include <lilac/panic.h>
 
 struct __packed fat_extBS_32 {
 	u32		FAT_size_32;
@@ -127,6 +128,23 @@ struct fat_disk {
 
 #define FAT_VALUE(FAT, clst) \
     ((FAT).FAT_buf[(clst) - (FAT).first_clst] & 0x0FFFFFFF)
+#define FAT_SET_VALUE(FAT, clst, val) \
+    (FAT).FAT_buf[(clst) - (FAT).first_clst] = (val) & 0x0FFFFFFF
+
+static inline int fat_value(u32 clst, struct fat_disk *disk)
+{
+    if (clst < disk->FAT.first_clst || clst > disk->FAT.last_clst)
+        panic("clst out of bounds\n");
+    return FAT_VALUE(disk->FAT, clst);
+}
+
+static inline int fat_set_value(u32 clst, u32 val, struct fat_disk *disk)
+{
+    if (clst < disk->FAT.first_clst || clst > disk->FAT.last_clst)
+        panic("clst out of bounds\n");
+    FAT_SET_VALUE(disk->FAT, clst, val);
+    return 0;
+}
 
 struct super_block;
 struct inode;
@@ -151,9 +169,9 @@ struct inode *fat_build_inode(struct super_block *sb, struct fat_inode *info);
 int __fat32_read_all_dirent(struct file *file, struct dirent **dirents_ptr);
 void __fat_read_clst(struct fat_disk *fat_disk, struct gendisk *hd, u32 clst, void *buf);
 void __fat_write_clst(struct fat_disk *fat_disk, struct gendisk *hd, u32 clst, const void *buf);
-u32 __get_FAT_val(u32 clst, struct fat_disk *disk);
 u32 __fat_get_clst_num(struct file *file, struct fat_disk *disk);
 int __fat_find_free_clst(struct fat_disk *disk);
+int __fat_add_new_clst(struct fat_disk *disk, u32 prev_clst, u32 new_clst);
 
 int fat32_write_fs_info(struct fat_disk *fat_disk, struct gendisk *gd);
 int fat_write_FAT(struct fat_disk *fat_disk, struct gendisk *gd);

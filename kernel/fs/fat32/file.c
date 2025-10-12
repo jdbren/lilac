@@ -89,7 +89,7 @@ int __do_fat32_read(const struct file *file, u32 clst, volatile u8 *buffer,
 
     while (clst < 0x0FFFFFF8 && clst_read < num_clst) {
         __fat_read_clst(fat_disk, gd, clst, (void*)buffer);
-        clst = __get_FAT_val(clst, fat_disk);
+        clst = fat_value(clst, fat_disk);
         buffer += fat_disk->bytes_per_clst;
         clst_read++;
     }
@@ -114,7 +114,7 @@ int __do_fat32_write(const struct file *file, u32 clst,
         __fat_write_clst(fat_disk, gd, clst, buffer);
         clst_writ++;
 
-        clst = __get_FAT_val(clst, fat_disk);
+        clst = fat_value(clst, fat_disk);
         if (clst >= 0x0FFFFFF8 && clst_writ < num_clst) {
             next_val = __fat_find_free_clst(fat_disk);
             if (next_val == -1)

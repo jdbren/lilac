@@ -167,7 +167,7 @@ static void * load_executable(struct task *p)
     if (!file) {
         file = vfs_open(path, 0, 0);
         if (IS_ERR_OR_NULL(file)) {
-            klog(LOG_ERROR, "Failed to open file %s\n", path);
+            klog(LOG_ERROR, "Failed to open file %s: %ld\n", path, PTR_ERR(file));
             exit(1);
         }
         p->info.exec_file = file;
@@ -551,15 +551,9 @@ SYSCALL_DECL3(execve, const char*, path, char* const*, argv, char* const*, envp)
     if (!access_ok(path, 1) || !access_ok(argv, 1) || !access_ok(envp, 1))
         return -EFAULT;
 
-    char *path_buf = kmalloc(256);
-    if (!path_buf)
-        return -ENOMEM;
-
-    err = strncpy_from_user(path_buf, path, 255);
-    if (err < 0) {
-        kfree(path_buf);
-        return err;
-    }
+    char *path_buf = get_user_path(path);
+    if (IS_ERR(path_buf))
+        return PTR_ERR(path_buf);
 
     err = do_execve(path_buf, argv, envp);
     if (err < 0)
@@ -669,15 +663,13 @@ SYSCALL_DECL1(exit, int, status)
 
 SYSCALL_DECL1(chdir, const char*, path)
 {
-    char *path_buf = kmalloc(256);
+    char *path_buf;
     long err = 0;
     struct task *task = current;
 
-    err = strncpy_from_user(path_buf, path, 255);
-    if (err < 0) {
-        kfree(path_buf);
-        return err;
-    }
+    path_buf = get_user_path(path);
+    if (IS_ERR(path_buf))
+        return PTR_ERR(path_buf);
 
     struct dentry *d = vfs_lookup(path_buf);
     if (IS_ERR(d)) {

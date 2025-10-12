@@ -71,7 +71,7 @@ int __fat32_read_all_dirent(struct file *file, struct dirent **dirents_ptr)
 
     *dirents_ptr = dir_buf;
 #ifdef DEBUG_FAT
-    for (int i = 0; i < num_dirents; i++)
+    for (u32 i = 0; i < num_dirents; i++)
         klog(LOG_DEBUG, "dirent %d: %s\n", i, dir_buf[i].d_name);
 #endif
     kvirtual_free((void*)buffer, disk->bytes_per_clst * 64);
@@ -96,7 +96,8 @@ int fat32_mkdir(struct inode *dir, struct dentry *new, umode_t mode)
     struct fat_disk *disk = (struct fat_disk*)dir->i_sb->private;
     struct gendisk *hd = dir->i_sb->s_bdev->disk;
     struct fat_file *parent_dir = (struct fat_file*)dir->i_private;
-    u32 clst = parent_dir->cl_low + (u32)(parent_dir->cl_high << 16);
+    int clst = parent_dir->cl_low + ((u32)parent_dir->cl_high << 16);
+    int prev_clst = clst;
     volatile unsigned char *buffer = kzmalloc(disk->bytes_per_clst);
     struct timestamp cur_time = get_timestamp();
     char name[8];
@@ -120,14 +121,26 @@ int fat32_mkdir(struct inode *dir, struct dentry *new, umode_t mode)
             }
         }
 
-        if (entry->name[0] == 0 || (u8)entry->name[0] == FAT_UNUSED)
+        if (entry < (struct fat_file*)(buffer + disk->bytes_per_clst) &&
+         (entry->name[0] == 0 || (u8)entry->name[0] == FAT_UNUSED))
             break;
+        else
+            entry = NULL;
 
-        clst = __get_FAT_val(clst, disk);
+        prev_clst = clst;
+        clst = fat_value(clst, disk);
     }
 
-    if (clst >= 0x0FFFFFF8)
-        kerror("Need to allocate new cluster\n");
+    if (clst >= 0x0FFFFFF8) {
+        clst = __fat_find_free_clst(disk);
+        if (clst == -1)
+            panic("No free clusters\n");
+        __fat_add_new_clst(disk, prev_clst, clst);
+        klog(LOG_DEBUG, "Added new cluster %x to dir\n", clst);
+        __fat_read_clst(disk, hd, clst, (void*)buffer);
+        memset((void*)buffer, 0, disk->bytes_per_clst);
+        entry = (struct fat_file*)buffer;
+    }
 
     int new_clst = __fat_find_free_clst(disk);
     if (new_clst == -1)

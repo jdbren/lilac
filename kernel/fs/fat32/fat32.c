@@ -41,7 +41,7 @@ const struct inode_operations fat_iops = {
 /**
  *  Utility functions
 **/
-static void print_fat32_data(struct fat_BS*);
+static void print_fat32_data(volatile struct fat_BS*);
 
 __must_check
 static inline int fat_read_bpb(struct fat_disk *fat_disk, struct gendisk *gd)
@@ -123,11 +123,6 @@ int fat_write_FAT(struct fat_disk *fat_disk, struct gendisk *gd)
     return 0;
 }
 
-u32 __get_FAT_val(u32 clst, struct fat_disk *disk)
-{
-    return FAT_VALUE(disk->FAT, clst);
-}
-
 #define LBA_ADDR(cluster_num, disk) \
     (disk->clst_begin_lba + \
     ((cluster_num - disk->root_start) * disk->sect_per_clst))
@@ -177,6 +172,17 @@ int __fat_find_free_clst(struct fat_disk *disk)
     }
 
     return -1;
+}
+
+int __fat_add_new_clst(struct fat_disk *disk, u32 prev_clst, u32 new_clst)
+{
+    if (prev_clst != 0)
+        fat_set_value(prev_clst, new_clst, disk);
+    fat_set_value(new_clst, 0x0FFFFFFF, disk); // Mark new clst as EOF
+
+    disk->fs_info.free_clst_cnt--;
+    // disk->fs_info.next_free_clst = __fat_find_free_clst(disk);
+    return new_clst;
 }
 
 static void disk_init(struct fat_disk *disk)
@@ -273,7 +279,7 @@ error:
     return NULL;
 }
 
-static void print_fat32_data(struct fat_BS *ptr)
+static void print_fat32_data(volatile struct fat_BS *ptr)
 {
     klog(LOG_DEBUG, "FAT32 data:\n");
     klog(LOG_DEBUG, "Bytes per sector: %x\n", ptr->bytes_per_sector);

@@ -269,16 +269,13 @@ struct file *vfs_open(const char *path, int flags, int mode)
 }
 SYSCALL_DECL3(open, const char*, path, int, flags, int, mode)
 {
-    char *path_buf = kmalloc(256);
+    char *path_buf;
     struct file *f;
     long fd;
 
-    if (!path_buf)
-        return -ENOMEM;
-
-    fd = strncpy_from_user(path_buf, path, 255);
-    if (fd < 0)
-        goto error;
+    path_buf = get_user_path(path);
+    if (IS_ERR(path_buf))
+        return PTR_ERR(path_buf);
 
     f = vfs_open(path_buf, flags, mode);
     if (IS_ERR(f)) {
@@ -538,18 +535,14 @@ int vfs_mkdir(const char *path, umode_t mode)
 }
 SYSCALL_DECL2(mkdir, const char*, path, umode_t, mode)
 {
-    char *path_buf = kmalloc(256);
-    long err = -EFAULT;
+    char *path_buf;
+    long err;
 
-    err = strncpy_from_user(path_buf, path, 255);
-    if (err == 0) {
-        err = -EINVAL;
-        goto error;
-    } else if (err < 0) {
-        goto error;
-    }
+    path_buf = get_user_path(path);
+    if (IS_ERR(path_buf))
+        return PTR_ERR(path_buf);
+
     err = vfs_mkdir(path_buf, mode);
-error:
     kfree(path_buf);
     return err;
 }
@@ -585,12 +578,13 @@ int vfs_create(const char *path, umode_t mode)
 }
 SYSCALL_DECL2(create, const char*, path, umode_t, mode)
 {
-    char *path_buf = kmalloc(256);
-    long err = -EFAULT;
+    char *path_buf;
+    long err;
 
-    err = strncpy_from_user(path_buf, path, 255);
-    if (err >= 0)
-        err = vfs_create(path, mode);
+    path_buf = get_user_path(path);
+    if (IS_ERR(path_buf))
+        return PTR_ERR(path_buf);
+    err = vfs_create(path, mode);
     kfree(path_buf);
     return err;
 }

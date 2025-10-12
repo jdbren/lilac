@@ -89,11 +89,15 @@ First run config.sh. ARCH defaults to x86_64.
 You can now build and boot into a vm using qemu.sh.
 
 ncurses
-./configure --build=x86_64-linux-gnu --host=x86_64-lilac --disable-widec --without-cxx --prefix="$HOME/lilac/sysroot/usr" --bindir="$HOME/lilac/sysroot/bin"
+./configure --build=x86_64-linux-gnu --host=x86_64-lilac --disable-widec --without-cxx --prefix=/usr --without-manpages
+make
+make DESTDIR=$SYSROOT install
 
 libedit
-CFLAGS="-I$HOME/lilac/sysroot/usr/include/ncurses" ./configure --build=x86_64-linux-gnu --host=x86_64-lilac --disable-widec
---with-sysroot="$HOME/lilac/sysroot"
+CFLAGS="-fcommon -std=gnu89" ./configure --build=x86_64-linux-gnu --host=x86_64-lilac --disable-widec --prefix=/usr
+make
+make DESTDIR=$SYSROOT install
 
 dash
-./configure --build=x86_64-linux-gnu --host=x86_64-lilac --with-libedit
+LIBS="-ledit -lncurses" ./configure --build=x86_64-linux-gnu --host=x86_64-lilac --with-libedit --prefix=/usr
+make
