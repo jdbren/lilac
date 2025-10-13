@@ -163,7 +163,7 @@ u64 get_sys_time(void)
 
 s64 get_unix_time(void)
 {
-    return boot_unix_time + get_sys_time() / 1000000000ull;
+    return boot_unix_time + get_sys_time() / 1'000'000'000ull;
 }
 
 static int is_leap_year(int year) {
@@ -208,6 +208,7 @@ static void unix_time_to_date(long long unix_time, struct timestamp *ts) {
     remaining_seconds %= 3600;
     ts->minute = remaining_seconds / 60;
     ts->second = remaining_seconds % 60;
+
 }
 
 

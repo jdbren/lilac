@@ -4,12 +4,14 @@
 #define _KERNEL_PROCESS_H
 
 #include <lilac/types.h>
-#include <lilac/file.h>
+#include <lilac/sync.h>
 #include <lilac/rbtree.h>
 #include <lilac/signal.h>
 #include <lilac/hashtable.h>
+#include <lilac/fdtable.h>
 
 struct regs_state;
+struct file;
 
 #define TASK_RUNNING 0
 #define TASK_SLEEPING 1

@@ -58,6 +58,7 @@ fs/fat32/fat32.o \
 fs/fat32/dir.o \
 fs/fat32/file.o \
 fs/fat32/inode.o \
+fs/fat32/name.o \
 fs/fat32/open.o \
 fs/tmpfs/tmpfs.o \
 fs/tmpfs/dir.o \

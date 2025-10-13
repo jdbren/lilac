@@ -3,6 +3,7 @@ set -eu
 
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     LOOPDEV=$(losetup --find --show --partscan uefi.img)
+    sleep 1
     mkdir -p /mnt/lilac
     mount "${LOOPDEV}p1" /mnt/lilac
     rsync -r --copy-links sysroot/ /mnt/lilac

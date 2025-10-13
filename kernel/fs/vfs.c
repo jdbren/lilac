@@ -10,6 +10,7 @@
 #include <lilac/timer.h>
 #include <lilac/uaccess.h>
 #include <drivers/blkdev.h>
+#include <fs/fcntl.h>
 #include <fs/fat32.h>
 #include <fs/tmpfs.h>
 
@@ -305,10 +306,10 @@ ssize_t vfs_read(struct file *file, void *buf, size_t count)
 {
     if (file->f_dentry) {
         struct inode *inode = file->f_dentry->d_inode;
-        if (inode->i_type == TYPE_DIR)
+        if (inode->i_type == TYPE_DIR || S_ISDIR(inode->i_mode))
             return -EISDIR;
 
-        if (inode->i_type == TYPE_DEV)
+        if (inode->i_type == TYPE_DEV || S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode))
             return inode->i_fop->read(file, buf, count);
 
         if (file->f_pos >= inode->i_size)
@@ -359,7 +360,9 @@ ssize_t vfs_write(struct file *file, const void *buf, size_t count)
 {
     if (file->f_dentry) {
         struct inode *inode = file->f_dentry->d_inode;
-        if (inode->i_type == TYPE_DEV) {
+        if (inode->i_type == TYPE_DIR || S_ISDIR(inode->i_mode))
+            return -EISDIR;
+        if (inode->i_type == TYPE_DEV || S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode)) {
             return inode->i_fop->write(file, buf, count);
         }
     }

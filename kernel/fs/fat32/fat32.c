@@ -78,6 +78,7 @@ static int fat_read_FAT(struct fat_disk *fat_disk, struct gendisk *hd)
     const u32 FAT_sz = fat_disk->bpb.extended_section.FAT_size_32;
     const u32 buf_sz = fat_disk->bpb.bytes_per_sector * FAT_sz;
 
+    klog(LOG_INFO, "Allocating %u bytes for FAT\n", buf_sz);
     fat_disk->FAT.FAT_buf = kvirtual_alloc(buf_sz, PG_WRITE);
 
     int ret = 0;
@@ -181,8 +182,16 @@ int __fat_add_new_clst(struct fat_disk *disk, u32 prev_clst, u32 new_clst)
     fat_set_value(new_clst, 0x0FFFFFFF, disk); // Mark new clst as EOF
 
     disk->fs_info.free_clst_cnt--;
-    // disk->fs_info.next_free_clst = __fat_find_free_clst(disk);
+    disk->fs_info.next_free_clst = __fat_find_free_clst(disk);
     return new_clst;
+}
+
+int fat_find_alloc_clst(struct fat_disk *disk, u32 prev_clst)
+{
+    int new_clst = __fat_find_free_clst(disk);
+    if (new_clst == -1)
+        return -1;
+    return __fat_add_new_clst(disk, prev_clst, new_clst);
 }
 
 static void disk_init(struct fat_disk *disk)

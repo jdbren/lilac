@@ -9,8 +9,6 @@
 
 #include "fat_internal.h"
 
-#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-
 static inline bool check_entry(struct fat_file *entry, const char *name)
 {
 #ifdef DEBUG_FAT_FULL
@@ -35,7 +33,6 @@ struct inode *fat_alloc_inode(struct super_block *sb)
     new_node->i_op = &fat_iops;
     new_node->i_count = 1;
     new_node->i_mode = S_IEXEC|S_IWRITE|S_IREAD;
-    new_node->i_private = kzmalloc(sizeof(struct fat_inode));
 
     return new_node;
 }
@@ -81,7 +78,7 @@ struct inode *fat_build_inode(struct super_block *sb, struct fat_inode *info)
     }
 
     inode = fat_alloc_inode(sb);
-    if (IS_ERR_OR_NULL(inode)) {
+    if (IS_ERR(inode)) {
         return inode;
     }
 
@@ -89,6 +86,10 @@ struct inode *fat_build_inode(struct super_block *sb, struct fat_inode *info)
     inode->i_size = info->entry.file_size;
     inode->i_private = info;
     inode->i_type = info->entry.attributes & FAT_DIR_ATTR ? TYPE_DIR : TYPE_FILE;
+    if (inode->i_type == TYPE_DIR)
+        inode->i_mode |= S_IFDIR;
+    else
+        inode->i_mode |= S_IFREG;
 
     list_add_tail(&inode->i_list, &sb->s_inodes);
 
@@ -96,17 +97,18 @@ struct inode *fat_build_inode(struct super_block *sb, struct fat_inode *info)
 }
 
 // Read a directory and return a buffer containing the directory entries
-static size_t __fat32_read_dir(struct fat_file *entry, struct fat_disk *disk,
-    struct gendisk *hd, volatile u8**buffer)
+static ssize_t
+__fat32_read_dir(struct fat_disk *disk, volatile u8 **buffer, u32 clst)
 {
-    size_t bytes_read = 0;
-    u32 clst = (u32)entry->cl_low + ((u32)entry->cl_high << 16);
+    ssize_t bytes_read = 0;
     volatile u8 *current;
 
     while (clst < 0x0FFFFFF8) {
         *buffer = krealloc((void*)*buffer, bytes_read + disk->bytes_per_clst);
+        if (!*buffer)
+            return -ENOMEM;
         current = *buffer + bytes_read;
-        __fat_read_clst(disk, hd, clst, (void*)current);
+        __fat_read_clst(disk, disk->bdev->disk, clst, (void*)current);
         clst = fat_value(clst, disk);
         bytes_read += disk->bytes_per_clst;
     }
@@ -114,22 +116,24 @@ static size_t __fat32_read_dir(struct fat_file *entry, struct fat_disk *disk,
     return bytes_read;
 }
 
+// Return 0 if found, 1 if not found, negative on error
 static int fat32_find(struct inode *dir, const char *name,
     struct fat_inode *info)
 {
-    int ret = -1;
+    int ret = 1;
+    int bytes = 0;
     struct fat_file *entry = (struct fat_file*)dir->i_private;
     struct fat_disk *disk = (struct fat_disk*)dir->i_sb->private;
     volatile u8 *buffer = NULL;
 
-    ret = __fat32_read_dir(entry, disk, dir->i_sb->s_bdev->disk, &buffer);
-    if (!buffer) {
+    bytes = __fat32_read_dir(disk, &buffer, fat_clst_value(entry));
+    if (bytes <= 0) {
         klog(LOG_ERROR, "Failed to read directory entries\n");
-        return ret;
+        return bytes;
     }
     entry = (struct fat_file*)buffer;
 
-    while (entry < (struct fat_file*)(buffer + ret)) {
+    while (entry < (struct fat_file*)(buffer + bytes)) {
         if (check_entry(entry, name)) {
             memcpy(&info->entry, entry, sizeof(info->entry));
             ret = 0;
@@ -142,46 +146,38 @@ static int fat32_find(struct inode *dir, const char *name,
     return ret;
 }
 
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+
 struct dentry *fat32_lookup(struct inode *parent, struct dentry *find,
     unsigned int flags)
 {
     struct inode *inode;
     struct fat_inode *info = kzmalloc(sizeof(*info));
     char fatname[12];
-    const char *dot;
-    int i, j;
+    long err = 0;
 
-    memset(fatname, ' ', 11);
-    fatname[11] = '\0';
+    if (!info)
+        return ERR_PTR(-ENOMEM);
 
-    dot = strchr(find->d_name, '.');
+    get_fat_name(fatname, find);
 
-    // Copy up to 8 characters for the base name, stop at a dot
-    for (i = 0, j = 0; i < 8 && find->d_name[j] != '\0' &&
-         find->d_name[j] != '.'; i++, j++) {
-        fatname[i] = toupper(find->d_name[j]);
-    }
-
-    if (dot) {
-        for (i = 8, j = 1; j <= 3 && dot[j] != '\0'; i++, j++) {
-            fatname[i] = toupper(dot[j]);
-        }
-    }
-
-    if (fat32_find(parent, fatname, info) == 0) {
+    if ((err = fat32_find(parent, fatname, info)) == 0) {
         inode = fat_build_inode(parent->i_sb, info);
-        if (IS_ERR_OR_NULL(inode)) {
+        if (IS_ERR(inode)) {
             kfree(info);
             return ERR_CAST(inode);
         }
         iget(inode);
         find->d_inode = inode;
-        int i;
-        for (i = 0; find->d_name[i]; i++) {
-            find->d_name[i] = toupper(find->d_name[i]);
-        }
-        find->d_name[i] = '\0';
+        str_toupper(find->d_name);
+    } else if (err > 0) {
+        kfree(info);
+    } else {
+        kfree(info);
+        return ERR_PTR(err); // Error
     }
 
     return NULL;
 }
+
+#pragma GCC diagnostic pop

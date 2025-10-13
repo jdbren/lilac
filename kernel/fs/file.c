@@ -1,4 +1,3 @@
-#include <lilac/file.h>
 #include <lilac/fs.h>
 #include <lilac/err.h>
 #include <lilac/kmalloc.h>

@@ -8,7 +8,7 @@ ifeq ($(V),1)
 export VERBOSE=1
 endif
 
-.PHONY: all clean install install-libc install-system
+.PHONY: all clean distclean install install-libc install-system
 .PHONY: kernel init user libc shell copy-headers
 
 all: kernel init libc
@@ -67,3 +67,6 @@ clean:
 	fi
 	rm -rf build-libc
 	rm -rf sysroot
+
+distclean: clean
+	rm debug.txt dump.txt kbuild.config* log.txt

@@ -3,7 +3,6 @@
 #include <lilac/lilac.h>
 #include <lilac/libc.h>
 #include <lilac/fs.h>
-#include <lilac/file.h>
 #include <lilac/timer.h>
 #include <drivers/blkdev.h>
 

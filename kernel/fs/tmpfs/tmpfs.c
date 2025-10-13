@@ -1,5 +1,4 @@
 #include "tmpfs_internal.h"
-#include <lilac/file.h>
 
 const struct file_operations tmpfs_fops = {
     .read = tmpfs_read,

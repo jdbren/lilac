@@ -1,6 +1,6 @@
+#include <fs/fcntl.h>
 #include <lilac/lilac.h>
 #include <lilac/fs.h>
-#include <lilac/file.h>
 #include <lilac/syscall.h>
 #include <lilac/sched.h>
 

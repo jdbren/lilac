@@ -206,7 +206,7 @@ void default_tty_set_termios(struct tty *tty, const struct termios *old)
         if (EDIT_LEN(data) > 0)
             c_commit_line(data);
         data->input.epos = data->input.wpos;
-        data->vmin_cnt = BUF_COUNT(data);
+        data->vmin_cnt = tty->termios.c_cc[VMIN];
     }
 
     if (!is_canon) {

@@ -6,15 +6,14 @@
 #include <lilac/list.h>
 #include <lilac/list_bl.h>
 #include <lilac/sync.h>
-#include <lilac/file.h>
+#include <lilac/fdtable.h>
 #include <fs/path.h>
 #include <fs/types.h>
+#include <fs/fcntl.h>
 
 /**
  * Based on the Linux VFS structures
 */
-
-#define FS_CREATE 0x1
 
 
 struct file;
@@ -134,6 +133,34 @@ struct dirent {
 	char            d_name[64];	/* name must be no longer than this */
 };
 
+struct file {
+    spinlock_t  f_lock;
+    unsigned int f_mode;
+    atomic_ulong  f_count;
+    struct mutex f_pos_lock;
+    unsigned long f_pos;
+    // struct fown_struct f_owner;
+    struct dentry *f_dentry;
+    struct inode *f_inode;
+    const struct file_operations *f_op;
+    union {
+        struct pipe_buf *pipe; // for pipe files
+        void *f_data; // other fs specific data
+    };
+    struct vfsmount *f_disk;
+};
+
+struct file_operations {
+    int     (*lseek)(struct file *, int, int);
+    ssize_t (*read)(struct file *, void *, size_t);
+    ssize_t (*write)(struct file *, const void *, size_t);
+    int     (*readdir)(struct file *, struct dirent *, unsigned int);
+    int     (*flush)(struct file *);
+    int     (*release)(struct inode *, struct file *);
+    int     (*ioctl)(struct file *, int op, void *args);
+};
+
+
 struct vfsmount {
     struct dentry *mnt_root;	/* root of the mounted tree */
     struct super_block *mnt_sb;	/* pointer to superblock */
@@ -188,7 +215,5 @@ typedef struct dentry *(*fs_init_func_t)(void*, struct super_block*);
 struct dentry * get_root_dentry(void);
 struct vfsmount * get_empty_vfsmount(enum fs_type type);
 fs_init_func_t get_fs_init(enum fs_type type);
-
-int get_next_fd(struct fdtable *, struct file *);
 
 #endif
