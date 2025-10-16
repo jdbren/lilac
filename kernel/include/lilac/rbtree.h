@@ -18,6 +18,10 @@
 #ifndef	_LINUX_RBTREE_H
 #define	_LINUX_RBTREE_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct rb_node {
 	unsigned long  __rb_parent_color;
 	struct rb_node *rb_right;
@@ -78,7 +82,7 @@ extern struct rb_node *rb_first_postorder(const struct rb_root *);
 extern struct rb_node *rb_next_postorder(const struct rb_node *);
 
 /* Fast replacement of a single node without remove/rebalance/add/rebalance */
-extern void rb_replace_node(struct rb_node *victim, struct rb_node *new,
+extern void rb_replace_node(struct rb_node *victim, struct rb_node *new_ent,
 			    struct rb_root *root);
 
 static inline void rb_link_node(struct rb_node *node, struct rb_node *parent,
@@ -145,12 +149,12 @@ rb_erase_cached(struct rb_node *node, struct rb_root_cached *root)
 }
 
 static inline void rb_replace_node_cached(struct rb_node *victim,
-					  struct rb_node *new,
+					  struct rb_node *new_ent,
 					  struct rb_root_cached *root)
 {
 	if (root->rb_leftmost == victim)
-		root->rb_leftmost = new;
-	rb_replace_node(victim, new, &root->rb_root);
+		root->rb_leftmost = new_ent;
+	rb_replace_node(victim, new_ent, &root->rb_root);
 }
 
 /*
@@ -346,5 +350,9 @@ rb_next_match(const void *key, struct rb_node *node,
 #define rb_for_each(node, key, tree, cmp) \
 	for ((node) = rb_find_first((key), (tree), (cmp)); \
 	     (node); (node) = rb_next_match((key), (node), (cmp)))
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif	/* _LINUX_RBTREE_H */

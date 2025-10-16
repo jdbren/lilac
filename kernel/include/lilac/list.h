@@ -22,9 +22,9 @@
 #define LIST_POISON2  ((void *) 0x122 + POISON_POINTER_DELTA)
 
 #define WRITE_ONCE(var, val) \
-	(*((volatile typeof(val) *)(&(var))) = (val))
+	(*((volatile __typeof__(val) *)(&(var))) = (val))
 
-#define READ_ONCE(var) (*((volatile typeof(var) *)(&(var))))
+#define READ_ONCE(var) (*((volatile __typeof__(var) *)(&(var))))
 
 /*
  * Circular doubly linked list implementation.
@@ -60,14 +60,14 @@ static inline void INIT_LIST_HEAD(struct list_head *list)
  * This is only for internal list manipulation where we know
  * the prev/next entries already!
  */
-static inline void __list_add(struct list_head *new,
+static inline void __list_add(struct list_head *new_ent,
 			      struct list_head *prev,
 			      struct list_head *next)
 {
-	next->prev = new;
-	new->next = next;
-	new->prev = prev;
-	WRITE_ONCE(prev->next, new);
+	next->prev = new_ent;
+	new_ent->next = next;
+	new_ent->prev = prev;
+	WRITE_ONCE(prev->next, new_ent);
 }
 
 /**
@@ -78,9 +78,9 @@ static inline void __list_add(struct list_head *new,
  * Insert a new entry after the specified head.
  * This is good for implementing stacks.
  */
-static inline void list_add(struct list_head *new, struct list_head *head)
+static inline void list_add(struct list_head *new_ent, struct list_head *head)
 {
-	__list_add(new, head, head->next);
+	__list_add(new_ent, head, head->next);
 }
 
 
@@ -92,9 +92,9 @@ static inline void list_add(struct list_head *new, struct list_head *head)
  * Insert a new entry before the specified head.
  * This is useful for implementing queues.
  */
-static inline void list_add_tail(struct list_head *new, struct list_head *head)
+static inline void list_add_tail(struct list_head *new_ent, struct list_head *head)
 {
-	__list_add(new, head->prev, head);
+	__list_add(new_ent, head->prev, head);
 }
 
 /*
@@ -124,8 +124,8 @@ static inline void __list_del_entry(struct list_head *entry)
 static inline void list_del(struct list_head *entry)
 {
 	__list_del_entry(entry);
-	entry->next = LIST_POISON1;
-	entry->prev = LIST_POISON2;
+	entry->next = (struct list_head *)LIST_POISON1;
+	entry->prev = (struct list_head *)LIST_POISON2;
 }
 
 /**
@@ -136,12 +136,12 @@ static inline void list_del(struct list_head *entry)
  * If @old was empty, it will be overwritten.
  */
 static inline void list_replace(struct list_head *old,
-				struct list_head *new)
+				struct list_head *new_ent)
 {
-	new->next = old->next;
-	new->next->prev = new;
-	new->prev = old->prev;
-	new->prev->next = new;
+	new_ent->next = old->next;
+	new_ent->next->prev = new_ent;
+	new_ent->prev = old->prev;
+	new_ent->prev->next = new_ent;
 }
 
 /**
@@ -152,9 +152,9 @@ static inline void list_replace(struct list_head *old,
  * If @old was empty, it will be overwritten.
  */
 static inline void list_replace_init(struct list_head *old,
-				     struct list_head *new)
+				     struct list_head *new_ent)
 {
-	list_replace(old, new);
+	list_replace(old, new_ent);
 	INIT_LIST_HEAD(old);
 }
 
@@ -850,8 +850,8 @@ static inline void __hlist_del(struct hlist_node *n)
 static inline void hlist_del(struct hlist_node *n)
 {
 	__hlist_del(n);
-	n->next = LIST_POISON1;
-	n->pprev = LIST_POISON2;
+	n->next = (struct hlist_node*)LIST_POISON1;
+	n->pprev = (struct hlist_node**)LIST_POISON2;
 }
 
 /**
@@ -961,11 +961,11 @@ hlist_is_singular_node(struct hlist_node *n, struct hlist_head *h)
  * reference of the first entry if it exists.
  */
 static inline void hlist_move_list(struct hlist_head *old,
-				   struct hlist_head *new)
+				   struct hlist_head *new_ent)
 {
-	new->first = old->first;
-	if (new->first)
-		new->first->pprev = &new->first;
+	new_ent->first = old->first;
+	if (new_ent->first)
+		new_ent->first->pprev = &new_ent->first;
 	old->first = NULL;
 }
 

@@ -11,16 +11,23 @@ struct dentry;
 struct file;
 struct dirent;
 
+#ifdef __cplusplus
+namespace vfs {
+#endif
 
 struct dentry *fat32_lookup(struct inode *parent, struct dentry *find,
     unsigned int flags);
 struct dentry *fat32_init(void *dev, struct super_block *sb);
-int fat32_create(struct inode *parent, struct dentry *new, umode_t mode);
+int fat32_create(struct inode *parent, struct dentry *new_d, umode_t mode);
 int fat32_open(struct inode *inode, struct file *file);
 int fat32_close(struct inode *inode, struct file *file);
 ssize_t fat32_read(struct file *file, void *file_buf, size_t count);
 ssize_t fat32_write(struct file *file, const void *file_buf, size_t count);
 int fat32_readdir(struct file *file, struct dirent *dirp, unsigned int count);
 int fat32_mkdir(struct inode *dir, struct dentry *new_dentry, umode_t mode);
+
+#ifdef __cplusplus
+} // namespace vfs
+#endif
 
 #endif

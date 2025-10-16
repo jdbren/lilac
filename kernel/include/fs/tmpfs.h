@@ -3,9 +3,13 @@
 
 #include <lilac/types.h>
 
-struct super_block;
-struct dentry;
+// struct super_block;
+// struct dentry;
+
+namespace vfs {
 
 struct dentry * tmpfs_init(void *device, struct super_block *sb);
+
+};
 
 #endif

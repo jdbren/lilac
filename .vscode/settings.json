@@ -1,0 +1,14 @@
+{
+    "files.associations": {
+        "*.h": "c",
+        "*.sql": "sql",
+        "chrono": "c",
+        "text_encoding": "c",
+        "typeindex": "c",
+        "typeinfo": "c",
+        "atomic": "cpp",
+        "array": "cpp",
+        "type_traits": "cpp",
+        "fdtable.hpp": "c"
+    }
+}

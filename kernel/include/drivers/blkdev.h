@@ -13,7 +13,7 @@ struct gendisk {
     const struct disk_operations *ops;
     struct block_device *partitions;
     // struct request_queue *queue;
-    void *private;
+    void *gd_private;
     spinlock_t lock;
     int state;
 #define GD_NEED_PART_SCAN		0
@@ -37,7 +37,7 @@ struct block_device {
     char name[32];
     struct inode *bd_inode;
     struct block_device *next;
-    struct mutex bd_holder_lock;
+    // struct mutex bd_holder_lock;
 };
 
 struct blkio_buffer {

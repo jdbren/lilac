@@ -3,6 +3,10 @@
 #ifndef _KERNEL_PROCESS_H
 #define _KERNEL_PROCESS_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <lilac/types.h>
 #include <lilac/sync.h>
 #include <lilac/rbtree.h>
@@ -155,5 +159,9 @@ extern DECLARE_HASHTABLE(sid_table, PID_HASH_BITS);
 
 #define pgrp_for_each(p, pgid) hash_for_each_possible(pgid_table, p, pgid_hash, pgid) \
     if (p->pgid == pgid)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

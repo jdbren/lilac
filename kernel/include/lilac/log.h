@@ -1,6 +1,10 @@
 #ifndef _LOG_H
 #define _LOG_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdarg.h>
 
 enum LOG_LEVEL {
@@ -25,5 +29,9 @@ void set_log_level(int level);
 void klog(int level, const char* message, ...);
 void kvlog(int level, const char* message, va_list args);
 void kstatus(int status, const char* message, ...);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -3,6 +3,10 @@
 #ifndef _KERNEL_SCHED_H
 #define _KERNEL_SCHED_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <lilac/process.h>
 
 void sched_init(void);
@@ -33,5 +37,9 @@ static inline bool task_interrupted_ack(void)
     }
     return false;
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -2,7 +2,6 @@
 #include <lilac/libc.h>
 #include <lilac/err.h>
 #include <drivers/blkdev.h>
-#include <lilac/fs.h>
 #include <lilac/kmalloc.h>
 #include <fs/mbr.h>
 #include <fs/gpt.h>

@@ -64,7 +64,7 @@ fs/tmpfs/tmpfs.o \
 fs/tmpfs/dir.o \
 fs/tmpfs/file.o \
 fs/tmpfs/sb.o \
-fs/vfs.o \
+fs/fs.o \
 fs/sb.o \
 fs/file.o \
 fs/inode.o \
