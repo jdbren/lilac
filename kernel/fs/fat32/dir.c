@@ -14,44 +14,63 @@
 
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 
-int __fat32_read_all_dirent(struct file *file, struct dirent **dirents_ptr)
+// Read a directory and return a buffer containing the raw directory entries
+ssize_t __fat32_read_dir(struct fat_disk *disk, volatile u8 **buffer, int clst)
 {
-    u32 start_clst;
-    struct fat_disk *disk = (struct fat_disk*)file->f_dentry->d_inode->i_sb->private;
-    volatile unsigned char *buffer = kvirtual_alloc(disk->bytes_per_clst * 64, PG_WRITE);
-    struct dirent *dir_buf;
-    u32 num_dirents = disk->bytes_per_clst / sizeof(struct dirent);
+    ssize_t bytes_read = 0;
 
-    start_clst = __fat_get_clst_num(file, disk);
-    if (start_clst <= 0)
-        return -1;
-    if (__do_fat32_read(file, start_clst, buffer, 64) < 0)
-        return -1;
+    if (clst < 0)
+        return -EINVAL;
 
-    dir_buf = kzmalloc(disk->bytes_per_clst);
-    if (!dir_buf) {
-        kvirtual_free((void*)buffer, disk->bytes_per_clst * 64);
-        return -ENOMEM;
+    while (clst < 0x0FFFFFF8) {
+        *buffer = krealloc((void*)*buffer, bytes_read + disk->bytes_per_clst);
+        if (!*buffer)
+            return -ENOMEM;
+        __fat_read_clst(disk, disk->bdev->disk, clst, (void*)*buffer + bytes_read);
+        clst = fat_value(clst, disk);
+        bytes_read += disk->bytes_per_clst;
     }
 
-    u32 i = 0;
-    struct fat_file *entry = (struct fat_file*)buffer;
-    while (entry->name[0] != 0) {
-        if ((u8)entry->name[0] == FAT_UNUSED ||
-            entry->name[0] == 0x0 ||
-            entry->attributes & FAT_VOL_LABEL ||
-            entry->attributes == LONG_FNAME)
-        {
-            entry++;
+    return bytes_read;
+}
+
+
+int __fat32_read_all_dirent(struct file *file, struct dirent **dirents_ptr)
+{
+    int i = 0;
+    int count = 0;
+    struct fat_disk *disk = (struct fat_disk*)file->f_dentry->d_inode->i_sb->private;
+    volatile u8 *raw_buf = NULL;
+    struct fat_file *entry;
+    struct dirent *dir_buf;
+    int num_dirents = 8;
+
+    if ((count = __fat32_read_dir(disk, &raw_buf, __fat_get_clst_num(file, disk))) <= 0) {
+        klog(LOG_ERROR, "__fat32_read_all_dirent: Failed to read directory data\n");
+        return count;
+    }
+
+    dir_buf = kzmalloc(num_dirents * sizeof(struct dirent));
+    if (!dir_buf) {
+        i = -ENOMEM;
+        goto out;
+    }
+
+    for (entry = (struct fat_file*)raw_buf;
+    entry->name[0] != 0 && (u8*)entry < (u8*)entry + count;
+    entry++) {
+        if (INVALID_ENTRY(entry) || entry->name[0] == 0x0)
             continue;
-        }
+        // if (entry->name[0] == 0x0)
+        //     break;
+
         if (i >= num_dirents) {
             num_dirents *= 2;
             void *tmp = kcalloc(num_dirents, sizeof(struct dirent));
             if (!tmp) {
                 kfree(dir_buf);
-                kvirtual_free((void*)buffer, disk->bytes_per_clst * 64);
-                return -ENOMEM;
+                i = -ENOMEM;
+                goto out;
             }
             memcpy(tmp, dir_buf, i * sizeof(struct dirent));
             kfree(dir_buf);
@@ -65,16 +84,16 @@ int __fat32_read_all_dirent(struct file *file, struct dirent **dirents_ptr)
             for (int j = 0; j < 3 && entry->ext[j] != ' '; j++)
                 dir_buf[i].d_name[c++] = entry->ext[j];
         }
-        ++entry;
         ++i;
     }
 
     *dirents_ptr = dir_buf;
 #ifdef DEBUG_FAT
-    for (u32 i = 0; i < num_dirents; i++)
+    for (int i = 0; i < num_dirents; i++)
         klog(LOG_DEBUG, "dirent %d: %s\n", i, dir_buf[i].d_name);
 #endif
-    kvirtual_free((void*)buffer, disk->bytes_per_clst * 64);
+out:
+    kfree((void*)raw_buf);
     return i;
 }
 
@@ -200,7 +219,7 @@ int fat32_mkdir(struct inode *dir, struct dentry *new_dentry, umode_t mode)
         goto error;
     }
 
-    int new_clst = fat_find_alloc_clst(disk, 0);
+    int new_clst = __fat_find_alloc_clst(disk, 0);
     if (new_clst < 0) {
         ret = -ENOSPC;
         goto error;
@@ -222,7 +241,7 @@ int fat32_mkdir(struct inode *dir, struct dentry *new_dentry, umode_t mode)
     __fat_write_clst(disk, hd, new_clst, (void*)buffer);
 
     fat_write_FAT(disk, hd);
-    fat32_write_fs_info(disk, hd);
+    // fat32_write_fs_info(disk, hd);
 
 error:
     kfree((void*)buffer);

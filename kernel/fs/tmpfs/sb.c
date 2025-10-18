@@ -55,8 +55,7 @@ struct dentry* tmpfs_init(void *device, struct super_block *sb)
     }
 
     root_inode->i_private = root_dir;
-    root_inode->i_type = TYPE_DIR;
-
+    root_inode->i_mode = S_IFDIR|S_IREAD|S_IWRITE|S_IEXEC;
     root_dentry->d_count = 1;
     root_dentry->d_sb = sb;
     root_dentry->d_inode = root_inode;

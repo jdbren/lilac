@@ -41,6 +41,8 @@ void fat_destroy_inode(struct inode *inode)
 {
     if (inode->i_private)
         kfree(inode->i_private);
+    if (inode->i_list.next)
+        list_del(&inode->i_list);
     kfree(inode);
 }
 
@@ -85,35 +87,11 @@ struct inode *fat_build_inode(struct super_block *sb, struct fat_inode *info)
     inode->i_ino = unique_ino();
     inode->i_size = info->entry.file_size;
     inode->i_private = info;
-    inode->i_type = info->entry.attributes & FAT_DIR_ATTR ? TYPE_DIR : TYPE_FILE;
-    if (inode->i_type == TYPE_DIR)
-        inode->i_mode |= S_IFDIR;
-    else
-        inode->i_mode |= S_IFREG;
+    inode->i_mode |= info->entry.attributes & FAT_DIR_ATTR ? S_IFDIR : S_IFREG;
 
     list_add_tail(&inode->i_list, &sb->s_inodes);
 
     return inode;
-}
-
-// Read a directory and return a buffer containing the directory entries
-static ssize_t
-__fat32_read_dir(struct fat_disk *disk, volatile u8 **buffer, u32 clst)
-{
-    ssize_t bytes_read = 0;
-    volatile u8 *current;
-
-    while (clst < 0x0FFFFFF8) {
-        *buffer = krealloc((void*)*buffer, bytes_read + disk->bytes_per_clst);
-        if (!*buffer)
-            return -ENOMEM;
-        current = *buffer + bytes_read;
-        __fat_read_clst(disk, disk->bdev->disk, clst, (void*)current);
-        clst = fat_value(clst, disk);
-        bytes_read += disk->bytes_per_clst;
-    }
-
-    return bytes_read;
 }
 
 // Return 0 if found, 1 if not found, negative on error

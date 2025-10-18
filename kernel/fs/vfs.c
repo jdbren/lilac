@@ -245,10 +245,10 @@ struct file *vfs_open(const char *path, int flags, int mode)
         return ERR_PTR(-EEXIST);
     }
 
-    if (inode->i_type == TYPE_DIR && (flags & O_ACCMODE) != O_RDONLY) {
+    if (S_ISDIR(inode->i_mode) && (flags & O_ACCMODE) != O_RDONLY) {
         klog(LOG_DEBUG, "VFS: Cannot open directory %s with write access\n", path);
         return ERR_PTR(-EISDIR);
-    } else if (inode->i_type != TYPE_DIR && flags & O_DIRECTORY) {
+    } else if (!S_ISDIR(inode->i_mode) && flags & O_DIRECTORY) {
         klog(LOG_DEBUG, "VFS: Not a directory: %s\n", path);
         return ERR_PTR(-ENOTDIR);
     }
@@ -306,10 +306,10 @@ ssize_t vfs_read(struct file *file, void *buf, size_t count)
 {
     if (file->f_dentry) {
         struct inode *inode = file->f_dentry->d_inode;
-        if (inode->i_type == TYPE_DIR || S_ISDIR(inode->i_mode))
+        if (S_ISDIR(inode->i_mode))
             return -EISDIR;
 
-        if (inode->i_type == TYPE_DEV || S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode))
+        if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode))
             return inode->i_fop->read(file, buf, count);
 
         if (file->f_pos >= inode->i_size)
@@ -360,9 +360,9 @@ ssize_t vfs_write(struct file *file, const void *buf, size_t count)
 {
     if (file->f_dentry) {
         struct inode *inode = file->f_dentry->d_inode;
-        if (inode->i_type == TYPE_DIR || S_ISDIR(inode->i_mode))
+        if (S_ISDIR(inode->i_mode))
             return -EISDIR;
-        if (inode->i_type == TYPE_DEV || S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode)) {
+        if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode)) {
             return inode->i_fop->write(file, buf, count);
         }
     }
@@ -450,7 +450,7 @@ ssize_t vfs_getdents(struct file *file, struct dirent *dirp, unsigned int buf_si
     struct inode *inode = file->f_dentry->d_inode;
     int dir_cnt;
 
-    if (inode->i_type != TYPE_DIR) {
+    if (!S_ISDIR(inode->i_mode)) {
         klog(LOG_DEBUG, "VFS: getdents from non-directory %s\n",
             file->f_dentry->d_name);
         return -ENOTDIR;
@@ -516,7 +516,7 @@ int vfs_mkdir(const char *path, umode_t mode)
     parent = parent_dentry->d_inode;
     if (!parent)
         return -ENOENT;
-    if (parent->i_type != TYPE_DIR) {
+    if (!S_ISDIR(parent->i_mode)) {
         klog(LOG_DEBUG, "VFS: Parent %s is not a directory\n", dir_path);
         return -ENOTDIR;
     }

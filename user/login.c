@@ -16,7 +16,11 @@ int main()
     dup(fd);
 
     write(1, "Enter name: ", 12);
-    read(0, &name, 63);
+    int count = read(0, &name, 63);
+    if (count > 0 && name[count - 1] == '\n')
+        name[count - 1] = '\0';
+    else
+        name[count] = '\0';
     setenv("USER", name, 1);
 
     struct termios tio;
@@ -34,7 +38,7 @@ int main()
     /* local modes (canonical + echo enabled) */
     tio.c_lflag = ISIG | ICANON | IEXTEN | ECHO | ECHOE | ECHOK;
 
-    /* control chars (sane defaults) */
+    /* control chars */
     tio.c_cc[VINTR]  = 0x03;  /* ^C */
     tio.c_cc[VQUIT]  = 0x1c;  /* ^\ */
     tio.c_cc[VERASE] = 0x7f;  /* DEL */
@@ -45,13 +49,13 @@ int main()
 
     tcsetattr(0, TCSANOW, &tio);
 
-    setenv("TERM", "vt100", 1);   /* or linux, vt100, etc. */
+    setenv("TERM", "vt100", 1);
     setenv("HOME", "/root", 1);
     setenv("SHELL", "/bin/dash", 1);
 
     // Try to run a shell
     execl("/bin/bash", "-", NULL); // will not work yet
-    execl("/bin/dash", "sh", "-lE", NULL); // kind of works
+    execl("/bin/dash", "sh", "-lE", NULL);
     execl("/sbin/gush", "gush", NULL); // my custom shell
     return 1;
 }

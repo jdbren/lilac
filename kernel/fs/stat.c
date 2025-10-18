@@ -27,16 +27,7 @@ int vfs_stat(const struct file *f, struct stat *st)
     st->st_nlink = 0;
     st->st_uid = 0;
     st->st_gid = 0;
-    if (i_ptr->i_type == TYPE_DEV) {
-        st->st_rdev = i_ptr->i_rdev;
-        st->st_mode |= S_IFCHR;
-    } else {
-        st->st_rdev = 0;
-    }
-    if (i_ptr->i_type == TYPE_DIR)
-        st->st_mode |= S_IFDIR;
-    if (i_ptr->i_type == TYPE_FILE)
-        st->st_mode |= S_IFREG;
+    st->st_rdev = i_ptr->i_rdev;
     st->st_size = i_ptr->i_size;
     // st->st_blksize = i_ptr->i_sb->s_blocksize;
     st->st_blksize = 512;

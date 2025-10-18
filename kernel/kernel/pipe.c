@@ -24,7 +24,7 @@ struct inode * pipe_alloc_inode()
     ino->i_mode = S_IFIFO|S_IREAD|S_IWRITE;
     ino->i_count = 1;
     ino->i_atime = ino->i_ctime = ino->i_mtime = get_sys_time();
-    ino->i_type = TYPE_SPECIAL;
+    ino->i_fop = &pipe_fops;
     ino->i_size = PAGE_SIZE;
     return ino;
 }

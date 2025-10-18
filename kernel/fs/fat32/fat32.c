@@ -142,16 +142,16 @@ void __fat_write_clst(struct fat_disk *fat_disk,
         fat_disk->sect_per_clst);
 }
 
-u32 __fat_get_clst_num(struct file *file, struct fat_disk *disk)
+int __fat_get_clst_num(struct file *file, struct fat_disk *disk)
 {
     struct fat_file *fat_file = (struct fat_file*)file->f_dentry->d_inode->i_private;
-    u32 clst_num = (u32)fat_file->cl_low + ((u32)fat_file->cl_high << 16);
+    u32 clst_num = fat_clst_value(fat_file);
     u32 clst_off = file->f_pos / disk->bytes_per_clst;
 
     while (clst_off--) {
         if (clst_num > 0x0FFFFFF8)
-            return 0;
-        clst_num = FAT_VALUE(disk->FAT, clst_num);
+            return -1;
+        clst_num = fat_value(clst_num, disk);
     }
 
     return clst_num;
@@ -167,7 +167,7 @@ int __fat_find_free_clst(struct fat_disk *disk)
     while (1) {
         if (clst > disk->FAT.last_clst)
             kerror("clst out of fat bounds\n");
-        if (FAT_VALUE(disk->FAT, clst) == 0)
+        if (fat_value(clst, disk) == 0)
             return clst;
         clst++;
     }
@@ -186,7 +186,7 @@ int __fat_add_new_clst(struct fat_disk *disk, u32 prev_clst, u32 new_clst)
     return new_clst;
 }
 
-int fat_find_alloc_clst(struct fat_disk *disk, u32 prev_clst)
+int __fat_find_alloc_clst(struct fat_disk *disk, u32 prev_clst)
 {
     int new_clst = __fat_find_free_clst(disk);
     if (new_clst == -1)
@@ -205,10 +205,6 @@ static void disk_init(struct fat_disk *disk)
     disk->root_start = id->extended_section.root_cluster;
 }
 
-
-/***
- *  FAT32 functions
-*/
 
 struct dentry *fat32_init(void *dev, struct super_block *sb)
 {
@@ -237,9 +233,10 @@ struct dentry *fat32_init(void *dev, struct super_block *sb)
     root_inode = fat_alloc_inode(sb);
     root_inode->i_ino = 1;
     root_inode->i_private = fat_inode;
-    root_inode->i_type = TYPE_DIR;
+    root_inode->i_mode |= S_IFDIR;
     fat_inode->entry.cl_low = fat_disk->root_start & 0xFFFF;
     fat_inode->entry.cl_high = fat_disk->root_start >> 16;
+    fat_inode->entry.attributes = FAT_DIR_ATTR;
 
     // Initialize the dentry
     root_dentry = kzmalloc(sizeof(struct dentry));

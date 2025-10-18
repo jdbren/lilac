@@ -27,7 +27,6 @@ int add_device(const char *path, const struct file_operations *fops,
         return -ENOENT;
     inode->i_fop = fops;
     inode->i_op = iops;
-    inode->i_type = TYPE_DEV;
 
     return 0;
 }
@@ -50,7 +49,6 @@ int dev_create(const char *path, const struct file_operations *fops,
         return -ENOENT;
     inode->i_fop = fops;
     inode->i_op = iops;
-    inode->i_type = dev;
     inode->i_mode = mode;
 
     return 0;
@@ -66,7 +64,6 @@ int dev_mknod(struct inode *parent_dir, struct dentry *node, umode_t mode, dev_t
     inode->i_sb = parent_dir->i_sb;
     inode->i_count = 1;
     inode->i_op = parent_dir->i_op;
-    inode->i_type = TYPE_DIR;
 
     node->d_inode = inode;
     list_add_tail(&inode->i_list, &parent_dir->i_sb->s_inodes);

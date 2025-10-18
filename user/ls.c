@@ -3,6 +3,7 @@
 #include <sys/dirent.h>
 #include <unistd.h>
 #include <errno.h>
+#include <termios.h>
 
 int main(int argc, char *argv[])
 {
@@ -22,14 +23,24 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    int cols = (80 + 1) / (12 + 2);
+    int rows = (12 + cols - 1) / cols;
+
     int err = 0;
     while ((err = getdents(fd, (void*)buf, sizeof(buf))) > 0) {
         if (errno == -ENOTDIR) {
             printf("ls: cannot access '%s': Not a directory\n", dir);
             return 1;
         }
-        for (int i = 0; i < 12; i++)
-            printf("%-12s\t", buf[i].d_name);
+        for (int r = 0; r < rows; ++r) {
+            for (int c = 0; c < cols; ++c) {
+                int i = c * rows + r;
+                if (i < 12) {
+                    printf("%-*s", 12 + 2, buf[i].d_name);
+                }
+            }
+            putchar('\n');
+        }
     }
 
     putchar('\n');

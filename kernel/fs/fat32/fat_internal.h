@@ -5,6 +5,10 @@
 #include <lilac/config.h>
 #include <lilac/panic.h>
 
+#ifdef DEBUG_FAT_FULL
+#define DEBUG_FAT
+#endif
+
 struct __packed fat_extBS_32 {
 	u32		FAT_size_32;
 	u16		extended_flags;
@@ -44,7 +48,7 @@ struct __packed fat_BS {
     };
 };
 
-struct __packed FSInfo {
+struct __packed fat_FSInfo {
     u32 lead_sig;
     u8 res[480];
     u32 struct_sig;
@@ -122,9 +126,13 @@ struct fat_disk {
     u16 bytes_per_clst;
     u16 sect_per_clst;
     volatile struct fat_BS bpb;
-    volatile struct FSInfo fs_info;
+    volatile struct fat_FSInfo fs_info;
     struct fat_FAT_buf FAT;
 };
+
+#define INVALID_ENTRY(entry) \
+    ((u8)(entry)->name[0] == FAT_UNUSED \
+    || ((entry)->attributes & FAT_VOL_LABEL) || (entry)->attributes == LONG_FNAME)
 
 #define FAT_VALUE(FAT, clst) \
     ((FAT).FAT_buf[(clst) - (FAT).first_clst] & 0x0FFFFFFF)
@@ -175,15 +183,16 @@ struct inode *fat_build_inode(struct super_block *sb, struct fat_inode *info);
 void get_fat_name(char fatname[12], const struct dentry *find);
 void str_toupper(char *str);
 
+ssize_t __fat32_read_dir(struct fat_disk *disk, volatile u8 **buffer, int clst);
 int __fat32_read_all_dirent(struct file *file, struct dirent **dirents_ptr);
 
 void __fat_read_clst(struct fat_disk *fat_disk, struct gendisk *hd, u32 clst, void *buf);
 void __fat_write_clst(struct fat_disk *fat_disk, struct gendisk *hd, u32 clst, const void *buf);
 
-u32 __fat_get_clst_num(struct file *file, struct fat_disk *disk);
+int __fat_get_clst_num(struct file *file, struct fat_disk *disk);
 int __fat_find_free_clst(struct fat_disk *disk);
 int __fat_add_new_clst(struct fat_disk *disk, u32 prev_clst, u32 new_clst);
-int fat_find_alloc_clst(struct fat_disk *disk, u32 prev_clst);
+int __fat_find_alloc_clst(struct fat_disk *disk, u32 prev_clst);
 
 int fat32_write_fs_info(struct fat_disk *fat_disk, struct gendisk *gd);
 int fat_write_FAT(struct fat_disk *fat_disk, struct gendisk *gd);

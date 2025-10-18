@@ -98,8 +98,8 @@ int __do_fat32_read(const struct file *file, u32 clst, volatile u8 *buffer,
 }
 
 // Write to a file from a buffer (always multiples of cluster size)
-int __do_fat32_write(const struct file *file, u32 clst,
-    const u8 *buffer, size_t num_clst)
+int __do_fat32_write(const struct file *file, u32 clst, const u8 *buffer,
+    size_t num_clst)
 {
     if (num_clst == 0)
         return -1;
@@ -116,13 +116,9 @@ int __do_fat32_write(const struct file *file, u32 clst,
 
         clst = fat_value(clst, fat_disk);
         if (clst >= 0x0FFFFFF8 && clst_writ < num_clst) {
-            next_val = __fat_find_free_clst(fat_disk);
-            if (next_val == -1)
+            clst = __fat_find_alloc_clst(fat_disk, clst);
+            if (clst <= 0)
                 kerror("No free clusters\n");
-            fat_disk->FAT.FAT_buf[clst - fat_disk->FAT.first_clst] &= 0xF0000000;
-            fat_disk->FAT.FAT_buf[clst - fat_disk->FAT.first_clst] |= next_val & 0x0FFFFFFF;
-            fat_disk->FAT.FAT_buf[next_val - fat_disk->FAT.first_clst] |= 0x0FFFFFFF;
-            clst = next_val;
         }
 
         buffer += fat_disk->bytes_per_clst;

@@ -212,14 +212,14 @@ void tty_init(void)
     struct tty *tty;
     char path[32];
     umode_t mode = S_IFCHR|S_IREAD|S_IWRITE;
-    dev_create("/dev/tty", &tty_fops, &tty_iops, mode, TYPE_TTY);
+    dev_create("/dev/tty", &tty_fops, &tty_iops, mode, TTY_DEVICE);
     for (int i = 0; i < NUM_STATIC_TTYS; i++) {
         tty = &ttys[i];
         init_tty_struct(tty, i);
         strcpy(path, "/dev/");
         strcat(path, tty->name);
         klog(LOG_DEBUG, "Creating %s\n", path);
-        dev_create(path, &tty_fops, &tty_iops, mode, TYPE_TTY);
+        dev_create(path, &tty_fops, &tty_iops, mode, TTY_DEVICE);
     }
 
     tty = &ttys[0];
@@ -303,7 +303,7 @@ static int tcsetpgrp(struct tty *t, pid_t pgrp)
 
 int tty_ioctl(struct file *f, int op, void *argp)
 {
-    if (f->f_dentry->d_inode->i_type != TYPE_TTY)
+    if (!S_ISCHR(f->f_dentry->d_inode->i_mode))
         return -ENOTTY;
 
     struct tty *tty = file_get_tty(f);

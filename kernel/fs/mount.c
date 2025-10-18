@@ -94,7 +94,7 @@ int vfs_mount(const char *source, const char *target,
         return PTR_ERR(new_dentry);
 
     struct inode *new_inode = new_dentry->d_inode;
-    if (new_inode && new_inode->i_type != TYPE_DIR) {
+    if (new_inode && !S_ISDIR(new_inode->i_mode)) {
         klog(LOG_DEBUG, "Mount: target is not a directory\n");
         return -ENOTDIR;
     }

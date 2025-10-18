@@ -514,7 +514,7 @@ static int do_execve(const char *path, char *const argv[], char *const envp[])
     if (IS_ERR_OR_NULL(file)) {
         klog(LOG_DEBUG, "file %s not found\n", path);
         return PTR_ERR(file);
-    } else if (file->f_dentry->d_inode->i_type != TYPE_FILE) {
+    } else if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
         klog(LOG_DEBUG, "file %s is not a regular file\n", path);
         vfs_close(file);
         return -EACCES;
@@ -680,7 +680,7 @@ SYSCALL_DECL1(chdir, const char*, path)
         goto out;
     }
 
-    if (d->d_inode->i_type != TYPE_DIR) {
+    if (!S_ISDIR(d->d_inode->i_mode)) {
         err = -ENOTDIR;
         goto out;
     }

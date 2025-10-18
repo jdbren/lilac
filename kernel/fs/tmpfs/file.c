@@ -12,8 +12,7 @@ int tmpfs_create(struct inode *parent, struct dentry *new_dentry, umode_t mode)
     struct tmpfs_file *file_info = kzmalloc(sizeof(*file_info));
 
     new_inode->i_private = file_info;
-    new_inode->i_mode = mode;
-    new_inode->i_type = TYPE_FILE;
+    new_inode->i_mode = mode | S_IFREG;
     file_info->data = kmalloc(4096);
     new_inode->i_size = 4096;
     new_dentry->d_inode = new_inode;

@@ -38,7 +38,8 @@ int tmpfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
     new_inode = dir->i_sb->s_op->alloc_inode(dir->i_sb);
     new_inode->i_private = new_dir;
-    new_inode->i_type = TYPE_DIR;
+    new_inode->i_mode = mode | S_IFDIR;
+    dentry->d_inode = new_inode;
 
     parent->num_entries++;
     parent->children = krealloc(parent->children, parent->num_entries * sizeof(struct tmpfs_entry));

@@ -112,7 +112,7 @@ all: lilac.ker
 
 lilac.ker: $(OBJS) $(LINKER_SCRIPT) acpi libk.a
 ifndef VERBOSE
-	@echo "	LD	$@"
+	@echo "	CXXLD	$@"
 	@$(CXX) -T $(LINKER_SCRIPT) -o $@ $(LINK_LIST)
 else
 	$(CXX) -T $(LINKER_SCRIPT) -o $@ $(LINK_LIST)

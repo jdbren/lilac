@@ -12,9 +12,8 @@ int fat32_open(struct inode *inode, struct file *file)
 {
     struct fat_inode *info = (struct fat_inode*)inode->i_private;
     file->f_op = &fat_fops;
-    if (inode->i_type == TYPE_DIR) {
+    if (info->entry.attributes & FAT_DIR_ATTR)
         info->buf.num_dirent = __fat32_read_all_dirent(file, &info->buf.dirent);
-    }
     return 0;
 }
 
@@ -90,7 +89,6 @@ int fat32_create(struct inode *parent, struct dentry *new, umode_t mode)
     fat_i->entry = *entry;
 
     new->d_inode = fat_build_inode(parent->i_sb, fat_i);
-    new->d_inode->i_type = TYPE_FILE;
 
     disk->fs_info.free_clst_cnt--;
     disk->fs_info.next_free_clst = __fat_find_free_clst(disk);
@@ -98,7 +96,7 @@ int fat32_create(struct inode *parent, struct dentry *new, umode_t mode)
     memset((void*)buffer, 0, disk->bytes_per_clst);
     __fat_write_clst(disk, hd, new_clst, (const void*)buffer);
     fat_write_FAT(disk, hd);
-    fat32_write_fs_info(disk, hd);
+    // fat32_write_fs_info(disk, hd);
 
 error:
     kfree((void*)buffer);
