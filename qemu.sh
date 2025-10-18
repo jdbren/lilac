@@ -16,7 +16,7 @@ make -j $(get_ncpus) install-system
 sudo ./scripts/image.sh
 
 qemu-system-x86_64 \
-    -s -enable-kvm -no-reboot -smp 4 -m 512M \
+    -s -enable-kvm -no-reboot -smp 4 -m 1G \
     -machine q35,firmware=./resources/OVMF-pure-efi.fd \
     -cpu host,+tsc-deadline,+invtsc,+rdtscp,+vmware-cpuid-freq \
     -drive file=./uefi.img,format=raw -snapshot \

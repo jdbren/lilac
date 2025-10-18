@@ -477,7 +477,7 @@ static ssize_t nc_read(struct tty *tty, u8 *buf, size_t nr)
         // Case 2: Block until VMIN characters available
         while (copied < vmin || (copied < nr && !BUF_EMPTY(data))) {
             while (BUF_EMPTY(data)) {
-                klog(LOG_DEBUG, "noncanon_read: waiting for vmin=%d (have %zu)\n", vmin, copied);
+                klog(LOG_DEBUG, "noncanon_read: waiting for vmin=%d (have %lu)\n", vmin, copied);
                 if (sleep_on(&tty->read_wait) == -EINTR) {
                     return copied > 0 ? (ssize_t)copied : -EINTR;
                 }

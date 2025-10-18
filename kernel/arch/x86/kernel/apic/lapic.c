@@ -135,8 +135,6 @@ void lapic_enable(uintptr_t addr) {
 
     lapic_base = (uintptr_t)map_phys((void*)addr, 0x1000, PG_STRONG_UC | PG_WRITE);
 
-    klog(LOG_DEBUG, "Spur: %x\n", read_reg(APIC_REG_SPUR));
-
     /* Set the Spurious Interrupt Vector Register bit 8 to start receiving interrupts */
     write_reg(APIC_REG_SPUR, 0xff | 0x100);
 

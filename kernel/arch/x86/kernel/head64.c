@@ -59,7 +59,7 @@ void x86_64_kernel_early(void)
     apic_init(acpi.madt);
     keyboard_init();
     timer_init(1, acpi.hpet);
-    // ap_init(acpi.madt->core_cnt);
+    ap_init(acpi.madt->core_cnt);
     acpi_early_cleanup(&acpi);
     syscall_init();
 

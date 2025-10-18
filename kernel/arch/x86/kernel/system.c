@@ -1,8 +1,9 @@
 #include <lilac/lilac.h>
 #include <lilac/timer.h>
 #include <drivers/framebuffer.h>
-#include <asm/cpuid-bits.h>
 #include <lilac/kmm.h>
+
+#include "cpu-features.h"
 
 void print_system_info(void)
 {
