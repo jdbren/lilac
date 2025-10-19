@@ -16,7 +16,7 @@ static struct mm_info root_mm = {
 
 static struct sighandlers root_sighand = {
     .ref_count = 1,
-    .lock = (spinlock_t)SPINLOCK_INIT,
+    .lock = SPINLOCK_INIT,
     .actions = {
         [SIGINT] = {.sa.sa_handler = SIG_IGN, .sa.sa_flags = SA_RESTART},
         [SIGQUIT] = {.sa.sa_handler = SIG_IGN, .sa.sa_flags = SA_RESTART},

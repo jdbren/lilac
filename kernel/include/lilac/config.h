@@ -55,4 +55,6 @@
 
 #define __user
 
+#define TIMER_HZ 1000
+
 #endif

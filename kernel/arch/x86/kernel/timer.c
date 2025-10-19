@@ -2,6 +2,7 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include "timer.h"
 
+#include <lilac/config.h>
 #include <lilac/timer.h>
 #include <lilac/sched.h>
 #include <acpi/hpet.h>
@@ -100,7 +101,21 @@ void tsc_deadline_tick(void)
     tsc_deadline_set(1000000);
 }
 
-void timer_init(u32 ms, struct hpet_info *info)
+void timer_tick_init(void)
+{
+    if (tsc_deadline()) {
+        apic_tsc_deadline();
+        handle_tick = tsc_deadline_tick;
+    } else if (invariant_tsc()) {
+        apic_periodic(TIMER_HZ / 1000);
+    } else {
+        if (get_lapic_id())
+            kerror("HPET for APs is not supported\n");
+        hpet_enable_int(TIMER_HZ / 1000);
+    }
+}
+
+void timer_init(struct hpet_info *info)
 {
     idt_entry(0x20, (uintptr_t)timer_handler, __KERNEL_CS, 0, INT_GATE);
     ioapic_entry(0, 0x20, 0, 0);
@@ -113,14 +128,8 @@ void timer_init(u32 ms, struct hpet_info *info)
     klog(LOG_INFO, "TSC frequency: %llu Hz\n", tsc_freq_hz);
     klog(LOG_INFO, "Boot Unix time: %lld seconds since epoch\n", boot_unix_time);
 
-    if (tsc_deadline()) {
-        apic_tsc_deadline();
-        handle_tick = tsc_deadline_tick;
-    } else if (invariant_tsc()) {
-        apic_periodic(ms);
-    } else {
-        hpet_enable_int(ms);
-    }
+    timer_tick_init();
+
     kstatus(STATUS_OK, "System clock initialized\n");
 }
 

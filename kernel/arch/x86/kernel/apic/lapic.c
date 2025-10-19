@@ -19,6 +19,7 @@
 #define CPUID_FEAT_EDX_APIC (1 << 9)
 
 uintptr_t lapic_base;
+static uintptr_t lapic_addr_orig;
 
 static inline void write_reg(u32 reg, u32 value)
 {
@@ -64,6 +65,8 @@ static void cpu_set_apic_base(uintptr_t apic)
 {
     u32 edx = 0;
     u32 eax = (apic & 0xfffff0000) | IA32_APIC_BASE_MSR_ENABLE;
+
+    lapic_addr_orig = apic;
 
 #ifdef __PHYSICAL_MEMORY_EXTENSION__
     edx = (apic >> 32) & 0x0f;
@@ -139,6 +142,14 @@ void lapic_enable(uintptr_t addr) {
     write_reg(APIC_REG_SPUR, 0xff | 0x100);
 
     kstatus(STATUS_OK, "BSP local APIC enabled\n");
+}
+
+void ap_lapic_enable(void)
+{
+    cpu_set_apic_base(lapic_addr_orig);
+
+    /* Set the Spurious Interrupt Vector Register bit 8 to start receiving interrupts */
+    write_reg(APIC_REG_SPUR, 0xff | 0x100);
 }
 
 

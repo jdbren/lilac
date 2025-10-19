@@ -67,10 +67,12 @@
 
 void apic_init(struct madt_info *madt);
 void lapic_enable(uintptr_t apic_base);
+void ap_lapic_enable(void);
 void ioapic_init(struct ioapic *ioapic, struct int_override *over, u8 num_over);
 void ioapic_entry(u8 irq, u8 vector, u8 flags, u8 dest);
 void apic_eoi(void);
 int ap_init(u8 numcores);
+u8 get_lapic_id(void);
 
 void apic_tsc_deadline(void);
 void tsc_deadline_set(u64 ns_from_now);

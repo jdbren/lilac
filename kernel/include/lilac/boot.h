@@ -42,6 +42,8 @@ extern struct acpi_info acpi;
 uintptr_t get_rsdp(void);
 void parse_multiboot(uintptr_t addr, struct multiboot_info *mbd);
 
+void syscall_init(void);
+
 __noreturn __no_stack_chk
 void start_kernel(void);
 

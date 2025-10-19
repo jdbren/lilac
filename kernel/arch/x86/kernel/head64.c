@@ -31,7 +31,7 @@ uintptr_t page_directory;
 
 extern u32 mbinfo; // defined in boot asm
 
-static void syscall_init(void)
+void syscall_init(void)
 {
     extern void syscall_entry();
     write_msr(IA32_STAR, 0, __KERNEL_CS | (__USER_CS32 << 16));
@@ -58,7 +58,7 @@ void x86_64_kernel_early(void)
     acpi_early((void*)mbd.new_acpi->rsdp, &acpi);
     apic_init(acpi.madt);
     keyboard_init();
-    timer_init(1, acpi.hpet);
+    timer_init(acpi.hpet);
     ap_init(acpi.madt->core_cnt);
     acpi_early_cleanup(&acpi);
     syscall_init();
