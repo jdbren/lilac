@@ -110,7 +110,7 @@ $(LIBS)
 
 all: lilac.ker
 
-lilac.ker: $(OBJS) $(LINKER_SCRIPT) acpi libk.a
+lilac.ker: install-headers $(OBJS) $(LINKER_SCRIPT) acpi libk.a
 ifndef VERBOSE
 	@echo "	CXXLD	$@"
 	@$(CXX) -T $(LINKER_SCRIPT) -o $@ $(LINK_LIST)
@@ -127,7 +127,21 @@ else
 	OBJ=`$(CC) $(CFLAGS) $(LDFLAGS) -print-file-name=$(@F)` && cp "$$OBJ" $@
 endif
 
-install-headers:
+$(ARCH_GEN_INCLUDES_DIR):
+	@mkdir -p $(ARCH_GEN_INCLUDES_DIR)
+
+$(ARCH_GEN_INCLUDES_DIR)/%.s: $(ARCHDIR)/%.c | $(ARCH_GEN_INCLUDES_DIR)
+ifndef VERBOSE
+	@$(CC) -S -P -Iinclude -I$(ARCHDIR)/include -o $@ -ffreestanding $<
+else
+	$(CC) -S -P -Iinclude -I$(ARCHDIR)/include -o $@ -ffreestanding $<
+endif
+
+$(ARCH_GEN_INCLUDES_DIR)/%.h: $(ARCH_GEN_INCLUDES_DIR)/%.s
+	@echo "	GEN	$@"
+	@grep '^#define' $< | sed 's/\$$//' > $@
+
+install-headers: $(KERNEL_ARCH_ASM_GEN_H)
 	@if [ ! -d $(DESTDIR)$(INCLUDEDIR)/asm ]; then \
 		mkdir -p $(DESTDIR)$(INCLUDEDIR)/asm; \
 		cp -r include/user/* $(DESTDIR)$(INCLUDEDIR)/asm/; \
@@ -175,6 +189,7 @@ endif
 
 clean:
 	rm -f lilac.ker libk.a
+	rm -rf $(ARCH_GEN_INCLUDES_DIR)
 	@rm -f $(OBJS) $(OBJS:.o=.d)
 	@rm -f $(LIBK_OBJS) $(LIBK_OBJS:.o=.d)
 	@$(MAKE) -C drivers/acpi clean

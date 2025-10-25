@@ -24,6 +24,7 @@ enum LOG_STATUS {
 void set_log_level(int level);
 void klog(int level, const char* message, ...);
 void kvlog(int level, const char* message, va_list args);
+void kvlog_raw(const char *data, va_list args);
 void kstatus(int status, const char* message, ...);
 
 #endif

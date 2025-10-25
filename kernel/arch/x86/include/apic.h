@@ -71,7 +71,7 @@ void ap_lapic_enable(void);
 void ioapic_init(struct ioapic *ioapic, struct int_override *over, u8 num_over);
 void ioapic_entry(u8 irq, u8 vector, u8 flags, u8 dest);
 void apic_eoi(void);
-int ap_init(u8 numcores);
+int ap_init(void);
 u8 get_lapic_id(void);
 
 void apic_tsc_deadline(void);

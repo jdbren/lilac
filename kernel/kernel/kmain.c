@@ -27,9 +27,7 @@ void start_kernel(void)
     kstatus(STATUS_OK, "Starting kernel\n");
     _init_ctors();
 
-    acpi_full_init();
     scan_sys_bus();
-
     fs_init();
     sched_init();
 

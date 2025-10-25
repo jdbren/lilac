@@ -99,7 +99,13 @@ gdt_init:
 	call tss_init
 	ret
 
-.get_tss:
+.global get_tss
+.type get_tss, @function
+get_tss:
+	push %ebp
+	mov %esp, %ebp
+	push %ebx
+
 	movl $1, %eax
 	cpuid
 	shrl $24, %ebx
@@ -107,6 +113,10 @@ gdt_init:
 	movl $0x68, %eax
 	mul  %ebx
 	addl %ecx, %eax
+
+	mov %ebx, %edx
+	pop %ebx
+	leave
 	ret
 
 .global tss_init
@@ -114,11 +124,10 @@ gdt_init:
 tss_init:
 	push %ebp
 	mov  %esp, %ebp
-	push %ebx
 
-	call .get_tss # eax = &tss, ebx = cpu_id
+	call get_tss # eax = &tss, edx = cpu_id
 
-	leal gdt_entries+40(, %ebx, 8), %edx   # TSS descriptor for this CPU
+	leal gdt_entries+40(, %edx, 8), %edx   # TSS descriptor for this CPU
 	movl $0, 4(%eax)
 	movl $__KERNEL_DS, 8(%eax)
 
@@ -138,7 +147,6 @@ tss_init:
 	addw $5 * 8, %ax
 	ltr  %ax
 
-	pop  %ebx
 	pop  %ebp
 	ret
 
@@ -147,7 +155,7 @@ set_tss_esp0:
 	push %ebp
 	movl %esp, %ebp
 	push %ebx
-	call .get_tss
+	call get_tss
 	movl 8(%ebp), %ebx
 	movl %ebx, 4(%eax)
 	pop %ebx

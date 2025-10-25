@@ -38,10 +38,13 @@ void kernel_early(void)
 
     acpi_early((void*)mbd.new_acpi->rsdp, &acpi);
     apic_init(acpi.madt);
+    // percpu_mem_init(acpi.madt->core_cnt);
     keyboard_init();
-    timer_init(1, acpi.hpet); // 1ms interval
-    // ap_init(acpi.madt->core_cnt);
+    timer_init(acpi.hpet);
     acpi_early_cleanup(&acpi);
+
+    acpi_full_init();
+    // ap_init();
 
     start_kernel();
 }

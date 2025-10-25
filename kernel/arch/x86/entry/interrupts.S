@@ -18,12 +18,12 @@
 	jz 1f # if in kernel mode, skip
 	swapgs
 1:
-	popq %gs:TSS_rsp1     # store error code
+	popq %gs:8     # store error code
 	PUSH_REGS
 	xor  %rbp,%rbp
 
 	lea  RIP(%rsp),%rsi  	# interrupt stack frame
-	mov  %gs:TSS_rsp1,%rdi 	# error code
+	mov  %gs:8,%rdi 	# error code
 	call \name\()_handler
 
 	call x86_kernel_exit

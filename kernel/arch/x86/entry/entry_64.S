@@ -1,6 +1,7 @@
 // Copyright (C) 2025 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #define __ASSEMBLY__
+#include <generated/asm-offsets.h>
 #include <asm/segments.h>
 #include <asm/msr.h>
 #include <asm/gdt.h>
@@ -8,10 +9,6 @@
 #include <lilac/syscall.h>
 
 #include "macros.S"
-
-.equ TASK_PGD_OFFSET,    16
-.equ TASK_PC_OFFSET,     24
-.equ TASK_KSTACK_OFFSET, 32
 
 .text
 /*
@@ -23,12 +20,13 @@
 .globl syscall_entry
 syscall_entry:
 	swapgs
-	mov %rsp, %gs:TSS_rsp2 # save user stack in scratch
-	mov %gs:TSS_rsp0, %rsp # switch to kernel stack
+	mov %rsp, %gs:CPU_LOCAL_USTACK # save user stack in scratch
+	mov %gs:CPU_LOCAL_TSS, %rsp # get tss
+	mov TSS_rsp0(%rsp), %rsp # switch to kernel stack
 
 	# set up regs struct
 	push $__USER_DS   # ss
-	push %gs:TSS_rsp2 # user stack
+	push %gs:CPU_LOCAL_USTACK # user stack
 	push %r11         # rflags
 	push $__USER_CS   # cs
 	push %rcx         # rip
@@ -68,7 +66,8 @@ syscall_entry:
 
 	# reset interrupt stack
 	lea  40+15*8(%rsp), %rax
-	mov  %rax, %gs:TSS_rsp0
+	mov  %gs:CPU_LOCAL_TSS, %rsi
+	mov  %rax, TSS_rsp0(%rsi)
 
 	swapgs
 
@@ -84,7 +83,8 @@ syscall_entry:
 slow_return:
 	# reset interrupt stack
 	lea  40+15*8(%rsp), %rax
-	mov  %rax, %gs:TSS_rsp0
+	mov  %gs:CPU_LOCAL_TSS, %rsi
+	mov  %rax, TSS_rsp0(%rsi)
 
 	testb $3, CS(%rsp)
 	jz 1f # if return to kernel mode, skip

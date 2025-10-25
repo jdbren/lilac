@@ -1,25 +1,29 @@
+# sysroot and kernel files
 /sysroot
 lilac.ker
 lilac.iso
+*.img
+
+# Build files
 *.o
 *.d
-/isodir
-*.img
-*.DS_Store
-kernel/.DS_Store
-libc/.DS_Store
-/user_code
+/build*
+
+# Debug, IDE, Filesystems
+.DS_Store
+
+# Text and debug files
 debug.txt
 log.txt
 dump.txt
 kbuild.config
+*.old
+resources/code/inodes.txt
+
+# Libs and generated files
 libc/libk.a
 kernel/libk.a
 libc/libc.a
 init/init
 kernel/drivers/acpi/acpi.lib
-resources/code/inodes.txt
-user/ls
-*.old
-build*
-/mnt
+kernel/arch/*/include/generated

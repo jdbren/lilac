@@ -39,6 +39,7 @@
 #endif
 #ifndef __section
 # define __section(x)  __attribute__((section(x)))
+# define __used         __attribute__((used))
 #endif
 #ifndef unreachable
 # define unreachable() __builtin_unreachable()
@@ -56,5 +57,6 @@
 #define __user
 
 #define TIMER_HZ 1000
+#define CONFIG_MAX_CPUS 8
 
 #endif

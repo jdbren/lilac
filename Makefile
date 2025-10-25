@@ -1,8 +1,8 @@
-PROJECTS=kernel init libc user
+PROJECTS=kernel init user
 
 include kbuild.config
 export DESTDIR=$(SYSROOT)
-export LIBC_DIR?=$(HOME)/newlib
+export LIBC_DIR?=$(shell realpath ./newlib)
 
 ifeq ($(V),1)
 export VERBOSE=1
@@ -60,13 +60,13 @@ shell: install-libc
 # CLEAN
 clean:
 	@for PROJECT in $(PROJECTS); do \
-  		($(MAKE) -C $$PROJECT clean) \
+  		($(MAKE) -s -C $$PROJECT clean) \
 	done
 	@if [ -d ../gush ]; then \
-		$(MAKE) -C ../gush clean; \
+		$(MAKE) -s -C ../gush clean; \
 	fi
 	rm -rf build-libc
 	rm -rf sysroot
 
 distclean: clean
-	rm debug.txt dump.txt kbuild.config* log.txt
+	rm -f debug.txt dump.txt kbuild.config* log.txt

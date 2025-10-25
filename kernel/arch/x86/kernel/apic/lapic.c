@@ -3,6 +3,7 @@
 #include "apic.h"
 
 #include <lilac/lilac.h>
+#include <lilac/boot.h>
 #include <lilac/timer.h>
 #include <lilac/kmm.h>
 #include <asm/msr.h>
@@ -65,8 +66,6 @@ static void cpu_set_apic_base(uintptr_t apic)
 {
     u32 edx = 0;
     u32 eax = (apic & 0xfffff0000) | IA32_APIC_BASE_MSR_ENABLE;
-
-    lapic_addr_orig = apic;
 
 #ifdef __PHYSICAL_MEMORY_EXTENSION__
     edx = (apic >> 32) & 0x0f;
@@ -135,6 +134,7 @@ void lapic_enable(uintptr_t addr) {
         kerror("CPU does not support APIC\n");
 
     cpu_set_apic_base(addr);
+    lapic_addr_orig = addr;
 
     lapic_base = (uintptr_t)map_phys((void*)addr, 0x1000, PG_STRONG_UC | PG_WRITE);
 
@@ -156,12 +156,12 @@ void ap_lapic_enable(void)
 volatile u8 aprunning;
 u8 bspdone;
 
-int ap_init(u8 numcores)
+int ap_init(void)
 {
     u8 bspid;
     extern void ap_tramp(void);
 
-    if (numcores == 1)
+    if (ncpus == 1)
         return 0;
 
     bspid = get_lapic_id();
@@ -175,7 +175,7 @@ int ap_init(u8 numcores)
     volatile u32 *const ipi_data = (volatile u32* const)(base + ICR_DATA);
 
     arch_enable_interrupts();
-    for (int i = 0; i < numcores; i++) {
+    for (int i = 0; i < ncpus; i++) {
         if (i == bspid)
             continue;
 
@@ -217,7 +217,7 @@ int ap_init(u8 numcores)
 
     kstatus(STATUS_OK, "APs running: %d\n", aprunning);
     unmap_from_self((void*)0x8000, PAGE_SIZE);
-    if (aprunning == numcores - 1)
+    if (aprunning == ncpus - 1)
         return 0;
     else
         return 1;

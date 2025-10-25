@@ -90,6 +90,15 @@ void mutex_lock(mutex_t *mutex)
         __mutex_lock_slow(mutex);
 }
 
+void mutex_lock_r(mutex_t *mutex)
+{
+    long id = get_pid();
+    if (atomic_load(&mutex->owner) == id)
+        return;
+
+    mutex_lock(mutex);
+}
+
 void mutex_unlock(mutex_t *mutex)
 {
     long id = get_pid();

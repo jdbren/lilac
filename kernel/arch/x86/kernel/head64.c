@@ -4,6 +4,7 @@
 #include <lilac/timer.h>
 #include <drivers/framebuffer.h>
 #include <lilac/kmm.h>
+#include <lilac/percpu.h>
 #include <asm/cpu-flags.h>
 #include <asm/msr.h>
 #include <asm/segments.h>
@@ -43,8 +44,7 @@ void syscall_init(void)
         X86_FLAGS_IOPL|X86_FLAGS_NT|X86_FLAGS_RF|
         X86_FLAGS_AC|X86_FLAGS_ID, 0);
 
-    uintptr_t tss_ptr = (uintptr_t)get_tss();
-    write_msr(IA32_KERNEL_GS_BASE, (u32)tss_ptr, tss_ptr >> 32);
+    percpu_init_cpu();
 }
 
 __noreturn __no_stack_chk
@@ -57,11 +57,14 @@ void x86_64_kernel_early(void)
 
     acpi_early((void*)mbd.new_acpi->rsdp, &acpi);
     apic_init(acpi.madt);
+    percpu_mem_init(acpi.madt->core_cnt);
     keyboard_init();
     timer_init(acpi.hpet);
-    ap_init(acpi.madt->core_cnt);
     acpi_early_cleanup(&acpi);
+
     syscall_init();
+    acpi_full_init();
+    ap_init();
 
     start_kernel();
 

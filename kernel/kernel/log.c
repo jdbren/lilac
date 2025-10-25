@@ -25,9 +25,18 @@ void set_log_level(int level)
     log_level = level;
 }
 
+void kvlog_raw(const char *data, va_list args)
+{
+    acquire_lock(&log_lock);
+    vprintf(data, args);
+    release_lock(&log_lock);
+}
+
 void kvlog(int level, const char *data, va_list args)
 {
     int orig_write_to_screen = write_to_screen;
+    long long stime = (long long) get_sys_time();
+
     acquire_lock(&log_lock);
     struct framebuffer_color text_color = graphics_getcolor();
 
@@ -35,7 +44,6 @@ void kvlog(int level, const char *data, va_list args)
     if (level == LOG_ERROR)
         write_to_screen = 1;
 
-    long long stime = (long long) get_sys_time();
     printf(LOG_PREFIX, stime / 1000000000ll, stime % 1000000000ll, get_pid());
 
     switch (level) {
@@ -69,6 +77,8 @@ void kstatus(int status, const char *message, ...)
     va_list args;
     if (!message) return;
 
+    acquire_lock(&log_lock);
+
     printf("[");
     switch (status)
     {
@@ -87,6 +97,8 @@ void kstatus(int status, const char *message, ...)
     va_start(args, message);
     vprintf(message, args);
     va_end(args);
+
+    release_lock(&log_lock);
 }
 
 __noreturn void kerror(const char *msg, ...)

@@ -1,15 +1,12 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #define __ASSEMBLY__
+#include <generated/asm-offsets.h>
 #include <asm/segments.h>
 #include <lilac/syscall.h>
 #include <lilac/errno.h>
 
 #include "macros.S"
-
-.equ TASK_PGD_OFFSET, 12
-.equ TASK_PC_OFFSET, 16
-.equ TASK_KSTACK_OFFSET, 20
 
 .text
 .globl syscall_handler

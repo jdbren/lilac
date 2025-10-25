@@ -107,11 +107,9 @@ void timer_tick_init(void)
         apic_tsc_deadline();
         handle_tick = tsc_deadline_tick;
     } else if (invariant_tsc()) {
-        apic_periodic(TIMER_HZ / 1000);
+        // tsc periodic
     } else {
-        if (get_lapic_id())
-            kerror("HPET for APs is not supported\n");
-        hpet_enable_int(TIMER_HZ / 1000);
+        apic_periodic(TIMER_HZ / 1000);
     }
 }
 

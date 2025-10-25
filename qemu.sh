@@ -1,5 +1,5 @@
 #!/bin/bash
-set -eux
+set -eu
 
 get_ncpus() {
     if [[ "$OSTYPE" == "linux-gnu"* ]]; then
@@ -12,7 +12,7 @@ get_ncpus() {
     fi
 }
 
-make -j $(get_ncpus) install-system
+make -s -j $(get_ncpus) install-system
 sudo ./scripts/image.sh
 
 qemu-system-x86_64 \
