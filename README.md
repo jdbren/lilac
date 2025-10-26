@@ -47,7 +47,7 @@ make install
 make all-gcc
 # Need to have system headers in the sysroot include dir. Get these from newlib.
 mkdir -p $HOME/lilac/sysroot/usr/local
-cp -r $HOME/newlib/newlib/libc/include $HOME/lilac/sysroot/usr/local/include
+cp -r $HOME/lilac/newlib/newlib/libc/include $HOME/lilac/sysroot/usr/local/include
 make all-target-libgcc
 make install-gcc install-target-libgcc
 ```
