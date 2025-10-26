@@ -53,7 +53,7 @@ make install-gcc install-target-libgcc
 ```
 ```bash
 # Add a crt0 for compiling user space programs
-x86_64-elf-gcc -o crt0.o -c ~/lilac/init/crt0.S
+x86_64-lilac-gcc -o crt0.o -c ~/lilac/init/crt0.S
 mv crt0.o /usr/local/lib/gcc/x86_64-lilac/16.0.0/ # or where ever the compiler is
 # Also make sure to install libc to the sysroot
 make install-libc # in lilac dir
