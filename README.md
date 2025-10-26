@@ -29,25 +29,7 @@ sudo dnf install gcc gcc-c++ make bison flex-devel gmp-devel libmpc-devel mpfr-d
 ```
 
 Binutils and gcc should be built in separate directories from the source code.
-You will likely need the generic elf compiler.
-```bash
-# Target can be x86_64-elf or i686-elf
-export TARGET=x86_64-elf
-```
-```bash
-../binutils-gdb/configure --target=$TARGET --prefix=$PREFIX --disable-nls
-make
-make install
-```
-```bash
-../gcc/configure --target=$TARGET --prefix=$PREFIX --disable-nls --enable-languages=c,c++ --without-headers --disable-hosted-libstdcxx
-make all-gcc
-make all-target-libgcc
-make all-target-libstdc++-v3
-make install-gcc install-target-libgcc install-target-libstdc++-v3
-```
-
-Now onto building the custom toolchain. There is a bit of bootstrapping
+There is a bit of bootstrapping
 since libgcc expects the system headers to be available. You have to
 clone the gcc, binutils, and newlib forks and switch to the lilac-os
 branch.
