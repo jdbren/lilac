@@ -1,3 +1,4 @@
 [submodule "newlib"]
 	path = newlib
 	url = https://github.com/jdbren/newlib.git
+	branch = lilac-os
