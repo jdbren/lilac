@@ -12,6 +12,8 @@ struct timestamp {
     u8 second;
 };
 
+void timer_init(void);
+
 void sleep(u32 ms);
 void usleep(u32 micros);
 u64 get_sys_time(void);

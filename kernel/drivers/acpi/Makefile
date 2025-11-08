@@ -44,7 +44,7 @@ else
 endif
 
 clean:
-	@echo "CLEAN	ACPI_OBJS"
+	@echo "CLEAN	acpi"
 	@rm -f $(OBJS) $(OBJS:.o=.d) acpi.lib
 
 -include $(OBJS:.o=.d)

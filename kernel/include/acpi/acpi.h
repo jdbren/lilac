@@ -45,9 +45,9 @@ struct acpi_info {
     // struct facp_info *facp;
 };
 
-void acpi_early(struct RSDP *rsdp, struct acpi_info *info);
-void acpi_early_cleanup(struct acpi_info *info);
-int acpi_full_init(void);
+void acpi_early_init(void);
+void acpi_early_cleanup(void);
+int acpi_subsystem_init(void);
 void scan_sys_bus(void);
 
 #endif

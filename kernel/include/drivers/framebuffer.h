@@ -33,7 +33,7 @@ struct framebuffer {
     u16 width_pad;
 };
 
-void graphics_init(struct multiboot_tag_framebuffer *fb);
+void graphics_init(void);
 void graphics_putc(u16 c, u32 cx, u32 cy);
 void graphics_clear(void);
 void graphics_scroll(void);

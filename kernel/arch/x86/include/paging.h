@@ -45,10 +45,6 @@ typedef u32 pte_t;
 
 #define PG_STRONG_UC (PG_CACHE_DISABLE | PG_WRITE_THROUGH)
 
-extern volatile u8 *const phys_mem_mapping;
-
-int kernel_pt_init(uintptr_t start, uintptr_t end);
-
 void *get_physaddr(void *virtualaddr);
 int map_pages(void *physaddr, void *virtualaddr, u16 flags, int num_pages);
 int unmap_pages(void *virtualaddr, int num_pages);
@@ -63,8 +59,8 @@ static inline int unmap_page(void *virtualaddr)
     return unmap_pages(virtualaddr, 1);
 }
 
+void x86_setup_mem(void);
 void init_phys_mem_mapping(size_t memory_sz_kb);
-int __map_frame_bm(void *physaddr, void *virtualaddr);
 
 #ifdef __x86_64__
 pdpte_t * get_or_alloc_pdpt(pml4e_t *pml4, void *virt, u16 flags);

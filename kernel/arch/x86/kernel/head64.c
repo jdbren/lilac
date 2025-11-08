@@ -23,14 +23,11 @@ __noreturn void __stack_chk_fail(void)
     kerror("Stack smashing detected\n");
 }
 
-struct multiboot_info mbd;
-struct acpi_info acpi;
-//static struct efi_info efi;
+struct boot_info boot_info;
+extern u32 mbinfo; // defined in boot asm
 
 // need to set up
 uintptr_t page_directory;
-
-extern u32 mbinfo; // defined in boot asm
 
 void syscall_init(void)
 {
@@ -43,28 +40,16 @@ void syscall_init(void)
         X86_FLAGS_IF|X86_FLAGS_DF|X86_FLAGS_OF|
         X86_FLAGS_IOPL|X86_FLAGS_NT|X86_FLAGS_RF|
         X86_FLAGS_AC|X86_FLAGS_ID, 0);
-
     percpu_init_cpu();
 }
 
 __noreturn __no_stack_chk
 void x86_64_kernel_early(void)
 {
+    parse_multiboot((uintptr_t)&mbinfo);
+
     idt_init();
-    parse_multiboot((uintptr_t)&mbinfo, &mbd);
-    mm_init(mbd.efi_mmap);
-    graphics_init(mbd.framebuffer);
-
-    acpi_early((void*)mbd.new_acpi->rsdp, &acpi);
-    apic_init(acpi.madt);
-    percpu_mem_init(acpi.madt->core_cnt);
-    keyboard_init();
-    timer_init(acpi.hpet);
-    acpi_early_cleanup(&acpi);
-
-    syscall_init();
-    acpi_full_init();
-    ap_init();
+    x86_setup_mem();
 
     start_kernel();
 
@@ -74,5 +59,5 @@ void x86_64_kernel_early(void)
 
 uintptr_t get_rsdp(void)
 {
-    return virt_to_phys((void*)mbd.new_acpi->rsdp);
+    return virt_to_phys((void*)boot_info.mbd.new_acpi->rsdp);
 }

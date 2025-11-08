@@ -1,6 +1,7 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/log.h>
+#include <lilac/boot.h>
 #include <lilac/panic.h>
 #include <lilac/libc.h>
 #include <drivers/pci.h>
@@ -71,8 +72,10 @@ void read_xsdt(struct SDTHeader *xsdt, struct acpi_info *info)
     }
 }
 
-void acpi_early(struct RSDP *rsdp, struct acpi_info *info)
+void acpi_early_init(void)
 {
+    struct acpi_info *info = &boot_info.acpi;
+    struct RSDP *rsdp = (struct RSDP*)boot_info.mbd.new_acpi->rsdp;
     u8 check = 0;
     for (u32 i = 0; i < sizeof(*rsdp); i++)
         check += ((char *)rsdp)[i];
@@ -95,18 +98,20 @@ void acpi_early(struct RSDP *rsdp, struct acpi_info *info)
     } else {
         read_rsdt((struct SDTHeader*)(uintptr_t)rsdp->RsdtAddress, info);
     }
+
+    boot_info.ncpus = info->madt ? info->madt->core_cnt : 1;
 }
 
-void acpi_early_cleanup(struct acpi_info *info)
+void acpi_early_cleanup(void)
 {
-    if (info->madt)
-        dealloc_madt(info->madt);
-    if (info->hpet)
-        dealloc_hpet(info->hpet);
+    if (boot_info.acpi.madt)
+        dealloc_madt(boot_info.acpi.madt);
+    if (boot_info.acpi.hpet)
+        dealloc_hpet(boot_info.acpi.hpet);
 }
 
 
-int acpi_full_init(void)
+int acpi_subsystem_init(void)
 {
     ACPI_STATUS status;
 

@@ -19,7 +19,6 @@ static inline void set_kernel_gs_base(u64 base)
     );
 }
 
-int ncpus;
 uintptr_t __per_cpu_offset[CONFIG_MAX_CPUS];
 
 __section(PERCPU_SECTION".first") __used
@@ -65,9 +64,9 @@ static void *alloc_percpu_area(size_t size)
     return p;
 }
 
-void percpu_mem_init(int cpu_count)
+void percpu_mem_init(void)
 {
-    ncpus = cpu_count;
+    int cpu_count = boot_info.ncpus;
     size_t mem_region_size = (size_t)((uintptr_t)&_percpu_end - (uintptr_t)&_percpu_start);
     if (mem_region_size == 0 || cpu_count <= 0)
         panic("No per-CPU data or invalid CPU count: ncpu=%d\n", cpu_count);

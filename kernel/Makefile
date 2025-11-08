@@ -11,11 +11,17 @@ EXEC_PREFIX?=$(PREFIX)
 BOOTDIR?=$(EXEC_PREFIX)/boot
 INCLUDEDIR?=$(PREFIX)/include
 
-FLAGS=-D__lilac__ -D__KERNEL__ -Iinclude -ffreestanding -Wall -Wextra \
-	-Wno-unused-parameter -Wno-unused-function -Wno-unused-variable
-CFLAGS:=$(CFLAGS) $(FLAGS) -fno-strict-aliasing -mno-red-zone -fanalyzer -fstack-protector -DLOG_CPUID
+FLAGS=-D__lilac__ -D__KERNEL__ -DLOG_CPUID -Werror -Iinclude -ffreestanding \
+	-Wall -Wextra -Wno-sign-compare -Wundef -Wframe-larger-than=2048 \
+	-Wno-unused-parameter -Wno-unused-function -Wno-unused-variable -Wno-undef
+CFLAGS:=$(CFLAGS) $(FLAGS) -std=gnu23 -fanalyzer -fstack-protector-strong \
+	-fno-strict-aliasing -fno-PIE -fno-common -mno-red-zone \
+	-fno-strict-overflow -fno-delete-null-pointer-checks -fno-stack-check \
+	-fno-allow-store-data-races -fno-asynchronous-unwind-tables \
+	-ftrivial-auto-var-init=zero -fzero-init-padding-bits=all
 # -DDEBUG_VFS -DDEBUG_FORK -DDEBUG_KMM -DDEBUG_KMALLOC -DDEBUG_PAGING -DDEBUG_FAT -DDEBUG_TMPFS -DDEBUG_ELF
-CXXFLAGS:=$(CXXFLAGS) $(FLAGS) -D_GLIBCXX_NO_ASSERTIONS -fno-exceptions -fno-rtti -fpermissive -std=c++23
+CXXFLAGS:=$(CXXFLAGS) $(FLAGS) -D_GLIBCXX_NO_ASSERTIONS \
+	-fno-exceptions -fno-rtti -fpermissive -std=c++23
 LDFLAGS:=$(LDFLAGS) -nostdlib
 LIBS:=$(LIBS) -lgcc -lstdc++
 
@@ -54,6 +60,8 @@ kernel/syscall.o \
 kernel/wait.o \
 mm/kmalloc.o \
 mm/mm.o \
+mm/pmem.o \
+mm/init.o \
 fs/fat32/fat32.o \
 fs/fat32/dir.o \
 fs/fat32/file.o \

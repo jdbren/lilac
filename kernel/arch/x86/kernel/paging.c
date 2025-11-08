@@ -1,10 +1,10 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include <lilac/types.h>
+#include <lilac/pmem.h>
+#include <lilac/boot.h>
 #include <lilac/panic.h>
 #include <lilac/libc.h>
 #include "paging.h"
-#include "pgframe.h"
 
 #define PAGE_DIR_SIZE 1024
 #define PAGE_TABLE_SIZE 1024
@@ -124,6 +124,14 @@ static int pde(int index, u16 flags)
     // printf("pde %x: %x\n", index, entry);
 
     return 0;
+}
+
+void * arch_map_frame_bitmap(size_t size)
+{
+    void *virt = (void*)(((uintptr_t)&_kernel_end + 0xfff) & ~0xfff);
+    void *phys = (void*)get_phys_addr(virt);
+    map_pages(phys, virt, PG_WRITE, size / PAGE_SIZE + 1);
+    return virt;
 }
 
 void init_phys_mem_mapping(size_t) {}

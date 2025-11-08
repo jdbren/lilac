@@ -533,7 +533,7 @@ static ssize_t nc_read(struct tty *tty, u8 *buf, size_t nr)
 /* Output processing for c_oflag */
 static ssize_t process_output(struct tty *tty, const u8 *buf, size_t nr)
 {
-    size_t written = 0;
+    // size_t written = 0;
     u8 output_buf[256];
     size_t out_pos = 0;
 
@@ -544,7 +544,7 @@ static ssize_t process_output(struct tty *tty, const u8 *buf, size_t nr)
             output_buf[out_pos++] = '\r';
             if (out_pos >= sizeof(output_buf)) {
                 tty->ops->write(tty, output_buf, out_pos);
-                written += out_pos;
+                // written += out_pos;
                 out_pos = 0;
             }
             output_buf[out_pos++] = '\n';
@@ -568,7 +568,7 @@ static ssize_t process_output(struct tty *tty, const u8 *buf, size_t nr)
         if (out_pos >= sizeof(output_buf)) {
             ssize_t result = tty->ops->write(tty, output_buf, out_pos);
             if (result < 0) return result;
-            written += result;
+            // written += result;
             out_pos = 0;
         }
     }
@@ -576,7 +576,7 @@ static ssize_t process_output(struct tty *tty, const u8 *buf, size_t nr)
     if (out_pos > 0) {
         ssize_t result = tty->ops->write(tty, output_buf, out_pos);
         if (result < 0) return result;
-        written += result;
+        // written += result;
     }
 
     return nr;

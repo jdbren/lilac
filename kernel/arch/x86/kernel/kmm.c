@@ -2,10 +2,11 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/kmm.h>
 #include <lilac/lilac.h>
+#include <lilac/boot.h>
+#include <lilac/pmem.h>
 #include <utility/multiboot2.h>
 #include <utility/efi.h>
 
-#include "pgframe.h"
 #include "paging.h"
 
 // #define DEBUG_KMM 1
@@ -18,17 +19,12 @@ typedef struct memory_desc memory_desc_t;
 
 static void *__check_bitmap(int i, int num_pages, int *count, int *start);
 static void __free_page(u8 *page);
-static void __parse_mmap(struct multiboot_tag_efi_mmap *mmap);
-
-extern const uintptr_t _kernel_end;
-extern const uintptr_t _kernel_start;
 
 #define KHEAP_PAGES ((KHEAP_MAX_ADDR - KHEAP_START_ADDR) / PAGE_SIZE)
 #define KHEAP_BITMAP_SIZE (KHEAP_PAGES / 8)
 #define HEAP_MANAGE_BYTES PAGE_ROUND_UP(KHEAP_BITMAP_SIZE)
 
 static uintptr_t kheap_bitmap[HEAP_MANAGE_BYTES / 4];
-size_t memory_size_kb;
 
 static void __set_memory_size(struct multiboot_tag_efi_mmap *mmap)
 {
@@ -36,25 +32,15 @@ static void __set_memory_size(struct multiboot_tag_efi_mmap *mmap)
     for (u32 i = 0; i < mmap->size; i += mmap->descr_size,
         entry = (efi_memory_desc_t*)((uintptr_t)entry + mmap->descr_size)) {
         if (entry->type != EFI_RESERVED_TYPE)
-            memory_size_kb += entry->num_pages * PAGE_SIZE / 1024;
+            boot_info.total_mem_kb += entry->num_pages * PAGE_SIZE / 1024;
     }
 }
 
-// TODO: Add support for greater than 4GB memory
-void mm_init(struct multiboot_tag_efi_mmap *mmap)
+void x86_setup_mem(void)
 {
+    struct multiboot_tag_efi_mmap *mmap = boot_info.mbd.efi_mmap;
     __set_memory_size(mmap);
-    init_phys_mem_mapping(memory_size_kb);
-    phys_mem_init(mmap);
-    __parse_mmap(mmap);
-
-    // Allocate page tables for all kernel space
-    kernel_pt_init(KHEAP_START_ADDR, KHEAP_MAX_ADDR);
-}
-
-size_t arch_get_mem_sz(void)
-{
-    return memory_size_kb;
+    init_phys_mem_mapping(boot_info.total_mem_kb);
 }
 
 static void *find_vaddr(int num_pages)
@@ -220,36 +206,6 @@ static void __free_page(u8 *page)
     kheap_bitmap[index] &= ~(1 << offset);
 }
 
-static void __parse_mmap(struct multiboot_tag_efi_mmap *mmap)
-{
-    efi_memory_desc_t *entry = (efi_memory_desc_t*)mmap->efi_mmap;
-    //void *vaddr = NULL;
-    for (u32 i = 0; i < mmap->size; i += mmap->descr_size,
-            entry = (efi_memory_desc_t*)((uintptr_t)entry + mmap->descr_size)) {
-        switch (entry->type) {
-            case EFI_BOOT_SERVICES_CODE:
-            case EFI_BOOT_SERVICES_DATA:
-                if (entry->phys_addr < (uintptr_t)&_kernel_start)
-                    continue;
-                else
-                    free_frames((void*)((uintptr_t)entry->phys_addr), entry->num_pages);
-            break;
-            case EFI_RUNTIME_SERVICES_DATA:
-                // vaddr = find_vaddr(entry->num_pages);
-                // map_pages((void*)entry->phys_addr, vaddr, PG_WRITE, entry->num_pages);
-                // entry->virt_addr = (u32)vaddr;
-                // map_pages((void*)entry->phys_addr, (void*)entry->phys_addr, PG_WRITE, entry->num_pages);
-
-            break;
-            case EFI_RUNTIME_SERVICES_CODE:
-                // vaddr = find_vaddr(entry->num_pages);
-                // map_pages((void*)entry->phys_addr, vaddr, 0, entry->num_pages);
-                // entry->virt_addr = (u32)vaddr;
-                // map_pages((void*)entry->phys_addr, (void*)entry->phys_addr, 0, entry->num_pages);
-            break;
-        }
-    }
-}
 
 int umem_alloc(uintptr_t vaddr, int num_pages)
 {

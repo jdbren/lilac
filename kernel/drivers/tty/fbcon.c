@@ -148,7 +148,7 @@ static void draw_cursor(struct vc_state *vt, int cx, int cy)
 {
     struct framebuffer *fb = vt->display_data;
 
-    if (!vt || !fb || !fb->fb || !fb->font)
+    if (!fb || !fb->fb || !fb->font)
         return;
     if (cx < 0 || cx >= vt->xs || cy < 0 || cy >= vt->ys)
         return;

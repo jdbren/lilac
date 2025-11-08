@@ -19,7 +19,9 @@
 #define PAGE_ROUND_DOWN(x)  (((uintptr_t)(x)) & (~(PAGE_SIZE-1)))
 #define PAGE_ROUND_UP(x)    ((((uintptr_t)(x)) + PAGE_SIZE-1) & (~(PAGE_SIZE-1)))
 
-void mm_init(struct multiboot_tag_efi_mmap *mmap);
+void mm_init(void);
+int kernel_pt_init(uintptr_t start, uintptr_t end);
+
 void *kvirtual_alloc(int size, int flags);
 void kvirtual_free(void* addr, int size);
 

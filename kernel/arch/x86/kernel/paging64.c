@@ -1,9 +1,10 @@
 // Copyright (C) 2025 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include "paging.h"
-#include "pgframe.h"
-
 #include <lilac/lilac.h>
+#include <lilac/boot.h>
+#include <lilac/pmem.h>
+
+#include "paging.h"
 
 #pragma GCC diagnostic ignored "-Warray-bounds"
 #pragma GCC diagnostic ignored "-Wanalyzer-out-of-bounds"
@@ -179,6 +180,7 @@ int kernel_pt_init(uintptr_t start, uintptr_t end)
         } else {
             pdpt[pdpt_ndx] = (pdpte_t)((uintptr_t)alloc_frame() | PG_WRITE |
                 PG_STRONG_UC | 1);
+            memset((void*)ENTRY_ADDR(pdpt[pdpt_ndx]), 0, PAGE_BYTES);
         }
         start += 0x40000000UL;
     }
@@ -215,9 +217,11 @@ void *get_physaddr(void *virt)
     return (void*)((pt[pt_ndx] & ~0xFFF) + ((uintptr_t)virt & 0xFFF));
 }
 
-int __map_frame_bm(void *phys, void *virt)
+void * arch_map_frame_bitmap(size_t size)
 {
     extern size_t boot_pml4;
+    void *virt = (void*)(((uintptr_t)(&_kernel_end) & ~0x1fffffUL) + 0x200000);
+    void *phys = (void*)get_phys_addr(virt);
     // We still have identity mapped low memory
     pml4e_t *pml4 = (pml4e_t*)&boot_pml4;
     u32 pml4_ndx = get_pml4_index(virt); // should be mapped already in boot
@@ -231,11 +235,13 @@ int __map_frame_bm(void *phys, void *virt)
         kerror("pd not present");
     }
     // Add a 2MB page
+    if (size > 0x200000)
+        kerror("Cannot map more than 2MB for frame bitmap yet");
     pde_t *pd = (pde_t*)ENTRY_ADDR(pdpt[pdpt_ndx]);
     pd[pd_ndx] = (pde_t)((uintptr_t)phys | PG_WRITE | PG_STRONG_UC |
         PG_HUGE_PAGE | 1);
     __native_flush_tlb_single(virt);
-    return 0;
+    return virt;
 }
 
 void copy_kernel_mappings(uintptr_t phys_cr3)

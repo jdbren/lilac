@@ -4,12 +4,12 @@ SECTIONS
 {
     . = 1M;
 
-	_kernel_start = .;
-
 	.multiboot.text : { *(.multiboot.text) }
 	.multiboot.data : { *(.multiboot.data) }
 
 	. += 0xC0000000;
+
+	_kernel_start = .;
 
 	.text ALIGN (4K) : AT (ADDR (.text) - 0xC0000000) { *(.text .text.*) }
 

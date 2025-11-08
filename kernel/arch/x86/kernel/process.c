@@ -8,14 +8,12 @@
 #include <lilac/config.h>
 #include <lilac/mm.h>
 #include <lilac/kmm.h>
+#include <lilac/pmem.h>
 #include <lilac/kmalloc.h>
-#include "pgframe.h"
 #include "paging.h"
 #include <asm/regs.h>
 
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
-
-extern const u32 _kernel_end;
 
 static u32 *const pd = (u32*)0xFFFFF000UL;
 

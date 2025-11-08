@@ -13,6 +13,7 @@ lilac.iso
 .DS_Store
 
 # Text and debug files
+bugs.txt
 debug.txt
 log.txt
 dump.txt

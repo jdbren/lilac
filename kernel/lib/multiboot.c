@@ -1,10 +1,12 @@
 #include <lilac/libc.h>
 #include <lilac/boot.h>
 
-void parse_multiboot(uintptr_t addr, struct multiboot_info *mbd)
+void parse_multiboot(uintptr_t addr)
 {
     if (addr & 7)
         kerror("Unaligned mbi:\n");
+
+    struct multiboot_info *mbd = &boot_info.mbd;
 
     struct multiboot_tag *tag;
     for (tag = (struct multiboot_tag *)(addr + 8);

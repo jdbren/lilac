@@ -1,5 +1,6 @@
 #include <drivers/framebuffer.h>
 #include <lilac/lilac.h>
+#include <lilac/boot.h>
 #include <lilac/font.h>
 #include <lilac/kmm.h>
 #include <utility/termius.h>
@@ -95,8 +96,9 @@ void graphics_setcolor(u32 fg, u32 bg)
 
 static void print_font_info(struct font *terminal_font);
 
-void graphics_init(struct multiboot_tag_framebuffer *mfb)
+void graphics_init(void)
 {
+    struct multiboot_tag_framebuffer *mfb = boot_info.mbd.framebuffer;
     if (mfb->common.framebuffer_type != MULTIBOOT_FRAMEBUFFER_TYPE_RGB
         || mfb->common.framebuffer_bpp != 32) {
         kerror("Unsupported framebuffer type\n");

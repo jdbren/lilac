@@ -60,6 +60,7 @@ shell: install-libc
 # CLEAN
 clean:
 	@for PROJECT in $(PROJECTS); do \
+		echo "CLEAN	$$PROJECT"; \
   		($(MAKE) -s -C $$PROJECT clean) \
 	done
 	@if [ -d ../gush ]; then \

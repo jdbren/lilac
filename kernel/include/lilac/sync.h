@@ -23,11 +23,10 @@ typedef volatile atomic_flag spinlock_t;
 
 #define spin_lock_init(spin) atomic_flag_clear(spin);
 
-static inline void acquire_lock(spinlock_t *spin)
-{
-    while(atomic_flag_test_and_set(spin))
-		pause();
-}
+#define acquire_lock(spin) do { \
+    while(atomic_flag_test_and_set(spin)) \
+		pause(); \
+} while (0)
 
 #define release_lock(spin) atomic_flag_clear(spin)
 

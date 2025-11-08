@@ -158,6 +158,7 @@ u8 bspdone;
 
 int ap_init(void)
 {
+    int ncpus = boot_info.ncpus;
     u8 bspid;
     extern void ap_tramp(void);
 

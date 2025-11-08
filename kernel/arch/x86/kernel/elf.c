@@ -7,8 +7,8 @@
 #include <lilac/process.h>
 #include <lilac/mm.h>
 #include <lilac/kmm.h>
+#include <lilac/pmem.h>
 #include "paging.h"
-#include "pgframe.h"
 
 // #define DEBUG_ELF 1
 

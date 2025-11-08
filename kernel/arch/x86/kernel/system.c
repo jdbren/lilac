@@ -2,8 +2,18 @@
 #include <lilac/timer.h>
 #include <drivers/framebuffer.h>
 #include <lilac/kmm.h>
+#include <lilac/boot.h>
+#include <lilac/percpu.h>
 
 #include "cpu-features.h"
+#include "apic.h"
+
+// Additional setup after mm and boot info ready
+void arch_setup(void)
+{
+    apic_init(boot_info.acpi.madt);
+    percpu_mem_init();
+}
 
 void print_system_info(void)
 {
@@ -42,8 +52,8 @@ void print_system_info(void)
     __cpuid(0x80000006, regs[0], regs[1], regs[2], regs[3]);
     printf("L2 Cache: %u KB\n", regs[2] >> 16);
 
-    size_t mem_sz_mb = arch_get_mem_sz() / 0x400;
-    printf("Memory: %u MB\n", mem_sz_mb);
+    size_t mem_sz_mb = boot_info.total_mem_kb / 1024;
+    printf("Total Memory: %u MB\n", (unsigned int)mem_sz_mb);
 
     u64 sys_time_ms = get_sys_time() / 1000000;
     printf("System clock running for %llu ms\n", sys_time_ms);

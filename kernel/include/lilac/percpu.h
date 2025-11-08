@@ -43,7 +43,7 @@ extern uintptr_t __per_cpu_offset[CONFIG_MAX_CPUS];
 #define this_cpu_ptr(var) per_cpu_ptr(var, this_cpu_id())
 
 
-void percpu_mem_init(int cpu_count);
+void percpu_mem_init(void);
 void percpu_init_cpu(void);
 
 

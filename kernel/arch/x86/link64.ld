@@ -8,12 +8,12 @@ KERNEL_VM_BASE = 0xffffffff80000000;
 SECTIONS {
 	. = 1M;
 
-	_kernel_start = .;
-
 	.multiboot.text : { *(.multiboot.text) }
 	.multiboot.data : { *(.multiboot.data) }
 
 	. += KERNEL_VM_BASE;
+
+	_kernel_start = .;
 
 	.text ALIGN (4K) : AT (ADDR (.text) - KERNEL_VM_BASE) { *(.text .text.*) }
 

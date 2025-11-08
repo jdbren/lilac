@@ -30,20 +30,23 @@ struct efi_info {
 };
 
 struct boot_info {
+	int ncpus;
+	unsigned long total_mem_kb;
 	struct multiboot_info mbd;
 	struct acpi_info acpi;
 	struct efi_info efi;
 	u64 rsdp;
 };
 
-extern struct multiboot_info mbd;
-extern struct acpi_info acpi;
+extern const char _kernel_start[];
+extern const char _kernel_end[];
 
-extern int ncpus;
+extern struct boot_info boot_info;
 
 uintptr_t get_rsdp(void);
-void parse_multiboot(uintptr_t addr, struct multiboot_info *mbd);
+void parse_multiboot(uintptr_t addr);
 
+void arch_setup(void);
 void syscall_init(void);
 
 __noreturn __no_stack_chk

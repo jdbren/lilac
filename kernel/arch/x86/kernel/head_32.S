@@ -124,8 +124,10 @@ get_tss:
 tss_init:
 	push %ebp
 	mov  %esp, %ebp
+	push %ebx
 
 	call get_tss # eax = &tss, edx = cpu_id
+	mov %edx, %ebx
 
 	leal gdt_entries+40(, %edx, 8), %edx   # TSS descriptor for this CPU
 	movl $0, 4(%eax)
@@ -147,7 +149,8 @@ tss_init:
 	addw $5 * 8, %ax
 	ltr  %ax
 
-	pop  %ebp
+	pop %ebx
+	pop %ebp
 	ret
 
 .global set_tss_esp0

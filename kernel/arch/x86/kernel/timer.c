@@ -3,6 +3,7 @@
 #include "timer.h"
 
 #include <lilac/config.h>
+#include <lilac/boot.h>
 #include <lilac/timer.h>
 #include <lilac/sched.h>
 #include <acpi/hpet.h>
@@ -113,10 +114,12 @@ void timer_tick_init(void)
     }
 }
 
-void timer_init(struct hpet_info *info)
+void timer_init(void)
 {
     idt_entry(0x20, (uintptr_t)timer_handler, __KERNEL_CS, 0, INT_GATE);
     ioapic_entry(0, 0x20, 0, 0);
+
+    struct hpet_info *info = boot_info.acpi.hpet;
 
     hpet_init(info);
     hpet_enabled = 1;

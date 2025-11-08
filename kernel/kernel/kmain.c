@@ -1,17 +1,23 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/lilac.h>
+#include <lilac/boot.h>
+#include <lilac/kmm.h>
+#include <lilac/percpu.h>
 #include <lilac/fs.h>
 #include <lilac/sched.h>
 #include <lilac/console.h>
 #include <lilac/tty.h>
+#include <lilac/keyboard.h>
+#include <lilac/timer.h>
+#include <drivers/framebuffer.h>
 #include <acpi/acpi.h>
 #include <lib/icxxabi.h>
 
 extern void (*__init_array_start[])(void);
 extern void (*__init_array_end[])(void);
 
-void _init_ctors(void)
+void init_ctors(void)
 {
     size_t count = (uintptr_t)__init_array_end - (uintptr_t)__init_array_start;
     count /= sizeof(void*);
@@ -24,17 +30,29 @@ void _init_ctors(void)
 __noreturn __no_stack_chk
 void start_kernel(void)
 {
-    kstatus(STATUS_OK, "Starting kernel\n");
-    _init_ctors();
+    mm_init();
+    graphics_init();
 
+    init_ctors();
+    acpi_early_init();
+    arch_setup();
+
+    keyboard_init();
+    timer_init();
+    syscall_init();
+
+    acpi_early_cleanup();
+    acpi_subsystem_init();
     scan_sys_bus();
+    arch_enable_interrupts();
+
     fs_init();
     sched_init();
-
-    arch_enable_interrupts();
     console_init();
     tty_init();
     sched_clock_init();
+
+    kstatus(STATUS_OK, "Kernel initialized\n");
 
     idle();
     unreachable();
