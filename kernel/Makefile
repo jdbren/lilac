@@ -62,6 +62,7 @@ mm/kmalloc.o \
 mm/mm.o \
 mm/pmem.o \
 mm/init.o \
+mm/vmalloc.o \
 fs/fat32/fat32.o \
 fs/fat32/dir.o \
 fs/fat32/file.o \

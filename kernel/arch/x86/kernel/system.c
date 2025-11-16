@@ -7,6 +7,24 @@
 
 #include "cpu-features.h"
 #include "apic.h"
+#include "paging.h"
+
+static void __set_memory_size(struct multiboot_tag_efi_mmap *mmap)
+{
+    efi_memory_desc_t *entry = (efi_memory_desc_t*)mmap->efi_mmap;
+    for (u32 i = 0; i < mmap->size; i += mmap->descr_size,
+        entry = (efi_memory_desc_t*)((uintptr_t)entry + mmap->descr_size)) {
+        if (entry->type != EFI_RESERVED_TYPE)
+            boot_info.total_mem_kb += entry->num_pages * PAGE_SIZE / 1024;
+    }
+}
+
+void x86_setup_mem(void)
+{
+    struct multiboot_tag_efi_mmap *mmap = boot_info.mbd.efi_mmap;
+    __set_memory_size(mmap);
+    init_phys_mem_mapping(boot_info.total_mem_kb);
+}
 
 // Additional setup after mm and boot info ready
 void arch_setup(void)
