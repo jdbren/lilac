@@ -6,7 +6,7 @@
 #include <lilac/types.h>
 #include <lilac/panic.h>
 #include <lilac/fs.h>
-#include <lilac/list.h>
+#include <lib/list.h>
 #include <lilac/libc.h>
 #include <drivers/blkdev.h>
 #include <lilac/kmm.h>

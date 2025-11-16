@@ -2,8 +2,8 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/process.h>
 #include <stdatomic.h>
-#include <lilac/rbtree.h>
-#include <lilac/hashtable.h>
+#include <lib/rbtree.h>
+#include <lib/hashtable.h>
 #include <lilac/libc.h>
 #include <lilac/lilac.h>
 #include <lilac/elf.h>

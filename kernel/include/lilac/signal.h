@@ -1,7 +1,7 @@
 #ifndef _LILAC_SIGNAL_H
 #define _LILAC_SIGNAL_H
 
-#include <lilac/list.h>
+#include <lib/list.h>
 #include <user/signal-defs.h>
 #include <lilac/signo.h>
 // #include <user/siginfo.h>

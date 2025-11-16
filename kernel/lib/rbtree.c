@@ -9,7 +9,7 @@
   linux/lib/rbtree.c
 */
 
-#include <lilac/rbtree_augmented.h>
+#include <lib/rbtree_augmented.h>
 
 /*
  * red-black trees properties:  https://en.wikipedia.org/wiki/Rbtree

@@ -4,7 +4,7 @@
 #define LILAC_LIST_BL_H
 
 #include <lilac/types.h>
-#include <lilac/list.h>
+#include <lib/list.h>
 #include <lilac/bit_spinlock.h>
 
 /*

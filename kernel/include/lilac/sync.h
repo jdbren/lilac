@@ -5,7 +5,7 @@
 #include <lilac/types.h>
 
 #ifndef __cplusplus
-#include <lilac/list.h>
+#include <lib/list.h>
 #endif
 
 #ifdef __cplusplus

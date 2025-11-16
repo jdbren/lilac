@@ -8,10 +8,10 @@
 #define _LINUX_HASHTABLE_H
 
 #include <lilac/compiler.h>
-#include <lilac/list.h>
+#include <lib/list.h>
 #include <lilac/types.h>
-#include <lilac/hash.h>
-#include <lilac/log_base2.h>
+#include <lib/hash.h>
+#include <lib/log_base2.h>
 
 
 #define DEFINE_HASHTABLE(name, bits)						\
