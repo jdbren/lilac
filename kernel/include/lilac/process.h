@@ -5,9 +5,9 @@
 
 #include <lilac/types.h>
 #include <lilac/sync.h>
-#include <lilac/rbtree.h>
+#include <lib/rbtree.h>
 #include <lilac/signal.h>
-#include <lilac/hashtable.h>
+#include <lib/hashtable.h>
 #include <lilac/fdtable.h>
 
 struct regs_state;

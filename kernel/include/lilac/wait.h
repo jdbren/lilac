@@ -3,7 +3,7 @@
 
 #include <lilac/config.h>
 #include <lilac/sync.h>
-#include <lilac/list.h>
+#include <lib/list.h>
 
 #define WNOHANG 1
 #define WUNTRACED 2
