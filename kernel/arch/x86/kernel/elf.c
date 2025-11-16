@@ -8,7 +8,6 @@
 #include <mm/mm.h>
 #include <mm/kmm.h>
 #include <mm/page.h>
-#include "paging.h"
 
 // #define DEBUG_ELF 1
 
@@ -73,10 +72,10 @@ static void* elf32_load(void *elf, struct mm_info *mm)
     for (int i = 0; i < hdr->elf32.p_tbl_sz; i++) {
         if (phdr[i].type != LOAD_SEG)
             continue;
-        if (phdr[i].align > PAGE_BYTES)
+        if (phdr[i].align > PAGE_SIZE)
             kerror("Alignment greater than page size\n");
-        int num_pages = PAGE_ROUND_UP(phdr[i].p_memsz) / PAGE_BYTES;
-        int flags = PG_USER;
+        int num_pages = PAGE_ROUND_UP(phdr[i].p_memsz) / PAGE_SIZE;
+        int flags = MEM_USER;
         struct vm_desc *desc = kzmalloc(sizeof *desc);
         if (!desc) {
             klog(LOG_ERROR, "Out of memory loading ELF\n");
@@ -86,7 +85,7 @@ static void* elf32_load(void *elf, struct mm_info *mm)
         void *phys = alloc_frames(num_pages);
 	    void *vaddr = (void*)(uintptr_t)(phdr[i].p_vaddr & 0xFFFFF000);
 
-        map_pages(phys, vaddr, PG_USER | PG_WRITE, num_pages);
+        map_pages(phys, vaddr, MEM_USER | MEM_WRITE, num_pages);
 
 	    memcpy((void*)(uintptr_t)phdr[i].p_vaddr, (u8*)elf + phdr[i].p_offset, phdr[i].p_filesz);
         if (phdr[i].p_filesz < phdr[i].p_memsz)
@@ -94,7 +93,7 @@ static void* elf32_load(void *elf, struct mm_info *mm)
                     phdr[i].p_memsz - phdr[i].p_filesz);
 
         if (phdr[i].flags & WRIT) {
-            flags |= PG_WRITE;
+            flags |= MEM_WRITE;
             desc->vm_prot |= PROT_WRITE;
         }
         if (phdr[i].flags & EXEC) {
@@ -107,7 +106,7 @@ static void* elf32_load(void *elf, struct mm_info *mm)
 
         desc->mm = mm;
         desc->start = (uintptr_t)vaddr;
-        desc->end = (uintptr_t)vaddr + num_pages * PAGE_BYTES;
+        desc->end = (uintptr_t)vaddr + num_pages * PAGE_SIZE;
         desc->vm_prot |= PROT_READ;
         desc->vm_flags = MAP_PRIVATE;
 
@@ -150,10 +149,10 @@ static void * elf64_load(void *elf, struct mm_info *mm)
     for (int i = 0; i < hdr->elf64.p_tbl_sz; i++) {
         if (phdr[i].type != LOAD_SEG)
             continue;
-        if (phdr[i].align > PAGE_BYTES)
+        if (phdr[i].align > PAGE_SIZE)
             kerror("Alignment greater than page size\n");
-        int num_pages = PAGE_ROUND_UP(phdr[i].p_memsz) / PAGE_BYTES;
-        int flags = PG_USER;
+        int num_pages = PAGE_ROUND_UP(phdr[i].p_memsz) / PAGE_SIZE;
+        int flags = MEM_USER;
         struct vm_desc *desc = kzmalloc(sizeof *desc);
         if (!desc) {
             klog(LOG_ERROR, "Out of memory loading ELF\n");
@@ -163,7 +162,7 @@ static void * elf64_load(void *elf, struct mm_info *mm)
         void *phys = alloc_frames(num_pages);
         void *vaddr = (void*)(phdr[i].p_vaddr & 0xFFFFF000);
 
-        map_pages(phys, vaddr, PG_USER | PG_WRITE, num_pages);
+        map_pages(phys, vaddr, MEM_USER | MEM_WRITE, num_pages);
 
         memcpy((void*)phdr[i].p_vaddr, (u8*)elf + phdr[i].p_offset, phdr[i].p_filesz);
         if (phdr[i].p_filesz < phdr[i].p_memsz)
@@ -174,7 +173,7 @@ static void * elf64_load(void *elf, struct mm_info *mm)
             desc->vm_prot |= PROT_READ;
         }
         if (phdr[i].flags & WRIT) {
-            flags |= PG_WRITE;
+            flags |= MEM_WRITE;
             desc->vm_prot |= PROT_WRITE;
         }
         if (phdr[i].flags & EXEC) {
@@ -187,7 +186,7 @@ static void * elf64_load(void *elf, struct mm_info *mm)
 
         desc->mm = mm;
         desc->start = (uintptr_t)vaddr;
-        desc->end = (uintptr_t)vaddr + num_pages * PAGE_BYTES;
+        desc->end = (uintptr_t)vaddr + num_pages * PAGE_SIZE;
         desc->vm_flags = MAP_PRIVATE;
 
         if (desc->vm_prot & PROT_WRITE && desc->vm_prot & PROT_EXEC)

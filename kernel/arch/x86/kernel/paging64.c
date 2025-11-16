@@ -2,6 +2,7 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/lilac.h>
 #include <lilac/boot.h>
+#include <mm/kmm.h>
 #include <mm/page.h>
 
 #include "paging.h"
@@ -36,7 +37,7 @@ pdpte_t * get_or_alloc_pdpt(pml4e_t *pml4, void *virt, u16 flags)
     u32 pml4_ndx = get_pml4_index(virt);
     if (!ENTRY_PRESENT(pml4[pml4_ndx])) {
         pml4[pml4_ndx] = (uintptr_t)alloc_frame() | flags | PG_WRITE;
-        memset((void*)ENTRY_ADDR(pml4[pml4_ndx]), 0, PAGE_BYTES);
+        memset((void*)ENTRY_ADDR(pml4[pml4_ndx]), 0, PAGE_SIZE);
 #ifdef DEBUG_PAGING
         klog(LOG_DEBUG, "Allocated PDPT at %p for %p\n",
             (void*)ENTRY_ADDR(pml4[pml4_ndx]), virt);
@@ -50,7 +51,7 @@ pde_t * get_or_alloc_pd(pdpte_t *pdpt, void *virt, u16 flags)
     u32 pdpt_ndx = get_pdpt_index(virt);
     if (!ENTRY_PRESENT(pdpt[pdpt_ndx])) {
         pdpt[pdpt_ndx] = (uintptr_t)alloc_frame() | flags | PG_WRITE;
-        memset((void*)ENTRY_ADDR(pdpt[pdpt_ndx]), 0, PAGE_BYTES);
+        memset((void*)ENTRY_ADDR(pdpt[pdpt_ndx]), 0, PAGE_SIZE);
 #ifdef DEBUG_PAGING
         klog(LOG_DEBUG, "Allocated PD at %p for %p\n",
             (void*)ENTRY_ADDR(pdpt[pdpt_ndx]), virt);
@@ -64,7 +65,7 @@ pte_t * get_or_alloc_pt(pde_t *pd, void *virt, u16 flags)
     u32 pd_ndx = get_pd_index(virt);
     if (!ENTRY_PRESENT(pd[pd_ndx])) {
         pd[pd_ndx] = (uintptr_t)alloc_frame() | flags;
-        memset((void*)ENTRY_ADDR(pd[pd_ndx]), 0, PAGE_BYTES);
+        memset((void*)ENTRY_ADDR(pd[pd_ndx]), 0, PAGE_SIZE);
 #ifdef DEBUG_PAGING
         klog(LOG_DEBUG, "Allocated PT at %p for %p\n",
             (void*)ENTRY_ADDR(pd[pd_ndx]), virt);
@@ -73,11 +74,11 @@ pte_t * get_or_alloc_pt(pde_t *pd, void *virt, u16 flags)
     return (pte_t*)ENTRY_ADDR(pd[pd_ndx]);
 }
 
-int map_pages(void *phys, void *virt, u16 flags, int num_pages)
+int map_pages(void *phys, void *virt, int flags, int num_pages)
 {
-    flags |= PG_PRESENT;
-    for (int i = 0; i < num_pages; i++, phys = (u8*)phys + PAGE_BYTES,
-    virt = (u8*)virt + PAGE_BYTES) {
+    flags |= x86_to_page_flags(flags) | PG_PRESENT;
+    for (int i = 0; i < num_pages; i++, phys = (u8*)phys + PAGE_SIZE,
+    virt = (u8*)virt + PAGE_SIZE) {
 #ifdef DEBUG_PAGING
         printf("Mapping %p to %p with flags %x\n", virt, phys, flags);
 #endif
@@ -100,7 +101,7 @@ int map_pages(void *phys, void *virt, u16 flags, int num_pages)
 
 int unmap_pages(void *virt, int num_pages)
 {
-    for (int i = 0; i < num_pages; i++, virt = (u8*)virt + PAGE_BYTES) {
+    for (int i = 0; i < num_pages; i++, virt = (u8*)virt + PAGE_SIZE) {
         pml4e_t *pml4 = (pml4e_t*)ENTRY_ADDR(arch_get_pgd());
 
         u32 pml4_ndx = get_pml4_index(virt);
@@ -132,7 +133,7 @@ int unmap_pages(void *virt, int num_pages)
 }
 
 
-static pdpte_t phys_map_pdpt[ENTRIES_PER_TABLE] __align(PAGE_BYTES);
+static pdpte_t phys_map_pdpt[ENTRIES_PER_TABLE] __align(PAGE_SIZE);
 
 /*
     Set up the physical memory mapping using huge pages
@@ -180,7 +181,7 @@ int kernel_pt_init(uintptr_t start, uintptr_t end)
         } else {
             pdpt[pdpt_ndx] = (pdpte_t)((uintptr_t)alloc_frame() | PG_WRITE |
                 PG_STRONG_UC | 1);
-            memset((void*)ENTRY_ADDR(pdpt[pdpt_ndx]), 0, PAGE_BYTES);
+            memset((void*)ENTRY_ADDR(pdpt[pdpt_ndx]), 0, PAGE_SIZE);
         }
         start += 0x40000000UL;
     }

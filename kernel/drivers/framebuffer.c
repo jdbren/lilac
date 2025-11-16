@@ -107,7 +107,7 @@ void graphics_init(void)
     fb->fb = (u8*)map_phys(
             (void*)(uintptr_t)mfb->common.framebuffer_addr,
             mfb->common.framebuffer_pitch * mfb->common.framebuffer_height,
-            PG_WRITE|PG_STRONG_UC);
+            MEM_WRITE|MEM_UC);
     fb->fb_width = mfb->common.framebuffer_width;
     fb->fb_height = mfb->common.framebuffer_height;
     fb->fb_pitch = mfb->common.framebuffer_pitch;

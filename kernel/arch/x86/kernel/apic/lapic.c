@@ -10,7 +10,6 @@
 #include "timer.h"
 #include "cpu-features.h"
 #include "idt.h"
-#include "paging.h"
 
 #define IA32_APIC_BASE_MSR_ENABLE 0x800
 
@@ -136,7 +135,7 @@ void lapic_enable(uintptr_t addr) {
     cpu_set_apic_base(addr);
     lapic_addr_orig = addr;
 
-    lapic_base = (uintptr_t)map_phys((void*)addr, 0x1000, PG_STRONG_UC | PG_WRITE);
+    lapic_base = (uintptr_t)map_phys((void*)addr, 0x1000, MEM_UC | MEM_WRITE);
 
     /* Set the Spurious Interrupt Vector Register bit 8 to start receiving interrupts */
     write_reg(APIC_REG_SPUR, 0xff | 0x100);
@@ -168,7 +167,7 @@ int ap_init(void)
     bspid = get_lapic_id();
     // copy the AP trampoline code to a fixed address in low memory
 
-    map_to_self((void*)0x8000, PAGE_SIZE, PG_WRITE);
+    map_to_self((void*)0x8000, PAGE_SIZE, MEM_WRITE);
     memcpy((void*)0x8000, (void*)ap_tramp, PAGE_SIZE);
 
     const uintptr_t base = lapic_base;
