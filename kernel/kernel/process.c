@@ -15,6 +15,7 @@
 #include <lilac/mm.h>
 #include <lilac/kmm.h>
 #include <lilac/kmalloc.h>
+#include <lilac/pmem.h>
 #include <lilac/uaccess.h>
 
 #define INIT_STACK(KSTACK) ((uintptr_t)KSTACK + __KERNEL_STACK_SZ - sizeof(size_t))
@@ -627,7 +628,7 @@ void reap_task(struct task *p)
     hash_del(&p->pgid_hash);
     hash_del(&p->sid_hash);
     // kfree(p->regs); // ISSUE This is sometimes stack memory, so can't free currently
-    kvirtual_free(p->mm->kstack, __KERNEL_STACK_SZ);
+    free_pages(p->mm->kstack, __KERNEL_STACK_SZ / PAGE_SIZE);
     kfree(p->mm);
 }
 

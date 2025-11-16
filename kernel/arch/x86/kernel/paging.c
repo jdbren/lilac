@@ -129,9 +129,33 @@ static int pde(int index, u16 flags)
 void * arch_map_frame_bitmap(size_t size)
 {
     void *virt = (void*)(((uintptr_t)&_kernel_end + 0xfff) & ~0xfff);
-    void *phys = (void*)get_phys_addr(virt);
+    void *phys = (void*)__pa(virt);
     map_pages(phys, virt, PG_WRITE, size / PAGE_SIZE + 1);
     return virt;
 }
 
-void init_phys_mem_mapping(size_t) {}
+u8 *const phys_mem_mapping = (void*)__PHYS_MAP_ADDR;
+
+void init_phys_mem_mapping(size_t mem_sz_kb) {
+    size_t mem_map_space = KHEAP_START_ADDR - __PHYS_MAP_ADDR;
+    size_t required_space = mem_sz_kb * 1024;
+    if (required_space > mem_map_space) {
+        klog(LOG_WARN, "Only %lu KB of physical memory can be mapped\n",
+             mem_map_space / 1024);
+        required_space = mem_map_space;
+    }
+
+    uintptr_t virt = __PHYS_MAP_ADDR;
+    uintptr_t phys = 0;
+    uintptr_t end  = __PHYS_MAP_ADDR + required_space;
+
+    while (virt + 0x400000 <= end) {
+        u32 pdindex = PG_DIR_INDEX(virt);
+        pd[pdindex] = phys | PG_WRITE | PG_HUGE_PAGE | 1;
+        virt += 0x400000;
+        phys += 0x400000;
+    }
+
+    uintptr_t cr3 = arch_get_pgd();
+    asm volatile("mov %0, %%cr3" :: "r"(cr3) : "memory");
+}

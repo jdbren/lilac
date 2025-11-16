@@ -82,7 +82,7 @@ void AcpiOsUnmapMemory(void *where, ACPI_SIZE length)
 ACPI_STATUS AcpiOsGetPhysicalAddress(void *LogicalAddress,
     ACPI_PHYSICAL_ADDRESS *PhysicalAddress)
 {
-    *PhysicalAddress = (ACPI_PHYSICAL_ADDRESS)virt_to_phys(LogicalAddress);
+    *PhysicalAddress = (ACPI_PHYSICAL_ADDRESS)__walk_pages(LogicalAddress);
     return AE_OK;
 }
 

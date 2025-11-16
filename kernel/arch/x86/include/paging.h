@@ -42,22 +42,11 @@ typedef u32 pte_t;
 #define PG_ACCESSED        0x20
 #define PG_DIRTY           0x40
 #define PG_HUGE_PAGE       0x80
+#define PG_GLOBAL          0x100
 
 #define PG_STRONG_UC (PG_CACHE_DISABLE | PG_WRITE_THROUGH)
 
 void *get_physaddr(void *virtualaddr);
-int map_pages(void *physaddr, void *virtualaddr, u16 flags, int num_pages);
-int unmap_pages(void *virtualaddr, int num_pages);
-
-static inline int map_page(void *physaddr, void *virtualaddr, u16 flags)
-{
-    return map_pages(physaddr, virtualaddr, flags, 1);
-}
-
-static inline int unmap_page(void *virtualaddr)
-{
-    return unmap_pages(virtualaddr, 1);
-}
 
 void x86_setup_mem(void);
 void init_phys_mem_mapping(size_t memory_sz_kb);

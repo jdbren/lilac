@@ -43,14 +43,15 @@ static void print_page_structs(u32 *cr3)
 #ifndef __x86_64__
 static struct mm_info * make_32_bit_mmap()
 {
-    volatile uintptr_t *cr3 = map_phys(alloc_frame(), PAGE_BYTES, PG_WRITE);
+    uintptr_t phys = (uintptr_t)alloc_frame();
+    volatile uintptr_t *cr3 = map_phys((void*)phys, PAGE_BYTES, PG_WRITE);
     memset((void*)cr3, 0, PAGE_SIZE);
 
     // Do recursive mapping
-    cr3[1023] = virt_to_phys((void*)cr3) | PG_WRITE | PG_SUPER | 1;
+    cr3[1023] = phys | PG_WRITE | PG_SUPER | 1;
 
     // Allocate kernel stack
-    void *kstack = kvirtual_alloc(__KERNEL_STACK_SZ, PG_WRITE);
+    void *kstack = get_free_pages(__KERNEL_STACK_SZ / PAGE_SIZE, 0);
 
     // Map kernel space
     for (int i = PG_DIR_INDEX(0xc0000000); i < 1023; i++)
@@ -60,9 +61,9 @@ static struct mm_info * make_32_bit_mmap()
     if (!info) {
         kerror("Out of memory allocating mm_info\n");
     }
-    info->pgd = virt_to_phys((void*)cr3);
+    info->pgd = phys;
     info->kstack = kstack;
-    cr3[1023] = virt_to_phys((void*)cr3) | PG_WRITE | PG_SUPER | 1;
+    cr3[1023] = phys | PG_WRITE | PG_SUPER | 1;
     unmap_phys((void*)cr3, PAGE_BYTES);
 
     return info;
@@ -82,7 +83,7 @@ static struct mm_info * make_64_bit_mmap()
         kerror("Out of memory allocating mm_info\n");
     }
     info->pgd = cr3;
-    info->kstack = kvirtual_alloc(__KERNEL_STACK_SZ, PG_WRITE);
+    info->kstack = get_free_pages(__KERNEL_STACK_SZ / PAGE_SIZE, 0);
 
     return info;
 }
@@ -106,7 +107,7 @@ void arch_unmap_all_user_vm(struct mm_info *info)
         struct vm_desc *next = desc->vm_next;
         klog(LOG_DEBUG, "Unmapping %x-%x\n", desc->start, desc->end);
         for (uintptr_t addr = desc->start; addr < desc->end; addr += PAGE_SIZE) {
-            uintptr_t phys = virt_to_phys((void*)addr);
+            uintptr_t phys = __walk_pages((void*)addr);
             unmap_page((void*)addr);
             free_frame((void*)phys);
         }
@@ -230,9 +231,10 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
             u32 ptindex = PG_TABLE_INDEX(new_desc->start + i * PAGE_SIZE);
 
             if (!(cr3[pdindex] & 1)) {
-                u32 *pt = map_phys(alloc_frame(), PAGE_BYTES, PG_WRITE);
+                uintptr_t phys = (uintptr_t)alloc_frame();
+                u32 *pt = map_phys((void*)phys, PAGE_BYTES, PG_WRITE);
                 memset(pt, 0, PAGE_SIZE);
-                cr3[pdindex] = virt_to_phys(pt) | PG_WRITE | PG_USER | 1;
+                cr3[pdindex] = phys | PG_WRITE | PG_USER | 1;
                 unmap_phys(pt, PAGE_BYTES);
             }
 

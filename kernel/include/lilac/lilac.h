@@ -23,7 +23,7 @@ void print_system_info(void);
 
 #define __no_stack_chk __attribute__((no_stack_protector))
 #ifndef __always_inline
-    #define __always_inline __attribute__((always_inline))
+    #define __always_inline inline __attribute__((always_inline))
 #endif
 
 #if defined __i386__ || defined __x86_64__

@@ -11,7 +11,7 @@
 startup_64:
 .code32
 	# Identity map the kernel.
-	leal pa(boot_pt0), %edi		# page table entry
+	leal __pa(boot_pt0), %edi		# page table entry
 	xorl %eax, %eax				# start addr = 0
 
 1:	movl %eax, %esi
@@ -19,13 +19,13 @@ startup_64:
 	movl %esi, (%edi)				# set page table entry, 32 bit is enough
 	addl $8, %edi					# 8 bytes per entry
 	addl $4096, %eax				# next page address
-	cmpl $pa(_kernel_end), %eax		# check if we are done
+	cmpl $__pa(_kernel_end), %eax		# check if we are done
 	jne  1b
 
 	# Set up the kernel page mapping (higher half).
 	xorl %eax, %eax
-	leal pa(boot_pt0_high), %edi
-	leal pa(_data_start), %ecx
+	leal __pa(boot_pt0_high), %edi
+	leal __pa(_data_start), %ecx
 
 2:	movl %eax, %esi
 	orl	 $1, %esi  		# set present bit, read-only (code)
@@ -35,7 +35,7 @@ startup_64:
 	cmpl %eax, %ecx
 	jne  2b
 
-	leal pa(_kernel_end), %ecx
+	leal __pa(_kernel_end), %ecx
 
 3:	movl %eax, %esi
 	orl	 $3, %esi 		# set present bit and r/w (data)
@@ -46,34 +46,34 @@ startup_64:
 	jne  3b
 
 	# Set up the page directory.
-	leal pa(boot_pd), %edi
-	leal pa(boot_pt0), %esi
+	leal __pa(boot_pd), %edi
+	leal __pa(boot_pt0), %esi
 	orl  $3, %esi
 	movl %esi, (%edi)
 
-	leal pa(boot_pd510_high), %edi
-	leal pa(boot_pt0_high), %esi
+	leal __pa(boot_pd510_high), %edi
+	leal __pa(boot_pt0_high), %esi
 	orl  $3, %esi
 	movl %esi, (%edi)
 
 	# Set up the page directory pointer table.
-	leal pa(boot_pdtp), %edi
-	leal pa(boot_pd), %esi
+	leal __pa(boot_pdtp), %edi
+	leal __pa(boot_pd), %esi
 	orl  $3, %esi
 	movl %esi, (%edi)
 
-	leal pa(boot_pdtp511_high), %edi
-	leal pa(boot_pd510_high), %esi
+	leal __pa(boot_pdtp511_high), %edi
+	leal __pa(boot_pd510_high), %esi
 	orl  $3, %esi
 	movl %esi, 8*510(%edi)
 
 	# Set up the page map level 4.
-	leal pa(boot_pml4), %edi
-	leal pa(boot_pdtp), %esi		 # Map low memory (ident)
+	leal __pa(boot_pml4), %edi
+	leal __pa(boot_pdtp), %esi		 # Map low memory (ident)
 	orl  $3, %esi
 	# Maintain this identity mapping until the phys_mem_mapping is set up
 	movl %esi, (%edi)
-	leal pa(boot_pdtp511_high), %esi # Map high memory
+	leal __pa(boot_pdtp511_high), %esi # Map high memory
 	orl  $3, %esi
 	movl %esi, 8*511(%edi)
 
@@ -81,7 +81,7 @@ startup_64:
 	movl %cr4, %eax
 	orl  $X86_CR4_PAE, %eax
 	movl %eax, %cr4
-	leal pa(boot_pml4), %edi
+	leal __pa(boot_pml4), %edi
 	movl %edi, %cr3
 
 	# Set EFER.LME and EFER.SCE
@@ -95,10 +95,10 @@ startup_64:
 	orl  $(X86_CR0_PG | X86_CR0_WP), %eax # pg enable, wp enable
 	movl %eax, %cr0
 
-	lea  pa(gdt_descr), %eax
+	lea  __pa(gdt_descr), %eax
 	lgdt (%eax)
 
-	ljmp  $__KERNEL_CS,$pa(.long_mode)
+	ljmp  $__KERNEL_CS,$__pa(.long_mode)
 .code64
 .long_mode:
 	mov $__KERNEL_DS, %ax
@@ -208,7 +208,7 @@ set_tss_esp0:
 gdt_descr:
 gdt:
 	.word 7 * 64 + 8 * 128 - 1
-	.quad pa(gdt_entries)
+	.quad __pa(gdt_entries)
 
 .align 16
 gdt_entries:

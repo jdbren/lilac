@@ -5,6 +5,7 @@
 #include <lilac/libc.h>
 #include <drivers/blkdev.h>
 #include <lilac/kmm.h>
+#include <lilac/pmem.h>
 
 #include "fat_internal.h"
 
@@ -21,7 +22,7 @@ ssize_t fat32_read(struct file *file, void *file_buf, size_t count)
 
     u32 num_clst = ROUND_UP(count + offset, disk->bytes_per_clst) /
         disk->bytes_per_clst;
-    volatile unsigned char *buffer = kvirtual_alloc(disk->bytes_per_clst * num_clst, PG_WRITE);
+    volatile unsigned char *buffer = get_free_pages(PAGE_UP_COUNT(disk->bytes_per_clst * num_clst), 0);
 
     start_clst = __fat_get_clst_num(file, disk);
     if (start_clst == 0)
@@ -34,7 +35,7 @@ ssize_t fat32_read(struct file *file, void *file_buf, size_t count)
     bytes_read = count;
 
 out:
-    kvirtual_free((void*)buffer, disk->bytes_per_clst * num_clst);
+    free_pages((void*)buffer, PAGE_UP_COUNT(disk->bytes_per_clst * num_clst));
     return bytes_read;
 }
 
@@ -47,7 +48,7 @@ ssize_t fat32_write(struct file *file, const void *file_buf, size_t count)
     u32 offset = file->f_pos % disk->bytes_per_clst;
     u32 num_clst = ROUND_UP(count + offset, disk->bytes_per_clst) /
         disk->bytes_per_clst;
-    unsigned char *buffer = kvirtual_alloc(disk->bytes_per_clst * num_clst, PG_WRITE);
+    unsigned char *buffer = get_free_pages(PAGE_UP_COUNT(disk->bytes_per_clst * num_clst), 0);
 
     start_clst = __fat_get_clst_num(file, disk);
     if (start_clst == 0)
@@ -71,7 +72,7 @@ ssize_t fat32_write(struct file *file, const void *file_buf, size_t count)
     }
 
 out:
-    kvirtual_free(buffer, disk->bytes_per_clst * num_clst);
+    free_pages((void*)buffer, PAGE_UP_COUNT(disk->bytes_per_clst * num_clst));
     return bytes_written;
 }
 

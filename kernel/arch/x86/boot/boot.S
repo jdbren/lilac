@@ -59,10 +59,10 @@ _start:
 	andl $7, %edx
 	jne .invlboot
 
-	leal pa(stack_top), %ecx
+	leal __pa(stack_top), %ecx
 
 	# Set up the boot segment registers.
-	lgdt pa(boot_gdt_descr)
+	lgdt __pa(boot_gdt_descr)
 	movl $0x10, %edx
 	movw %dx, %ds
 	movw %dx, %es
@@ -73,24 +73,24 @@ _start:
 	leal (%ecx), %esp
 
 	# Save the multiboot information.
- 	movl %ebx, pa(_mbd_addr)
- 	leal pa(_mbd_size), %ecx
+ 	movl %ebx, __pa(_mbd_addr)
+ 	leal __pa(_mbd_size), %ecx
  	movl (%ebx), %eax
  	movl %eax, (%ecx)
 
 	# Clear the bss.
 	cld
 	xorl %eax, %eax
-	leal pa(_bss_start), %edi
-	leal pa(_bss_end), %ecx
+	leal __pa(_bss_start), %edi
+	leal __pa(_bss_end), %ecx
 	subl %edi, %ecx
 	shrl $2, %ecx
 	rep ;stosl
 
 	# Copy the multiboot information.
-	leal pa(mbinfo), %edi
-	movl pa(_mbd_addr), %esi
-	movl pa(_mbd_size), %ecx
+	leal __pa(mbinfo), %edi
+	movl __pa(_mbd_addr), %esi
+	movl __pa(_mbd_size), %ecx
 	rep ;movsb
 
 	mov $0x1, %eax
@@ -117,9 +117,9 @@ _start:
 	test 	$bit_LM, %edx
 	jz 		.invlboot
 
-	jmp pa(startup_64)
+	jmp __pa(startup_64)
 #else
-	jmp pa(startup_32)
+	jmp __pa(startup_32)
 #endif
 
 .invlboot:

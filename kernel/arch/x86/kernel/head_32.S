@@ -9,7 +9,7 @@
 .globl startup_32
 startup_32:
 	# Identity map the kernel.
-	leal pa(boot_page_table0), %edi		# page table entry
+	leal __pa(boot_page_table0), %edi		# page table entry
 	xorl %eax, %eax				 		# start addr = 0
 
 1:	movl %eax, %esi
@@ -17,13 +17,13 @@ startup_32:
 	movl %esi, (%edi)				# set page table entry
 	addl $4, %edi					# next page table entry
 	addl $4096, %eax				# next page address
-	cmpl $pa(_kernel_end), %eax		# check if we are done
+	cmpl $__pa(_kernel_end), %eax		# check if we are done
 	jne  1b
 
 	# Set up the kernel page mapping (higher half).
 	xorl %eax, %eax
-	leal pa(boot_page_table768), %edi
-	leal pa(_data_start), %ecx
+	leal __pa(boot_page_table768), %edi
+	leal __pa(_data_start), %ecx
 
 2:	movl %eax, %esi
 	orl	 $1, %esi  		# set present bit, read-only (code)
@@ -33,7 +33,7 @@ startup_32:
 	cmpl %eax, %ecx
 	jne  2b
 
-	leal pa(_kernel_end), %ecx
+	leal __pa(_kernel_end), %ecx
 
 3:	movl %eax, %esi
 	orl	 $3, %esi 		# set present bit and r/w (data)
@@ -44,25 +44,30 @@ startup_32:
 	jne  3b
 
 	# Set up the page directory.
-	leal pa(page_directory), %edi
-	leal pa(boot_page_table0), %esi
+	leal __pa(page_directory), %edi
+	leal __pa(boot_page_table0), %esi
 	orl  $3, %esi
 	movl %esi, (%edi)
 
-	leal pa(boot_page_table768), %esi
+	leal __pa(boot_page_table768), %esi
 	orl  $3, %esi
 	addl $(4*768), %edi
 	movl %esi, (%edi)
 
 	# Recursive map
-	leal pa(page_directory), %eax
+	leal __pa(page_directory), %eax
 	movl %eax, %edi
 	addl $(4*1023), %edi
 	orl  $3, %eax
 	movl %eax, (%edi)
 
+	# Enable page size extension, machine check, global pages
+	mov %cr4, %eax
+	or $(X86_CR4_PSE|X86_CR4_MCE|X86_CR4_PGE), %eax
+	mov %eax, %cr4
+
 	# Enable paging.
-	leal pa(page_directory), %eax
+	leal __pa(page_directory), %eax
 	movl %eax, %cr3
 	movl %cr0, %eax
 	orl  $(X86_CR0_PG|X86_CR0_WP), %eax # pg enable, wp enable

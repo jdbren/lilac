@@ -22,7 +22,7 @@
    asm volatile("invlpg (%0)" : : "r"((uintptr_t)addr) : "memory");
 
 // Maps all of physical memory
-volatile u8 *const phys_mem_mapping = (void*)__PHYS_MAP_ADDR;
+u8 *const phys_mem_mapping = (void*)__PHYS_MAP_ADDR;
 
 uintptr_t arch_get_pgd(void)
 {
@@ -144,7 +144,7 @@ void init_phys_mem_mapping(size_t memory_sz_kb)
     pml4e_t *pml4 = (pml4e_t*)&boot_pml4;
 
     u32 pml4_ndx = get_pml4_index(phys_mem_mapping); // index 256
-    pml4[pml4_ndx] = (pml4e_t)(pa(((uintptr_t)phys_map_pdpt) & ~0xfff) |
+    pml4[pml4_ndx] = (pml4e_t)(__pa(((uintptr_t)phys_map_pdpt) & ~0xfff) |
         PG_WRITE | PG_STRONG_UC | 1);
 
     // Get mem size in GB
@@ -221,7 +221,7 @@ void * arch_map_frame_bitmap(size_t size)
 {
     extern size_t boot_pml4;
     void *virt = (void*)(((uintptr_t)(&_kernel_end) & ~0x1fffffUL) + 0x200000);
-    void *phys = (void*)get_phys_addr(virt);
+    void *phys = (void*)__pa(virt);
     // We still have identity mapped low memory
     pml4e_t *pml4 = (pml4e_t*)&boot_pml4;
     u32 pml4_ndx = get_pml4_index(virt); // should be mapped already in boot

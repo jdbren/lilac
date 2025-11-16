@@ -3,6 +3,7 @@
 #include <lilac/fs.h>
 #include <lilac/syscall.h>
 #include <lilac/kmm.h>
+#include <lilac/pmem.h>
 #include <lilac/uaccess.h>
 #include <lilac/timer.h>
 
@@ -45,7 +46,7 @@ struct pipe_buf * create_pipe(size_t buf_size)
         return ERR_PTR(-ENOMEM);
     }
 
-    p->buffer = kvirtual_alloc(buf_size, PG_WRITE);
+    p->buffer = get_free_pages(buf_size / PAGE_SIZE, 0);
     if (!p->buffer) {
         klog(LOG_ERROR, "Failed to allocate pipe buffer\n");
         kfree(p);
@@ -71,7 +72,7 @@ void destroy_pipe(struct pipe_buf *p)
         kfree(p->p_inode);
 
     if (p->buffer)
-        kvirtual_free(p->buffer, p->buf_size);
+        free_pages(p->buffer, p->buf_size / PAGE_SIZE);
 
     kfree(p);
 }
