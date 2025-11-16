@@ -4,7 +4,7 @@
 #include <lilac/process.h>
 #include <lilac/sched.h>
 #include <lilac/log.h>
-#include <lilac/kmalloc.h>
+#include <mm/kmalloc.h>
 
 /*
     Semaphores

@@ -1,5 +1,5 @@
 #include <lilac/fs.h>
-#include <lilac/kmalloc.h>
+#include <mm/kmalloc.h>
 #include <lilac/libc.h>
 #include <lilac/err.h>
 #include "tmpfs_internal.h"

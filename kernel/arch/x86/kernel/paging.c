@@ -1,6 +1,6 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include <lilac/pmem.h>
+#include <mm/page.h>
 #include <lilac/boot.h>
 #include <lilac/panic.h>
 #include <lilac/libc.h>

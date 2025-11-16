@@ -9,9 +9,9 @@
 #include <lib/list.h>
 #include <lilac/libc.h>
 #include <drivers/blkdev.h>
-#include <lilac/kmm.h>
-#include <lilac/kmalloc.h>
-#include <lilac/pmem.h>
+#include <mm/kmm.h>
+#include <mm/kmalloc.h>
+#include <mm/page.h>
 
 #include "fat_internal.h"
 

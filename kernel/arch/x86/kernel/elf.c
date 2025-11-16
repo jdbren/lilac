@@ -5,9 +5,9 @@
 #include <lilac/lilac.h>
 #include <lilac/libc.h>
 #include <lilac/process.h>
-#include <lilac/mm.h>
-#include <lilac/kmm.h>
-#include <lilac/pmem.h>
+#include <mm/mm.h>
+#include <mm/kmm.h>
+#include <mm/page.h>
 #include "paging.h"
 
 // #define DEBUG_ELF 1

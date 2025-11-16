@@ -1,7 +1,7 @@
 #include <lilac/libc.h>
 #include <lilac/err.h>
 #include <lilac/fs.h>
-#include <lilac/kmalloc.h>
+#include <mm/kmalloc.h>
 #include <lilac/uaccess.h>
 
 /**

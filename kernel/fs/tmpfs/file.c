@@ -1,7 +1,7 @@
 #include <lilac/fs.h>
 #include <lilac/log.h>
 #include <lilac/libc.h>
-#include <lilac/kmalloc.h>
+#include <mm/kmalloc.h>
 
 #include "tmpfs_internal.h"
 

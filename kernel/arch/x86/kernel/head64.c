@@ -3,7 +3,7 @@
 #include <lilac/keyboard.h>
 #include <lilac/timer.h>
 #include <drivers/framebuffer.h>
-#include <lilac/kmm.h>
+#include <mm/kmm.h>
 #include <lilac/percpu.h>
 #include <asm/cpu-flags.h>
 #include <asm/msr.h>

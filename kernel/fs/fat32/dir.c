@@ -7,8 +7,8 @@
 #include <lilac/timer.h>
 #include <lilac/err.h>
 #include <drivers/blkdev.h>
-#include <lilac/kmm.h>
-#include <lilac/kmalloc.h>
+#include <mm/kmm.h>
+#include <mm/kmalloc.h>
 
 #include "fat_internal.h"
 

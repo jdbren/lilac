@@ -1,8 +1,8 @@
 #include <lilac/lilac.h>
 #include <lilac/boot.h>
 #include <lilac/percpu.h>
-#include <lilac/kmm.h>
-#include <lilac/pmem.h>
+#include <mm/kmm.h>
+#include <mm/page.h>
 
 #include <asm/segments.h>
 #include <asm/msr.h>

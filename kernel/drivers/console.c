@@ -3,7 +3,7 @@
 #include <lilac/device.h>
 #include <lilac/fs.h>
 #include <drivers/framebuffer.h>
-#include <lilac/kmm.h>
+#include <mm/kmm.h>
 
 
 #if (!defined(DEBUG_KMM) && !defined(DEBUG_PAGING))

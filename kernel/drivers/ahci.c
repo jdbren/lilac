@@ -4,9 +4,9 @@
 #include <lilac/panic.h>
 #include <drivers/ahci.h>
 #include <drivers/blkdev.h>
-#include <lilac/kmm.h>
-#include <lilac/kmalloc.h>
-#include <lilac/pmem.h>
+#include <mm/kmm.h>
+#include <mm/kmalloc.h>
+#include <mm/page.h>
 #include <utility/ata.h>
 
 #pragma GCC diagnostic ignored "-Wpointer-to-int-cast"

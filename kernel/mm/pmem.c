@@ -1,5 +1,5 @@
-#include <lilac/pmem.h>
-#include <lilac/kmm.h>
+#include <mm/page.h>
+#include <mm/kmm.h>
 #include <utility/efi.h>
 #include <lilac/boot.h>
 #include <lilac/sync.h>

@@ -4,7 +4,7 @@
 #include <lilac/boot.h>
 #include <lilac/keyboard.h>
 #include <lilac/timer.h>
-#include <lilac/kmm.h>
+#include <mm/kmm.h>
 #include <drivers/framebuffer.h>
 
 #include "apic.h"

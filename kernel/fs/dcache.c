@@ -2,7 +2,7 @@
 #include <lilac/log.h>
 #include <lilac/err.h>
 #include <lilac/libc.h>
-#include <lilac/kmalloc.h>
+#include <mm/kmalloc.h>
 
 #include "utils.h"
 
