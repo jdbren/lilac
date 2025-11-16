@@ -10,8 +10,9 @@
 #include <mm/kmm.h>
 #include <mm/page.h>
 #include <mm/kmalloc.h>
-#include "paging.h"
 #include <asm/regs.h>
+
+#include "paging.h"
 
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 
@@ -28,13 +29,13 @@ static void print_page_structs(u32 *cr3)
     for (int i = 0; i < 1024; i++) {
         klog(LOG_DEBUG, "PD[%d]: %x\n", i, cr3[i]);
         if (cr3[i] & 1) {
-            u32 *pt = map_phys((void*)(cr3[i] & ~0xFFF), PAGE_BYTES, PG_WRITE);
+            u32 *pt = map_phys((void*)(cr3[i] & ~0xFFF), PAGE_SIZE, MEM_WRITE);
             for (int j = 0; j < 1024; j++) {
                 if (pt[j] & 1) {
                     klog(LOG_DEBUG, "PT[%d]: %x\n", j, pt[j]);
                 }
             }
-            unmap_phys(pt, PAGE_BYTES);
+            unmap_phys(pt, PAGE_SIZE);
         }
     }
 }
@@ -44,7 +45,7 @@ static void print_page_structs(u32 *cr3)
 static struct mm_info * make_32_bit_mmap()
 {
     uintptr_t phys = (uintptr_t)alloc_frame();
-    volatile uintptr_t *cr3 = map_phys((void*)phys, PAGE_BYTES, PG_WRITE);
+    volatile uintptr_t *cr3 = map_phys((void*)phys, PAGE_SIZE, MEM_WRITE);
     memset((void*)cr3, 0, PAGE_SIZE);
 
     // Do recursive mapping
@@ -64,7 +65,7 @@ static struct mm_info * make_32_bit_mmap()
     info->pgd = phys;
     info->kstack = kstack;
     cr3[1023] = phys | PG_WRITE | PG_SUPER | 1;
-    unmap_phys((void*)cr3, PAGE_BYTES);
+    unmap_phys((void*)cr3, PAGE_SIZE);
 
     return info;
 }
@@ -132,7 +133,7 @@ void * arch_user_stack(void)
 {
     static const int num_pgs = __USER_STACK_SZ / PAGE_SIZE;
     void *stack = (void*)(__USER_STACK - __USER_STACK_SZ);
-    map_pages(alloc_frames(num_pgs), stack, PG_USER | PG_WRITE, num_pgs);
+    map_pages(alloc_frames(num_pgs), stack, MEM_USER | MEM_WRITE, num_pgs);
     return stack;
 }
 
@@ -204,7 +205,7 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
     child->brk = parent->brk;
     child->start_stack = parent->start_stack;
     child->total_vm = parent->total_vm;
-    u32 *cr3 = map_phys((void*)child->pgd, PAGE_BYTES, PG_WRITE);
+    u32 *cr3 = map_phys((void*)child->pgd, PAGE_SIZE, MEM_WRITE);
 
     struct vm_desc *desc = parent->mmap;
     while (desc) {
@@ -222,7 +223,7 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
         void *phys = alloc_frames(num_pages);
 
         // Copy data
-        void *tmp_virt = map_phys(phys, num_pages * PAGE_SIZE, PG_WRITE);
+        void *tmp_virt = map_phys(phys, num_pages * PAGE_SIZE, MEM_WRITE);
         memcpy(tmp_virt, (void*)new_desc->start, num_pages * PAGE_SIZE);
         unmap_phys(tmp_virt, num_pages * PAGE_SIZE);
 
@@ -232,19 +233,19 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
 
             if (!(cr3[pdindex] & 1)) {
                 uintptr_t phys = (uintptr_t)alloc_frame();
-                u32 *pt = map_phys((void*)phys, PAGE_BYTES, PG_WRITE);
+                u32 *pt = map_phys((void*)phys, PAGE_SIZE, MEM_WRITE);
                 memset(pt, 0, PAGE_SIZE);
                 cr3[pdindex] = phys | PG_WRITE | PG_USER | 1;
-                unmap_phys(pt, PAGE_BYTES);
+                unmap_phys(pt, PAGE_SIZE);
             }
 
-            u32 *pt = map_phys((void*)(cr3[pdindex] & ~0xFFF), PAGE_BYTES, PG_WRITE);
+            u32 *pt = map_phys((void*)(cr3[pdindex] & ~0xFFF), PAGE_SIZE, MEM_WRITE);
             pt[ptindex] = ((uintptr_t)phys + i * PAGE_SIZE) | PG_WRITE | PG_USER | 1;
-            unmap_phys(pt, PAGE_BYTES);
+            unmap_phys(pt, PAGE_SIZE);
         }
     }
 
-    unmap_phys(cr3, PAGE_BYTES);
+    unmap_phys(cr3, PAGE_SIZE);
 
     return child;
 }

@@ -19,7 +19,7 @@ int umem_alloc(uintptr_t vaddr, int num_pages)
         kerror("OUT OF PHYSICAL MEMORY");
         return -ENOMEM;
     }
-    if (map_pages(frames, (void*)vaddr, PG_USER | PG_WRITE, num_pages) != 0) {
+    if (map_pages(frames, (void*)vaddr, MEM_USER | MEM_WRITE, num_pages) != 0) {
         kerror("Failed to map pages");
         free_frames(frames, num_pages);
         return -ENOMEM;

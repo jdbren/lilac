@@ -69,7 +69,7 @@ void *AcpiOsMapMemory(ACPI_PHYSICAL_ADDRESS PhysicalAddress, ACPI_SIZE Length)
 {
     int offset = PhysicalAddress & 0xFFF;
     //printf("AcpiOsMapMemory: %x, %d\n", PhysicalAddress, Length);
-    void *ptr = map_phys((void*)(uintptr_t)PhysicalAddress, offset + Length, PG_WRITE);
+    void *ptr = map_phys((void*)(uintptr_t)PhysicalAddress, offset + Length, MEM_WRITE);
     return (void*)((uintptr_t)ptr + offset);
 }
 
@@ -223,7 +223,7 @@ ACPI_STATUS AcpiOsRemoveInterruptHandler(UINT32 InterruptLevel,
 ACPI_STATUS AcpiOsReadMemory(ACPI_PHYSICAL_ADDRESS Address, UINT64 *Value,
     UINT32 Width)
 {
-    void *addr = map_phys((void*)(uintptr_t)(Address), PAGE_SIZE, PG_WRITE);
+    void *addr = map_phys((void*)(uintptr_t)(Address), PAGE_SIZE, MEM_WRITE);
     switch (Width)
     {
         case 8:
@@ -248,7 +248,7 @@ ACPI_STATUS AcpiOsReadMemory(ACPI_PHYSICAL_ADDRESS Address, UINT64 *Value,
 ACPI_STATUS AcpiOsWriteMemory(ACPI_PHYSICAL_ADDRESS Address, UINT64 Value,
     UINT32 Width)
 {
-    void *addr = map_phys((void*)(uintptr_t)(Address), PAGE_SIZE, PG_WRITE);
+    void *addr = map_phys((void*)(uintptr_t)(Address), PAGE_SIZE, MEM_WRITE);
     switch (Width)
     {
         case 8:

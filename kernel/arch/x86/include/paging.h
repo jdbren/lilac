@@ -5,8 +5,6 @@
 
 #include <lilac/types.h>
 
-#define PAGE_BYTES 4096
-
 #define is_aligned(POINTER, BYTE_COUNT) \
     (((uintptr_t)(POINTER)) % (BYTE_COUNT) == 0)
 
@@ -50,6 +48,8 @@ void *get_physaddr(void *virtualaddr);
 
 void x86_setup_mem(void);
 void init_phys_mem_mapping(size_t memory_sz_kb);
+
+int x86_to_page_flags(int flags);
 
 #ifdef __x86_64__
 pdpte_t * get_or_alloc_pdpt(pml4e_t *pml4, void *virt, u16 flags);

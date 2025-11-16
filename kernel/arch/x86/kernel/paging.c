@@ -41,14 +41,14 @@ void *get_physaddr(void *virtualaddr)
     return (void *)((pt[ptindex] & ~0xFFF) + ((u32)virtualaddr & 0xFFF));
 }
 
-int map_pages(void *physaddr, void *virtualaddr, u16 flags, int num_pages)
+int map_pages(void *physaddr, void *virtualaddr, int flags, int num_pages)
 {
-    flags |= 1;
-    for (int i = 0; i < num_pages; i++, physaddr = (u8*)physaddr + PAGE_BYTES,
-    virtualaddr = (u8*)virtualaddr + PAGE_BYTES) {
+    flags |= x86_to_page_flags(flags) | 1;
+    for (int i = 0; i < num_pages; i++, physaddr = (u8*)physaddr + PAGE_SIZE,
+    virtualaddr = (u8*)virtualaddr + PAGE_SIZE) {
         //printf("mapping %x to %x\n", physaddr, virtualaddr);
-        assert(is_aligned(physaddr, PAGE_BYTES));
-        assert(is_aligned(virtualaddr, PAGE_BYTES));
+        assert(is_aligned(physaddr, PAGE_SIZE));
+        assert(is_aligned(virtualaddr, PAGE_SIZE));
 
         u32 pdindex = (u32)virtualaddr >> 22;
         u32 ptindex = (u32)virtualaddr >> 12 & 0x03FF;
@@ -75,9 +75,9 @@ int map_pages(void *physaddr, void *virtualaddr, u16 flags, int num_pages)
 
 int unmap_pages(void *virtualaddr, int num_pages)
 {
-    for (int i = 0; i < num_pages; i++, virtualaddr = (u8*)virtualaddr + PAGE_BYTES) {
+    for (int i = 0; i < num_pages; i++, virtualaddr = (u8*)virtualaddr + PAGE_SIZE) {
         //printf("unmapping %x\n", virtualaddr);
-        assert(is_aligned(virtualaddr, PAGE_BYTES));
+        assert(is_aligned(virtualaddr, PAGE_SIZE));
 
         u32 pdindex = (u32)virtualaddr >> 22;
         u32 ptindex = (u32)virtualaddr >> 12 & 0x03FF;
@@ -113,13 +113,13 @@ static int pde(int index, u16 flags)
     flags |= default_flags;
 
     void *addr = alloc_frame();
-    assert(is_aligned(addr, PAGE_BYTES));
+    assert(is_aligned(addr, PAGE_SIZE));
 
     pde_t entry = (u32)addr | flags;
     pd[index] = entry;
 
     volatile u32 *pt = ((u32*)0xFFC00000) + (0x400 * index);
-    memset((void*)pt, 0, PAGE_BYTES);
+    memset((void*)pt, 0, PAGE_SIZE);
 
     // printf("pde %x: %x\n", index, entry);
 

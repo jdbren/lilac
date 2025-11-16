@@ -128,7 +128,7 @@ static uintptr_t get_pci_mmio_addr(u8 bus, u8 device, u8 function)
             addr += ((bus - pcie_mmio_maps[i].start_bus) << 20
                 | device << 15 | function << 12);
 
-            map_to_self((void*)addr, 1024, PG_WRITE | PG_STRONG_UC);
+            map_to_self((void*)addr, 1024, MEM_WRITE | MEM_UC);
             return addr;
         }
     }
