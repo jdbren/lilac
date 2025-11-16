@@ -6,6 +6,7 @@
 #include <drivers/blkdev.h>
 #include <lilac/kmm.h>
 #include <lilac/kmalloc.h>
+#include <lilac/pmem.h>
 #include <utility/ata.h>
 
 #pragma GCC diagnostic ignored "-Wpointer-to-int-cast"
@@ -59,7 +60,11 @@ static int num_ports;
 static int num_devices;
 
 static uintptr_t ahci_base;
+static uintptr_t ahci_phys_base;
 static struct ahci_device *devices;
+
+#define ahci_phys_addr(x) \
+	(ahci_phys_base + ((uintptr_t)(x) - ahci_base))
 
 static void ahci_install_device(struct ahci_device *dev);
 static int check_type(hba_port_t *port);
@@ -155,7 +160,14 @@ static void port_mem_init(int num_ports)
 		+ sizeof(struct HBA_CMD_TBL) * CMD_LIST_SZ * num_ports
 		+ sizeof(struct HBA_PRDT_ENTRY) * NUM_PRDT_ENTRIES * CMD_LIST_SZ * num_ports;
 
-	ahci_base = (uintptr_t)kvirtual_alloc(size, PG_WRITE | PG_STRONG_UC);
+	int npages = PAGE_ROUND_UP(size) / PAGE_SIZE;
+	struct page *pg = alloc_pages(npages, 0);
+	ahci_base = (uintptr_t)get_free_vaddr(npages);
+	ahci_phys_base = page_to_phys(pg);
+	map_pages((void*)ahci_phys_base, (void*)ahci_base, PG_WRITE | PG_STRONG_UC, npages);
+	pg->refcount++;
+	pg->virt = (void*)ahci_base;
+	memset((void*)ahci_base, 0, npages * PAGE_SIZE);
 }
 
 void ahci_port_rebase(hba_port_t *port, int portno)
@@ -163,12 +175,12 @@ void ahci_port_rebase(hba_port_t *port, int portno)
 	stop_cmd(port);	// Stop command engine
 
 	// Command list offset: 1K*portno
-	port->clb = virt_to_phys(get_clb(portno));
+	port->clb = ahci_phys_addr(get_clb(portno));
 	port->clbu = 0;
 	memset(get_clb(portno), 0, 1024);
 
 	// FIS entry size = 256 bytes per port
-	port->fb = virt_to_phys(get_fb(portno));
+	port->fb = ahci_phys_addr(get_fb(portno));
 	port->fbu = 0;
 	memset(get_fb(portno), 0, 256);
 
@@ -178,7 +190,7 @@ void ahci_port_rebase(hba_port_t *port, int portno)
 		cmdheader[i].prdtl = NUM_PRDT_ENTRIES;
 		// 256 bytes per command table, 64+16+48+16*8
 		// Command table offset: 40K + 8K*portno + cmdheader_index*256
-		cmdheader[i].ctba = virt_to_phys(get_cmdtbl(portno, i));
+		cmdheader[i].ctba = ahci_phys_addr(get_cmdtbl(portno, i));
 		cmdheader[i].ctbau = 0;
 		memset(get_cmdtbl(portno, i), 0, 256);
 	}

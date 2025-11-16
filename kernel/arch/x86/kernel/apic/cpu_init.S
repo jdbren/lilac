@@ -49,14 +49,14 @@ _L8060:
 	# set up a stack
 	movl	$0x1000, %eax
 	mul		%ebx
-	addl	$pa(ap_stack), %eax
+	addl	$__pa(ap_stack), %eax
 	mov		%eax, %esp
 	push	%ebx
 	# spinlock, wait for the BSP to finish
 1:  pause
-	cmpb		$0, pa(bspdone)
+	cmpb		$0, __pa(bspdone)
 	jz			1b
-	lock incb 	pa(aprunning)
+	lock incb 	__pa(aprunning)
 
 #ifdef __x86_64__
 init_cpu:
@@ -64,7 +64,7 @@ init_cpu:
 	mov  $(X86_CR4_PAE|X86_CR4_MCE|X86_CR4_OSFXSR), %eax
 	mov  %eax, %cr4
 
-	mov  $pa(boot_pml4), %eax
+	mov  $__pa(boot_pml4), %eax
 	mov  %eax, %cr3
 
 	# Set EFER.LME and EFER.SCE
@@ -97,10 +97,10 @@ init_cpu:
 #else // 32-bit mode
 init_cpu:
 	# prepare jump into C code (should never return)
-	mov  $X86_CR4_OSFXSR, %eax
+	mov  $(X86_CR4_OSFXSR|X86_CR4_PSE|X86_CR4_MCE|X86_CR4_PGE), %eax
 	mov  %eax, %cr4
 
-	mov  $pa(page_directory), %eax
+	mov  $__pa(page_directory), %eax
 	mov  %eax, %cr3
 
 	mov $(X86_CR0_PE|X86_CR0_PG|X86_CR0_WP|X86_CR0_AM \

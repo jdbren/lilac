@@ -2,6 +2,7 @@
 #include <lilac/boot.h>
 #include <lilac/percpu.h>
 #include <lilac/kmm.h>
+#include <lilac/pmem.h>
 
 #include <asm/segments.h>
 #include <asm/msr.h>
@@ -56,11 +57,11 @@ void ap_startup(void)
 extern char _percpu_start;
 extern char _percpu_end;
 
-static void *alloc_percpu_area(size_t size)
+static void *alloc_percpu_area(int pages)
 {
-    void *p = kvirtual_alloc(size, PG_WRITE);
+    void *p = get_zeroed_pages(pages, 0);
     if (!p)
-        panic("Failed to allocate per-CPU area of size %lu\n", size);
+        panic("Failed to allocate per-CPU area of %lu pages\n", pages);
     return p;
 }
 
@@ -74,7 +75,7 @@ void percpu_mem_init(void)
     size_t alloc_size = PAGE_ROUND_UP(mem_region_size);
 
     for (int cpu = 0; cpu < cpu_count; cpu++) {
-        void *area = alloc_percpu_area(alloc_size);
+        void *area = alloc_percpu_area(alloc_size / PAGE_SIZE);
 
         memcpy(area, &_percpu_start, mem_region_size);
 

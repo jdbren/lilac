@@ -11,6 +11,7 @@
 #include <drivers/blkdev.h>
 #include <lilac/kmm.h>
 #include <lilac/kmalloc.h>
+#include <lilac/pmem.h>
 
 #include "fat_internal.h"
 
@@ -79,7 +80,7 @@ static int fat_read_FAT(struct fat_disk *fat_disk, struct gendisk *hd)
     const u32 buf_sz = fat_disk->bpb.bytes_per_sector * FAT_sz;
 
     klog(LOG_INFO, "Allocating %u bytes for FAT\n", buf_sz);
-    fat_disk->FAT.FAT_buf = kvirtual_alloc(buf_sz, PG_WRITE);
+    fat_disk->FAT.FAT_buf = get_zeroed_pages(PAGE_UP_COUNT(buf_sz), 0);
 
     int ret = 0;
     for (u32 i = 0; i < FAT_sz; i += 128) {

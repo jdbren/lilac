@@ -39,7 +39,7 @@ void kernel_early(void)
 
 uintptr_t get_rsdp(void)
 {
-    return virt_to_phys((void*)boot_info.mbd.new_acpi->rsdp);
+    return __walk_pages((void*)boot_info.mbd.new_acpi->rsdp);
 }
 
 

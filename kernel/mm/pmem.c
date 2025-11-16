@@ -1,5 +1,5 @@
 #include <lilac/pmem.h>
-
+#include <lilac/kmm.h>
 #include <utility/efi.h>
 #include <lilac/boot.h>
 #include <lilac/sync.h>
@@ -8,9 +8,7 @@
 #define get_index(frame) ((uintptr_t)frame / (BITS_PER_LONG * PAGE_SIZE))
 #define get_offset(frame) (((uintptr_t)frame / PAGE_SIZE) % BITS_PER_LONG)
 
-typedef struct __packed page {
-    u8 pg[PAGE_SIZE];
-} page_t;
+typedef u8 page_t[PAGE_SIZE];
 
 static uintptr_t FIRST_PAGE = 0x0;
 static u32 BITMAP_SIZE;
@@ -22,7 +20,7 @@ static void *__do_frame_alloc(int, int);
 static void __free_frame(page_t *frame);
 static void __mark_frames(size_t index, size_t offset, size_t pg_cnt);
 
-struct frame *phys_frames;
+struct page *phys_frames;
 
 static void efi_init_bitmap(void)
 {
@@ -30,11 +28,11 @@ static void efi_init_bitmap(void)
 
     // Mark some reserved frames
     __mark_frames(get_index(0x0), get_offset(0x0), 0x100000 / PAGE_SIZE);
-    __mark_frames(get_index(get_phys_addr(&_kernel_start)),
-        get_offset(get_phys_addr(&_kernel_start)),
-        (get_phys_addr(&_kernel_end) - get_phys_addr(&_kernel_start)) / PAGE_SIZE + 1);
-    __mark_frames(get_index(get_phys_addr(pg_frame_bitmap)),
-        get_offset(get_phys_addr(pg_frame_bitmap)),
+    __mark_frames(get_index(__phys_addr(&_kernel_start)),
+        get_offset(__phys_addr(&_kernel_start)),
+        (__phys_addr(&_kernel_end) - __phys_addr(&_kernel_start)) / PAGE_SIZE + 1);
+    __mark_frames(get_index(__phys_addr(pg_frame_bitmap)),
+        get_offset(__phys_addr(pg_frame_bitmap)),
         BITMAP_SIZE / PAGE_SIZE + 1);
 
     efi_memory_desc_t *entry = (efi_memory_desc_t*)mmap->efi_mmap;
@@ -68,7 +66,51 @@ void pmem_init(void)
     pg_frame_bitmap = arch_map_frame_bitmap(BITMAP_SIZE);
     memset((void*)pg_frame_bitmap, 0, BITMAP_SIZE);
     efi_init_bitmap();
+
+    void *phys = alloc_frames(PAGE_UP_COUNT(total_pages * sizeof(struct page)));
+    phys_frames = (struct page *)(phys_mem_mapping + (uintptr_t)phys);
 }
+
+
+struct page * alloc_pages(u32 pgcnt, u32 flags)
+{
+    uintptr_t phys = (uintptr_t)alloc_frames(pgcnt);
+    if (!phys)
+        return NULL;
+
+    struct page *pg = phys_to_page(phys);
+    pg->refcount = 1;
+    pg->flags = flags;
+    return pg;
+}
+
+void __free_pages(struct page *frame, u32 pgcnt)
+{
+    uintptr_t addr = page_to_phys(frame);
+    free_frames((void*)addr, pgcnt);
+}
+
+void free_pages(void *addr, u32 pgcnt)
+{
+    struct page *pg = virt_to_page(addr);
+    __free_pages(pg, pgcnt);
+}
+
+void * get_free_pages(u32 pgcnt, u32 flags)
+{
+    struct page *pg = alloc_pages(pgcnt, flags);
+    return pg ? get_page_addr(pg) : NULL;
+}
+
+void * get_zeroed_pages(u32 pgcnt, u32 flags)
+{
+    void *addr = get_free_pages(pgcnt, flags);
+    if (addr)
+        memset(addr, 0, pgcnt * PAGE_SIZE);
+    return addr;
+}
+
+// --------
 
 void* alloc_frames(u32 num_pages)
 {
@@ -177,6 +219,10 @@ static void __free_frame(page_t *frame)
 
     pg_frame_bitmap[index] &= ~(1UL << offset);
 }
+
+//
+// Debugging functions
+//
 
 void print_bitmap(void)
 {

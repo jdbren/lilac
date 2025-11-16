@@ -7,6 +7,7 @@
 #include <lilac/panic.h>
 #include <lilac/kmalloc.h>
 #include <lilac/kmm.h>
+#include <lilac/pmem.h>
 
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 #pragma GCC diagnostic ignored "-Wanalyzer-use-after-free"
@@ -196,7 +197,7 @@ void kfree(void *ptr)
 
     // check if large allocation
     if (header->is_large) {
-        kvirtual_free(header, header->num_pages * PAGE_SIZE);
+        free_pages(header, header->num_pages);
         return;
     }
 
@@ -243,7 +244,7 @@ static void* malloc_small(size_t size)
     // check if there is any memory available
     if (buckets[bucket_idx].free_count == 0) {
         // allocate new superblock
-        void *block = kvirtual_alloc(SUPERBLOCKSIZE, PG_WRITE);
+        void *block = get_free_pages(SUPERBLOCKSIZE / PAGE_SIZE, 0);
         assert(block != NULL);
 
         header = (struct sb_header*)block;
@@ -291,7 +292,7 @@ static void* malloc_large(size_t size)
     int pages = (size + sizeof(struct sb_header))/PAGE_SIZE + 1;
     size = pages * PAGE_SIZE;
 
-    void *block = kvirtual_alloc(size, PG_WRITE);
+    void *block = get_free_pages(pages, 0);
     assert(block != NULL);
 
     // set up superblock header
@@ -308,6 +309,9 @@ static void* malloc_large(size_t size)
 static void init_super(struct sb_header *header, size_t size, int bucket_idx)
 {
     // make superblock header
+    header->next = NULL;
+    header->prev = NULL;
+    header->is_large = false;
     header->canary = 0xDEAD;
     if (size > sizeof(struct sb_header))
         header->free = (alloc_t*)((u8*)header + size);
@@ -376,7 +380,7 @@ static struct sb_header* manage_empty_sb(struct sb_header *header, int bucket_id
         assert(header->free_count == (SUPERBLOCKSIZE - sizeof(struct sb_header)) / header->alloc_size);
         buckets[bucket_idx].free_count -= header->free_count;
         // free superblock
-        kvirtual_free(header, SUPERBLOCKPAGES * PAGE_SIZE);
+        free_pages(header, SUPERBLOCKPAGES);
 
         header = NULL;
     }

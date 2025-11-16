@@ -81,6 +81,11 @@ static void free_vaddr(u8 *page, u32 num_pages)
         __free_page(page);
 }
 
+void * get_free_vaddr(int num_pages)
+{
+    return find_vaddr(num_pages);
+}
+
 void* kvirtual_alloc(int size, int flags)
 {
     if (size == 0)
@@ -159,7 +164,7 @@ void unmap_virt(void *virt, int size)
     unmap_pages(virt, num_pages);
 }
 
-uintptr_t virt_to_phys(void *vaddr)
+uintptr_t __walk_pages(void *vaddr)
 {
     return (uintptr_t)get_physaddr(vaddr);
 }
