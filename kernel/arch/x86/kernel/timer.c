@@ -7,7 +7,7 @@
 #include <lilac/timer.h>
 #include <lilac/sched.h>
 #include <acpi/hpet.h>
-#include <lilac/kmm.h>
+#include <mm/kmm.h>
 #include <lilac/port.h>
 #include <lilac/panic.h>
 #include <lilac/log.h>

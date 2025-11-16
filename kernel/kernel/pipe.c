@@ -2,8 +2,8 @@
 #include <lilac/lilac.h>
 #include <lilac/fs.h>
 #include <lilac/syscall.h>
-#include <lilac/kmm.h>
-#include <lilac/pmem.h>
+#include <mm/kmm.h>
+#include <mm/page.h>
 #include <lilac/uaccess.h>
 #include <lilac/timer.h>
 

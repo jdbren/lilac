@@ -6,10 +6,10 @@
 #include <lilac/types.h>
 #include <lilac/panic.h>
 #include <lilac/config.h>
-#include <lilac/mm.h>
-#include <lilac/kmm.h>
-#include <lilac/pmem.h>
-#include <lilac/kmalloc.h>
+#include <mm/mm.h>
+#include <mm/kmm.h>
+#include <mm/page.h>
+#include <mm/kmalloc.h>
 #include "paging.h"
 #include <asm/regs.h>
 

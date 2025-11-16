@@ -1,9 +1,9 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include <lilac/kmm.h>
+#include <mm/kmm.h>
 #include <lilac/lilac.h>
 #include <lilac/boot.h>
-#include <lilac/pmem.h>
+#include <mm/page.h>
 #include <utility/multiboot2.h>
 #include <utility/efi.h>
 

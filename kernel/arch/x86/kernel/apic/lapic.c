@@ -5,7 +5,7 @@
 #include <lilac/lilac.h>
 #include <lilac/boot.h>
 #include <lilac/timer.h>
-#include <lilac/kmm.h>
+#include <mm/kmm.h>
 #include <asm/msr.h>
 #include "timer.h"
 #include "cpu-features.h"

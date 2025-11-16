@@ -4,8 +4,8 @@
 #include <lilac/lilac.h>
 #include <lilac/libc.h>
 #include <drivers/blkdev.h>
-#include <lilac/kmm.h>
-#include <lilac/pmem.h>
+#include <mm/kmm.h>
+#include <mm/page.h>
 
 #include "fat_internal.h"
 

@@ -3,7 +3,7 @@
 #include <lilac/err.h>
 #include <drivers/blkdev.h>
 #include <lilac/fs.h>
-#include <lilac/kmalloc.h>
+#include <mm/kmalloc.h>
 #include <fs/mbr.h>
 #include <fs/gpt.h>
 

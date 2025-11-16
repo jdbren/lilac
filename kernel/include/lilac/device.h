@@ -4,7 +4,7 @@
 #include <lilac/types.h>
 #include <lilac/config.h>
 #include <lilac/sync.h>
-#include <lilac/kmalloc.h>
+#include <mm/kmalloc.h>
 
 struct device;
 struct device_driver;

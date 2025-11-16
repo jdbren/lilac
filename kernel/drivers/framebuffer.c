@@ -2,7 +2,7 @@
 #include <lilac/lilac.h>
 #include <lilac/boot.h>
 #include <lilac/font.h>
-#include <lilac/kmm.h>
+#include <mm/kmm.h>
 #include <utility/termius.h>
 
 #define WINDOW_BORDER 16

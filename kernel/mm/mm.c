@@ -1,4 +1,4 @@
-#include <lilac/mm.h>
+#include <mm/mm.h>
 
 #include <lilac/types.h>
 #include <lilac/err.h>
@@ -6,7 +6,7 @@
 #include <lilac/process.h>
 #include <lilac/sched.h>
 #include <lilac/syscall.h>
-#include <lilac/kmm.h>
+#include <mm/kmm.h>
 #include <lilac/fs.h>
 #include <lilac/libc.h>
 

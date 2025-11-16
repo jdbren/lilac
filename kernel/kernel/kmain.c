@@ -2,7 +2,7 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/lilac.h>
 #include <lilac/boot.h>
-#include <lilac/kmm.h>
+#include <mm/kmm.h>
 #include <lilac/percpu.h>
 #include <lilac/fs.h>
 #include <lilac/sched.h>

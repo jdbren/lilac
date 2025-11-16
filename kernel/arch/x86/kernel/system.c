@@ -1,7 +1,7 @@
 #include <lilac/lilac.h>
 #include <lilac/timer.h>
 #include <drivers/framebuffer.h>
-#include <lilac/kmm.h>
+#include <mm/kmm.h>
 #include <lilac/boot.h>
 #include <lilac/percpu.h>
 

@@ -1,6 +1,6 @@
 #include <acpi/hpet.h>
-#include <lilac/kmm.h>
-#include <lilac/kmalloc.h>
+#include <mm/kmm.h>
+#include <mm/kmalloc.h>
 #include <lilac/log.h>
 #include <lilac/panic.h>
 

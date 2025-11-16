@@ -1,6 +1,6 @@
-#include <lilac/mm.h>
-#include <lilac/kmm.h>
-#include <lilac/pmem.h>
+#include <mm/mm.h>
+#include <mm/kmm.h>
+#include <mm/page.h>
 
 void mm_init(void)
 {

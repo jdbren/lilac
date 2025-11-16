@@ -5,9 +5,9 @@
 #include <lilac/types.h>
 #include <lilac/libc.h>
 #include <lilac/panic.h>
-#include <lilac/kmalloc.h>
-#include <lilac/kmm.h>
-#include <lilac/pmem.h>
+#include <mm/kmalloc.h>
+#include <mm/kmm.h>
+#include <mm/page.h>
 
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 #pragma GCC diagnostic ignored "-Wanalyzer-use-after-free"

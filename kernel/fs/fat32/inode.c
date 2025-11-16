@@ -5,7 +5,7 @@
 #include <lilac/libc.h>
 #include <lilac/err.h>
 #include <drivers/blkdev.h>
-#include <lilac/kmalloc.h>
+#include <mm/kmalloc.h>
 
 #include "fat_internal.h"
 

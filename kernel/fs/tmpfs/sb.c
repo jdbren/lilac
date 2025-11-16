@@ -3,7 +3,7 @@
 #include <lilac/err.h>
 #include "tmpfs_internal.h"
 
-#include <lilac/kmalloc.h>
+#include <mm/kmalloc.h>
 
 struct inode* tmpfs_alloc_inode(struct super_block *sb)
 {
