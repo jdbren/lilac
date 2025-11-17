@@ -48,6 +48,7 @@ KERNEL_OBJS=\
 $(KERNEL_ARCH_OBJS) \
 kernel/kmain.o \
 kernel/device.o \
+kernel/elf.o \
 kernel/ioctl.o \
 kernel/log.o \
 kernel/pipe.o \
@@ -62,7 +63,7 @@ mm/kmalloc.o \
 mm/mm.o \
 mm/pmem.o \
 mm/init.o \
-mm/vmalloc.o \
+mm/valloc.o \
 fs/fat32/fat32.o \
 fs/fat32/dir.o \
 fs/fat32/file.o \

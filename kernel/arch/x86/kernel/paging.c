@@ -13,17 +13,6 @@ typedef u32 pde_t;
 static u32* const pd = (u32*)0xFFFFF000;
 
 static int pde(int index, u16 flags);
-static inline void __native_flush_tlb_single(uintptr_t addr)
-{
-   asm volatile("invlpg (%0)" : : "r"(addr) : "memory");
-}
-
-uintptr_t arch_get_pgd(void)
-{
-    uintptr_t cr3;
-    asm volatile("mov %%cr3, %0" : "=r"(cr3));
-    return cr3;
-}
 
 void *get_physaddr(void *virtualaddr)
 {
@@ -67,7 +56,7 @@ int map_pages(void *physaddr, void *virtualaddr, int flags, int num_pages)
 
         pt[ptindex] = ((u32)physaddr) | (flags & 0xFFF);
 
-        __native_flush_tlb_single((u32)virtualaddr);
+        __native_flush_tlb_single(virtualaddr);
     }
 
     return 0;
@@ -91,7 +80,7 @@ int unmap_pages(void *virtualaddr, int num_pages)
 
         pt[ptindex] = 0; // set not present
 
-        __native_flush_tlb_single((u32)virtualaddr);
+        __native_flush_tlb_single(virtualaddr);
     }
 
     return 0;

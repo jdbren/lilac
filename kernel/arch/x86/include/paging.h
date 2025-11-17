@@ -57,4 +57,16 @@ pdpte_t * get_or_alloc_pdpt(pml4e_t *pml4, void *virt, u16 flags);
 pde_t * get_or_alloc_pd(pdpte_t *pdpt, void *virt, u16 flags);
 pte_t * get_or_alloc_pt(pde_t *pd, void *virt, u16 flags);
 
+#define __native_flush_tlb_single(addr) \
+   asm volatile("invlpg (%0)" : : "r"((uintptr_t)addr) : "memory")
+
+#define __native_flush_tlb() do { \
+    unsigned long tmp; \
+    asm volatile( \
+        "mov %%cr3, %0\n\t" \
+        "mov %0, %%cr3\n\t" \
+        : "=&r"(tmp) :: "memory", "cc"); \
+} while (0)
+
+
 #endif

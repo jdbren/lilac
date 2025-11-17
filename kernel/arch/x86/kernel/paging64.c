@@ -19,18 +19,8 @@
 
 #define phys_to_mapping(x) (phys_mem_mapping + (x))
 
-#define __native_flush_tlb_single(addr) \
-   asm volatile("invlpg (%0)" : : "r"((uintptr_t)addr) : "memory");
-
 // Maps all of physical memory
 u8 *const phys_mem_mapping = (void*)__PHYS_MAP_ADDR;
-
-uintptr_t arch_get_pgd(void)
-{
-    uintptr_t cr3;
-    asm volatile("mov %%cr3, %0" : "=r"(cr3));
-    return cr3;
-}
 
 pdpte_t * get_or_alloc_pdpt(pml4e_t *pml4, void *virt, u16 flags)
 {
@@ -188,7 +178,7 @@ int kernel_pt_init(uintptr_t start, uintptr_t end)
 
     // Unmap the identity mapping
     memset(pml4, 0, 2048);
-    __native_flush_tlb_single(0);
+    __native_flush_tlb();
     return 0;
 }
 
