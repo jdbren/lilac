@@ -40,7 +40,6 @@ void syscall_init(void)
         X86_FLAGS_IF|X86_FLAGS_DF|X86_FLAGS_OF|
         X86_FLAGS_IOPL|X86_FLAGS_NT|X86_FLAGS_RF|
         X86_FLAGS_AC|X86_FLAGS_ID, 0);
-    percpu_init_cpu();
 }
 
 __noreturn __no_stack_chk

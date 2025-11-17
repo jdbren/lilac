@@ -48,6 +48,7 @@ void ap_startup(void)
     load_idt();
     ap_lapic_enable();
     syscall_init();
+    percpu_init_cpu();
     // timer_tick_init();
 
     while (1)

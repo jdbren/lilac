@@ -25,3 +25,10 @@ int x86_to_page_flags(int flags)
         result |= (PG_CACHE_DISABLE | PG_WRITE_THROUGH);
     return result;
 }
+
+uintptr_t arch_get_pgd(void)
+{
+    uintptr_t cr3;
+    asm volatile("mov %%cr3, %0" : "=r"(cr3));
+    return cr3;
+}
