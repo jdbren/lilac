@@ -182,7 +182,7 @@ int kernel_pt_init(uintptr_t start, uintptr_t end)
     return 0;
 }
 
-void *get_physaddr(void *virt)
+void *__get_physaddr(void *virt)
 {
     pml4e_t *pml4 = (pml4e_t*)ENTRY_ADDR(arch_get_pgd());
     u32 pml4_ndx = get_pml4_index(virt);

@@ -42,9 +42,18 @@ typedef u32 pte_t;
 #define PG_HUGE_PAGE       0x80
 #define PG_GLOBAL          0x100
 
+#define X86_FAULT_PRESENT    0x1
+#define X86_FAULT_WRITE      0x2
+#define X86_FAULT_USER       0x4
+#define X86_FAULT_RSVD       0x8
+#define X86_FAULT_INSTR     0x10
+#define X86_FAULT_PK        0x20
+#define X86_FAULT_SS        0x40
+#define X86_FAULT_SGX       (1 << 15)
+
 #define PG_STRONG_UC (PG_CACHE_DISABLE | PG_WRITE_THROUGH)
 
-void *get_physaddr(void *virtualaddr);
+void *__get_physaddr(void *virtualaddr);
 
 void x86_setup_mem(void);
 void init_phys_mem_mapping(size_t memory_sz_kb);

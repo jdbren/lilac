@@ -14,7 +14,7 @@ static u32* const pd = (u32*)0xFFFFF000;
 
 static int pde(int index, u16 flags);
 
-void *get_physaddr(void *virtualaddr)
+void *__get_physaddr(void *virtualaddr)
 {
     u32 pdindex = (u32)virtualaddr >> 22;
     u32 ptindex = (u32)virtualaddr >> 12 & 0x03FF;

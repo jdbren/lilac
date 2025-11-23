@@ -4,23 +4,13 @@
 #include <lilac/types.h>
 #include <lilac/sync.h>
 
-#define PROT_NONE   0x00
-#define PROT_READ	0x04
-#define PROT_WRITE	0x02
-#define PROT_EXEC	0x01
+#include <user/mman-bits.h>
 
-#define MAP_SHARED	    0x01
-#define MAP_PRIVATE	    0x02
-#define MAP_ANONYMOUS	0x04
-#define MAP_FIXED	    0x08
-
-#define VM_TEXT     1
-#define VM_RODATA   2
-#define VM_DATA     3
-#define VM_BSS      4
-#define VM_STACK    5
-
-struct vm_desc;
+#define VM_NONE         0x0000
+#define VM_READ         0x0001
+#define VM_WRITE        0x0002
+#define VM_EXEC         0x0004
+#define VM_SHARED       0x0008
 
 struct vm_desc {
     uintptr_t start;
@@ -34,7 +24,7 @@ struct vm_desc {
     u32 vm_prot;
     u32 vm_flags;
 
-    u32 vm_pgoff;
+    unsigned long vm_pgoff;
     struct file *vm_file;
 };
 
@@ -43,4 +33,20 @@ void vma_list_insert(struct vm_desc *vma, struct vm_desc **list);
 
 void * sbrk(intptr_t increment);
 
-#endif
+
+enum fault_flags {
+    FAULT_WRITE     = 0x1,
+    FAULT_INSTR     = 0x2,
+    FAULT_USER      = 0x4,
+    FAULT_PTE_EXIST = 0x8,
+};
+
+enum fault_return {
+    FAULT_SUCCESS,
+    FAULT_PROT_VIOLATION,
+    FAULT_FILE_ERROR,
+};
+
+int mm_fault(struct vm_desc *vma, uintptr_t addr, unsigned long flags);
+
+#endif // _LILAC_MM_H_
