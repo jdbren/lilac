@@ -58,7 +58,7 @@ void ioapic_init(struct ioapic *ioapic, struct int_override *over, u8 num_over)
 {
     pic_disable();
     ioapic_base = (uintptr_t)map_phys((void*)(uintptr_t)ioapic->address, PAGE_SIZE,
-        MEM_UC | MEM_WRITE);
+        MEM_PF_UC | MEM_PF_WRITE);
     ioapic_gsi_base = ioapic->gsi_base;
     num_overrides = num_over;
     overrides = kcalloc(num_over, sizeof(struct int_override));

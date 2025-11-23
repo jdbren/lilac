@@ -62,7 +62,7 @@ static inline void write_reg(const u32 offset, const u64 val)
 void hpet_init(struct hpet_info *info)
 {
     hpet_base = (uintptr_t)map_phys((void*)(uintptr_t)info->address, PAGE_SIZE,
-        MEM_WRITE | MEM_UC);
+        MEM_PF_WRITE | MEM_PF_UC);
 
     hpet_number = info->hpet_number;
 

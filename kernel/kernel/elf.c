@@ -75,7 +75,7 @@ static void* elf32_load(void *elf, struct mm_info *mm)
         if (phdr[i].align > PAGE_SIZE)
             kerror("Alignment greater than page size\n");
         int num_pages = PAGE_ROUND_UP(phdr[i].p_memsz) / PAGE_SIZE;
-        int flags = MEM_USER;
+        int flags = MEM_PF_USER;
         struct vm_desc *desc = kzmalloc(sizeof *desc);
         if (!desc) {
             klog(LOG_ERROR, "Out of memory loading ELF\n");
@@ -85,7 +85,7 @@ static void* elf32_load(void *elf, struct mm_info *mm)
         void *phys = alloc_frames(num_pages);
 	    void *vaddr = (void*)(uintptr_t)(phdr[i].p_vaddr & 0xFFFFF000);
 
-        map_pages(phys, vaddr, MEM_USER | MEM_WRITE, num_pages);
+        map_pages(phys, vaddr, MEM_PF_USER | MEM_PF_WRITE, num_pages);
 
 	    memcpy((void*)(uintptr_t)phdr[i].p_vaddr, (u8*)elf + phdr[i].p_offset, phdr[i].p_filesz);
         if (phdr[i].p_filesz < phdr[i].p_memsz)
@@ -93,7 +93,7 @@ static void* elf32_load(void *elf, struct mm_info *mm)
                     phdr[i].p_memsz - phdr[i].p_filesz);
 
         if (phdr[i].flags & WRIT) {
-            flags |= MEM_WRITE;
+            flags |= MEM_PF_WRITE;
             desc->vm_prot |= PROT_WRITE;
         }
         if (phdr[i].flags & EXEC) {
@@ -152,7 +152,7 @@ static void * elf64_load(void *elf, struct mm_info *mm)
         if (phdr[i].align > PAGE_SIZE)
             kerror("Alignment greater than page size\n");
         int num_pages = PAGE_ROUND_UP(phdr[i].p_memsz) / PAGE_SIZE;
-        int flags = MEM_USER;
+        int flags = MEM_PF_USER;
         struct vm_desc *desc = kzmalloc(sizeof *desc);
         if (!desc) {
             klog(LOG_ERROR, "Out of memory loading ELF\n");
@@ -162,7 +162,7 @@ static void * elf64_load(void *elf, struct mm_info *mm)
         void *phys = alloc_frames(num_pages);
         void *vaddr = (void*)(phdr[i].p_vaddr & 0xFFFFF000);
 
-        map_pages(phys, vaddr, MEM_USER | MEM_WRITE, num_pages);
+        map_pages(phys, vaddr, MEM_PF_USER | MEM_PF_WRITE, num_pages);
 
         memcpy((void*)phdr[i].p_vaddr, (u8*)elf + phdr[i].p_offset, phdr[i].p_filesz);
         if (phdr[i].p_filesz < phdr[i].p_memsz)
@@ -173,7 +173,7 @@ static void * elf64_load(void *elf, struct mm_info *mm)
             desc->vm_prot |= PROT_READ;
         }
         if (phdr[i].flags & WRIT) {
-            flags |= MEM_WRITE;
+            flags |= MEM_PF_WRITE;
             desc->vm_prot |= PROT_WRITE;
         }
         if (phdr[i].flags & EXEC) {

@@ -33,6 +33,10 @@ unsigned long ___phys_addr(unsigned long x)
 #define virt_to_phys(kaddr) __phys_addr(kaddr)
 
 
+#define ALLOC_NORMAL    0x0
+#define ALLOC_DMA       0x1
+
+
 struct page {
     unsigned int flags;
     atomic_uint refcount;

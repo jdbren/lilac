@@ -84,9 +84,9 @@ startup_64:
 	leal __pa(boot_pml4), %edi
 	movl %edi, %cr3
 
-	# Set EFER.LME and EFER.SCE
+	# Set long mode, syscall, and no-exec
 	movl $IA32_EFER, %ecx
-	movl $(EFER_LME | EFER_SCE), %eax
+	movl $(EFER_LME | EFER_SCE | EFER_NXE), %eax
 	xorl %edx, %edx
 	wrmsr
 

@@ -67,9 +67,9 @@ init_cpu:
 	mov  $__pa(boot_pml4), %eax
 	mov  %eax, %cr3
 
-	# Set EFER.LME and EFER.SCE
+	# Set EFER
 	movl $IA32_EFER, %ecx
-	movl $(EFER_LME | EFER_SCE), %eax
+	movl $(EFER_LME | EFER_SCE | EFER_NXE), %eax
 	xorl %edx, %edx
 	wrmsr
 
