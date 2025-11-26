@@ -64,6 +64,7 @@ mm/mm.o \
 mm/pmem.o \
 mm/init.o \
 mm/valloc.o \
+mm/fault.o \
 fs/fat32/fat32.o \
 fs/fat32/dir.o \
 fs/fat32/file.o \

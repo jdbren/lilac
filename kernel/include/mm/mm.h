@@ -18,13 +18,14 @@ struct vm_desc {
     struct mm_info *mm;
 
     /* list sorted by address */
-    struct vm_desc *vm_next;
+    struct vm_desc *vm_next, *vm_prev;
     // rb_node_t vm_rb;
 
-    u32 vm_prot;
+    // u32 vm_prot;
     u32 vm_flags;
 
-    unsigned long vm_pgoff;
+    unsigned int vm_pgoff; // offset in pages from start of backing file
+    unsigned int vm_fsize; // size in file
     struct file *vm_file;
 };
 

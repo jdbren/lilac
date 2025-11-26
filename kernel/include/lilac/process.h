@@ -111,7 +111,7 @@ struct mm_info {
     // struct list_head mmlist;
     uintptr_t start_code, end_code;
     uintptr_t start_data, end_data;
-    uintptr_t brk;
+    uintptr_t start_brk, brk;
     uintptr_t start_stack;
     uintptr_t arg_start, arg_end;
     uintptr_t env_start, env_end;

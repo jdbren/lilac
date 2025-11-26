@@ -24,6 +24,7 @@ int umem_alloc(uintptr_t vaddr, int num_pages)
         free_frames(frames, num_pages);
         return -ENOMEM;
     }
+    memset((void*)vaddr, 0, num_pages * PAGE_SIZE);
     return 0;
 }
 
@@ -101,27 +102,34 @@ void * sbrk(intptr_t increment)
     struct vm_desc *vma_list = mm->mmap;
 
     uintptr_t end_brk = (uintptr_t)mm->brk;
-#ifdef DEBUG_MM
     klog(LOG_DEBUG, "sbrk: Current break point: %p, Increment: %ld\n", (void*)end_brk, increment);
-#endif
     // Find the VMA that contains the current break point
-    while (vma_list && vma_list->end < end_brk) {
+    while (vma_list && vma_list->start != mm->start_brk) {
         vma_list = vma_list->vm_next;
     }
 
     if (vma_list == NULL) {
-        klog(LOG_WARN, "sbrk: No VMA found for current break point\n");
-        return ERR_PTR(-ENOMEM); // No VMA found
+        klog(LOG_DEBUG, "sbrk: Creating new VMA for brk at %p\n", (void*)mm->start_brk);
+        vma_list = kzmalloc(sizeof(*vma_list));
+        if (!vma_list) {
+            return ERR_PTR(-ENOMEM);
+        }
+        vma_list->mm = mm;
+        vma_list->start = mm->start_brk;
+        vma_list->end = mm->start_brk;
+        vma_list->vm_flags = VM_READ | VM_WRITE;
+        vma_list_insert(vma_list, &mm->mmap);
+    } else {
+        klog(LOG_DEBUG, "sbrk: Found existing VMA for brk at %p-%p\n", (void*)vma_list->start, (void*)vma_list->end);
     }
 
-    if (increment < 0 || (mm->brk - vma_list->start + increment) > 0xFFFFFF) {
+    if (increment < 0 || labs(increment) > 0xFFFFFF) {
         klog(LOG_WARN, "sbrk: Invalid increment: %ld\n", increment);
         return ERR_PTR(-ENOMEM); // Invalid increment
     }
 
     if (end_brk + increment > vma_list->end) {
         size_t num_pages = PAGE_ROUND_UP(increment) / PAGE_SIZE;
-        umem_alloc(vma_list->end, num_pages);
         vma_list->end += num_pages * PAGE_SIZE;
     } else if (end_brk + increment < vma_list->start) {
         klog(LOG_WARN, "sbrk: New break point is below the start of the VMA\n");
@@ -129,6 +137,7 @@ void * sbrk(intptr_t increment)
     }
 
     mm->brk += increment;
+    klog(LOG_DEBUG, "sbrk: New break point: %p\n", (void*)mm->brk);
     return (void *)end_brk;
 }
 

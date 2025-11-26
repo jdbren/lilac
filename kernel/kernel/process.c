@@ -174,24 +174,14 @@ static void * load_executable(struct task *p)
         p->info.exec_file = file;
     }
 
-    int bytes = file->f_dentry->d_inode->i_size;
-    struct elf_header *hdr = kzmalloc(bytes);
     klog(LOG_DEBUG, "Reading ELF file\n");
-    klog(LOG_DEBUG, "File size: %d\n", bytes);
-    if (vfs_read(file, (void*)hdr, bytes) != bytes) {
-        klog(LOG_ERROR, "Failed to read file %s\n", path);
-        goto out;
-    }
-
-    klog(LOG_DEBUG, "Parsing ELF file\n");
-    jmp = elf_load(hdr, p->mm);
+    jmp = elf_load(file, p->mm);
     if (!jmp) {
         klog(LOG_ERROR, "Failed to load ELF file\n");
         goto out;
     }
 
 out:
-    //kfree(hdr);
     klog(LOG_DEBUG, "ELF loaded\n");
     return jmp;
 }
@@ -202,15 +192,13 @@ static void set_vm_areas(struct mm_info *mem)
     stack_desc->mm = mem;
     stack_desc->start = mem->start_stack;
     stack_desc->end = __USER_STACK;
-    stack_desc->vm_prot = PROT_READ | PROT_WRITE;
-    stack_desc->vm_flags = MAP_PRIVATE | MAP_ANONYMOUS;
+    stack_desc->vm_flags = VM_READ | VM_WRITE;
     vma_list_insert(stack_desc, &mem->mmap);
 #ifdef DEBUG_VMA
     struct vm_desc *desc = mem->mmap;
     while (desc) {
         klog(LOG_DEBUG, "Start: %x\n", desc->start);
         klog(LOG_DEBUG, "End: %x\n", desc->end);
-        klog(LOG_DEBUG, "Prot: %x\n", desc->vm_prot);
         klog(LOG_DEBUG, "Flags: %x\n", desc->vm_flags);
         desc = desc->vm_next;
     }
@@ -274,11 +262,11 @@ static void start_process(void)
 
     struct vm_desc *desc = mem->mmap;
     while (desc) { // after the data segment, this seems imprecise?
-        if ((desc->vm_prot & (PROT_READ|PROT_WRITE)) == (PROT_READ|PROT_WRITE))
+        if ((desc->vm_flags & (VM_READ|VM_WRITE)) == (VM_READ|VM_WRITE))
             break;
         desc = desc->vm_next;
     }
-    mem->brk = desc ? desc->end : 0;
+    mem->start_brk = mem->brk = desc ? desc->end : 0;
     mem->start_stack = (uintptr_t)arch_user_stack();
     set_vm_areas(mem);
 

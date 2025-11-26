@@ -13,11 +13,23 @@
 #include "apic.h"
 #include "timer.h"
 
+static inline void set_gs_base(u64 base)
+{
+    asm volatile (
+        "wrmsr" :: "c"(IA32_GS_BASE), "a"((u32)base), "d"((u32)(base >> 32))
+    );
+}
+
 static inline void set_kernel_gs_base(u64 base)
 {
     asm volatile (
         "wrmsr" :: "c"(IA32_KERNEL_GS_BASE), "a"((u32)base), "d"((u32)(base >> 32))
     );
+}
+
+static inline void swapgs(void)
+{
+    asm volatile ("swapgs");
 }
 
 uintptr_t __per_cpu_offset[CONFIG_MAX_CPUS];
@@ -95,6 +107,7 @@ void percpu_init_cpu(void)
     u8 cpu_id = get_lapic_id();
     uintptr_t base = (uintptr_t)&_percpu_start + per_cpu_offset(cpu_id);
     set_kernel_gs_base(base);
+    swapgs();
 
     struct cpu_local *local = (struct cpu_local *)base;
     local->id = cpu_id;

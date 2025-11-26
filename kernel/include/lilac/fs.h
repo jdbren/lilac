@@ -169,6 +169,7 @@ struct vfsmount {
 
 int vfs_lseek(struct file *file, int offset, int whence);
 struct file* vfs_open(const char *path, int flags, int mode);
+ssize_t vfs_read_at(struct file *file, void *buf, size_t count, unsigned long pos);
 ssize_t vfs_read(struct file *file, void *buf, size_t count);
 ssize_t vfs_write(struct file *file, const void *buf, size_t count);
 int vfs_close(struct file *file);
