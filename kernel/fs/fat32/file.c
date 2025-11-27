@@ -18,6 +18,10 @@ ssize_t fat32_read(struct file *file, void *file_buf, size_t count)
     if (fat_file->cl_low == 0 || file->f_pos >= fat_file->file_size)
         return 0;
     u32 offset = file->f_pos % disk->bytes_per_clst;
+#ifdef DEBUG_FAT
+    klog(LOG_DEBUG, "Fat file size: %u, f_pos: %lu, offset: %u\n",
+        fat_file->file_size, file->f_pos, offset);
+#endif
     count = MIN(count, fat_file->file_size - file->f_pos);
 
     u32 num_clst = ROUND_UP(count + offset, disk->bytes_per_clst) /

@@ -3,8 +3,12 @@
 
 #include <lilac/config.h>
 
-#define PATH_MAX 256
+#ifndef PATH_MAX
+#define PATH_MAX 1024
+#endif
+#ifndef NAME_MAX
 #define NAME_MAX 32
+#endif
 
 __must_check
 char * get_user_path(const char *path);

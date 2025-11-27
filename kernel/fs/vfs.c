@@ -301,6 +301,27 @@ error:
     return fd;
 }
 
+ssize_t vfs_read_at(struct file *file, void *buf, size_t count, unsigned long pos)
+{
+    if (file->f_dentry) {
+        struct inode *inode = file->f_dentry->d_inode;
+        if (S_ISDIR(inode->i_mode))
+            return -EISDIR;
+
+        if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode))
+            return inode->i_fop->read(file, buf, count);
+
+        if (pos >= inode->i_size)
+            return 0;
+    }
+
+    unsigned long old_pos = file->f_pos;
+    file->f_pos = pos;
+    ssize_t bytes = file->f_op->read(file, buf, count);
+    file->f_pos = old_pos;
+
+    return bytes;
+}
 
 ssize_t vfs_read(struct file *file, void *buf, size_t count)
 {
@@ -316,9 +337,18 @@ ssize_t vfs_read(struct file *file, void *buf, size_t count)
             return 0;
     }
 
+#ifdef DEBUG_VFS
+    klog(LOG_DEBUG, "vfs_read: Reading %lu bytes from file %s at pos %lu\n",
+        count, file->f_dentry ? file->f_dentry->d_name : "unknown", file->f_pos);
+#endif
+
     ssize_t bytes = file->f_op->read(file, buf, count);
     if (bytes > 0)
         file->f_pos += bytes;
+#ifdef DEBUG_VFS
+    klog(LOG_DEBUG, "vfs_read: Read %ld bytes from file %s at pos %lu\n",
+        bytes, file->f_dentry ? file->f_dentry->d_name : "unknown", file->f_pos);
+#endif
     return bytes;
 }
 SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)

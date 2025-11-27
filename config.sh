@@ -33,6 +33,7 @@ LIBDIR=$EXEC_PREFIX/lib
 INCLUDEDIR=$PREFIX/include
 
 # Create makefile includes
+echo "export BUILD=${BUILD}" >> kbuild.config
 echo "export TARGET=${TARGET}" >> kbuild.config
 echo "export HOST=${HOST}" >> kbuild.config
 echo "export CONFIG_${ARCH}=y" >> kbuild.config
