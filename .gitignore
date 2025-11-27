@@ -11,6 +11,7 @@ lilac.iso
 
 # Debug, IDE, Filesystems
 .DS_Store
+.vscode/settings.json
 
 # Text and debug files
 bugs.txt

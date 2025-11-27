@@ -155,7 +155,7 @@ static void copy_vm_area(void *cr3, struct vm_desc *new_desc)
         pde_t *pd = get_or_alloc_pd(pdpt, virt, flags | PG_WRITE);
         pte_t *pt = get_or_alloc_pt(pd, virt, flags | PG_WRITE);
 
-        if (new_desc->vm_prot & PROT_WRITE)
+        if (new_desc->vm_flags & VM_WRITE)
             flags |= PG_WRITE;
 
         pt[get_pt_index(virt)] = ((uintptr_t)phys + i * PAGE_SIZE) | flags;
@@ -169,6 +169,7 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
     child->end_code = parent->end_code;
     child->start_data = parent->start_data;
     child->end_data = parent->end_data;
+    child->start_brk = parent->start_brk;
     child->brk = parent->brk;
     child->start_stack = parent->start_stack;
     child->total_vm = parent->total_vm;

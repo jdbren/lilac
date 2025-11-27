@@ -3,8 +3,10 @@
 #include <lilac/lilac.h>
 #include <lilac/signal.h>
 #include <lilac/sched.h>
+#include <mm/mm.h>
 
 #include "idt.h"
+#include "paging.h"
 
 #pragma GCC diagnostic ignored "-Warray-bounds"
 #pragma GCC diagnostic ignored "-Wanalyzer-out-of-bounds"
@@ -24,6 +26,8 @@ static struct exception_entry *const
 
 static void * find_exception(uintptr_t err_ip)
 {
+    if (err_ip <= __USER_MAX_ADDR)
+        return NULL;
     const int num_entries = EXCEPTION_TABLE_SIZE(&_exception_start, &_exception_end);
     for (int i = 0; i < num_entries; i++) {
         klog(LOG_DEBUG, "Checking %x against %x\n", err_ip, exception_table[i].err_addr);
@@ -43,21 +47,72 @@ void div0_handler(struct interrupt_frame *frame)
     }
 }
 
+static struct vm_desc* find_vma(struct mm_info *mm, uintptr_t addr)
+{
+    struct vm_desc *vma = mm->mmap;
+    while (vma) {
+        if (addr >= vma->start && addr < vma->end)
+            return vma;
+        vma = vma->vm_next;
+    }
+    return NULL;
+}
+
+static unsigned long get_fault_flags(long err_code)
+{
+    unsigned long flags = 0;
+    if (err_code & X86_FAULT_PRESENT)
+        flags |= FAULT_PTE_EXIST;
+    if (err_code & X86_FAULT_WRITE)
+        flags |= FAULT_WRITE;
+    if (err_code & X86_FAULT_USER)
+        flags |= FAULT_USER;
+    if (err_code & X86_FAULT_INSTR)
+        flags |= FAULT_INSTR;
+    return flags;
+}
+
+static int user_page_fault(long error, struct interrupt_frame *frame, uintptr_t addr)
+{
+    struct vm_desc *vma = find_vma(current->mm, addr);
+    if (!vma) {
+        do_raise(current, SIGSEGV);
+        return -1;
+    }
+#if defined DEBUG_VMA || defined DEBUG_MM
+    klog(LOG_DEBUG, "Found VMA %lx-%lx for faulting address %lx\n", vma->start, vma->end, addr);
+    klog(LOG_DEBUG, "VMA flags: %x\n", vma->vm_flags);
+#endif
+    int fault_ret = mm_fault(vma, addr, get_fault_flags(error));
+
+    if (fault_ret == FAULT_PROT_VIOLATION) {
+        do_raise(current, SIGSEGV);
+        return -1;
+    } else if (fault_ret == FAULT_FILE_ERROR) {
+        do_raise(current, SIGBUS);
+        return -1;
+    }
+
+    return 0;
+}
+
 void pgflt_handler(long error_code, struct interrupt_frame *frame)
 {
     uintptr_t addr = 0;
     asm volatile ("mov %%cr2,%0\n\t" : "=r"(addr));
 
-    klog(LOG_WARN, "Fault address: %x\n", addr);
-    klog(LOG_WARN, "Error code: %x\n", error_code);
-
+    klog(LOG_DEBUG, "Page fault at %p, Code: %lx, IP: %p\n", addr, error_code, frame->ip);
     void *handler = find_exception(frame->ip);
-    if (handler && addr < __KERNEL_BASE) {
+
+    if (error_code & X86_FAULT_USER || addr <= __USER_MAX_ADDR) {
+        if (addr >= __USER_MAX_ADDR) {
+            do_raise(current, SIGSEGV);
+            return;
+        }
+        user_page_fault(error_code, frame, addr);
+    } else if (handler && addr < __KERNEL_BASE) {
         klog(LOG_WARN, "Page fault at %x handled by %p\n", frame->ip, handler);
         frame->ip = (uintptr_t)handler;
-    } else if (frame->ip < __USER_STACK) { // user space fault
-        klog(LOG_WARN, "Page fault in user space at %p, sending SIGSEGV\n", frame->ip);
-        do_raise(current, SIGSEGV);
     } else {
         kerror("Page fault detected\n");
     }

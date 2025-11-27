@@ -34,15 +34,15 @@ struct __packed elf32_header {
     u16 mach;
     u32 elfv;
     u32 entry;
-    u32 p_tbl;
-    u32 s_tbl;
-    u32 flg;
-    u16 hd_sz;
+    u32 p_tbl_off;
+    u32 s_tbl_off;
+    u32 flags;
+    u16 header_sz;
     u16 p_entry_sz;
-    u16 p_tbl_sz;
+    u16 p_tbl_num_ents;
     u16 s_entry_sz;
-    u16 s_tbl_sz;
-    u16 nms_idx;
+    u16 s_tbl_num_ents;
+    u16 s_idx_header_strs;
 };
 
 struct __packed elf64_header {
@@ -50,22 +50,22 @@ struct __packed elf64_header {
     u16 mach;
     u32 elfv;
     u64 entry;
-    u64 p_tbl;
-    u64 s_tbl;
-    u32 flg;
-    u16 hd_sz;
+    u64 p_tbl_off;
+    u64 s_tbl_off;
+    u32 flags;
+    u16 header_sz;
     u16 p_entry_sz;
-    u16 p_tbl_sz;
+    u16 p_tbl_num_ents;
     u16 s_entry_sz;
-    u16 s_tbl_sz;
-    u16 nms_idx;
+    u16 s_tbl_num_ents;
+    u16 s_idx_header_strs;
 };
 
 struct __packed elf_header {
     u32 sig;
     u8 class;
     u8 endian;
-    u8 headv;
+    u8 header_ver;
     u8 abi;
     u8 padding[8];
     union {
@@ -97,7 +97,8 @@ struct __packed elf64_pheader {
 };
 
 struct mm_info;
+struct file;
 
-void * elf_load(struct elf_header *elf, struct mm_info *mm);
+void * elf_load(struct file *elf_file, struct mm_info *mm);
 
 #endif

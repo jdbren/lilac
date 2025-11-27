@@ -17,6 +17,7 @@ extern "C" {
 int atoi(const char*);
 
 int abs(int);
+long labs(long i);
 
 int toupper(int ch);
 int tolower(int ch);

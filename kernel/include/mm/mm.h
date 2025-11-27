@@ -21,11 +21,15 @@ struct vm_desc {
     struct vm_desc *vm_next;
     // rb_node_t vm_rb;
 
-    u32 vm_prot;
+    // u32 vm_prot;
     u32 vm_flags;
 
-    unsigned long vm_pgoff;
+    unsigned int vm_pgoff; // offset in pages from start of backing file
+    unsigned int vm_fsize; // size in file
     struct file *vm_file;
+
+    uintptr_t seg_vaddr;   // EXACT p_vaddr
+    size_t    seg_offset;  // EXACT p_offset
 };
 
 int umem_alloc(uintptr_t vaddr, int num_pages);
@@ -45,6 +49,7 @@ enum fault_return {
     FAULT_SUCCESS,
     FAULT_PROT_VIOLATION,
     FAULT_FILE_ERROR,
+    FAULT_OOM,
 };
 
 int mm_fault(struct vm_desc *vma, uintptr_t addr, unsigned long flags);

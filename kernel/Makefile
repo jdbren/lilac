@@ -1,5 +1,11 @@
 ARCHNAME=$(shell ../scripts/target-triplet-to-arch.sh $(HOST))
 COMPILER_DIR?=$(shell dirname $(shell which $(CC)))/..
+UNAME=$(shell uname)
+ifeq ($(UNAME), Linux)
+GRUB_FILE=grub2-file
+else
+GRUB_FILE=grub-file
+endif
 
 CFLAGS?=-Og
 LDFLAGS?=
@@ -64,6 +70,7 @@ mm/mm.o \
 mm/pmem.o \
 mm/init.o \
 mm/valloc.o \
+mm/fault.o \
 fs/fat32/fat32.o \
 fs/fat32/dir.o \
 fs/fat32/file.o \
@@ -127,7 +134,7 @@ ifndef VERBOSE
 else
 	$(CXX) -T $(LINKER_SCRIPT) -o $@ $(LINK_LIST)
 endif
-	grub2-file --is-x86-multiboot2 lilac.ker
+	$(GRUB_FILE) --is-x86-multiboot2 lilac.ker
 
 $(ARCHDIR)/crtbegin.o $(ARCHDIR)/crtend.o:
 ifndef VERBOSE
