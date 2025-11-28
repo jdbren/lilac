@@ -30,7 +30,6 @@ static void * find_exception(uintptr_t err_ip)
         return NULL;
     const int num_entries = EXCEPTION_TABLE_SIZE(&_exception_start, &_exception_end);
     for (int i = 0; i < num_entries; i++) {
-        klog(LOG_DEBUG, "Checking %x against %x\n", err_ip, exception_table[i].err_addr);
         if (exception_table[i].err_addr == err_ip)
             return exception_table[i].handler;
     }
@@ -100,8 +99,9 @@ void pgflt_handler(long error_code, struct interrupt_frame *frame)
 {
     uintptr_t addr = 0;
     asm volatile ("mov %%cr2,%0\n\t" : "=r"(addr));
-
+#ifdef DEBUG_MM
     klog(LOG_DEBUG, "Page fault at %p, Code: %lx, IP: %p\n", addr, error_code, frame->ip);
+#endif
     void *handler = find_exception(frame->ip);
 
     if (error_code & X86_FAULT_USER || addr <= __USER_MAX_ADDR) {
@@ -111,7 +111,7 @@ void pgflt_handler(long error_code, struct interrupt_frame *frame)
         }
         user_page_fault(error_code, frame, addr);
     } else if (handler && addr < __KERNEL_BASE) {
-        klog(LOG_WARN, "Page fault at %x handled by %p\n", frame->ip, handler);
+        klog(LOG_DEBUG, "Page fault at %x handled by %p\n", frame->ip, handler);
         frame->ip = (uintptr_t)handler;
     } else {
         kerror("Page fault detected\n");

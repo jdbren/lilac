@@ -106,7 +106,9 @@ void arch_unmap_all_user_vm(struct mm_info *info)
     struct vm_desc *desc = info->mmap;
     while (desc) {
         struct vm_desc *next = desc->vm_next;
+#ifdef DEBUG_MM
         klog(LOG_DEBUG, "Unmapping %x-%x\n", desc->start, desc->end);
+#endif
         for (uintptr_t addr = desc->start; addr < desc->end; addr += PAGE_SIZE) {
             uintptr_t phys = __walk_pages((void*)addr);
             unmap_page((void*)addr);

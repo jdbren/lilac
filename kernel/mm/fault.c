@@ -59,8 +59,10 @@ static int do_file_fault(struct vm_desc *vma, uintptr_t pgaddr, unsigned long fl
         memset(buf, 0, start_in_page);
 
     size_t file_offset = seg_offset + off_in_seg;
+#ifdef DEBUG_MM
     klog(LOG_DEBUG, "File-backed fault: pgaddr=%lx start_in_page=%lx off_in_seg=%lx file_offset=%lx read=%lx\n",
          pgaddr, start_in_page, off_in_seg, file_offset, bytes_to_read);
+#endif
 
     vfs_lseek(f, file_offset, 0);
     ssize_t bytes = vfs_read(f, buf + start_in_page, bytes_to_read);
@@ -110,8 +112,6 @@ int mm_fault(struct vm_desc *vma, uintptr_t addr, unsigned long flags)
         // TODO: Handle present PTE case (copy-on-write)
         kerror("Page table entry already exists for address %lx\n", addr);
     }
-
-    klog(LOG_DEBUG, "Handling user page fault for address %lx\n", addr);
 
     if (vma->vm_file)
         return do_file_fault(vma, page_start, flags);

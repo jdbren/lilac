@@ -109,7 +109,9 @@ void tty_put(struct tty *tty)
 
 int tty_recv_char(u8 c)
 {
+#ifdef DEBUG_TTY
     klog(LOG_DEBUG, "tty_recv_char: received char '%c' (0x%02x)\n", (char)c, c);
+#endif
     // hack until vt switching
     if (c & 0x80) {
         c &= ~0x80u;
@@ -124,7 +126,9 @@ int tty_recv_char(u8 c)
 
 int tty_recv_buf(char *buf, size_t size)
 {
+#ifdef DEBUG_TTY
     klog(LOG_DEBUG, "tty_recv_buf: received \"%s\"\n", buf);
+#endif
     struct tty *tty = &ttys[active];
     if (tty->ldisc_ops && tty->ldisc_ops->receive_buf)
         tty->ldisc_ops->receive_buf(tty, (u8*)buf, NULL, size);
@@ -218,7 +222,6 @@ void tty_init(void)
         init_tty_struct(tty, i);
         strcpy(path, "/dev/");
         strcat(path, tty->name);
-        klog(LOG_DEBUG, "Creating %s\n", path);
         dev_create(path, &tty_fops, &tty_iops, mode, TTY_DEVICE);
     }
 

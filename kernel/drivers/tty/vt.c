@@ -1156,8 +1156,6 @@ static void vt_out(struct vc_state *vt, int ch, wchar_t wc)
     }
 }
 
-// #define DEBUG_VT
-
 /* Output a string to the modem. */
 static void v_termout(struct vc_state *vt, const char *s, int len)
 {

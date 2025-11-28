@@ -84,6 +84,8 @@ struct termios {
 	speed_t c_ospeed;		/* output speed */
 };
 
+#define _POSIX_VDISABLE '\0'
+
 /* c_cc characters */
 #define VINTR		 0
 #define VQUIT		 1
