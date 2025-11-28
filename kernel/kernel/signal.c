@@ -192,8 +192,9 @@ SYSCALL_DECL3(sigaction, int, signum, const struct sigaction *, act, struct siga
         ka->sa.sa_flags = act->sa_flags;
         ka->sa.sa_mask = act->sa_mask;
     }
-
+#ifdef DEBUG_SIGNAL
     klog(LOG_DEBUG, "sigaction: Signal %d action updated to %p\n", signum, ka->sa.sa_handler);
+#endif
     return 0;
 }
 

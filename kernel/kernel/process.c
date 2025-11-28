@@ -185,8 +185,6 @@ out:
     return jmp;
 }
 
-#define DEBUG_VMA
-
 static void set_vm_areas(struct mm_info *mem)
 {
     struct vm_desc *stack_desc = kzmalloc(sizeof(*stack_desc));
@@ -224,9 +222,11 @@ static unsigned int prepare_task_args(struct task *p, char **argv, char *argv_lo
     argv[argc] = NULL;
 
     // Print the arguments
+#ifdef DEBUG_FORK
     for (u32 i = 0; i < argc; i++) {
         klog(LOG_DEBUG, "Arg %d: %s\n", i, argv[i]);
     }
+#endif
 
     return argc;
 }
@@ -247,9 +247,11 @@ static void prepare_task_env(struct task *p, char **envp, char *env_loc, char *e
     envp[envc] = NULL;
 
     // Print the environment variables
+#ifdef DEBUG_FORK
     for (u32 i = 0; i < envc; i++) {
         klog(LOG_DEBUG, "Env %d: %s\n", i, envp[i]);
     }
+#endif
 }
 
 static void start_process(void)

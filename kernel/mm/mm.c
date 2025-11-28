@@ -11,6 +11,32 @@
 #include <lilac/fs.h>
 #include <lilac/libc.h>
 
+static struct vm_desc * find_vma(struct mm_info *mm, uintptr_t addr)
+{
+    struct vm_desc *vma = mm->mmap;
+    while (vma) {
+        if (addr >= vma->start && addr < vma->end) {
+            return vma;
+        }
+        vma = vma->vm_next;
+    }
+    return NULL;
+}
+
+static struct vm_desc * create_brk_seg(struct mm_info *mm)
+{
+    klog(LOG_DEBUG, "sbrk: Creating new VMA for brk at %p\n", (void*)mm->start_brk);
+    struct vm_desc *vma_list = kzmalloc(sizeof(*vma_list));
+    if (!vma_list) {
+        return ERR_PTR(-ENOMEM);
+    }
+    vma_list->mm = mm;
+    vma_list->start = mm->start_brk;
+    vma_list->end = mm->start_brk;
+    vma_list->vm_flags = VM_READ | VM_WRITE;
+    vma_list_insert(vma_list, &mm->mmap);
+    return vma_list;
+}
 
 int umem_alloc(uintptr_t vaddr, int num_pages)
 {
@@ -62,25 +88,25 @@ void vma_list_insert(struct vm_desc *vma, struct vm_desc **list)
 int brk(void *addr)
 {
     struct mm_info *mm = current->mm;
-    struct vm_desc *vma_list = mm->mmap;
+    struct vm_desc *vma = mm->mmap;
     uintptr_t addr_val = (uintptr_t)addr;
 
-    // Find the VMA that contains the current break point
-    while (vma_list && vma_list->end <= (uintptr_t)mm->brk) {
-        vma_list = vma_list->vm_next;
+    while (vma && vma->start != mm->start_brk) {
+        vma = vma->vm_next;
     }
 
-    if (vma_list == NULL) {
-        return -ENOMEM; // No VMA found
+    if (vma == NULL) {
+        vma = create_brk_seg(mm);
+        if (IS_ERR(vma)) {
+            return PTR_ERR(vma);
+        }
     }
 
-    // Check if the new break address is valid
-    if (addr_val < vma_list->start || addr_val - vma_list->start > 0xffffff) {
-        return -ENOMEM; // Invalid address
-    } else if (addr_val > vma_list->end) {
+    if (addr_val < vma->start || addr_val - vma->start > 0xffffff) {
+        return -ENOMEM;
+    } else if (addr_val > vma->end) {
         uintptr_t vaddr = PAGE_ROUND_UP(addr);
-        umem_alloc(vma_list->end, addr_val - vma_list->end);
-        vma_list->end = vaddr;
+        vma->end = vaddr;
     }
 
     mm->brk = addr_val;
@@ -99,28 +125,19 @@ SYSCALL_DECL1(brk, void*, addr)
 void * sbrk(intptr_t increment)
 {
     struct mm_info *mm = current->mm;
-    struct vm_desc *vma_list = mm->mmap;
-
+    struct vm_desc *vma = mm->mmap;
     uintptr_t end_brk = (uintptr_t)mm->brk;
-#ifdef DEBUG_MM
     klog(LOG_DEBUG, "sbrk: Current break point: %p, Increment: %ld\n", (void*)end_brk, increment);
-#endif
-    // Find the VMA that contains the current break point
-    while (vma_list && vma_list->start != mm->start_brk) {
-        vma_list = vma_list->vm_next;
+
+    while (vma && vma->start != mm->start_brk) {
+        vma = vma->vm_next;
     }
 
-    if (vma_list == NULL) {
-        klog(LOG_DEBUG, "sbrk: Creating new VMA for brk at %p\n", (void*)mm->start_brk);
-        vma_list = kzmalloc(sizeof(*vma_list));
-        if (!vma_list) {
-            return ERR_PTR(-ENOMEM);
+    if (vma == NULL) {
+        vma = create_brk_seg(mm);
+        if (IS_ERR(vma)) {
+            return vma;
         }
-        vma_list->mm = mm;
-        vma_list->start = mm->start_brk;
-        vma_list->end = mm->start_brk;
-        vma_list->vm_flags = VM_READ | VM_WRITE;
-        vma_list_insert(vma_list, &mm->mmap);
     }
 #ifdef DEBUG_MM
     else {
@@ -129,16 +146,15 @@ void * sbrk(intptr_t increment)
     }
 #endif
 
-
     if (increment < 0 || labs(increment) > 0xFFFFFF) {
         klog(LOG_WARN, "sbrk: Invalid increment: %ld\n", increment);
         return ERR_PTR(-ENOMEM); // Invalid increment
     }
 
-    if (end_brk + increment > vma_list->end) {
+    if (end_brk + increment > vma->end) {
         size_t num_pages = PAGE_ROUND_UP(increment) / PAGE_SIZE;
-        vma_list->end += num_pages * PAGE_SIZE;
-    } else if (end_brk + increment < vma_list->start) {
+        vma->end += num_pages * PAGE_SIZE;
+    } else if (end_brk + increment < vma->start) {
         klog(LOG_WARN, "sbrk: New break point is below the start of the VMA\n");
         return ERR_PTR(-ENOMEM);
     }

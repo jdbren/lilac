@@ -15,7 +15,7 @@ https://github.com/jdbren/gcc/releases/tag/gcc-15.2.0-lilac \
 https://github.com/jdbren/binutils-gdb/releases/tag/binutils-2.45-lilac
 
 ------------------------------------------------------------------------------
-Lilac is an operating system kernel running on x86. It is a fun project to learn 
+Lilac is an operating system kernel running on x86. It is a fun project to learn
 about kernel programming and operating system fundamentals.
 
 The entry point is _start in the x86 boot folder. I am testing on the Qemu q35
@@ -76,16 +76,16 @@ See scripts/create-image.sh
 First run config.sh. ARCH defaults to x86_64.
 You can now build and boot into a vm using qemu.sh.
 
-ncurses
-./configure --build=x86_64-linux-gnu --host=x86_64-lilac --disable-widec --without-cxx --prefix=/usr --without-manpages
+ncurses 5.7
+CFLAGS="-Wno-implicit-function-declaration -Wno-incompatible-pointer-types" ./configure --host=x86_64-lilac --disable-widec --without-cxx --prefix=/usr --without-manpages --enable-termcap --disable-hashmap --without-hashed-db
 make
 make DESTDIR=$SYSROOT install
 
-libedit
+libedit 20150325-3.1
 CFLAGS="-fcommon -std=gnu89" ./configure --build=x86_64-linux-gnu --host=x86_64-lilac --disable-widec --prefix=/usr
 make
 make DESTDIR=$SYSROOT install
 
-dash
+dash 5.6.1
 LIBS="-ledit -lncurses" ./configure --build=x86_64-linux-gnu --host=x86_64-lilac --with-libedit --prefix=/usr
 make

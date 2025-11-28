@@ -62,12 +62,13 @@ syscall_entry:
 	call x86_kernel_exit
 	pop  %r12 # orignal return value
 	test %rax,%rax
-	jnz  slow_return # not clean context
 
 	# reset interrupt stack
 	lea  40+15*8(%rsp), %rax
 	mov  %gs:CPU_LOCAL_TSS, %rsi
 	mov  %rax, TSS_rsp0(%rsi)
+
+	jnz  slow_return # not clean context
 
 	swapgs
 
@@ -81,11 +82,6 @@ syscall_entry:
 	sysretq
 
 slow_return:
-	# reset interrupt stack
-	lea  40+15*8(%rsp), %rax
-	mov  %gs:CPU_LOCAL_TSS, %rsi
-	mov  %rax, TSS_rsp0(%rsi)
-
 	testb $3, CS(%rsp)
 	jz 1f # if return to kernel mode, skip
 	swapgs
