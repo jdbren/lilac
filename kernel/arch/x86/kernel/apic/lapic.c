@@ -97,22 +97,16 @@ static unsigned long apic_get_timer_hz(void)
 }
 
 
-
-extern u64 tsc_freq_hz;
-
-void tsc_deadline_set(u64 ns_from_now)
+void tsc_deadline_set(u64 deadline)
 {
-    u64 tsc_now = rdtsc();
-    u64 delta_tsc = (tsc_freq_hz * ns_from_now) / 1000000000ull;
-    u64 deadline = tsc_now + delta_tsc;
     write_msr(IA32_TSC_DEADLINE, (u32)(deadline & 0xFFFFFFFF), (u32)(deadline >> 32));
 }
 
 void apic_tsc_deadline(void)
 {
     write_reg(APIC_LVT_TIMER, APIC_TIMER_DEADLINE | 0x20);
-    asm ("mfence");
-    tsc_deadline_set(1000000); // 1ms
+    __asm__ ("mfence");
+    tsc_deadline_set(0);
     klog(LOG_INFO, "APIC TSC deadline timer enabled\n");
 }
 
@@ -183,7 +177,7 @@ int ap_init(void)
         *((volatile u32*)(base + 0x280)) = 0;               // clear errors
         *ap_select = (*ap_select & 0x00ffffff) | (i << 24); // select AP
         *ipi_data = (*ipi_data & 0xfff00000) | 0x00C500;    // INIT IPI
-        sleep(10);                                          // wait
+        usleep(10000);                                      // wait
 
         do {
             asm volatile ("pause" : : : "memory");
@@ -195,7 +189,7 @@ int ap_init(void)
         do {
             asm volatile ("pause" : : : "memory");
         } while (*ipi_data & (1 << 12));
-        sleep(10);                                          // wait
+        usleep(10000);                                          // wait
 
         // send STARTUP IPI
         *((volatile u32*)(base + 0x280)) = 0;
@@ -212,7 +206,7 @@ int ap_init(void)
 
     // release the AP spinlocks
     bspdone = 1;
-    sleep(10);
+    usleep(10000);
     arch_disable_interrupts();
 
     kstatus(STATUS_OK, "APs running: %d\n", aprunning);

@@ -8,6 +8,7 @@
 #include "cpu-features.h"
 #include "apic.h"
 #include "paging.h"
+#include "timer.h"
 
 static void __set_memory_size(struct multiboot_tag_efi_mmap *mmap)
 {
@@ -30,6 +31,7 @@ void x86_setup_mem(void)
 void arch_setup(void)
 {
     apic_init(boot_info.acpi.madt);
+    x86_timer_init();
     percpu_mem_init();
     percpu_init_cpu();
 }
@@ -74,7 +76,7 @@ void print_system_info(void)
     size_t mem_sz_mb = boot_info.total_mem_kb / 1024;
     printf("Total Memory: %u MB\n", (unsigned int)mem_sz_mb);
 
-    u64 sys_time_ms = get_sys_time() / 1000000;
+    u64 sys_time_ms = get_sys_time_ns() / 1000000;
     printf("System clock running for %llu ms\n", sys_time_ms);
     struct timestamp ts = get_timestamp();
     printf("Current time: " TIME_FORMAT "\n\n",

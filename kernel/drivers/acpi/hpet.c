@@ -59,7 +59,7 @@ static inline void write_reg(const u32 offset, const u64 val)
 }
 
 // time in ms
-void hpet_init(struct hpet_info *info)
+u64 hpet_init(struct hpet_info *info)
 {
     hpet_base = (uintptr_t)map_phys((void*)(uintptr_t)info->address, PAGE_SIZE,
         MEM_PF_WRITE | MEM_PF_UC);
@@ -76,6 +76,8 @@ void hpet_init(struct hpet_info *info)
 
     klog(LOG_INFO, "HPET @ %p, clk period %u fs (%llu Hz), %u comparators\n",
         (void*)(uintptr_t)info->address, hpet_clk_period, hpet_frq, info->comparator_count);
+
+    return hpet_frq;
 }
 
 void hpet_enable_int(u32 time)

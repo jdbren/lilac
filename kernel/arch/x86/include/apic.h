@@ -75,7 +75,7 @@ int ap_init(void);
 u8 get_lapic_id(void);
 
 void apic_tsc_deadline(void);
-void tsc_deadline_set(u64 ns_from_now);
+void tsc_deadline_set(u64 deadline);
 void apic_periodic(u32 ms);
 
 #endif

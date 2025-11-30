@@ -52,6 +52,7 @@
 .type _start, @function
 _start:
 .code32
+	cli
 	# Check the magic number.
 	cmpl $MULTIBOOT2_BOOTLOADER_MAGIC, %eax
 	jne .invlboot

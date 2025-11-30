@@ -121,12 +121,12 @@ ACPI_STATUS AcpiOsExecute(ACPI_EXECUTE_TYPE Type, ACPI_OSD_EXEC_CALLBACK Functio
 
 void AcpiOsSleep(UINT64 Milliseconds)
 {
-    sleep(Milliseconds);
+    usleep(Milliseconds * 1000);
 }
 
 void AcpiOsStall(UINT32 Microseconds)
 {
-    sleep(Microseconds / 1000);
+    usleep(Microseconds);
 }
 
 void AcpiOsWaitEventsComplete(void) {}
@@ -322,7 +322,7 @@ ACPI_STATUS AcpiOsWritePciConfiguration(ACPI_PCI_ID *PciId, UINT32 Register,
 // Other
 UINT64 AcpiOsGetTimer(void)
 {
-    return get_sys_time();
+    return get_sys_time_ns();
 }
 
 ACPI_STATUS AcpiOsSignal(UINT32 Function, void *Info)
