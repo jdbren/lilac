@@ -7,42 +7,79 @@
 #include <lilac/boot.h>
 #include <lilac/timer.h>
 #include <lilac/sched.h>
-#include <acpi/hpet.h>
-#include <mm/kmm.h>
 #include <lilac/port.h>
 #include <lilac/panic.h>
 #include <lilac/log.h>
-#include <lilac/syscall.h>
-
+#include <acpi/hpet.h>
 #include <asm/segments.h>
+
 #include "cpu-features.h"
 #include "apic.h"
 #include "idt.h"
 #include "io.h"
 
+#define PIT_FREQUENCY 1193182
 
 extern void timer_handler(void);
 extern void init_PIT(int freq);
-
-s64 boot_unix_time;
-volatile u32 timer_cnt;
-extern volatile u32 system_timer_fractions;
-extern volatile u32 system_timer_ms;
+u64 read_pit_count(void);
 
 static int hpet_enabled = 0;
-
-u64 tsc_freq_hz = 0;
-
-static inline void nop(void) {}
-
-static void (*handle_tick)(void) = nop;
-
 
 u64 rdtsc(void)
 {
     unsigned long eax, edx;
     __asm__ ("rdtsc" : "=a"(eax), "=d"(edx));
     return ((u64)edx << 32) | eax;
+}
+
+static struct clock_source tsc_clock = {
+    .name = "tsc",
+    .read = rdtsc,
+    .freq_hz = 0,
+    .scale = { .mult = 0, .shift = 0 },
+};
+
+static struct clock_source hpet_clock = {
+    .name = "hpet",
+    .read = hpet_read,
+    .freq_hz = 0,
+    .scale = { .mult = 0, .shift = 0 },
+};
+
+static struct clock_source pit_clock = {
+    .name = "pit",
+    .read = read_pit_count,
+    .freq_hz = PIT_FREQUENCY,
+    .scale = { .mult = 0, .shift = 0 },
+};
+
+struct clock_source *__system_clock = &pit_clock;
+u64 ticks_per_ms = PIT_FREQUENCY / 1000;
+
+// Compute mult/shift so that:
+//    mult fits 32-bit, maximize precision
+// Formula: mult ≈ (1e9 << shift) / freq
+static void set_clock_scale(struct clock_source *c)
+{
+    u32 shift;
+    for (shift = 31; ; shift--) {
+        u64 num = (1000000000ull << shift);
+        u64 mult = num / c->freq_hz;
+
+        if (mult <= UINT32_MAX) {
+            c->scale.mult = (u32)mult;
+            c->scale.shift = shift;
+            return;
+        }
+
+        if (shift == 0)
+            break;
+    }
+
+    // fallback: lowest precision but safe
+    c->scale.mult = 1000000000ull / c->freq_hz;
+    c->scale.shift = 0;
 }
 
 static inline bool in_hypervisor(void)
@@ -98,149 +135,50 @@ static u64 calc_tsc_hz(void)
     return ticks_in_10ms * 100; // Convert to Hz
 }
 
-void tsc_deadline_tick(void)
+void tsc_deadline_tick(unsigned long x)
 {
     // should calculate the next timer event to fire
     // for now, just set it to 1ms from now
-    tsc_deadline_set(1000000);
+    u64 tsc_now = rdtsc();
+    tsc_deadline_set(tsc_now + ticks_per_ms);
 }
 
 void timer_tick_init(void)
 {
+    idt_entry(0x20, (uintptr_t)timer_handler, __KERNEL_CS, 0, INT_GATE);
+    ioapic_entry(0, 0x20, 0, 0);
+
     if (tsc_deadline()) {
         apic_tsc_deadline();
         handle_tick = tsc_deadline_tick;
+        set_clock_source(&tsc_clock);
     } else if (invariant_tsc()) {
         // tsc periodic
+        apic_periodic(TIMER_HZ / 1000);
+        set_clock_source(&tsc_clock);
     } else {
         apic_periodic(TIMER_HZ / 1000);
     }
 }
 
-void timer_init(void)
+void x86_timer_init(void)
 {
-    idt_entry(0x20, (uintptr_t)timer_handler, __KERNEL_CS, 0, INT_GATE);
-    ioapic_entry(0, 0x20, 0, 0);
-
     struct hpet_info *info = boot_info.acpi.hpet;
 
-    hpet_init(info);
+    hpet_clock.freq_hz = hpet_init(info);
+    set_clock_scale(&hpet_clock);
     hpet_enabled = 1;
+    set_clock_source(&hpet_clock);
 
-    tsc_freq_hz = calc_tsc_hz();
-    boot_unix_time = rtc_init() - rdtsc() / tsc_freq_hz;
-    klog(LOG_INFO, "TSC frequency: %llu Hz\n", tsc_freq_hz);
+    tsc_clock.freq_hz = calc_tsc_hz();
+    set_clock_scale(&tsc_clock);
+    boot_unix_time = rtc_init() - rdtsc() / tsc_clock.freq_hz;
+
+    klog(LOG_INFO, "TSC frequency: %llu Hz\n", tsc_clock.freq_hz);
     klog(LOG_INFO, "Boot Unix time: %lld seconds since epoch\n", boot_unix_time);
-
-    timer_tick_init();
-
-    kstatus(STATUS_OK, "System clock initialized\n");
 }
 
-
-void timer_tick(void)
-{
-    handle_tick();
-    sched_tick();
-}
-
-__attribute__((optimize("O0")))
-void sleep(u32 millis)
-{
-    timer_cnt = millis;
-    while (timer_cnt > 0) {
-        asm volatile("nop");
-    }
-}
-
-__attribute__((optimize("O0")))
-void usleep(u32 micros)
-{
-    // Get current time
-    u64 start = get_sys_time();
-    u64 end = start + micros * 1000;
-    while (get_sys_time() < end) {
-        asm volatile("nop");
-    }
-}
-
-SYSCALL_DECL2(nanosleep, const struct timespec*, duration, struct timespec*, rem)
-{
-    u64 total_ns = duration->tv_sec * 1'000'000'000ull + duration->tv_nsec;
-    usleep(total_ns / 1000);
-    return 0;
-}
-
-// Get system timer in 1 ns intervals
-u64 get_sys_time(void)
-{
-    if (!hpet_enabled)
-        return 0;
-    u64 counter = hpet_read();
-    u64 time_ns = (counter * hpet_get_clk_period()) / 1000000ULL;
-    return time_ns;
-}
-
-s64 get_unix_time(void)
-{
-    return boot_unix_time + get_sys_time() / 1'000'000'000ull;
-}
-
-static int is_leap_year(int year) {
-    return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
-}
-
-static int days_in_month(int month, int year) {
-    if (month == 2) {
-        return is_leap_year(year) ? 29 : 28;
-    }
-    int days_in_months[] = { 31, 30, 31, 30, 31, 31, 31, 30, 31, 30, 31, 31 };
-    return days_in_months[month - 1]; // month is 1-12
-}
-
-static void unix_time_to_date(long long unix_time, struct timestamp *ts) {
-    // Start from the epoch time
-    s64 remaining_seconds = unix_time;
-
-    // Calculate the year
-    ts->year = 1970;
-    while (remaining_seconds >= (is_leap_year(ts->year) ? 31622400 : 31536000)) {
-        remaining_seconds -= (is_leap_year(ts->year) ? 31622400 : 31536000);
-        (ts->year)++;
-    }
-
-    // Calculate the month
-    ts->month = 1;
-    while (remaining_seconds >= days_in_month(ts->month, ts->year) * 24 * 60 * 60) {
-        remaining_seconds -= days_in_month(ts->month, ts->year) * 24 * 60 * 60;
-        (ts->month)++;
-    }
-
-    // Calculate the day
-    ts->day = 1;
-    while (remaining_seconds >= 24 * 60 * 60) {
-        remaining_seconds -= 24 * 60 * 60;
-        (ts->day)++;
-    }
-
-    // Calculate hours, minutes, and seconds
-    ts->hour = remaining_seconds / 3600;
-    remaining_seconds %= 3600;
-    ts->minute = remaining_seconds / 60;
-    ts->second = remaining_seconds % 60;
-
-}
-
-
-struct timestamp get_timestamp(void)
-{
-    struct timestamp ts;
-    long long unix_time = get_unix_time();
-    unix_time_to_date(unix_time, &ts);
-    return ts;
-}
-
-unsigned read_pit_count(void)
+u64 read_pit_count(void)
 {
 	unsigned count = 0;
 

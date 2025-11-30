@@ -35,7 +35,7 @@ void kvlog_raw(const char *data, va_list args)
 void kvlog(int level, const char *data, va_list args)
 {
     int orig_write_to_screen = write_to_screen;
-    long long stime = (long long) get_sys_time();
+    long long stime = (long long) get_sys_time_ns();
 
     acquire_lock(&log_lock);
     struct framebuffer_color text_color = graphics_getcolor();
@@ -105,7 +105,7 @@ __noreturn void kerror(const char *msg, ...)
 {
     va_list args;
 	write_to_screen = 1;
-    u64 stime = get_sys_time();
+    u64 stime = get_sys_time_ns();
 
     printf("[%4lld.%09lld] ", (long long)(stime / 1000000000ll),
         (long long)(stime % 1000000000ll));

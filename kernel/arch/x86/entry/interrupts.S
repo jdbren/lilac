@@ -182,15 +182,7 @@ isr_no_err simd
 #endif
 
 .text
-.extern timer_cnt
 do_timer_interrupt:
-	movl (timer_cnt), %eax
-	cmpl $(-1), %eax
-	je .no_tick
-	dec %eax
-	mov %eax, (timer_cnt)
-
-.no_tick:
 	xor  %eax, %eax
 	call apic_eoi
 

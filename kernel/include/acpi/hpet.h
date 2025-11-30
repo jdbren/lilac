@@ -36,7 +36,7 @@ struct hpet_info {
 
 struct hpet_info *parse_hpet(struct SDTHeader *addr);
 int dealloc_hpet(struct hpet_info *info);
-void hpet_init(struct hpet_info *info);
+u64 hpet_init(struct hpet_info *info);
 void hpet_enable_int(u32 time);
 void hpet_disable_int(void);
 u64 hpet_read(void);

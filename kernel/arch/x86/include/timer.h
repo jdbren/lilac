@@ -3,11 +3,7 @@
 #ifndef x86_TIMER_H
 #define x86_TIMER_H
 
-#include <lilac/types.h>
-#include <acpi/hpet.h>
-
-void timer_tick_init(void);
+void x86_timer_init(void);
 long long rtc_init(void);
-u64 rdtsc(void);
 
 #endif
