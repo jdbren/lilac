@@ -2,7 +2,10 @@
 #include <lilac/lilac.h>
 #include <lilac/boot.h>
 #include <lilac/font.h>
+#include <lilac/device.h>
+#include <lilac/fs.h>
 #include <mm/kmm.h>
+#include <mm/mm.h>
 #include <utility/termius.h>
 
 #define WINDOW_BORDER 16
@@ -95,6 +98,43 @@ void graphics_setcolor(u32 fg, u32 bg)
 }
 
 static void print_font_info(struct font *terminal_font);
+
+int fb_mmap(struct file *file, struct vm_desc *vma)
+{
+    uintptr_t phys_addr = (uintptr_t)boot_info.mbd.framebuffer->common.framebuffer_addr + vma->vm_pgoff * PAGE_SIZE;
+    size_t size = MIN((vma->end - vma->start) / PAGE_SIZE, boot_info.mbd.framebuffer->common.framebuffer_pitch
+        * boot_info.mbd.framebuffer->common.framebuffer_height / PAGE_SIZE);
+    int flags = MEM_PF_UC | MEM_PF_USER;
+    if (vma->vm_flags & VM_WRITE)
+        flags |= MEM_PF_WRITE;
+    return map_pages((void*)phys_addr, (void*)vma->start, flags, size);
+}
+
+int fb_close(struct inode *inode, struct file *f)
+{
+    return 0;
+}
+
+static const struct file_operations fb_fops = {
+    .ioctl = NULL,
+    .release = fb_close,
+    .mmap = fb_mmap,
+};
+
+int fb_open(struct inode *inode, struct file *f)
+{
+    f->f_op = &fb_fops;
+    return 0;
+}
+
+static const struct inode_operations fb_iops = {
+    .open = fb_open,
+};
+
+void fb_init(void)
+{
+    dev_create("/dev/fb0", &fb_fops, &fb_iops, S_IFCHR|S_IREAD|S_IWRITE, MEM_DEVICE);
+}
 
 void graphics_init(void)
 {

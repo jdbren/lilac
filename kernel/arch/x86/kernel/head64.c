@@ -1,8 +1,6 @@
 #include <lilac/lilac.h>
 #include <lilac/boot.h>
-#include <lilac/keyboard.h>
 #include <lilac/timer.h>
-#include <drivers/framebuffer.h>
 #include <mm/kmm.h>
 #include <lilac/percpu.h>
 #include <asm/cpu-flags.h>

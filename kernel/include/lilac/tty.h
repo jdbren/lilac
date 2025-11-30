@@ -122,7 +122,8 @@ struct tty_operations {
     int (*open)(struct tty *tty, struct file *file);
     void (*close)(struct tty *tty, struct file *file);
     ssize_t (*write)(struct tty *tty, const u8 *buf, size_t count);
-    // void (*set_termios)(struct tty *tty, struct termios *old);
+    void (*set_termios)(struct tty *tty, struct termios *old);
+    int (*ioctl)(struct tty *tty, int cmd, unsigned long arg);
 };
 
 struct tty_ldisc_ops {

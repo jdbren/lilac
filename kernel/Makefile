@@ -64,6 +64,7 @@ kernel/sched.o \
 kernel/signal.o \
 kernel/sync.o \
 kernel/syscall.o \
+kernel/time.o \
 kernel/wait.o \
 mm/kmalloc.o \
 mm/mm.o \

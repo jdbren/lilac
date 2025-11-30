@@ -36,6 +36,8 @@
 #include <lilac/tty.h>
 #include <lilac/console.h>
 #include <lilac/log.h>
+#include <lilac/errno.h>
+#include <drivers/keyboard.h>
 
 /*
  * The variable vt->esc_s holds the escape sequence status:
@@ -102,12 +104,13 @@ static char * vt_map[] = {
   "\376\244\225\242\223\376\224\366\376\227\243\226\201\376\376\230"
 };
 
-#define mc_wgetattr(w) ( (w)->attr )
+#define wgetattr(w) ( (w)->attr )
 #define wsetattr(w,a) ( (w)->attr = (a) )
 
 int vt_open(struct tty *tty, struct file *file);
 void vt_close(struct tty *tty, struct file *f);
 ssize_t vt_write(struct tty *tty, const u8 *buf, size_t count);
+int vt_ioctl(struct tty *tty, int cmd, unsigned long arg);
 
 static void v_termout(struct vc_state *vt, const char *s, int len);
 
@@ -115,11 +118,14 @@ const struct tty_operations vt_tty_ops = {
     .open = vt_open,
     .close = vt_close,
     .write = vt_write,
+    .ioctl = vt_ioctl,
+    .set_termios = NULL
 };
 
 static struct vc_state vt_cons[NUM_STATIC_TTYS] = {
     [0 ... NUM_STATIC_TTYS-1] = {
         .con_ops = &fbcon_ops,
+        .vt_kbd_mode = KB_STD,
         .vt_echo = 1,
         .vt_wrap = 1,
         .vt_addlf = 0,
@@ -142,7 +148,8 @@ static struct vc_state vt_cons[NUM_STATIC_TTYS] = {
         .attr = XA_NORMAL,
         .curx = 0,
         .cury = 0,
-        .save_fg = WHITE
+        .save_fg = WHITE,
+        .save_bg = BLACK,
     }
 };
 
@@ -721,7 +728,7 @@ static void state2(struct vc_state *vt, int c)
             vt->vt_tabs[x] = 0;
         break;
     case 'm': /* Set attributes */
-        attr = mc_wgetattr((vt));
+        attr = wgetattr((vt));
         for (f = 0; f <= vt->ptr; f++) {
             if (vt->escparms[f] >= 30 && vt->escparms[f] <= 37)
                 wsetfgcol(vt, vt->escparms[f] - 30);
@@ -1187,4 +1194,13 @@ ssize_t vt_write(struct tty *tty, const u8 *buf, size_t count)
 
 void vt_close(struct tty *tty, struct file *f)
 {
+}
+
+int vt_ioctl(struct tty *tty, int cmd, unsigned long arg)
+{
+    struct vc_state *v = tty->driver_data;
+    switch (cmd) {
+    default:
+        return -EINVAL;
+    }
 }

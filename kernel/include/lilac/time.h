@@ -23,4 +23,9 @@ struct tm {
     const char *tm_zone;   /* Timezone abbreviation */
 };
 
+struct timezone {
+    int tz_minuteswest; /* of Greenwich */
+    int tz_dsttime;     /* type of dst correction to apply */
+};
+
 #endif

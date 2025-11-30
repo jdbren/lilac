@@ -112,7 +112,8 @@ void arch_unmap_all_user_vm(struct mm_info *info)
         for (uintptr_t addr = desc->start; addr < desc->end; addr += PAGE_SIZE) {
             uintptr_t phys = __walk_pages((void*)addr);
             unmap_page((void*)addr);
-            free_frame((void*)phys);
+            if (!(desc->vm_flags & VM_IO))
+                put_page(phys_to_page(phys));
         }
         kfree(desc);
         desc = next;
@@ -131,13 +132,6 @@ struct mm_info * arch_process_remap(struct mm_info *existing)
     return existing;
 }
 
-void * arch_user_stack(void)
-{
-    static const int num_pgs = __USER_STACK_SZ / PAGE_SIZE;
-    void *stack = (void*)(__USER_STACK - __USER_STACK_SZ);
-    map_pages(alloc_frames(num_pgs), stack, MEM_PF_USER | MEM_PF_WRITE, num_pgs);
-    return stack;
-}
 
 #ifdef __x86_64__
 static void copy_vm_area(void *cr3, struct vm_desc *new_desc)
@@ -189,6 +183,7 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
         *new_desc = *desc;
         new_desc->mm = child;
         new_desc->vm_next = NULL;
+        new_desc->vm_prev = NULL;
         vma_list_insert(new_desc, &child->mmap);
         desc = desc->vm_next;
 

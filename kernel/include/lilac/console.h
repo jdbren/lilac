@@ -3,6 +3,7 @@
 
 #include <lilac/types.h>
 #include <lilac/sync.h>
+#include <user/lilac/keyboard.h>
 
 struct file;
 struct tty;
@@ -66,6 +67,7 @@ struct vc_state {
     int vt_crlf         : 1;    /* Return sends CR/LF */
     int vt_om           : 1;    /* Origin mode. */
     int vt_doscroll     : 1;
+    int vt_kbd_mode     : 2;    /* Keyboard mode. */
 
     int escparms[8];        /* Accumulated escape sequence. */
     int ptr;                /* Index into escparms array. */

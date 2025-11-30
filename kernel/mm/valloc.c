@@ -14,7 +14,7 @@
 #define get_offset(page) (((size_t)(page - KHEAP_START_ADDR) / PAGE_SIZE) % 32)
 
 static void *__check_bitmap(int i, int num_pages, int *count, int *start);
-static void __free_page(u8 *page);
+static void __free_vaddr(u8 *page);
 
 #define KHEAP_PAGES ((KHEAP_MAX_ADDR - KHEAP_START_ADDR) / PAGE_SIZE)
 #define KHEAP_BITMAP_SIZE (KHEAP_PAGES / 8)
@@ -57,7 +57,7 @@ static void free_vaddr(u8 *page, u32 num_pages)
     klog(LOG_DEBUG, "Freed %d pages at %x\n", num_pages, page);
 #endif
     for (u8 *end = page + num_pages * PAGE_SIZE; page < end; page += PAGE_SIZE)
-        __free_page(page);
+        __free_vaddr(page);
 }
 
 void * get_free_vaddr(int num_pages)
@@ -141,7 +141,7 @@ static void* __check_bitmap(int i, int num_pages, int *count, int *start)
     return 0;
 }
 
-static void __free_page(u8 *page)
+static void __free_vaddr(u8 *page)
 {
     u32 index = get_index(page);
     u32 offset = get_offset(page);

@@ -272,7 +272,7 @@ static void start_process(void)
         desc = desc->vm_next;
     }
     mem->start_brk = mem->brk = desc ? desc->end : 0;
-    mem->start_stack = (uintptr_t)arch_user_stack();
+    mem->start_stack = (uintptr_t)(__USER_STACK - __USER_STACK_SZ);
     set_vm_areas(mem);
 
     uintptr_t argv, argc, envp;

@@ -46,16 +46,6 @@ void div0_handler(struct interrupt_frame *frame)
     }
 }
 
-static struct vm_desc* find_vma(struct mm_info *mm, uintptr_t addr)
-{
-    struct vm_desc *vma = mm->mmap;
-    while (vma) {
-        if (addr >= vma->start && addr < vma->end)
-            return vma;
-        vma = vma->vm_next;
-    }
-    return NULL;
-}
 
 static unsigned long get_fault_flags(long err_code)
 {
