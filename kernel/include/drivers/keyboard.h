@@ -4,6 +4,7 @@
 #define KERNEL_KEYBOARD_H
 
 #include <lilac/types.h>
+#include <user/lilac/keyboard.h>
 
 #define KB_SHIFT    1
 #define KB_CTRL     2
@@ -20,7 +21,14 @@ struct kbd_event {
     u8 status;
 };
 
-void keyboard_init(void);
+struct kbd_state {
+    int mode:3;
+    int reserved:5;
+};
+
+void kbd_init(void);
+void kbd_int_init(void);
 void kb_code(int);
+int kb_set_mode(int mode);
 
 #endif

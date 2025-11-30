@@ -16,6 +16,7 @@ struct device_type;
 #define TTY_DEVICE 2
 #define SATA_DEVICE 3
 #define NVME_DEVICE 4
+#define INPUT_DEVICE 5
 
 #define DEVICE_ID(maj, min) ((maj << 20) + min)
 #define MAJOR(dev) ((dev) >> 20)

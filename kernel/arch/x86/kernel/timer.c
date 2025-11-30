@@ -2,6 +2,7 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include "timer.h"
 
+#include <lilac/types.h>
 #include <lilac/config.h>
 #include <lilac/boot.h>
 #include <lilac/timer.h>
@@ -11,6 +12,7 @@
 #include <lilac/port.h>
 #include <lilac/panic.h>
 #include <lilac/log.h>
+#include <lilac/syscall.h>
 
 #include <asm/segments.h>
 #include "cpu-features.h"
@@ -22,7 +24,7 @@
 extern void timer_handler(void);
 extern void init_PIT(int freq);
 
-static s64 boot_unix_time;
+s64 boot_unix_time;
 volatile u32 timer_cnt;
 extern volatile u32 system_timer_fractions;
 extern volatile u32 system_timer_ms;
@@ -160,6 +162,13 @@ void usleep(u32 micros)
     while (get_sys_time() < end) {
         asm volatile("nop");
     }
+}
+
+SYSCALL_DECL2(nanosleep, const struct timespec*, duration, struct timespec*, rem)
+{
+    u64 total_ns = duration->tv_sec * 1'000'000'000ull + duration->tv_nsec;
+    usleep(total_ns / 1000);
+    return 0;
 }
 
 // Get system timer in 1 ns intervals

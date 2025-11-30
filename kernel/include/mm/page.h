@@ -88,9 +88,30 @@ void free_page(void *addr)
 }
 
 static inline __always_inline
+void __free_page(struct page *frame)
+{
+    __free_pages(frame, 1);
+}
+
+static inline __always_inline
 void * get_free_page(u32 type)
 {
     return get_free_pages(1, type);
+}
+
+static inline
+void * get_page(struct page *pg)
+{
+    pg->refcount++;
+    return get_page_addr(pg);
+}
+
+static inline
+void put_page(struct page *pg)
+{
+    if (atomic_fetch_sub(&pg->refcount, 1) == 1) {
+        __free_page(pg);
+    }
 }
 
 #endif

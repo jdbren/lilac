@@ -1,6 +1,9 @@
-#include <lilac/keyboard.h>
+#include <drivers/keyboard.h>
 #include <lilac/libc.h>
 #include <lilac/tty.h>
+#include <lilac/fs.h>
+#include <lilac/device.h>
+#include <lilac/err.h>
 
 #define K_STOP      256
 #define K_F1        257
@@ -27,6 +30,10 @@
 #define K_INS       275
 #define K_DEL       276
 
+struct kbd_state vt_kbd = {
+    .mode = KB_STD,
+    .reserved = 0
+};
 
 unsigned short keyboard_map[128] = {
     0, 27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',
@@ -168,9 +175,33 @@ static void kbd_send(int keycode)
     }
 }
 
+static int scancode_queue[32];
+static int scancode_queue_start = 0;
+static int scancode_queue_end = 0;
+
+static void scancode_add(int scancode)
+{
+    scancode_queue[scancode_queue_end] = scancode;
+    scancode_queue_end = (scancode_queue_end + 1) % 32;
+}
+
+static int scancode_pop()
+{
+    if (scancode_queue_start == scancode_queue_end)
+        return -1; // empty
+    int scancode = scancode_queue[scancode_queue_start];
+    scancode_queue_start = (scancode_queue_start + 1) % 32;
+    return scancode;
+}
+
 void kb_code(int scancode)
 {
     int c = 0;
+
+    if (vt_kbd.mode == KB_RAW) {
+        scancode_add(scancode);
+        return;
+    }
 
     switch (scancode) {
         case SHIFT_PRESSED:
@@ -213,4 +244,57 @@ void kb_code(int scancode)
         // klog(LOG_DEBUG, "Keycode: %x\n", c);
         kbd_send(c);
     }
+}
+
+int kb_set_mode(int mode)
+{
+    if (mode < KB_RAW || mode > KB_STD)
+        return -EINVAL;
+    vt_kbd.mode = mode;
+    return 0;
+}
+
+ssize_t kb_read_raw(struct file *f, void *buf, size_t size)
+{
+    size_t bytes_read = 0;
+    u8 *cbuf = buf;
+    while (bytes_read < size) {
+        int scancode = scancode_pop();
+        if (scancode == -1)
+            break; // no more scancodes
+        cbuf[bytes_read++] = (u8)scancode;
+    }
+    return bytes_read;
+}
+
+int kb_ioctl(struct file *f, int op, void *argp)
+{
+    switch (op) {
+    case KBDGMODE:
+        return vt_kbd.mode;
+    case KBDSMODE:
+        return kb_set_mode((int)(uintptr_t)argp);
+    default:
+        return -EINVAL;
+    }
+}
+
+static const struct file_operations keyboard_fops = {
+    .read = kb_read_raw,
+    .ioctl = kb_ioctl
+};
+
+int kb_open(struct inode *inode, struct file *file)
+{
+    file->f_op = &keyboard_fops;
+    return 0;
+}
+
+static const struct inode_operations keyboard_iops = {
+    .open = kb_open,
+};
+
+void kbd_init(void)
+{
+    dev_create("/dev/kbd0", &keyboard_fops, &keyboard_iops, S_IFCHR|S_IREAD, INPUT_DEVICE);
 }

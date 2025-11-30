@@ -8,6 +8,7 @@
 #include <lilac/syscall.h>
 #include <lilac/uaccess.h>
 #include <lilac/ioctl.h>
+#include <drivers/keyboard.h>
 
 #include "vt100.h"
 
@@ -113,11 +114,11 @@ int tty_recv_char(u8 c)
     klog(LOG_DEBUG, "tty_recv_char: received char '%c' (0x%02x)\n", (char)c, c);
 #endif
     // hack until vt switching
-    if (c & 0x80) {
-        c &= ~0x80u;
-        set_active_term(atoi((char*)&c));
-        return 0;
-    }
+    // if (c & 0x80) {
+    //     c &= ~0x80u;
+    //     set_active_term(atoi((char*)&c));
+    //     return 0;
+    // }
     struct tty *tty = &ttys[active];
     if (tty->ldisc_ops && tty->ldisc_ops->receive_buf)
         tty->ldisc_ops->receive_buf(tty, &c, NULL, 1);

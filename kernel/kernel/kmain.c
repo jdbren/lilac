@@ -8,7 +8,7 @@
 #include <lilac/sched.h>
 #include <lilac/console.h>
 #include <lilac/tty.h>
-#include <lilac/keyboard.h>
+#include <drivers/keyboard.h>
 #include <lilac/timer.h>
 #include <drivers/framebuffer.h>
 #include <acpi/acpi.h>
@@ -37,7 +37,7 @@ void start_kernel(void)
     acpi_early_init();
     arch_setup();
 
-    keyboard_init();
+    kbd_int_init();
     timer_init();
     syscall_init();
 
@@ -48,6 +48,8 @@ void start_kernel(void)
 
     fs_init();
     sched_init();
+    fb_init();
+    kbd_init();
     console_init();
     tty_init();
     sched_clock_init();

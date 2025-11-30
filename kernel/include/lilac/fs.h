@@ -21,6 +21,7 @@ struct inode;
 struct dentry;
 struct super_block;
 struct dirent;
+struct vm_desc;
 
 enum file_type {
     TYPE_FILE, TYPE_DIR, TYPE_DEV, TYPE_SPECIAL, TYPE_TTY
@@ -157,6 +158,7 @@ struct file_operations {
     int     (*flush)(struct file *);
     int     (*release)(struct inode *, struct file *);
     int     (*ioctl)(struct file *, int op, void *args);
+    int     (*mmap)(struct file *, struct vm_desc *);
 };
 
 

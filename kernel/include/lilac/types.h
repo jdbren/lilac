@@ -63,8 +63,8 @@ enum disk_cmd {
 };
 
 struct timespec {
-    time_t tv_spec;
-    suseconds_t tv_nsec;
+    time_t tv_sec;
+    long tv_nsec;
 };
 
 #endif

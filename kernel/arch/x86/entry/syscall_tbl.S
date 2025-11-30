@@ -68,6 +68,10 @@ syscall_table:
 	sc_tbl_entry memfd_create
 	sc_tbl_entry sigsuspend # 42
 	sc_tbl_entry fcntl      # 43
+	sc_tbl_entry mmap		# 44
+	sc_tbl_entry munmap		# 45
+	sc_tbl_entry nanosleep	# 46
+	sc_tbl_entry gettimeofday
 /*
 	sc_tbl_entry link		# 26
 	sc_tbl_entry unlink		# 27
