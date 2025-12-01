@@ -145,6 +145,5 @@ void init_phys_mem_mapping(size_t mem_sz_kb) {
         phys += 0x400000;
     }
 
-    uintptr_t cr3 = arch_get_pgd();
-    asm volatile("mov %0, %%cr3" :: "r"(cr3) : "memory");
+    __native_flush_tlb();
 }

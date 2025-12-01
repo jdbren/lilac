@@ -51,7 +51,7 @@ static struct clock_source pit_clock = {
     .name = "pit",
     .read = read_pit_count,
     .freq_hz = PIT_FREQUENCY,
-    .scale = { .mult = 0, .shift = 0 },
+    .scale = { .mult = (1000000000ull << 22) / PIT_FREQUENCY, .shift = 22 },
 };
 
 struct clock_source *__system_clock = &pit_clock;
@@ -62,11 +62,8 @@ u64 ticks_per_ms = PIT_FREQUENCY / 1000;
 // Formula: mult ≈ (1e9 << shift) / freq
 static void set_clock_scale(struct clock_source *c)
 {
-    u32 shift;
-    for (shift = 31; ; shift--) {
-        u64 num = (1000000000ull << shift);
-        u64 mult = num / c->freq_hz;
-
+    for (int shift = 31; shift > 0; shift--) {
+        u64 mult = ((1000000000ull << shift) + c->freq_hz / 2) / c->freq_hz;
         if (mult <= UINT32_MAX) {
             c->scale.mult = (u32)mult;
             c->scale.shift = shift;
@@ -74,14 +71,11 @@ static void set_clock_scale(struct clock_source *c)
                  c->name, c->scale.mult, c->scale.shift);
             return;
         }
-
-        if (shift == 0)
-            break;
     }
 
-    // fallback: lowest precision but safe
-    c->scale.mult = 1000000000ull / c->freq_hz;
+    c->scale.mult = (u32)(1000000000ull / c->freq_hz);
     c->scale.shift = 0;
+    klog(LOG_WARN, "Clock %s: using unscaled conversion (freq too high)\n", c->name);
 }
 
 static inline bool in_hypervisor(void)

@@ -17,6 +17,7 @@
 #define __KERNEL_MAX_ADDR   0xffffffff80200000ULL
 #define __USER_STACK        0x0000800000000000ULL
 #define __USER_MAX_ADDR     0x00007fffffffffffULL
+#define __USER_MMAP_START   0x0000004000000000ULL
 #else
 #define __KERNEL_BASE       0xc0000000
 #define __KERNEL_MAX_ADDR   0xc0400000
@@ -25,6 +26,7 @@
 #define KHEAP_MAX_ADDR      0xffb00000
 #define __USER_STACK        0x80000000
 #define __USER_MAX_ADDR     0x7fffffff
+#define __USER_MMAP_START   0x40000000
 #endif
 
 #define __KERNEL_STACK_SZ   0x2000

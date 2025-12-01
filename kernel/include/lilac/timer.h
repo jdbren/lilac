@@ -23,7 +23,7 @@ struct clock_source {
 };
 
 extern struct clock_source *__system_clock;
-extern unsigned long ticks_per_ms;
+extern u64 ticks_per_ms;
 
 void timer_init(void);
 void timer_tick_init(void); // arch
@@ -61,15 +61,41 @@ static inline u64 ticks_to_ms(u64 t)
     return t / ticks_per_ms;
 }
 
+static inline
+u64 mul_u64_u32_shr(u64 a, u32 mul, unsigned int shift)
+{
+    u32 ah, al;
+    u64 ret;
+
+    al = a;
+    ah = a >> 32;
+
+    ret = ((u64)al * mul) >> shift;
+    if (ah)
+        ret += ((u64)ah * mul) << (32 - shift);
+
+    return ret;
+}
+
+
 static inline u64 ns_to_ticks(u64 ns)
 {
-    return (ns * __system_clock->freq_hz) / 1000000000ull;
+#ifdef __SIZEOF_INT128__
+    __uint128_t prod = (__uint128_t) ns * __system_clock->freq_hz;
+    return (u64)(prod / 1000000000ull);
+#else
+    return mul_u64_u32_shr(ns, (u32)(__system_clock->freq_hz / 1000000000ull), 0);
+#endif
 }
 
 static inline u64 ticks_to_ns(u64 t)
 {
-    __int128 prod = (__int128) t * (__int128) __system_clock->scale.mult;
+#ifdef __SIZEOF_INT128__
+    __uint128_t prod = (__uint128_t) t * __system_clock->scale.mult;
     return (u64)(prod >> __system_clock->scale.shift);
+#else
+    return mul_u64_u32_shr(t, __system_clock->scale.mult, __system_clock->scale.shift);
+#endif
 }
 
 #endif

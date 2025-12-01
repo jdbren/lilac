@@ -222,7 +222,7 @@ SYSCALL_DECL6(mmap, void*, addr, size_t, length, int, prot,
         vma = create_new_vma_at(current->mm, pgaddr, num_pages * PAGE_SIZE, mflags);
     } else {
         if (pgaddr == 0)
-            pgaddr = 0x5000000000ul; // arbitrary high address
+            pgaddr = __USER_MMAP_START; // arbitrary high address
         vma = create_new_vma_after(current->mm, pgaddr, num_pages * PAGE_SIZE, mflags);
     }
 
