@@ -13,6 +13,8 @@ void set_clock_source(struct clock_source *clock)
 {
     __system_clock = clock;
     ticks_per_ms = clock->freq_hz / 1000;
+    klog(LOG_INFO, "System clock set to %s (%llu Hz)\n",
+         clock->name, clock->freq_hz);
 }
 
 void timer_init(void)

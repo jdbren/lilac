@@ -70,6 +70,8 @@ static void set_clock_scale(struct clock_source *c)
         if (mult <= UINT32_MAX) {
             c->scale.mult = (u32)mult;
             c->scale.shift = shift;
+            klog(LOG_INFO, "Clock %s: scale mult=%u shift=%u\n",
+                 c->name, c->scale.mult, c->scale.shift);
             return;
         }
 
