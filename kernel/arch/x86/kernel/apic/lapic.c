@@ -104,9 +104,14 @@ void tsc_deadline_set(u64 deadline)
 
 void apic_tsc_deadline(void)
 {
+    u32 hi, lo;
     write_reg(APIC_LVT_TIMER, APIC_TIMER_DEADLINE | 0x20);
     __asm__ ("mfence");
-    tsc_deadline_set(0);
+
+    read_msr(IA32_TSC, &lo, &hi);
+    u64 current_tsc = ((u64)hi << 32) | lo;
+
+    tsc_deadline_set(current_tsc + 1000000);
     klog(LOG_INFO, "APIC TSC deadline timer enabled\n");
 }
 
