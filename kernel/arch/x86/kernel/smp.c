@@ -107,7 +107,9 @@ void percpu_init_cpu(void)
     u8 cpu_id = get_lapic_id();
     uintptr_t base = (uintptr_t)&_percpu_start + per_cpu_offset(cpu_id);
     set_kernel_gs_base(base);
+#ifdef __x86_64__
     swapgs();
+#endif
 
     struct cpu_local *local = (struct cpu_local *)base;
     local->id = cpu_id;

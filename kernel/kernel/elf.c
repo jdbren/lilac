@@ -200,7 +200,7 @@ static void * elf64_load(struct elf_header *hdr, struct mm_info *mm, struct file
     return (void*)hdr->elf64.entry;
 }
 #else
-static void * elf64_load(void *elf, struct mm_info *mm) { return NULL; }
+static void * elf64_load(struct elf_header *hdr, struct mm_info *mm, struct file *elff) { return NULL; }
 #endif
 
 void * elf_load(struct file *f, struct mm_info *mm)
