@@ -31,6 +31,7 @@ unsigned long ___phys_addr(unsigned long x)
 #define virt_to_page(kaddr) pfn_to_page(__phys_addr(kaddr) >> PAGE_SHIFT)
 
 #define virt_to_phys(kaddr) __phys_addr(kaddr)
+#define phys_to_virt(paddr) ((void*)((uintptr_t)(paddr) + __PHYS_MAP_ADDR))
 
 
 #define ALLOC_NORMAL    0x0
@@ -94,9 +95,15 @@ void __free_page(struct page *frame)
 }
 
 static inline __always_inline
-void * get_free_page(u32 type)
+void * get_free_page(void)
 {
-    return get_free_pages(1, type);
+    return get_free_pages(1, ALLOC_NORMAL);
+}
+
+static __always_inline
+void * get_zeroed_page(void)
+{
+    return get_zeroed_pages(1, ALLOC_NORMAL);
 }
 
 static inline

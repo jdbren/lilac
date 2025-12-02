@@ -17,7 +17,7 @@ static bool check_access(struct vm_desc *vma, unsigned int flags)
 
 static inline void * fault_page_alloc(void)
 {
-    void *page = get_free_page(ALLOC_NORMAL);
+    void *page = get_free_page();
     if (!page)
         panic("Out of memory allocating page for page fault\n");
     return page;

@@ -19,7 +19,7 @@ kernel: copy-headers
 copy-headers:
 	$(MAKE) -C kernel install-headers
 
-install:
+install: copy-headers
 	$(MAKE) -C kernel install
 
 install-system: install install-libc init user shell

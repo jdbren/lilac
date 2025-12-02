@@ -21,6 +21,28 @@
                 "${workspaceFolder}/.vscode/undefs.h"
             ],
             "cppStandard": "c++23"
+        },
+        {
+            "name": "Lilac32",
+            "includePath": [
+                "${workspaceFolder}/kernel/include/**",
+                "${workspaceFolder}/kernel/arch/x86/include/**",
+                "${workspaceFolder}/kernel/drivers/acpi/acpica/**",
+                "${workspaceFolder}/sysroot/usr/include/**"
+            ],
+            "defines": [
+                "__lilac__",
+                "__KERNEL__",
+                "true=1",
+                "false=0"
+            ],
+            "compilerPath": "/usr/local/bin/i686-lilac-gcc",
+            "intelliSenseMode": "gcc-x86",
+            "cStandard": "gnu23",
+            "forcedInclude": [
+                "${workspaceFolder}/.vscode/undefs.h"
+            ],
+            "cppStandard": "c++23"
         }
     ],
     "version": 4
