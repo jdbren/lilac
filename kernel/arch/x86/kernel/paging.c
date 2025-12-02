@@ -35,7 +35,9 @@ int map_pages(void *physaddr, void *virtualaddr, int flags, int num_pages)
     flags |= x86_to_page_flags(flags) | 1;
     for (int i = 0; i < num_pages; i++, physaddr = (u8*)physaddr + PAGE_SIZE,
     virtualaddr = (u8*)virtualaddr + PAGE_SIZE) {
-        //printf("mapping %x to %x\n", physaddr, virtualaddr);
+#ifdef DEBUG_PAGING
+        printf("mapping %x to %x\n", physaddr, virtualaddr);
+#endif
         assert(is_aligned(physaddr, PAGE_SIZE));
         assert(is_aligned(virtualaddr, PAGE_SIZE));
 
@@ -65,7 +67,9 @@ int map_pages(void *physaddr, void *virtualaddr, int flags, int num_pages)
 int unmap_pages(void *virtualaddr, int num_pages)
 {
     for (int i = 0; i < num_pages; i++, virtualaddr = (u8*)virtualaddr + PAGE_SIZE) {
-        //printf("unmapping %x\n", virtualaddr);
+#ifdef DEBUG_PAGING
+        printf("unmapping %x\n", virtualaddr);
+#endif
         assert(is_aligned(virtualaddr, PAGE_SIZE));
 
         u32 pdindex = (u32)virtualaddr >> 22;

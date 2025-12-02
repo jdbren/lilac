@@ -74,10 +74,11 @@
 	mov  4(%ebp), %eax
 	push %eax
 	call \name\()_handler
-	add  $12, %esp # err code and vals
+	add  $8, %esp
 	call x86_kernel_exit
 	popa
 	pop  %ebp
+	add  $4, %esp
 	iret
 .endm
 

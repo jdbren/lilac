@@ -44,9 +44,8 @@ static void print_page_structs(u32 *cr3)
 #ifndef __x86_64__
 static struct mm_info * make_32_bit_mmap()
 {
-    uintptr_t phys = (uintptr_t)alloc_frame();
-    volatile uintptr_t *cr3 = map_phys((void*)phys, PAGE_SIZE, MEM_PF_WRITE);
-    memset((void*)cr3, 0, PAGE_SIZE);
+    size_t *cr3 = get_zeroed_page();
+    uintptr_t phys = virt_to_phys(cr3);
 
     // Do recursive mapping
     cr3[1023] = phys | PG_WRITE | PG_SUPER | 1;
@@ -64,8 +63,6 @@ static struct mm_info * make_32_bit_mmap()
     }
     info->pgd = phys;
     info->kstack = kstack;
-    cr3[1023] = phys | PG_WRITE | PG_SUPER | 1;
-    unmap_phys((void*)cr3, PAGE_SIZE);
 
     return info;
 }
@@ -203,7 +200,7 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
     child->brk = parent->brk;
     child->start_stack = parent->start_stack;
     child->total_vm = parent->total_vm;
-    u32 *cr3 = map_phys((void*)child->pgd, PAGE_SIZE, MEM_PF_WRITE);
+    u32 *cr3 = phys_to_virt(child->pgd);
 
     struct vm_desc *desc = parent->mmap;
     while (desc) {
@@ -211,9 +208,11 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
         if (!new_desc) {
             kerror("Out of memory allocating vm_desc for fork\n");
         }
-        memcpy(new_desc, desc, sizeof *desc);
+
+        *new_desc = *desc;
         new_desc->mm = child;
         new_desc->vm_next = NULL;
+        new_desc->vm_prev = NULL;
         vma_list_insert(new_desc, &child->mmap);
         desc = desc->vm_next;
 
@@ -221,29 +220,21 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
         void *phys = alloc_frames(num_pages);
 
         // Copy data
-        void *tmp_virt = map_phys(phys, num_pages * PAGE_SIZE, MEM_PF_WRITE);
-        memcpy(tmp_virt, (void*)new_desc->start, num_pages * PAGE_SIZE);
-        unmap_phys(tmp_virt, num_pages * PAGE_SIZE);
+        memcpy(phys_to_virt(phys), (void*)new_desc->start, num_pages * PAGE_SIZE);
 
         for (int i = 0; i < num_pages; i++) {
             u32 pdindex = PG_DIR_INDEX(new_desc->start + i * PAGE_SIZE);
             u32 ptindex = PG_TABLE_INDEX(new_desc->start + i * PAGE_SIZE);
 
             if (!(cr3[pdindex] & 1)) {
-                uintptr_t phys = (uintptr_t)alloc_frame();
-                u32 *pt = map_phys((void*)phys, PAGE_SIZE, MEM_PF_WRITE);
-                memset(pt, 0, PAGE_SIZE);
-                cr3[pdindex] = phys | PG_WRITE | PG_USER | 1;
-                unmap_phys(pt, PAGE_SIZE);
+                u32 *pt = get_zeroed_page();
+                cr3[pdindex] = virt_to_phys(pt) | PG_WRITE | PG_USER | 1;
             }
 
-            u32 *pt = map_phys((void*)(cr3[pdindex] & ~0xFFF), PAGE_SIZE, MEM_PF_WRITE);
+            u32 *pt = phys_to_virt(cr3[pdindex] & ~0xFFF);
             pt[ptindex] = ((uintptr_t)phys + i * PAGE_SIZE) | PG_WRITE | PG_USER | 1;
-            unmap_phys(pt, PAGE_SIZE);
         }
     }
-
-    unmap_phys(cr3, PAGE_SIZE);
 
     return child;
 }

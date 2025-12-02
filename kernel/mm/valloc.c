@@ -9,9 +9,9 @@
 
 // #define DEBUG_KMM 1
 
-#define check_bit(var,pos) ((var) & (1<<(pos)))
-#define get_index(page) ((size_t)(page - KHEAP_START_ADDR)/ (32 * PAGE_SIZE))
-#define get_offset(page) (((size_t)(page - KHEAP_START_ADDR) / PAGE_SIZE) % 32)
+#define check_bit(var,pos) ((var) & (1ul<<(pos)))
+#define get_index(page) ((size_t)(page - KHEAP_START_ADDR)/ (BITS_PER_LONG * PAGE_SIZE))
+#define get_offset(page) (((size_t)(page - KHEAP_START_ADDR) / PAGE_SIZE) % BITS_PER_LONG)
 
 static void *__check_bitmap(int i, int num_pages, int *count, int *start);
 static void __free_vaddr(u8 *page);
@@ -20,7 +20,7 @@ static void __free_vaddr(u8 *page);
 #define KHEAP_BITMAP_SIZE (KHEAP_PAGES / 8)
 #define HEAP_MANAGE_BYTES PAGE_ROUND_UP(KHEAP_BITMAP_SIZE)
 
-static uintptr_t kheap_bitmap[HEAP_MANAGE_BYTES / 4];
+static uintptr_t kheap_bitmap[HEAP_MANAGE_BYTES / sizeof(uintptr_t)];
 
 static void *find_vaddr(int num_pages)
 {
@@ -32,7 +32,7 @@ static void *find_vaddr(int num_pages)
     void *ptr = NULL;
     int start = 0;
     int count = 0;
-    for (size_t i = 0; i < KHEAP_BITMAP_SIZE / sizeof(u32); i++) {
+    for (size_t i = 0; i < KHEAP_BITMAP_SIZE / sizeof(uintptr_t); i++) {
         if (kheap_bitmap[i] != ~0UL) {
             ptr = __check_bitmap(i, num_pages, &count, &start);
             if (ptr)
@@ -112,10 +112,10 @@ void unmap_virt(void *virt, int size)
 static void* __do_page_alloc(int start, int num_pages)
 {
     for (int k = start; k < start + num_pages; k++) {
-        int index = k / 32;
-        int offset = k % 32;
+        int index = k / BITS_PER_LONG;
+        int offset = k % BITS_PER_LONG;
 
-        kheap_bitmap[index] |= (1 << offset);
+        kheap_bitmap[index] |= (1ul << offset);
     }
 
     return (void*)(KHEAP_START_ADDR + start * PAGE_SIZE);
@@ -123,10 +123,10 @@ static void* __do_page_alloc(int start, int num_pages)
 
 static void* __check_bitmap(int i, int num_pages, int *count, int *start)
 {
-    for (int j = 0; j < 32; j++) {
+    for (int j = 0; j < BITS_PER_LONG; j++) {
         if (!check_bit(kheap_bitmap[i], j)) {
             if (*count == 0)
-                *start = i * 32 + j;
+                *start = i * BITS_PER_LONG + j;
 
             (*count)++;
 
@@ -146,5 +146,5 @@ static void __free_vaddr(u8 *page)
     u32 index = get_index(page);
     u32 offset = get_offset(page);
 
-    kheap_bitmap[index] &= ~(1 << offset);
+    kheap_bitmap[index] &= ~(1ul << offset);
 }
