@@ -27,7 +27,7 @@ static void fb_clear_rect_pixels(struct framebuffer *fb, int x, int y, int width
     for (int py = 0; py < height; py++) {
         u8 *row = fb->fb + ((y + py) * fb->fb_pitch) + (x * fb->bypp);
         for (int px = 0; px < width; px++) {
-            *(u32 *)(row + (px * fb->bypp)) = fb->fb_bg;
+            memcpy(row + (px * fb->bypp), &fb->fb_bg, fb->bypp);
         }
     }
 }
@@ -130,11 +130,11 @@ void fbcon_scroll(struct vc_state *vt, int top, int bottom, int dir, int lines)
 
     if (dir == S_UP) {
         if (top + lines <= bottom)
-            fbcon_move_chars(vt, top + lines, 0, top, 0, bottom - top - lines, vt->xs);
-        fbcon_clear_region(vt, bottom - lines, 0, lines, vt->xs);
+            fbcon_move_chars(vt, top + lines, 0, top, 0, bottom - top - lines + 1, vt->xs);
+        fbcon_clear_region(vt, bottom - lines + 1, 0, lines, vt->xs);
     } else if (dir == S_DOWN) {
         if (top + lines <= bottom)
-            fbcon_move_chars(vt, top, 0, top + lines, 0, bottom - top - lines, vt->xs);
+            fbcon_move_chars(vt, top, 0, top + lines, 0, bottom - top - lines + 1, vt->xs);
         fbcon_clear_region(vt, top, 0, lines, vt->xs);
     }
 }
@@ -154,23 +154,27 @@ static void draw_cursor(struct vc_state *vt, int cx, int cy)
         return;
 
     u32 offs = (cy * fb->font->height * fb->fb_pitch) +
-        (cx * (fb->font->width + fb->width_pad) * sizeof(u32));
+        (cx * (fb->font->width + fb->width_pad) * fb->bypp);
 
     for (int y = 0; y < fb->font->height; y++) {
         u32 line = offs;
 
         for (int x = 0; x < fb->font->width; x++) {
-            u32 *pixel = (u32*)(fb->fb + line);
-            u32 current_color = *pixel;
+            u8 *pixel_addr = fb->fb + line;
+            u32 current_color = 0;
+            u32 inverted_color = 0;
+
+            memcpy(&current_color, pixel_addr, fb->bypp);
 
             if (current_color == fb->fb_fg)
-                *pixel = fb->fb_bg;
+                inverted_color = fb->fb_bg;
             else if (current_color == fb->fb_bg)
-                *pixel = fb->fb_fg;
+                inverted_color = fb->fb_fg;
             else
-                *pixel = fb->fb_fg;
+                inverted_color = fb->fb_fg;
 
-            line += sizeof(u32);
+            memcpy(pixel_addr, &inverted_color, fb->bypp);
+            line += fb->bypp;
         }
 
         offs += fb->fb_pitch;

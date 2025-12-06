@@ -140,7 +140,7 @@ static struct vc_state vt_cons[NUM_STATIC_TTYS] = {
         .xs = 80,
         .ys = 24,
         .scroll_top = 0,
-        .scroll_bottom = 24,
+        .scroll_bottom = 23,
         .vt_bs = '\b',
         .vt_tabs = { [0] = 0x01010100, [1 ... 4] = 0x01010101 },
         .vt_fg = WHITE,
@@ -176,10 +176,10 @@ static void lf(struct vc_state *vc)
     /* don't scroll if above bottom of scrolling region, or
     * if below scrolling region
     */
-    if (vc->cury + 1 == vc->scroll_bottom)
-        vc->con_ops->con_scroll(vc, vc->scroll_top, vc->scroll_bottom, S_UP, 1);
-    else if (vc->cury < vc->ys - 1)
+    if (vc->cury < vc->scroll_bottom)
         vc->cury++;
+    else if (vc->cury == vc->scroll_bottom && vc->vt_doscroll)
+        vc->con_ops->con_scroll(vc, vc->scroll_top, vc->scroll_bottom, S_UP, 1);
 }
 
 static void ri(struct vc_state *vc)
@@ -187,10 +187,10 @@ static void ri(struct vc_state *vc)
     /* don't scroll if below top of scrolling region, or
     * if above scrolling region
     */
-    if (vc->cury == vc->scroll_top)
-        vc->con_ops->con_scroll(vc, vc->scroll_top, vc->scroll_bottom, S_DOWN, 1);
-    else if (vc->cury > 0)
+    if (vc->cury > vc->scroll_top)
         vc->cury--;
+    else if (vc->cury == vc->scroll_top && vc->vt_doscroll)
+        vc->con_ops->con_scroll(vc, vc->scroll_top, vc->scroll_bottom, S_DOWN, 1);
 }
 
 static void cr(struct vc_state *vc)
@@ -321,9 +321,10 @@ static void wputc(struct vc_state *vt, char c)
         if (c != '\n')
             vt->curx = 0;
         vt->cury++;
-        if (vt->cury >= vt->ys - 1) {
+        if (vt->cury > vt->scroll_bottom) {
             if (vt->vt_doscroll)
                 wscroll(vt, S_UP);
+            vt->cury = vt->scroll_bottom;
         }
         if (vt->cury >= vt->ys)
             vt->cury = vt->ys - 1;
@@ -360,8 +361,8 @@ static void winsnchar(struct vc_state *v, char c, int count)
 
     int x = v->curx;
     for (int i = 0; i < count; i++) {
-        x++;
         v->con_ops->con_putc(v, c, x, v->cury);
+        x++;
     }
 }
 
@@ -610,16 +611,21 @@ static void state2(struct vc_state *vt, int c)
         if (c == 'A') { /* Up. */
             y -= f;
             if (y < 0)
-            y = 0;
+                y = 0;
             if (y <= vt->scroll_top - 1)
-            y = vt->scroll_top;
+                y = vt->scroll_top;
         }
         locate_curs(vt, x, y);
         break;
     case 'X': /* Character erasing (ECH) */
         if ((f = vt->escparms[0]) == 0)
             f = 1;
-        wclrch(vt, f);
+        int save_x = vt->curx;
+        for (int i = 0; i < f && vt->curx < vt->xs; i++) {
+            vt->con_ops->con_putc(vt, ' ', vt->curx, vt->cury);
+            vt->curx++;
+        }
+        vt->curx = save_x;
         break;
     case 'K': /* Line erasing */
         switch (vt->escparms[0]) {
@@ -627,10 +633,10 @@ static void state2(struct vc_state *vt, int c)
             wclreol(vt);
             break;
         case 1:
-            //mc_wclrbol(vt);
+            wclrel(vt);
             break;
         case 2:
-            wclrel(vt);
+            wclrch(vt, vt->cury);
             break;
         }
         break;
@@ -1181,7 +1187,7 @@ static void v_termout(struct vc_state *vt, const char *s, int len)
     klog(LOG_DEBUG, "%s\n", log_buf);
 #endif
     vt->con_ops->con_cursor(vt, CURSOR_OFF);
-    for (p = s; *p && p < s+len; p++)
+    for (p = s; p < s+len; p++)
         vt_out(vt, *p, 0);
     vt->con_ops->con_cursor(vt, CURSOR_ON);
 }
@@ -1189,7 +1195,7 @@ static void v_termout(struct vc_state *vt, const char *s, int len)
 ssize_t vt_write(struct tty *tty, const u8 *buf, size_t count)
 {
     v_termout(tty->driver_data, (const char*)buf, count);
-    return MIN(strlen((char*)buf), count);
+    return count;
 }
 
 void vt_close(struct tty *tty, struct file *f)

@@ -206,7 +206,7 @@ void default_tty_set_termios(struct tty *tty, const struct termios *old)
         if (EDIT_LEN(data) > 0)
             c_commit_line(data);
         data->input.epos = data->input.wpos;
-        data->vmin_cnt = tty->termios.c_cc[VMIN];
+        data->vmin_cnt = BUF_COUNT(data);
     }
 
     if (!is_canon) {
@@ -528,6 +528,12 @@ static ssize_t nc_read(struct tty *tty, u8 *buf, size_t nr)
             }
         }
     }
+
+#ifdef DEBUG_TTY
+    for (size_t i = 0; i < copied; i++) {
+        klog(LOG_DEBUG, "nc_read: read char 0x%x\n", buf[i]);
+    }
+#endif
 
     return copied;
 }

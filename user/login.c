@@ -49,7 +49,7 @@ int main()
 
     tcsetattr(0, TCSANOW, &tio);
 
-    setenv("TERM", "vt100", 1);
+    setenv("TERM", "vt220", 1);
     setenv("HOME", "/root", 1);
     setenv("SHELL", "/bin/dash", 1);
 
