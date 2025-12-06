@@ -105,10 +105,10 @@ static int pde(int index, u16 flags)
     static const u8 default_flags = PG_WRITE | 1;
     flags |= default_flags;
 
-    void *addr = alloc_frame();
+    uintptr_t addr = virt_to_phys(get_zeroed_page());
     assert(is_aligned(addr, PAGE_SIZE));
 
-    pde_t entry = (u32)addr | flags;
+    pde_t entry = addr | flags;
     pd[index] = entry;
 
     volatile u32 *pt = ((u32*)0xFFC00000) + (0x400 * index);

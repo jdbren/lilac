@@ -18,8 +18,8 @@ CC=${TARGET}-gcc
 CXX=${TARGET}-g++
 LD=${TARGET}-ld
 
-CFLAGS="-g -O2 -DDEBUG"
-CXXFLAGS="-g -O2"
+CFLAGS=${CFLAGS:="-g -O2 -DDEBUG"}
+CXXFLAGS=${CXXFLAGS:="-g -O2"}
 
 # Define the defaults
 SYSROOT="$(pwd)/sysroot"

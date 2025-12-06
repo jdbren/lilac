@@ -77,9 +77,9 @@ startup_64:
 	orl  $3, %esi
 	movl %esi, 8*511(%edi)
 
-	# Set PAE bit and load CR3
+	# Set CR4 bits and load CR3
 	movl %cr4, %eax
-	orl  $X86_CR4_PAE, %eax
+	orl  $(X86_CR4_PAE|X86_CR4_PGE|X86_CR4_MCE), %eax
 	movl %eax, %cr4
 	leal __pa(boot_pml4), %edi
 	movl %edi, %cr3

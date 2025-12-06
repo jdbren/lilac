@@ -26,8 +26,7 @@ pdpte_t * get_or_alloc_pdpt(pml4e_t *pml4, void *virt, u16 flags)
 {
     u32 pml4_ndx = get_pml4_index(virt);
     if (!ENTRY_PRESENT(pml4[pml4_ndx])) {
-        pml4[pml4_ndx] = (uintptr_t)alloc_frame() | flags | PG_WRITE;
-        memset((void*)ENTRY_ADDR(pml4[pml4_ndx]), 0, PAGE_SIZE);
+        pml4[pml4_ndx] = virt_to_phys(get_zeroed_page()) | flags | PG_WRITE;
 #ifdef DEBUG_PAGING
         klog(LOG_DEBUG, "Allocated PDPT at %p for %p\n",
             (void*)ENTRY_ADDR(pml4[pml4_ndx]), virt);
@@ -40,8 +39,7 @@ pde_t * get_or_alloc_pd(pdpte_t *pdpt, void *virt, u16 flags)
 {
     u32 pdpt_ndx = get_pdpt_index(virt);
     if (!ENTRY_PRESENT(pdpt[pdpt_ndx])) {
-        pdpt[pdpt_ndx] = (uintptr_t)alloc_frame() | flags | PG_WRITE;
-        memset((void*)ENTRY_ADDR(pdpt[pdpt_ndx]), 0, PAGE_SIZE);
+        pdpt[pdpt_ndx] = virt_to_phys(get_zeroed_page()) | flags | PG_WRITE;
 #ifdef DEBUG_PAGING
         klog(LOG_DEBUG, "Allocated PD at %p for %p\n",
             (void*)ENTRY_ADDR(pdpt[pdpt_ndx]), virt);
@@ -54,8 +52,7 @@ pte_t * get_or_alloc_pt(pde_t *pd, void *virt, u16 flags)
 {
     u32 pd_ndx = get_pd_index(virt);
     if (!ENTRY_PRESENT(pd[pd_ndx])) {
-        pd[pd_ndx] = (uintptr_t)alloc_frame() | flags;
-        memset((void*)ENTRY_ADDR(pd[pd_ndx]), 0, PAGE_SIZE);
+        pd[pd_ndx] = virt_to_phys(get_zeroed_page()) | flags;
 #ifdef DEBUG_PAGING
         klog(LOG_DEBUG, "Allocated PT at %p for %p\n",
             (void*)ENTRY_ADDR(pd[pd_ndx]), virt);
@@ -136,7 +133,7 @@ void init_phys_mem_mapping(size_t memory_sz_kb)
 
     u32 pml4_ndx = get_pml4_index(phys_mem_mapping); // index 256
     pml4[pml4_ndx] = (pml4e_t)(__pa(((uintptr_t)phys_map_pdpt) & ~0xfff) |
-        PG_WRITE | PG_STRONG_UC | 1);
+        PG_WRITE | PG_STRONG_UC | PG_PRESENT);
 
     // Get mem size in GB
     u32 mem_size_gb = memory_sz_kb / (1024 * 1024);
@@ -144,7 +141,7 @@ void init_phys_mem_mapping(size_t memory_sz_kb)
     for (u32 i = 0; i <= mem_size_gb; i++) {
         u32 pdpt_ndx = get_pdpt_index(i*0x40000000UL);
         phys_map_pdpt[pdpt_ndx] = (pdpte_t)((i*0x40000000UL) | PG_WRITE |
-            PG_STRONG_UC | PG_HUGE_PAGE | 1);
+            PG_STRONG_UC | PG_HUGE_PAGE | PG_GLOBAL | PG_PRESENT);
     }
 }
 
@@ -160,8 +157,8 @@ int kernel_pt_init(uintptr_t start, uintptr_t end)
     assert(end == (end & ~0x3fffffffUL));
 
     if (!ENTRY_PRESENT(pml4[pml4_ndx])) {
-        pml4[pml4_ndx] = (pml4e_t)((uintptr_t)alloc_frame() | PG_WRITE |
-            PG_WRITE_THROUGH | 1);
+        pml4[pml4_ndx] = (pml4e_t)(virt_to_phys(get_zeroed_page()) | PG_WRITE |
+            PG_WRITE_THROUGH | PG_PRESENT);
     }
     while (start != end) {
         u32 pdpt_ndx = get_pdpt_index(start);
@@ -169,9 +166,8 @@ int kernel_pt_init(uintptr_t start, uintptr_t end)
         if (ENTRY_PRESENT(pdpt[pdpt_ndx])) {
             kerror("PDPT was already present in kheap area");
         } else {
-            pdpt[pdpt_ndx] = (pdpte_t)((uintptr_t)alloc_frame() | PG_WRITE |
-                PG_STRONG_UC | 1);
-            memset((void*)ENTRY_ADDR(pdpt[pdpt_ndx]), 0, PAGE_SIZE);
+            pdpt[pdpt_ndx] = (pdpte_t)(virt_to_phys(get_zeroed_page())
+                | PG_WRITE | PG_STRONG_UC | PG_GLOBAL | PG_PRESENT);
         }
         start += 0x40000000UL;
     }

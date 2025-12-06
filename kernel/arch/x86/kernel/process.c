@@ -71,13 +71,13 @@ static struct mm_info * make_32_bit_mmap()
 #ifdef __x86_64__
 static struct mm_info * make_64_bit_mmap()
 {
-    uintptr_t cr3 = (uintptr_t)alloc_frame();
+    uintptr_t cr3 = virt_to_phys(get_zeroed_page());
 
     copy_kernel_mappings(cr3);
 
     struct mm_info *info = kzmalloc(sizeof *info);
     if (!info) {
-        free_frame((void*)cr3);
+        free_page(phys_to_virt(cr3));
         kerror("Out of memory allocating mm_info\n");
     }
     info->pgd = cr3;
@@ -120,7 +120,7 @@ void arch_unmap_all_user_vm(struct mm_info *info)
 
 void arch_reclaim_mem(struct task *p)
 {
-    free_frame((void*)(p->pgd));
+    free_page(phys_to_virt(p->pgd));
 }
 
 struct mm_info * arch_process_remap(struct mm_info *existing)
@@ -134,10 +134,10 @@ struct mm_info * arch_process_remap(struct mm_info *existing)
 static void copy_vm_area(void *cr3, struct vm_desc *new_desc)
 {
     int num_pages = PAGE_ROUND_UP(new_desc->end - new_desc->start) / PAGE_SIZE;
-    void *phys = alloc_frames(num_pages);
+    uintptr_t phys = virt_to_phys(get_zeroed_pages(num_pages, ALLOC_NORMAL));
 
     // Copy data
-    memcpy((unsigned char*)phys_mem_mapping + (uintptr_t)phys, (void*)new_desc->start, num_pages * PAGE_SIZE);
+    memcpy((unsigned char*)phys_mem_mapping + phys, (void*)new_desc->start, num_pages * PAGE_SIZE);
 
     int flags = PG_USER | PG_PRESENT;
 
@@ -151,7 +151,7 @@ static void copy_vm_area(void *cr3, struct vm_desc *new_desc)
         if (new_desc->vm_flags & VM_WRITE)
             flags |= PG_WRITE;
 
-        pt[get_pt_index(virt)] = ((uintptr_t)phys + i * PAGE_SIZE) | flags;
+        pt[get_pt_index(virt)] = (phys + i * PAGE_SIZE) | flags;
     }
 }
 
@@ -217,7 +217,7 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
         desc = desc->vm_next;
 
         int num_pages = PAGE_ROUND_UP(new_desc->end - new_desc->start) / PAGE_SIZE;
-        void *phys = alloc_frames(num_pages);
+        void *phys = virt_to_phys(get_zeroed_page());
 
         // Copy data
         memcpy(phys_to_virt(phys), (void*)new_desc->start, num_pages * PAGE_SIZE);
