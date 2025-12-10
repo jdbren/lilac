@@ -136,7 +136,8 @@ void tsc_deadline_tick(unsigned long x)
     // should calculate the next timer event to fire
     // for now, just set it to 1ms from now
     u64 tsc_now = rdtsc();
-    tsc_deadline_set(tsc_now + ticks_per_ms);
+    u64 tpm = READ_ONCE(ticks_per_ms);
+    tsc_deadline_set(tsc_now + tpm);
 }
 
 void timer_tick_init(void)

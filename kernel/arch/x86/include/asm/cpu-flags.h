@@ -44,6 +44,7 @@
 #define X86_CR4_OSXMMEXCPT	(1 << 10) /* OS support for unmasked SIMD floating-point exceptions */
 #define X86_CR4_VMXE	(1 << 13) /* Virtual machine extensions enable */
 #define X86_CR4_SMXE	(1 << 14) /* Safer mode extensions enable */
+#define X86_CR4_FSGSBASE (1 << 16) /* RDFSBASE, RDGSBASE, WRFSBASE, WRGSBASE instructions */
 #define X86_CR4_PCIDE	(1 << 17) /* PCID enable */
 #define X86_CR4_OSXSAVE	(1 << 18) /* XSAVE and processor extended states enable */
 #define X86_CR4_SMEP	(1 << 20) /* Supervisor mode execution protection enable */

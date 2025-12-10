@@ -61,7 +61,7 @@ _L8060:
 #ifdef __x86_64__
 init_cpu:
 	# prepare jump into C code (should never return)
-	mov  $(X86_CR4_PAE|X86_CR4_PGE|X86_CR4_MCE|X86_CR4_OSFXSR), %eax
+	mov  $(X86_CR4_PAE|X86_CR4_PGE|X86_CR4_MCE|X86_CR4_OSFXSR|X86_CR4_FSGSBASE), %eax
 	mov  %eax, %cr4
 
 	mov  $__pa(boot_pml4), %eax

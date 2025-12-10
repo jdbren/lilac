@@ -31,12 +31,14 @@
 #define GDT_ENTRY_KERN_DS 2
 #define GDT_ENTRY_USER_CS 3
 #define GDT_ENTRY_USER_DS 4
-#define GDT_ENTRY_TSS(cpu_num) (5 + (cpu_num))
+#define GDT_ENTRY_PERCPU  5
+#define GDT_ENTRY_TSS(cpu_num) (6 + (cpu_num))
 
 #define __KERNEL_CS (GDT_ENTRY_KERN_CS*8)
 #define __KERNEL_DS (GDT_ENTRY_KERN_DS*8)
 #define __USER_CS   (GDT_ENTRY_USER_CS*8+3)
 #define __USER_DS   (GDT_ENTRY_USER_DS*8+3)
+#define __KERNEL_GS (GDT_ENTRY_PERCPU*8)
 #define __TSS(cpu_num)  (GDT_ENTRY_TSS(cpu_num)*8)
 #endif /* __x86_64__ */
 

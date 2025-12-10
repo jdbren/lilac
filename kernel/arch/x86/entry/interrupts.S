@@ -5,6 +5,7 @@
 #include <asm/regs.h>
 #include <asm/segments.h>
 #include <asm/gdt.h>
+#include <generated/asm-offsets.h>
 #include "macros.S"
 
 #ifdef __x86_64__
@@ -18,12 +19,12 @@
 	jz 1f # if in kernel mode, skip
 	swapgs
 1:
-	popq %gs:8     # store error code
+	popq %gs:CPU_LOCAL_SCRATCH     # store error code
 	PUSH_REGS
 	xor  %rbp,%rbp
 
 	lea  RIP(%rsp),%rsi  	# interrupt stack frame
-	mov  %gs:8,%rdi 	# error code
+	mov  %gs:CPU_LOCAL_SCRATCH,%rdi 	# error code
 	call \name\()_handler
 
 	call x86_kernel_exit
@@ -66,19 +67,27 @@
 	.extern \name\()_handler
 	.global \name
 	\name:
-	push %ebp
-	mov  %esp, %ebp
-	pusha
-	lea  8(%ebp), %eax
+	cli
+	cld
 	push %eax
-	mov  4(%ebp), %eax
+	movw $__KERNEL_GS, %ax
+	movw %ax, %gs
+	pop  %eax
+
+	pop  %gs:CPU_LOCAL_SCRATCH     # store error code
+	PUSH_REGS
+	xor  %ebp,%ebp
+
+	lea  EIP(%esp), %eax  # interrupt stack frame
+	push %eax
+	mov  %gs:CPU_LOCAL_SCRATCH, %eax 	# error code
 	push %eax
 	call \name\()_handler
 	add  $8, %esp
+
 	call x86_kernel_exit
-	popa
-	pop  %ebp
-	add  $4, %esp
+
+	POP_REGS
 	iret
 .endm
 
@@ -86,16 +95,22 @@
 	.extern \name\()_handler
 	.global \name
 	\name:
-	push %ebp
-	mov  %esp, %ebp
-	pusha
-	lea  4(%ebp), %eax
+	cli
+	cld
+	PUSH_REGS
+	xor %ebp,%ebp
+
+	movw $__KERNEL_GS, %ax
+	movw %ax, %gs
+
+	lea  EIP(%esp), %eax
 	push %eax
 	call \name\()_handler
 	add  $4, %esp
+
 	call x86_kernel_exit
-	popa
-	pop %ebp
+
+	POP_REGS
 	iret
 .endm
 #endif /* __x86_64__ */
@@ -168,15 +183,20 @@ isr_no_err simd
 \name:
 	cld
 	PUSH_REGS
+	xor %ebp, %ebp
+
 	push %esp
 	call x86_kernel_entry
 	add $4,%esp
-	lea ESP(%esp), %eax
+
+	lea EIP(%esp), %eax
 	push %eax
 	call \func
 	addl $4, %esp
+
 	call apic_eoi
 	call x86_kernel_exit
+
 	POP_REGS
 	iret
 .endm

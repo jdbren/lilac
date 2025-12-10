@@ -5,6 +5,17 @@
 #include <asm/gdt.h>
 
 #ifdef __x86_64__
+struct gdt_entry {
+    u16 limit_low;
+    u16 base_low;
+    u8  base_mid;
+    u8  access;
+    u8  gran;
+    u8  base_high;
+    u32 base_upper;
+    u32 reserved;
+} __packed;
+
 struct tss {
     u32 reserved0;
     u64 rsp0;
@@ -21,8 +32,17 @@ struct tss {
     u64 reserved2;
     u16 reserved3;
     u16 iomap_base;
-};
+} __packed;
 #else
+struct gdt_entry {
+    uint16_t limit_low;
+    uint16_t base_low;
+    uint8_t  base_mid;
+    uint8_t  access;
+    uint8_t  gran;
+    uint8_t  base_high;
+} __packed;
+
 struct tss {
     u32 prev_tss; // unused
     u32 esp0;
@@ -52,7 +72,7 @@ struct tss {
     u32 ldt;
     u16 trap;
     u16 iomap_base;
-};
+} __packed;
 #endif
 
 void gdt_init(void);

@@ -39,7 +39,7 @@ SECTIONS {
 		*(.data)
 	}
 
-	. = ALIGN(64);
+	. = ALIGN(4K);
 	.data.percpu : AT(ADDR(.data.percpu) - KERNEL_VM_BASE) {
 		_percpu_start = .;
 		*(.data.percpu.first)

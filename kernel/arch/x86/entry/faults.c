@@ -95,7 +95,7 @@ void pgflt_handler(long error_code, struct interrupt_frame *frame)
     void *handler = find_exception(frame->ip);
 
     if (error_code & X86_FAULT_USER || addr <= __USER_MAX_ADDR) {
-        if (addr >= __USER_MAX_ADDR) {
+        if (addr >= __USER_MAX_ADDR || addr <= 0x1000) {
             do_raise(current, SIGSEGV);
             return;
         }

@@ -21,7 +21,7 @@ static struct {
 } *pcie_mmio_maps;
 static int pcie_mmio_map_cnt;
 
-static uintptr_t get_pci_mmio_addr(u8 bus, u8 device, u8 function);
+static uintptr_t get_pci_mmio_addr(int bus, int device, int function);
 static ACPI_STATUS pcie_init_device(ACPI_HANDLE ObjHandle, UINT32 Level,
     void *Context, void **ReturnValue);
 
@@ -116,7 +116,7 @@ void pci_read_device(ACPI_DEVICE_INFO *Info)
 */
 
 // Get the MMIO address for a PCI device
-static uintptr_t get_pci_mmio_addr(u8 bus, u8 device, u8 function)
+static uintptr_t get_pci_mmio_addr(int bus, int device, int function)
 {
     uintptr_t addr;
     for (int i = 0; i < 256; i++) {

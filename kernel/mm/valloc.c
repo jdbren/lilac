@@ -3,6 +3,7 @@
 #include <mm/kmm.h>
 #include <lilac/lilac.h>
 #include <lilac/boot.h>
+#include <lilac/sync.h>
 #include <mm/page.h>
 #include <utility/multiboot2.h>
 #include <utility/efi.h>
@@ -21,6 +22,7 @@ static void __free_vaddr(u8 *page);
 #define HEAP_MANAGE_BYTES PAGE_ROUND_UP(KHEAP_BITMAP_SIZE)
 
 static uintptr_t kheap_bitmap[HEAP_MANAGE_BYTES / sizeof(uintptr_t)];
+static spinlock_t kheap_bm_lock = SPINLOCK_INIT;
 
 static void *find_vaddr(int num_pages)
 {
@@ -32,6 +34,8 @@ static void *find_vaddr(int num_pages)
     void *ptr = NULL;
     int start = 0;
     int count = 0;
+
+    acquire_lock(&kheap_bm_lock);
     for (size_t i = 0; i < KHEAP_BITMAP_SIZE / sizeof(uintptr_t); i++) {
         if (kheap_bitmap[i] != ~0UL) {
             ptr = __check_bitmap(i, num_pages, &count, &start);
@@ -41,6 +45,7 @@ static void *find_vaddr(int num_pages)
         else
             count = 0;
     }
+    release_lock(&kheap_bm_lock);
 
     if (!ptr)
         kerror("KERNEL OUT OF VIRTUAL MEMORY");
@@ -56,8 +61,10 @@ static void free_vaddr(u8 *page, u32 num_pages)
 #ifdef DEBUG_KMM
     klog(LOG_DEBUG, "Freed %d pages at %x\n", num_pages, page);
 #endif
+    acquire_lock(&kheap_bm_lock);
     for (u8 *end = page + num_pages * PAGE_SIZE; page < end; page += PAGE_SIZE)
         __free_vaddr(page);
+    release_lock(&kheap_bm_lock);
 }
 
 void * get_free_vaddr(int num_pages)

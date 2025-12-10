@@ -42,6 +42,10 @@ typedef s64 suseconds_t;
 #define likely(x)       __builtin_expect(!!(x), 1)
 #define unlikely(x)     __builtin_expect(!!(x), 0)
 
+#define WRITE_ONCE(var, val) \
+	(*((volatile typeof(val) *)(&(var))) = (val))
+#define READ_ONCE(var) (*((volatile typeof(var) *)(&(var))))
+
 typedef int pid_t;
 
 struct list_head {

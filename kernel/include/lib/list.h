@@ -21,11 +21,6 @@
 #define LIST_POISON1  ((void *) 0x100 + POISON_POINTER_DELTA)
 #define LIST_POISON2  ((void *) 0x122 + POISON_POINTER_DELTA)
 
-#define WRITE_ONCE(var, val) \
-	(*((volatile typeof(val) *)(&(var))) = (val))
-
-#define READ_ONCE(var) (*((volatile typeof(var) *)(&(var))))
-
 /*
  * Circular doubly linked list implementation.
  *

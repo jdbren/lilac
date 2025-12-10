@@ -10,6 +10,7 @@
 #include <acpi/hpet.h>
 #include <mm/kmm.h>
 #include <mm/kmalloc.h>
+#include <mm/page.h>
 #include "acpica/acpi.h"
 
 enum ACPI_BRIDGE_TYPE {
@@ -76,6 +77,9 @@ void acpi_early_init(void)
 {
     struct acpi_info *info = &boot_info.acpi;
     struct RSDP *rsdp = (struct RSDP*)boot_info.mbd.new_acpi->rsdp;
+    if (!rsdp)
+        kerror("No RSDP found!\n");
+
     u8 check = 0;
     for (u32 i = 0; i < sizeof(*rsdp); i++)
         check += ((char *)rsdp)[i];

@@ -15,6 +15,10 @@ syscall_handler:
 	PUSH_REGS
 	movw $__KERNEL_DS, %bp
 	movw %bp, %ds
+	movw %bp, %es
+	movw %bp, %fs
+	movw $__KERNEL_GS, %bp
+	movw %bp, %gs
 	xor  %ebp, %ebp
 
 	push %esp
@@ -129,15 +133,16 @@ int arch_return_from_fork(void *regs, void *kstack);
 .globl arch_return_from_fork
 .type arch_return_from_fork, @function
 arch_return_from_fork:
-	push %ebp
-	mov %esp, %ebp
+	// push 4(%esp)
+	// call x86_dump_regs
+	// add  $4, %esp
 
-	push 12(%ebp)
+	push 8(%esp)
 	call set_tss_esp0
-	addl $4, %esp
+	add $4, %esp
 
 	# restore registers
-	movl 8(%ebp), %eax
+	mov 4(%esp), %eax
 	RESTORE_REGS
 
 	# restore stack

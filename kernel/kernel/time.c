@@ -11,8 +11,9 @@ s64 boot_unix_time = 0;
 
 void set_clock_source(struct clock_source *clock)
 {
-    __system_clock = clock;
-    ticks_per_ms = clock->freq_hz / 1000;
+    WRITE_ONCE(ticks_per_ms, clock->freq_hz / 1000);
+    atomic_thread_fence(memory_order_release);
+    WRITE_ONCE(__system_clock, clock);
     klog(LOG_INFO, "System clock set to %s (%llu Hz)\n",
          clock->name, clock->freq_hz);
 }

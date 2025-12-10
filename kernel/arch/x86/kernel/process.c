@@ -217,7 +217,7 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
         desc = desc->vm_next;
 
         int num_pages = PAGE_ROUND_UP(new_desc->end - new_desc->start) / PAGE_SIZE;
-        void *phys = virt_to_phys(get_zeroed_page());
+        uintptr_t phys = virt_to_phys(get_zeroed_pages(num_pages, ALLOC_NORMAL));
 
         // Copy data
         memcpy(phys_to_virt(phys), (void*)new_desc->start, num_pages * PAGE_SIZE);
@@ -232,7 +232,7 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
             }
 
             u32 *pt = phys_to_virt(cr3[pdindex] & ~0xFFF);
-            pt[ptindex] = ((uintptr_t)phys + i * PAGE_SIZE) | PG_WRITE | PG_USER | 1;
+            pt[ptindex] = (phys + i * PAGE_SIZE) | PG_WRITE | PG_USER | 1;
         }
     }
 

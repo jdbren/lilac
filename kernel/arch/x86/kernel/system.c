@@ -32,8 +32,7 @@ void arch_setup(void)
 {
     apic_init(boot_info.acpi.madt);
     x86_timer_init();
-    percpu_mem_init();
-    percpu_init_cpu();
+    ap_init();
 }
 
 void print_system_info(void)

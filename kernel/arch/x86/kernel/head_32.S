@@ -134,7 +134,7 @@ tss_init:
 	call get_tss # eax = &tss, edx = cpu_id
 	mov %edx, %ebx
 
-	leal gdt_entries+40(, %edx, 8), %edx   # TSS descriptor for this CPU
+	leal gdt_entries+48(, %edx, 8), %edx   # TSS descriptor for this CPU
 	movl $0, 4(%eax)
 	movl $__KERNEL_DS, 8(%eax)
 
@@ -151,7 +151,7 @@ tss_init:
 
 	movl $8, %eax
 	mulw %bx  		# RPL 0 selector index
-	addw $5 * 8, %ax
+	addw $6 * 8, %ax
 	ltr  %ax
 
 	pop %ebx
@@ -176,19 +176,22 @@ set_tss_esp0:
 .global gdt
 gdt:
 gdt_descr:
-	.word 13 * 64 - 1
+	.word 14 * 64 - 1
 	.long gdt_entries
 
 .align 8
+.global gdt_entries
 gdt_entries:
 	.quad 0x0
 	.quad 0x00CF9A000000FFFF
 	.quad 0x00CF92000000FFFF
 	.quad 0x00CFFA000000FFFF
 	.quad 0x00CFF2000000FFFF
+	.quad 0x00CF92000000FFFF    # per-cpu data descriptor (base=0)
 	.rept 8
 	.quad 0x0000890000000067
 	.endr
+gdt_entries_end:
 
 
 .bss

@@ -79,7 +79,7 @@ startup_64:
 
 	# Set CR4 bits and load CR3
 	movl %cr4, %eax
-	orl  $(X86_CR4_PAE|X86_CR4_PGE|X86_CR4_MCE), %eax
+	orl  $(X86_CR4_PAE|X86_CR4_PGE|X86_CR4_MCE|X86_CR4_FSGSBASE), %eax
 	movl %eax, %cr4
 	leal __pa(boot_pml4), %edi
 	movl %edi, %cr3
@@ -224,6 +224,7 @@ gdt_entries:
 	.quad 0x0000890000000067
     .quad 0x0000000000000000
 	.endr
+gdt_entries_end:
 
 .bss
 .align PAGE_SIZE

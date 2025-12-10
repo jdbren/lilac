@@ -34,7 +34,9 @@ void start_kernel(void)
     graphics_init();
 
     init_ctors();
+    percpu_bsp_mem_init();
     acpi_early_init();
+    percpu_mem_init();
     arch_setup();
 
     kbd_int_init();
