@@ -146,7 +146,6 @@ void ap_lapic_enable(void)
 {
     cpu_set_apic_base(lapic_addr_orig);
 
-    /* Set the Spurious Interrupt Vector Register bit 8 to start receiving interrupts */
     write_reg(APIC_REG_SPUR, 0xff | 0x100);
 }
 

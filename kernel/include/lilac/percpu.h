@@ -24,10 +24,11 @@ static inline struct cpu_local * this_cpu_local(void)
 {
     struct cpu_local *ptr;
 #ifdef __x86_64__
-    asm volatile("rdgsbase %0" : "=r"(ptr));
+    asm volatile ("rdgsbase %0" : "=r"(ptr));
 #else
     asm volatile ("mov %%gs:0, %0" : "=r"(ptr));
 #endif
+    assert(ptr != NULL);
     return ptr;
 }
 #pragma GCC diagnostic pop

@@ -2,10 +2,10 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/sched.h>
 
-#include <stdbool.h>
 #include <lilac/lilac.h>
 #include <lilac/process.h>
 #include <lilac/syscall.h>
+#include <lilac/percpu.h>
 #include <mm/kmm.h>
 
 extern uintptr_t stack_top;
@@ -48,8 +48,8 @@ struct rq {
     struct rb_root_cached queue;
 };
 
-static struct rq rqs[4] = {
-    [0 ... 3] = {
+static struct rq rqs[CONFIG_MAX_CPUS] = {
+    [0 ... CONFIG_MAX_CPUS-1] = {
         .lock = SPINLOCK_INIT,
         .cpu = 0,
         .nr_running = 0,
@@ -74,7 +74,12 @@ extern void __context_switch_asm(struct task *prev, struct task *next);
 
 struct task* get_current_task(void)
 {
-    return rqs[0].curr;
+    return rqs[this_cpu_id()].curr;
+}
+
+struct rq *this_cpu_rq(void)
+{
+    return &rqs[this_cpu_id()];
 }
 
 struct task * find_child_by_pid(struct task *parent, int pid)
@@ -103,11 +108,12 @@ void rq_del(struct task *p)
 #ifdef DEBUG_SCHED
     klog(LOG_DEBUG, "Removing task %d from run queue\n", p->pid);
 #endif
-    acquire_lock(&rqs[0].lock);
-    rb_erase_cached(&p->rq_node, &rqs[0].queue);
-    rqs[0].nr_running--;
+    struct rq *rq = this_cpu_rq();
+    acquire_lock(&rq->lock);
+    rb_erase_cached(&p->rq_node, &rq->queue);
+    rq->nr_running--;
     p->on_rq = false;
-    release_lock(&rqs[0].lock);
+    release_lock(&rq->lock);
 }
 
 void rq_add(struct task *p)
@@ -119,11 +125,12 @@ void rq_add(struct task *p)
 #ifdef DEBUG_SCHED
     klog(LOG_DEBUG, "Adding task %d to run queue\n", p->pid);
 #endif
-    acquire_lock(&rqs[0].lock);
-    rb_add_cached(&p->rq_node, &rqs[0].queue, prio_comp);
-    rqs[0].nr_running++;
+    struct rq *rq = this_cpu_rq();
+    acquire_lock(&rq->lock);
+    rb_add_cached(&p->rq_node, &rq->queue, prio_comp);
+    rq->nr_running++;
     p->on_rq = true;
-    release_lock(&rqs[0].lock);
+    release_lock(&rq->lock);
 }
 
 void set_task_running(struct task *p)
@@ -234,7 +241,7 @@ static void context_switch(struct task *prev, struct task *next)
     klog(LOG_DEBUG, "\tPC: %p\n", next->pc);
     klog(LOG_DEBUG, "\tStack: %p\n", next->kstack);
 #endif
-    rqs[0].curr = next;
+    this_cpu_rq()->curr = next;
     save_fp_regs(prev);
     arch_prepare_context_switch(next);
     __context_switch_asm(prev, next);
@@ -243,41 +250,49 @@ static void context_switch(struct task *prev, struct task *next)
 
 void schedule(void)
 {
-    struct task *prev = current;
+    struct task *cur_task = current;
     struct task *next = NULL;
+    struct rq *rq = this_cpu_rq();
 
-    struct rb_node *node = rb_first_cached(&rqs[0].queue);
+    acquire_lock(&rq->lock);
+
+    struct rb_node *node = rb_first_cached(&rq->queue);
     if (!node) {
-        if (prev->state == TASK_RUNNING)
+        if (cur_task->state == TASK_RUNNING) {
+            release_lock(&rq->lock);
             return;
-        next = rqs[0].idle;
+        }
+        next = rq->idle;
     } else {
         next = rb_entry(node, struct task, rq_node);
     }
 
     next->runtime += 1;
 
-    if (next == prev) {
-        if (prev->state == TASK_RUNNING)
+    if (next == cur_task) {
+        if (cur_task->state == TASK_RUNNING) {
+            release_lock(&rq->lock);
             return;
-        else
-            next = rqs[0].idle; // idle
+        }
+        next = rq->idle;
     }
 
     if (next->state != TASK_RUNNING) {
         panic("Task %d is not running\n", next->pid);
     }
 
+    release_lock(&rq->lock);
+
     // Simple way to make sure all tasks get to run
-    if (next != rqs[0].idle) {
+    if (next != rq->idle) {
         rq_del(next);
     }
 
-    if (prev->state == TASK_RUNNING && prev != rqs[0].idle) {
-        rq_add(prev);
+    if (cur_task->state == TASK_RUNNING && cur_task != rq->idle) {
+        rq_add(cur_task);
     }
 
-    context_switch(prev, next);
+    context_switch(cur_task, next);
 }
 
 void sched_tick(void)

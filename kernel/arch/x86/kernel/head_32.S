@@ -101,6 +101,18 @@ gdt_init:
 	leal gdt_descr, %eax
 	movl $gdt_entries, 2(%eax)
 	lgdt (%eax)
+
+	# Set the per-cpu data segment base
+	lea gdt_entries + __KERNEL_GS, %edx
+	lea cpu_local_storage, %eax
+	mov %ax, 2(%edx)
+	shr $16, %eax
+	mov %al, 4(%edx)
+	mov %ah, 7(%edx)
+
+	mov $__KERNEL_GS, %ax
+	mov %ax, %gs
+
 	call tss_init
 	ret
 

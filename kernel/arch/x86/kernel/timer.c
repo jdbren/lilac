@@ -142,9 +142,6 @@ void tsc_deadline_tick(unsigned long x)
 
 void timer_tick_init(void)
 {
-    idt_entry(0x20, (uintptr_t)timer_handler, __KERNEL_CS, 0, INT_GATE);
-    ioapic_entry(0, 0x20, 0, 0);
-
     if (tsc_deadline()) {
         apic_tsc_deadline();
         handle_tick = tsc_deadline_tick;
@@ -161,6 +158,9 @@ void timer_tick_init(void)
 void x86_timer_init(void)
 {
     struct hpet_info *info = boot_info.acpi.hpet;
+
+    idt_entry(0x20, (uintptr_t)timer_handler, __KERNEL_CS, 0, INT_GATE);
+    ioapic_entry(0, 0x20, 0, 0);
 
     hpet_clock.freq_hz = hpet_init(info);
     set_clock_scale(&hpet_clock);

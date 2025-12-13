@@ -2,6 +2,7 @@
 #define _FRAMEBUFFER_H
 
 #include <lilac/types.h>
+#include <lilac/sync.h>
 #include <lilac/font.h>
 #include <utility/multiboot2.h>
 
@@ -31,6 +32,7 @@ struct framebuffer {
     u32 fb_bg;
     u16 bypp;
     u16 width_pad;
+    mutex_t lock;
 };
 
 void graphics_init(void);

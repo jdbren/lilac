@@ -1,6 +1,7 @@
 #include <lilac/lilac.h>
 #include <lilac/boot.h>
 #include <lilac/percpu.h>
+#include <lilac/timer.h>
 #include <mm/kmm.h>
 #include <mm/page.h>
 
@@ -38,7 +39,7 @@ __section(PERCPU_SECTION".first") __used
 struct cpu_local cpu_local_storage = {
     .self = &cpu_local_storage,
     .priv = nullptr,
-    .id = -1,
+    .id = 0,
     .scratch = 0,
     .user_stack = nullptr
 };
@@ -55,7 +56,6 @@ void ap_startup(void)
 {
     u8 id = get_lapic_id();
     arch_disable_interrupts();
-    klog(LOG_DEBUG, "AP %d started\n", id);
     tss_init();
     set_tss_esp0((uintptr_t)ap_stack + 0x1000 * (id+1));
     load_idt();
@@ -63,6 +63,8 @@ void ap_startup(void)
     syscall_init();
     percpu_init_cpu();
     // timer_tick_init();
+    klog(LOG_DEBUG, "AP %d started\n", id);
+    // arch_enable_interrupts();
 
     while (1)
         asm ("hlt");
@@ -152,8 +154,7 @@ void percpu_init_cpu(void)
     u8 cpu_id = get_lapic_id();
     uintptr_t base = (uintptr_t)&_percpu_start + per_cpu_offset(cpu_id);
 #ifdef __x86_64__
-    set_kernel_gs_base(base);
-    swapgs();
+    set_gs_base(base);
 #else
     set_gs_base_32((uint32_t)base);
 #endif

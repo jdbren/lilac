@@ -114,6 +114,9 @@ startup_64:
 	add $__KERNEL_BASE, %rsp
 	call gdt_init
 
+	# Initialize static bsp percpu data
+	lea cpu_local_storage, %rax
+	wrgsbase %rax
 /*
 	mov $7, %eax				# Enable XCR0.SSE and XCR0.AVX
 	xor %edx, %edx

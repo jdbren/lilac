@@ -13,7 +13,6 @@
 .extern \name\()_handler
 .global \name
 \name:
-	cli
 	cld
 	testb $3, 16(%rsp)
 	jz 1f # if in kernel mode, skip
@@ -41,7 +40,6 @@
 .extern \name\()_handler
 .global \name
 \name:
-	cli
 	cld
 	testb $3, 8(%rsp)
 	jz 1f # if in kernel mode, skip
@@ -64,18 +62,23 @@
 .endm
 #else // ARCH_x86:
 .macro isr_err name
-	.extern \name\()_handler
-	.global \name
-	\name:
-	cli
+.extern \name\()_handler
+.global \name
+\name:
 	cld
+	push %gs
 	push %eax
+	mov  $__KERNEL_GS, %ax
+	mov  %ax, %gs
+	mov  8(%esp), %eax
+	mov  %eax, %gs:CPU_LOCAL_SCRATCH     # store error code
+	pop  %eax
+	pop  %gs
+	add  $4, %esp # remove error code
+	PUSH_REGS
+
 	movw $__KERNEL_GS, %ax
 	movw %ax, %gs
-	pop  %eax
-
-	pop  %gs:CPU_LOCAL_SCRATCH     # store error code
-	PUSH_REGS
 	xor  %ebp,%ebp
 
 	lea  EIP(%esp), %eax  # interrupt stack frame
@@ -92,16 +95,15 @@
 .endm
 
 .macro isr_no_err name
-	.extern \name\()_handler
-	.global \name
-	\name:
-	cli
+.extern \name\()_handler
+.global \name
+\name:
 	cld
 	PUSH_REGS
 	xor %ebp,%ebp
 
-	movw $__KERNEL_GS, %ax
-	movw %ax, %gs
+	mov $__KERNEL_GS, %ax
+	mov %ax, %gs
 
 	lea  EIP(%esp), %eax
 	push %eax
@@ -173,7 +175,6 @@ isr_no_err simd
 	jz 2f # if return to kernel mode, skip
 	swapgs
 2:
-
 	POP_REGS
 	iretq
 .endm
@@ -183,6 +184,8 @@ isr_no_err simd
 \name:
 	cld
 	PUSH_REGS
+	mov $__KERNEL_GS, %ax
+	mov %ax, %gs
 	xor %ebp, %ebp
 
 	push %esp
@@ -203,13 +206,5 @@ isr_no_err simd
 #endif
 
 .text
-do_timer_interrupt:
-	xor  %eax, %eax
-	call apic_eoi
-
-	call timer_tick
-	ret
-
-
-isr_device timer_handler do_timer_interrupt
+isr_device timer_handler timer_tick
 isr_device kbd_handler keyboard_int
