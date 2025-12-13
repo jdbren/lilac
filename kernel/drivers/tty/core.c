@@ -49,7 +49,7 @@ const struct termios default_termios = {
 };
 
 const struct winsize default_winsize = {
-    .ws_row = 24,
+    .ws_row = 25,
     .ws_col = 80,
     .ws_xpixel = 0,
     .ws_ypixel = 0
@@ -89,11 +89,11 @@ int init_tty_struct(struct tty *tty, int i)
     mutex_init(&tty->winsize_lock);
     INIT_LIST_HEAD(&tty->read_wait.task_list);
     tty->data = kzmalloc(sizeof(*tty->data));
+    mutex_init(&tty->data->read_lock);
     tty->index = i;
     strcpy(tty->name, "tty");
     tty->name[3] = i + '0';
     tty->name[4] = '\0';
-    tty->ops->open(tty, NULL);
     return 0;
 }
 
@@ -157,6 +157,8 @@ int tty_open(struct inode *inode, struct file *file)
         if (index >= NUM_STATIC_TTYS || index < 0)
             return -ENXIO;
         tty = &ttys[index];
+        assert(tty->ops->open != NULL);
+        tty->ops->open(tty, file);
     }
 
     acquire_lock(&tty->ctrl.lock);
@@ -226,8 +228,8 @@ void tty_init(void)
         dev_create(path, &tty_fops, &tty_iops, mode, TTY_DEVICE);
     }
 
-    tty = &ttys[0];
-    tty->vc->cury = 10;
+    // tty = &ttys[0];
+    // tty->vc->cury = 10;
 }
 
 
@@ -275,12 +277,14 @@ static int tcsetattr(struct tty *t, struct termios *term)
     if (!valid_cflag(tmp.c_cflag))
         return -EINVAL;
 
+    acquire_lock(&t->termios_lock);
+
     struct termios old = t->termios;
     t->termios = tmp;
-
     if (t->ldisc_ops->set_termios)
         t->ldisc_ops->set_termios(t, &old);
 
+    release_lock(&t->termios_lock);
     return 0;
 }
 

@@ -390,8 +390,10 @@ static void handle_nc_char(struct tty *tty, u8 c)
 void default_tty_receive_buf(struct tty *tty, const u8 *cp, const u8 *fp, size_t count)
 {
     struct tty_data *data = tty->data;
-    u8 c;
 
+    mutex_lock(&data->read_lock);
+
+    u8 c;
     while (count--) {
         c = *cp++;
 
@@ -412,6 +414,8 @@ void default_tty_receive_buf(struct tty *tty, const u8 *cp, const u8 *fp, size_t
         else
             handle_nc_char(tty, c);
     }
+
+    mutex_unlock(&data->read_lock);
 }
 
 static ssize_t c_read(struct tty *tty, u8 *buf, size_t nr)
@@ -423,9 +427,11 @@ static ssize_t c_read(struct tty *tty, u8 *buf, size_t nr)
     while (copied < nr) {
         while (!data->line_ready && !data->at_eof && BUF_EMPTY(data)) {
             klog(LOG_DEBUG, "c_read: proc %d waiting for line\n", get_pid());
+            mutex_unlock(&data->read_lock);
             if (sleep_on(&tty->read_wait) == -EINTR) {
                 return copied > 0 ? (ssize_t)copied : -EINTR;
             }
+            mutex_lock(&data->read_lock);
         }
 
         // EOF
@@ -480,9 +486,11 @@ static ssize_t nc_read(struct tty *tty, u8 *buf, size_t nr)
         while (copied < vmin || (copied < nr && !BUF_EMPTY(data))) {
             while (BUF_EMPTY(data)) {
                 // klog(LOG_DEBUG, "noncanon_read: waiting for vmin=%d (have %lu)\n", vmin, copied);
+                mutex_unlock(&data->read_lock);
                 if (sleep_on(&tty->read_wait) == -EINTR) {
                     return copied > 0 ? (ssize_t)copied : -EINTR;
                 }
+                mutex_lock(&data->read_lock);
             }
 
             c = read_char(data);
@@ -518,9 +526,11 @@ static ssize_t nc_read(struct tty *tty, u8 *buf, size_t nr)
         // For now, behave like case 2
         while (copied < vmin) {
             while (BUF_EMPTY(data)) {
+                mutex_unlock(&data->read_lock);
                 if (sleep_on(&tty->read_wait) == -EINTR) {
                     return copied > 0 ? (ssize_t)copied : -EINTR;
                 }
+                mutex_lock(&data->read_lock);
             }
             c = read_char(data);
             if (c >= 0) {
@@ -596,26 +606,40 @@ ssize_t default_tty_read(struct tty *tty, struct file *file, u8 *buf, size_t nr,
 {
     struct tty_data *data = tty->data;
 
+    mutex_lock(&data->read_lock);
+
+    ssize_t ret;
     if (L_ICANON(tty)) {
-        return c_read(tty, buf, nr);
+        ret = c_read(tty, buf, nr);
     } else {
-        return nc_read(tty, buf, nr);
+        ret = nc_read(tty, buf, nr);
     }
+
+    mutex_unlock(&data->read_lock);
+    return ret;
 }
 
 
 ssize_t default_tty_write(struct tty *tty, struct file *file, const u8 *buf, size_t nr)
 {
+    mutex_lock(&tty->write_lock);
+
     if (tty->ctrl.stopped) {
         // TODO: Should block until resumed
         klog(LOG_WARN, "tty_write: output is stopped by flow control\n");
+        mutex_unlock(&tty->write_lock);
+        return -EAGAIN;
     }
 
+    ssize_t ret;
     if (!(tty->termios.c_oflag & (ONLCR|OCRNL|ONLRET|ONOCR))) {
-        return tty->ops->write(tty, buf, nr);
+        ret = tty->ops->write(tty, buf, nr);
+    } else {
+        ret = process_output(tty, buf, nr);
     }
 
-    return process_output(tty, buf, nr);
+    mutex_unlock(&tty->write_lock);
+    return ret;
 }
 
 

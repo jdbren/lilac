@@ -86,6 +86,11 @@ static inline int __mutex_lock_fast(mutex_t *mutex)
 
 void mutex_lock(mutex_t *mutex)
 {
+#ifdef DEBUG
+    long id = get_pid();
+    if (atomic_load(&mutex->owner) == id)
+        panic("Mutex lock by owner (pid %ld)\n", id);
+#endif
     if (unlikely(!__mutex_lock_fast(mutex)))
         __mutex_lock_slow(mutex);
 }
@@ -102,10 +107,10 @@ void mutex_lock_r(mutex_t *mutex)
 void mutex_unlock(mutex_t *mutex)
 {
     long id = get_pid();
-    if (atomic_load(&mutex->owner) != id) {
-        klog(LOG_ERROR, "Mutex unlock by non-owner (pid %ld)\n", id);
-        return;
-    }
+#ifdef DEBUG
+    if (atomic_load(&mutex->owner) != id)
+        panic("Mutex unlock by non-owner (pid %ld)\n", id);
+#endif
 
     atomic_store_explicit(&mutex->owner, -1, memory_order_release);
 

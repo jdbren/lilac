@@ -180,14 +180,12 @@ SYSCALL_DECL3(sigaction, int, signum, const struct sigaction *, act, struct siga
     struct ksigaction *ka = &current->sighandlers->actions[signum];
 
     if (oldact) {
-        // Return the old action
         oldact->sa_handler = ka->sa.sa_handler;
         oldact->sa_flags = ka->sa.sa_flags;
         oldact->sa_mask = ka->sa.sa_mask;
     }
 
     if (act) {
-        // Set the new action
         ka->sa.sa_handler = act->sa_handler;
         ka->sa.sa_flags = act->sa_flags;
         ka->sa.sa_mask = act->sa_mask;

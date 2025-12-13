@@ -11,6 +11,7 @@
 
 static struct gendisk *disks[MAX_DISKS];
 static int num_disks;
+spinlock_t disk_list_lock = SPINLOCK_INIT;
 
 __must_check
 static int create_block_dev(struct gendisk *disk,
@@ -40,7 +41,9 @@ int add_gendisk(struct gendisk *disk)
 {
     if (num_disks >= MAX_DISKS)
         return -1;
+    acquire_lock(&disk_list_lock);
     disks[num_disks++] = disk;
+    release_lock(&disk_list_lock);
     return 0;
 }
 

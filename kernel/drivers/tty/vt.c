@@ -138,9 +138,9 @@ static struct vc_state vt_cons[NUM_STATIC_TTYS] = {
         .vt_om = 0,
         .vt_doscroll = 1,
         .xs = 80,
-        .ys = 24,
+        .ys = 25,
         .scroll_top = 0,
-        .scroll_bottom = 23,
+        .scroll_bottom = 24,
         .vt_bs = '\b',
         .vt_tabs = { [0] = 0x01010100, [1 ... 4] = 0x01010101 },
         .vt_fg = WHITE,
@@ -161,7 +161,7 @@ int vt_open(struct tty *tty, struct file *file)
         vt->con_ops->con_init(vt, 0);
         tty->driver_data = &vt_cons[tty->index];
         vt->tty = tty;
-        // vt->con_ops->con_clear(vt, 0, 0, vt->ys, vt->xs);
+        vt->con_ops->con_clear(vt, 0, 0, vt->ys, vt->xs);
     }
     return 0;
 }
