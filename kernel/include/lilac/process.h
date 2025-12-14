@@ -63,6 +63,7 @@ struct task {
 
     spinlock_t lock;
 
+    // Scheduling info
     u8 state;
     struct task_flags flags;
     u8 priority;
@@ -70,9 +71,12 @@ struct task {
     u8 cpu;
     bool on_rq;
     u64 runtime;
-    u64 timeslice;
+    u64 vruntime;
+    // u64 timeslice;
     struct rb_node rq_node;
+    u64 exec_started;
 
+    // Parent-child
     struct task *parent;
     struct list_head children;
     struct list_head sibling;
@@ -124,6 +128,7 @@ void reap_task(struct task *p);
 __noreturn void do_exit(void);
 struct task * get_task_by_pid(int pid);
 struct task * get_pgrp_leader(int pgid);
+struct task * get_any_pgrp_member(pid_t pgid);
 
 // Architecture-specific functions
 void             arch_prepare_context_switch(struct task *next);

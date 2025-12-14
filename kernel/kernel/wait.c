@@ -218,7 +218,9 @@ void notify_parent(struct task *parent, struct task *child)
         return;
     }
     klog(LOG_DEBUG, "Notifying parent %d of child %d exit\n", parent->pid, child->pid);
-    parent->waiting_any = false;
-    wakeup_by_pid_on(parent->pid, &wait_q);
+    if (child->parent_wait || parent->waiting_any) {
+        parent->waiting_any = false;
+        wakeup_by_pid_on(parent->pid, &wait_q);
+    }
     do_raise(parent, SIGCHLD);
 }

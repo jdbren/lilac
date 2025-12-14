@@ -297,16 +297,29 @@ static int tcsetpgrp(struct tty *t, pid_t pgrp)
 {
     if (pgrp < 0)
         return -EINVAL;
-    struct task *p = get_pgrp_leader(pgrp);
-    if (p && p->sid == current->sid) {
-        t->ctrl.pgrp = pgrp;
-        return 0;
-    } else {
-        klog(LOG_DEBUG, "tcsetpgrp: no such process group %d in session %d\n", pgrp, current->sid);
+
+    struct task *p = get_any_pgrp_member(pgrp);
+    if (!p) {
+        klog(LOG_DEBUG, "tcsetpgrp: no such pgrp %d\n", pgrp);
+        return -EINVAL;
+    }
+
+    if (p->sid != current->sid) {
+        klog(LOG_DEBUG, "tcsetpgrp: pgrp %d not in session %d\n", pgrp, current->sid);
         return -EPERM;
     }
+
+    if (t->ctrl.session != current->sid) {
+        klog(LOG_DEBUG, "tcsetpgrp: tty session %d does not match caller session %d\n",
+            t->ctrl.session, current->sid);
+        return -EPERM;
+    }
+
+    t->ctrl.pgrp = pgrp;
+    klog(LOG_DEBUG, "tcsetpgrp: set pgrp to %d\n", pgrp);
     return 0;
 }
+
 
 
 int tty_ioctl(struct file *f, int op, void *argp)

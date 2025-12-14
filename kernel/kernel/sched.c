@@ -6,7 +6,10 @@
 #include <lilac/process.h>
 #include <lilac/syscall.h>
 #include <lilac/percpu.h>
+#include <lilac/timer.h>
 #include <mm/kmm.h>
+
+#define MIN_GRANULARITY 2
 
 extern uintptr_t stack_top;
 
@@ -96,7 +99,7 @@ static bool prio_comp(struct rb_node *a, const struct rb_node *b)
 {
     struct task *task_a = rb_entry(a, struct task, rq_node);
     struct task *task_b = rb_entry(b, struct task, rq_node);
-    return task_a->runtime < task_b->runtime;
+    return task_a->vruntime < task_b->vruntime;
 }
 
 void rq_del(struct task *p)
@@ -195,6 +198,8 @@ void yield(void)
 
 void schedule_task(struct task *new_task)
 {
+    new_task->state = TASK_RUNNING;
+    new_task->vruntime = current->vruntime + MIN_GRANULARITY;
     rq_add(new_task);
 #ifdef DEBUG_SCHED
     struct task *tmp = NULL, *t = new_task;
@@ -224,7 +229,6 @@ void sched_clock_init(void)
 static void context_switch(struct task *prev, struct task *next)
 {
     arch_disable_interrupts();
-    klog(LOG_DEBUG, "Switching from task %d to task %d\n", prev->pid, next->pid);
 #ifdef DEBUG_SCHED
     register uintptr_t rsp asm("rsp");
     klog(LOG_DEBUG, "Current stack pointer: %p\n", rsp);
@@ -267,8 +271,6 @@ void schedule(void)
         next = rb_entry(node, struct task, rq_node);
     }
 
-    next->runtime += 1;
-
     if (next == cur_task) {
         if (cur_task->state == TASK_RUNNING) {
             release_lock(&rq->lock);
@@ -283,7 +285,6 @@ void schedule(void)
 
     release_lock(&rq->lock);
 
-    // Simple way to make sure all tasks get to run
     if (next != rq->idle) {
         rq_del(next);
     }
@@ -297,13 +298,38 @@ void schedule(void)
 
 void sched_tick(void)
 {
-    if (sched_timer == -1)
+    struct task *cur = current;
+    struct rq *rq = this_cpu_rq();
+    if (unlikely(sched_timer == -1))
         return;
-    if (sched_timer > 0) {
-        sched_timer--;
-        return;
+
+    u64 now = read_ticks();
+    if (cur->state == TASK_RUNNING) {
+        u64 delta_exec = now - cur->exec_started;
+
+        if (delta_exec) {
+            cur->exec_started = now;
+            cur->runtime += ticks_to_ns(delta_exec);
+            cur->vruntime += delta_exec; // * nice factor / weight;
+        }
     }
-    current->flags.need_resched = 1;
+
+    acquire_lock(&rq->lock);
+
+    struct task *leftmost = NULL;
+    struct rb_node *node = rb_first_cached(&rq->queue);
+
+    if (node)
+        leftmost = rb_entry(node, struct task, rq_node);
+
+    if (leftmost && leftmost != cur) {
+        s64 diff = (s64)(cur->vruntime - leftmost->vruntime);
+
+        if (diff > MIN_GRANULARITY)
+            cur->flags.need_resched = 1;
+    }
+
+    release_lock(&rq->lock);
 }
 
 SYSCALL_DECL0(sched_yield)

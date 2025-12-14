@@ -63,6 +63,18 @@ inline struct task * get_pgrp_leader(int pgid)
     return NULL;
 }
 
+inline struct task *get_any_pgrp_member(pid_t pgid)
+{
+    struct task *p;
+    if (pgid < 0)
+        return NULL;
+    hash_for_each_possible(pgid_table, p, pgid_hash, pgid) {
+        if (p->pgid == pgid)
+            return p;
+    }
+    return NULL;
+}
+
 
 inline int get_pid(void)
 {
@@ -102,22 +114,28 @@ SYSCALL_DECL2(setpgid, pid_t, pid, pid_t, pgid)
 
     if (pid == 0 || pid == current->pid) {
         p = current;
+        pid = p->pid;
     } else {
         p = get_task_by_pid(pid);
-        if (!p || !is_child_of(p))
+        if (!p || !is_child_of(p)) {
+            klog(LOG_DEBUG, "setpgid: no such process %d\n", pid);
             return -ESRCH;
+        }
     }
 
     if (is_session_leader(p))
         return -EPERM;
 
-    target = get_pgrp_leader(pgid);
-    if (pid != pgid && (!target || target->sid != p->sid))
+    target = get_any_pgrp_member(pgid);
+    if (pid != pgid && (!target || target->sid != p->sid)) {
+        klog(LOG_DEBUG, "setpgid: no such process group %d in session %d\n", pgid, p->sid);
         return -EPERM;
+    }
 
     hash_del(&p->pgid_hash);
     p->pgid = pgid;
     hash_add(pgid_table, &p->pgid_hash, p->pgid);
+    klog(LOG_DEBUG, "Set pgid of process %d to %d\n", p->pid, p->pgid);
     return 0;
 }
 
@@ -135,6 +153,7 @@ SYSCALL_DECL0(setsid)
     p->ctty = NULL;
     hash_add(sid_table, &p->sid_hash, p->sid);
     hash_add(pgid_table, &p->pgid_hash, p->pgid);
+    klog(LOG_DEBUG, "Process %d created new session %d\n", p->pid, p->sid);
     return pid;
 }
 
@@ -630,8 +649,7 @@ __noreturn void do_exit(void)
     struct task *parent = NULL;
     if (unlikely(current->pid == 1))
         panic("Init tried to exit!\n");
-    if (current->parent_wait || current->parent->waiting_any)
-        parent = current->parent;
+    parent = current->parent;
     cleanup_task(current);
     current->state = TASK_ZOMBIE;
     if (parent)

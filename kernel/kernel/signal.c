@@ -71,7 +71,9 @@ int do_raise(struct task *p, int sig)
         klog(LOG_ERROR, "Invalid signal %d\n", sig);
         return -EINVAL;
     }
-
+#ifdef DEBUG_SIGNAL
+    klog(LOG_DEBUG, "Raising signal %d for process %d\n", sig, p->pid);
+#endif
     sigset_t pending = p->pending.signal;
     struct ksigaction *ka = &p->sighandlers->actions[sig];
 
@@ -99,6 +101,7 @@ int do_raise(struct task *p, int sig)
 
 int kill_pgrp(int pgid, int sig)
 {
+    klog(LOG_DEBUG, "kill_pgrp called with pgid=%d, sig=%d\n", pgid, sig);
     if (sig < 0 || sig > _NSIG)
         return -EINVAL;
 
@@ -123,11 +126,17 @@ int kill_pgrp(int pgid, int sig)
 
 SYSCALL_DECL2(kill, int, pid, int, sig)
 {
+    klog(LOG_DEBUG, "kill called with pid=%d, sig=%d\n", pid, sig);
     if (sig < 0 || sig > _NSIG)
         return -EINVAL;
 
-    if (pid < 0)
-        return -ESRCH;
+    if (pid == 0) {
+        return kill_pgrp(current->pgid, sig);
+    } else if (pid == -1) {
+        return -EOPNOTSUPP;
+    } else if (pid < -1) {
+        return kill_pgrp(-pid, sig);
+    }
 
     struct task *p = find_child_by_pid(current, pid);
     if (!p) {
@@ -244,7 +253,6 @@ SYSCALL_DECL1(sigpending, sigset_t *, set)
     return 0;
 }
 
-// TODO: Actually sleep until sig
 SYSCALL_DECL1(sigsuspend, sigset_t*, set)
 {
     if (!access_ok(set, sizeof(sigset_t))) {
@@ -256,8 +264,10 @@ SYSCALL_DECL1(sigsuspend, sigset_t*, set)
     klog(LOG_DEBUG, "sigsuspend: changing mask from %lx to %lx", oldmask, *set);
     current->blocked = *set;
 
-    // while (!current->flags.sig_pending)
-    //     yield();
+    while (!current->flags.sig_pending) {
+        current->state = TASK_SLEEPING;
+        yield();
+    }
 
     current->blocked = oldmask;
     return -EINTR;
