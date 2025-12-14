@@ -10,6 +10,8 @@ struct file * alloc_file(struct dentry *d)
 
     spin_lock_init(&file->f_lock);
     mutex_init(&file->f_pos_lock);
+    file->f_count = 1;
+    file->f_pos = 0;
     if (d)
         dget(d);
     file->f_dentry = d;

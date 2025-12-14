@@ -65,6 +65,10 @@ struct dentry * alloc_dentry(struct dentry *d_parent, const char *name)
     new_dentry->d_parent = d_parent;
     new_dentry->d_sb = i_parent->i_sb;
     new_dentry->d_name = (char*)name;
+    spin_lock_init(&new_dentry->d_lock);
+    INIT_HLIST_HEAD(&new_dentry->d_children);
+    INIT_HLIST_NODE(&new_dentry->d_sib);
+    new_dentry->d_count = 1;
 
     return new_dentry;
 }

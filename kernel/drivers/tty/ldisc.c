@@ -429,6 +429,7 @@ static ssize_t c_read(struct tty *tty, u8 *buf, size_t nr)
             klog(LOG_DEBUG, "c_read: proc %d waiting for line\n", get_pid());
             mutex_unlock(&data->read_lock);
             if (sleep_on(&tty->read_wait) == -EINTR) {
+                mutex_lock(&data->read_lock);
                 return copied > 0 ? (ssize_t)copied : -EINTR;
             }
             mutex_lock(&data->read_lock);
@@ -488,6 +489,7 @@ static ssize_t nc_read(struct tty *tty, u8 *buf, size_t nr)
                 // klog(LOG_DEBUG, "noncanon_read: waiting for vmin=%d (have %lu)\n", vmin, copied);
                 mutex_unlock(&data->read_lock);
                 if (sleep_on(&tty->read_wait) == -EINTR) {
+                    mutex_lock(&data->read_lock);
                     return copied > 0 ? (ssize_t)copied : -EINTR;
                 }
                 mutex_lock(&data->read_lock);
@@ -528,6 +530,7 @@ static ssize_t nc_read(struct tty *tty, u8 *buf, size_t nr)
             while (BUF_EMPTY(data)) {
                 mutex_unlock(&data->read_lock);
                 if (sleep_on(&tty->read_wait) == -EINTR) {
+                    mutex_lock(&data->read_lock);
                     return copied > 0 ? (ssize_t)copied : -EINTR;
                 }
                 mutex_lock(&data->read_lock);

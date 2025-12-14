@@ -90,6 +90,7 @@ fs/dcache.o \
 fs/mount.o \
 fs/stat.o \
 fs/fcntl.o \
+fs/fd.o \
 fs/name_utils.o \
 drivers/blkdev.o \
 drivers/console.o \

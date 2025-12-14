@@ -28,25 +28,25 @@ enum file_type {
 };
 
 struct inode {
-    unsigned long 		i_ino;
-    struct list_head 	i_list;
-    umode_t				i_mode;
-    atomic_uint 		i_count;
+    unsigned long       i_ino;
+    struct list_head    i_list;
+    umode_t             i_mode;
+    atomic_uint         i_count;
     const struct inode_operations *i_op;
     struct super_block *i_sb;
 
-    u64			i_size;
-    u64			i_atime;
-    u64			i_mtime;
-    u64			i_ctime;
-    spinlock_t	i_lock;	/* i_blocks, i_size */
-    u32			i_blocks;
+    u64         i_size;
+    u64         i_atime;
+    u64         i_mtime;
+    u64         i_ctime;
+    spinlock_t  i_lock;    /* i_blocks, i_size */
+    u32         i_blocks;
 
-    unsigned long		i_state;
-    struct semaphore	i_rwsem;
+    unsigned long    i_state;
+    struct semaphore i_rwsem;
 
-    struct hlist_node	i_hash;
-    struct hlist_head	i_dentry;
+    struct hlist_node    i_hash;
+    struct hlist_head    i_dentry;
 
     dev_t i_rdev;
     const struct file_operations *i_fop;
@@ -67,23 +67,21 @@ struct __cacheline_align inode_operations {
 };
 
 
-#define d_lock	d_lockref.lock
-
 struct dentry {
     atomic_uint d_count;
+    spinlock_t  d_lock;
     // struct hlist_bl_node d_hash; /* lookup hash list */
-    struct dentry *d_parent;	/* parent directory */
+    struct dentry *d_parent;        /* parent directory */
     char *d_name;
-    struct inode *d_inode;		/* Where the name belongs to - NULL is negative */
+    struct inode *d_inode;          /* Where the name belongs to - NULL is negative */
 
-    struct lockref d_lockref;	/* per-dentry lock and refcount */
     const struct dentry_operations *d_op;
-    struct super_block *d_sb;	/* The root of the dentry tree */
-    unsigned long d_time;		/* used by d_revalidate */
-    void *d_fsdata;			/* fs-specific data */
+    struct super_block *d_sb;       /* The root of the dentry tree */
+    unsigned long d_time;           /* used by d_revalidate */
+    void *d_fsdata;                 /* fs-specific data */
 
-    struct hlist_node d_sib;	/* child of parent list */
-    struct hlist_head d_children;	/* our children */
+    struct hlist_node d_sib;        /* child of parent list */
+    struct hlist_head d_children;   /* our children */
 
     struct vfsmount *d_mount;
 };
@@ -96,24 +94,24 @@ struct __cacheline_align dentry_operations {
 };
 
 struct super_block {
-    struct list_head			s_list;		/* Keep this first */
-    // dev_t					s_dev;		/* search index; _not_ kdev_t */
-    unsigned long			s_blocksize;
-    unsigned long long		s_maxbytes;	/* Max file size */
-    enum fs_type			s_type;
-    const struct super_operations	*s_op;
-    struct dentry			*s_root;
-    struct semaphore		s_umount;
-    int						s_count;
-    atomic_bool				s_active;
+    struct list_head    s_list;        /* Keep this first */
+    unsigned long       s_blocksize;
+    unsigned long long  s_maxbytes;    /* Max file size */
+    enum fs_type        s_type;
 
-    struct block_device		*s_bdev;
-    struct file				*s_bdev_file;
+    const struct super_operations *s_op;
+    struct dentry       *s_root;
+    struct semaphore    s_umount;
+    atomic_uint         s_count;
+    atomic_bool         s_active;
 
-    spinlock_t				s_lock;		/* Protects the sb and inode list */
-    struct list_head		s_inodes;	/* all inodes for this fs */
+    struct block_device *s_bdev;
+    struct file         *s_bdev_file;
 
-    void					*private;	/* Filesystem private info */
+    spinlock_t          s_lock;      /* Protects the sb and inode list */
+    struct list_head    s_inodes;    /* all inodes for this fs */
+
+    void *private;    /* Filesystem private info */
 };
 
 struct super_operations {
@@ -125,23 +123,24 @@ struct super_operations {
 };
 
 struct dirent {
-	unsigned long   d_ino;		/* file number of entry */
-	long            d_off;		/* directory offset of entry */
-	unsigned short  d_reclen;	/* length of this record */
-	unsigned char   d_type;		/* file type, see below */
-	unsigned short  d_namlen;	/* length of string in d_name */
-	char            d_name[64];	/* name must be no longer than this */
+    unsigned long   d_ino;        /* file number of entry */
+    long            d_off;        /* directory offset of entry */
+    unsigned short  d_reclen;    /* length of this record */
+    unsigned char   d_type;        /* file type, see below */
+    unsigned short  d_namlen;    /* length of string in d_name */
+    char            d_name[64];    /* name must be no longer than this */
 };
 
 struct file {
-    spinlock_t  f_lock;
-    unsigned int f_mode;
-    atomic_ulong  f_count;
-    struct mutex f_pos_lock;
-    unsigned long f_pos;
-    // struct fown_struct f_owner;
-    struct dentry *f_dentry;
-    struct inode *f_inode;
+    spinlock_t      f_lock;
+    atomic_uint     f_count;
+    mode_t          f_mode;
+    atomic_uint     f_owner;
+    off_t           f_pos;
+    struct mutex    f_pos_lock;
+    struct dentry  *f_dentry;
+    struct inode   *f_inode;
+
     const struct file_operations *f_op;
     union {
         struct pipe_buf *pipe; // for pipe files
@@ -163,13 +162,13 @@ struct file_operations {
 
 
 struct vfsmount {
-    struct dentry *mnt_root;	/* root of the mounted tree */
-    struct super_block *mnt_sb;	/* pointer to superblock */
+    struct dentry *mnt_root;    /* root of the mounted tree */
+    struct super_block *mnt_sb;    /* pointer to superblock */
     int mnt_flags;
     struct dentry *(*init_fs)(void*, struct super_block *);
 };
 
-int vfs_lseek(struct file *file, int offset, int whence);
+off_t vfs_lseek(struct file *file, off_t offset, int whence);
 struct file* vfs_open(const char *path, int flags, int mode);
 ssize_t vfs_read_at(struct file *file, void *buf, size_t count, unsigned long pos);
 ssize_t vfs_read(struct file *file, void *buf, size_t count);

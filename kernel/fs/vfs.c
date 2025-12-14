@@ -34,96 +34,6 @@ struct dentry * get_root_dentry(void)
     return root_dentry;
 }
 
-static int set_fdtsize(struct fdtable *files, unsigned int size)
-{
-    if (size <= files->max)
-        return files->max;
-    if (files->max >= 1024 || size > 1024)
-        return -EMFILE;
-
-    void *tmp = krealloc(files->fdarray, sizeof(struct file*) * size);
-    if (!tmp)
-        return -ENOMEM;
-    files->fdarray = tmp;
-    for (size_t i = files->max; i < size; i++)
-        files->fdarray[i] = NULL;
-    files->max = size;
-    klog(LOG_DEBUG, "Increased max file descriptors to %d\n", size);
-    return files->max;
-}
-
-static int get_fd_for(struct fdtable *files)
-{
-    unsigned int cur_max = files->max;
-
-    for (size_t i = 0; i < cur_max; i++) {
-        if (!files->fdarray[i]) {
-            return i;
-        }
-    }
-
-    if (files->max < 256) {
-        int new_size = set_fdtsize(files, files->max * 2);
-        if (new_size < 0)
-            return new_size;
-        return cur_max;
-    } else {
-        return -EMFILE;
-    }
-}
-
-static int get_fd(void)
-{
-    struct fdtable *files = &current->fs.files;
-    return get_fd_for(files);
-}
-
-int get_fd_at(struct fdtable *files, int start)
-{
-    if (start < 0 || (unsigned)start >= 1023)
-        return -EINVAL;
-
-    if (start >= (int)files->max) {
-        int new_size = set_fdtsize(files, MIN(start * 2, 1024));
-        if (new_size < 0)
-            return new_size;
-    }
-
-    for (int i = start; i < (int)files->max; i++) {
-        if (!files->fdarray[i]) {
-            return i;
-        }
-    }
-
-    klog(LOG_DEBUG, "get_fd_at: No available file descriptors\n");
-    return -EMFILE;
-}
-
-int get_next_fd(struct fdtable *files, struct file *file)
-{
-    if (!files || !file)
-        return -EINVAL;
-
-    int fd = get_fd_for(files);
-    if (fd < 0)
-        return fd;
-
-    files->fdarray[fd] = file;
-    return fd;
-}
-
-struct file * get_file_handle(int fd)
-{
-    struct file *file;
-    struct fdtable *files = &current->fs.files;
-
-    if (fd < 0 || (unsigned)fd >= files->max)
-        return ERR_PTR(-EBADF);
-    file = files->fdarray[fd];
-    if (!file)
-        return ERR_PTR(-EBADF);
-    return file;
-}
 
 static void root_init(struct block_device *bdev)
 {
@@ -172,20 +82,29 @@ void fs_init(void)
 #define SEEK_CUR 1
 #define SEEK_END 2
 
-int vfs_lseek(struct file *file, int offset, int whence)
+off_t vfs_lseek(struct file *file, off_t offset, int whence)
 {
-    if (whence == SEEK_SET)
-        file->f_pos = offset;
-    else if (whence == SEEK_CUR)
-        file->f_pos += offset;
-    else if (whence == SEEK_END)
-        file->f_pos = file->f_dentry->d_inode->i_size + offset;
-    else
-        return -EINVAL;
+    off_t ret = 0;
+    mutex_lock(&file->f_pos_lock);
 
-    return file->f_pos;
+    if (whence == SEEK_SET) {
+        file->f_pos = offset;
+    } else if (whence == SEEK_CUR) {
+        file->f_pos += offset;
+    } else if (whence == SEEK_END) {
+        acquire_lock(&file->f_dentry->d_inode->i_lock);
+        file->f_pos = file->f_dentry->d_inode->i_size + offset;
+        release_lock(&file->f_dentry->d_inode->i_lock);
+    } else {
+        ret = -EINVAL;
+    }
+
+    if (ret >= 0)
+        ret = file->f_pos;
+    mutex_unlock(&file->f_pos_lock);
+    return ret;
 }
-SYSCALL_DECL3(lseek, int, fd, int, offset, int, whence)
+SYSCALL_DECL3(lseek, int, fd, off_t, offset, int, whence)
 {
     struct file *file = get_file_handle(fd);
     if (IS_ERR(file))
@@ -257,8 +176,6 @@ struct file *vfs_open(const char *path, int flags, int mode)
     if (IS_ERR_OR_NULL(new_file))
         return ERR_PTR(-ENOMEM);
 
-    fget(new_file);
-
     if ((err = inode->i_op->open(inode, new_file)) < 0) {
         fput(new_file);
         return ERR_PTR(err);
@@ -285,14 +202,13 @@ SYSCALL_DECL3(open, const char*, path, int, flags, int, mode)
         goto error;
     }
 
-    fd = get_fd();
+    fd = get_next_fd(&current->fs.files, f);
     if (fd < 0) {
-        vfs_close(f);
-        fd = -EMFILE;
+        klog(LOG_DEBUG, "No available file descriptors for %s\n", path_buf);
+        fput(f);
         goto error;
     }
 
-    current->fs.files.fdarray[fd] = f;
 #ifdef DEBUG_VFS
     klog(LOG_DEBUG, "VFS: Opened file %s with fd %d\n", path_buf, fd);
 #endif
@@ -342,9 +258,11 @@ ssize_t vfs_read(struct file *file, void *buf, size_t count)
         count, file->f_dentry ? file->f_dentry->d_name : "unknown", file->f_pos);
 #endif
 
+    mutex_lock(&file->f_pos_lock);
     ssize_t bytes = file->f_op->read(file, buf, count);
     if (bytes > 0)
         file->f_pos += bytes;
+    mutex_unlock(&file->f_pos_lock);
 #ifdef DEBUG_VFS
     klog(LOG_DEBUG, "vfs_read: Read %ld bytes from file %s at pos %lu\n",
         bytes, file->f_dentry ? file->f_dentry->d_name : "unknown", file->f_pos);
@@ -397,9 +315,11 @@ ssize_t vfs_write(struct file *file, const void *buf, size_t count)
         }
     }
 
+    mutex_lock(&file->f_pos_lock);
     ssize_t bytes = file->f_op->write(file, buf, count);
     if (bytes > 0)
         file->f_pos += bytes;
+    mutex_unlock(&file->f_pos_lock);
     return bytes;
 }
 
@@ -633,38 +553,49 @@ SYSCALL_DECL3(mknod, const char*, pathname, int, mode, dev_t, dev)
 
 int vfs_dup(int oldfd, int newfd)
 {
-    struct file *f = get_file_handle(oldfd);
-    if (IS_ERR(f))
-        return PTR_ERR(f);
-    struct fdtable *files = &current->fs.files;
-#ifdef DEBUG_VFS
-    klog(LOG_DEBUG, "vfs_dup: file %p, dentry %p, oldfd %d, newfd %d\n", f, f->f_dentry, oldfd, newfd);
-#endif
     if (newfd < 0 || newfd >= 1024) {
         klog(LOG_ERROR, "VFS: vfs_dup invalid newfd %d\n", newfd);
         return -EBADF;
     }
-    if (newfd >= (int)files->max) {
-        set_fdtsize(files, 1 << (32 - __builtin_clz(newfd - 1)));
-    }
-    if (newfd < (int)files->max && current->fs.files.fdarray[newfd]) {
-        vfs_close(current->fs.files.fdarray[newfd]);
-        current->fs.files.fdarray[newfd] = NULL;
-    }
+
+    if (oldfd == newfd)
+        return newfd;
+
+    struct file *f = get_file_handle(oldfd);
+    if (IS_ERR(f))
+        return PTR_ERR(f);
+
     fget(f);
-    current->fs.files.fdarray[newfd] = f;
+
+#ifdef DEBUG_VFS
+    klog(LOG_DEBUG, "vfs_dup: file %p, dentry %p, oldfd %d, newfd %d\n", f, f->f_dentry, oldfd, newfd);
+#endif
+
+    int ret;
+    if ((ret = get_fd_exact_replace(&current->fs.files, newfd, f)) < 0) {
+        fput(f);
+        klog(LOG_ERROR, "VFS: vfs_dup failed to set fd %d\n", newfd);
+        return ret;
+    }
+
 #ifdef DEBUG_VFS
     klog(LOG_DEBUG, "VFS: Duplicated fd %d to %d\n", oldfd, newfd);
 #endif
-    return newfd;
+    return ret;
 }
 
 int vfs_dupf(int fd)
 {
-    int newfd = get_fd();
-    if (newfd < 0)
-        return newfd; // -EMFILE
-    return vfs_dup(fd, newfd);
+    struct file *f = get_file_handle(fd);
+    if (IS_ERR(f))
+        return PTR_ERR(f);
+    fget(f);
+    int new_fd = get_next_fd(&current->fs.files, f);
+    if (new_fd < 0) {
+        klog(LOG_ERROR, "VFS: vfs_dupf failed to get new fd\n");
+        fput(f);
+    }
+    return new_fd;
 }
 
 SYSCALL_DECL1(dup, int, oldfd)

@@ -109,7 +109,7 @@ void mutex_unlock(mutex_t *mutex)
     long id = get_pid();
 #ifdef DEBUG
     if (atomic_load(&mutex->owner) != id)
-        panic("Mutex unlock by non-owner (pid %ld)\n", id);
+        panic("Mutex unlock by non-owner (owner = %ld)\n", mutex->owner);
 #endif
 
     atomic_store_explicit(&mutex->owner, -1, memory_order_release);
