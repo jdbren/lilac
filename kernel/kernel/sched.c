@@ -29,7 +29,7 @@ static struct sighandlers root_sighand = {
     }
 };
 
-struct task __root = {
+struct task __rootp = {
     .state = TASK_RUNNING,
     .name = "idle",
     .priority = 20,
@@ -56,8 +56,8 @@ static struct rq rqs[CONFIG_MAX_CPUS] = {
         .lock = SPINLOCK_INIT,
         .cpu = 0,
         .nr_running = 0,
-        .curr = &__root,
-        .idle = &__root,
+        .curr = &__rootp,
+        .idle = &__rootp,
         .queue = RB_ROOT_CACHED,
     }
 };
@@ -102,6 +102,13 @@ static bool prio_comp(struct rb_node *a, const struct rb_node *b)
     return task_a->vruntime < task_b->vruntime;
 }
 
+void __rq_del(struct rq *rq, struct task *p)
+{
+    rb_erase_cached(&p->rq_node, &rq->queue);
+    rq->nr_running--;
+    p->on_rq = false;
+}
+
 void rq_del(struct task *p)
 {
     if (!p->on_rq) {
@@ -113,10 +120,15 @@ void rq_del(struct task *p)
 #endif
     struct rq *rq = this_cpu_rq();
     acquire_lock(&rq->lock);
-    rb_erase_cached(&p->rq_node, &rq->queue);
-    rq->nr_running--;
-    p->on_rq = false;
+    __rq_del(rq, p);
     release_lock(&rq->lock);
+}
+
+void __rq_add(struct rq *rq, struct task *p)
+{
+    rb_add_cached(&p->rq_node, &rq->queue, prio_comp);
+    rq->nr_running++;
+    p->on_rq = true;
 }
 
 void rq_add(struct task *p)
@@ -130,9 +142,7 @@ void rq_add(struct task *p)
 #endif
     struct rq *rq = this_cpu_rq();
     acquire_lock(&rq->lock);
-    rb_add_cached(&p->rq_node, &rq->queue, prio_comp);
-    rq->nr_running++;
-    p->on_rq = true;
+    __rq_add(rq, p);
     release_lock(&rq->lock);
 }
 
@@ -211,10 +221,10 @@ void schedule_task(struct task *new_task)
 
 void sched_init(void)
 {
-    rqs[0].idle = &__root;
-    rqs[0].curr = &__root;
+    rqs[0].idle = &__rootp;
+    rqs[0].curr = &__rootp;
     rqs[0].nr_running = 1;
-    __root.pgd = arch_get_pgd();
+    __rootp.pgd = arch_get_pgd();
     struct task *pid1 = init_process();
     schedule_task(pid1);
     timer_reset = 100;
@@ -254,47 +264,34 @@ static void context_switch(struct task *prev, struct task *next)
 
 void schedule(void)
 {
-    struct task *cur_task = current;
-    struct task *next = NULL;
+    struct task *cur = current;
+    struct task *next;
     struct rq *rq = this_cpu_rq();
 
     acquire_lock(&rq->lock);
 
     struct rb_node *node = rb_first_cached(&rq->queue);
     if (!node) {
-        if (cur_task->state == TASK_RUNNING) {
-            release_lock(&rq->lock);
-            return;
-        }
-        next = rq->idle;
+        if (cur->state == TASK_RUNNING)
+            next = cur;
+        else
+            next = rq->idle;
     } else {
         next = rb_entry(node, struct task, rq_node);
+        __rq_del(rq, next);
     }
 
-    if (next == cur_task) {
-        if (cur_task->state == TASK_RUNNING) {
-            release_lock(&rq->lock);
-            return;
-        }
-        next = rq->idle;
-    }
-
-    if (next->state != TASK_RUNNING) {
-        panic("Task %d is not running\n", next->pid);
+    if (cur->state == TASK_RUNNING && cur != rq->idle) {
+        __rq_add(rq, cur);
     }
 
     release_lock(&rq->lock);
 
-    if (next != rq->idle) {
-        rq_del(next);
+    if (next != cur) {
+        context_switch(cur, next);
     }
-
-    if (cur_task->state == TASK_RUNNING && cur_task != rq->idle) {
-        rq_add(cur_task);
-    }
-
-    context_switch(cur_task, next);
 }
+
 
 void sched_tick(void)
 {
