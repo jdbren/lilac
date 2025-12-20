@@ -54,25 +54,22 @@ void mutex_init(mutex_t *mutex)
 static void __mutex_lock_slow(mutex_t *mutex)
 {
     long id = get_pid();
-    struct mutex_waiter waiter = {.t = current};
+    struct mutex_waiter waiter = {.list = LIST_HEAD_INIT(waiter.list), .t = current};
 
     acquire_lock(&mutex->wait_lock);
     list_add_tail(&waiter.list, &mutex->waiters);
 
     for (;;) {
-        long expected = -1;
         set_current_state(TASK_UNINTERRUPTIBLE);
 
-        if (atomic_compare_exchange_strong_explicit(&mutex->owner, &expected,
-                id, memory_order_acquire, memory_order_relaxed)) {
-            list_del(&waiter.list);
+        if (atomic_load_explicit(&mutex->owner, memory_order_acquire) == get_pid()) {
             set_current_state(TASK_RUNNING);
             release_lock(&mutex->wait_lock);
             return;
         }
 
         release_lock(&mutex->wait_lock);
-        yield();
+        schedule();
         acquire_lock(&mutex->wait_lock);
     }
 }
@@ -95,34 +92,36 @@ void mutex_lock(mutex_t *mutex)
         __mutex_lock_slow(mutex);
 }
 
-void mutex_lock_r(mutex_t *mutex)
-{
-    long id = get_pid();
-    if (atomic_load(&mutex->owner) == id)
-        return;
-
-    mutex_lock(mutex);
-}
-
 void mutex_unlock(mutex_t *mutex)
 {
     long id = get_pid();
 #ifdef DEBUG
     if (atomic_load(&mutex->owner) != id)
-        panic("Mutex unlock by non-owner (owner = %ld)\n", mutex->owner);
+        panic("unlock by non-owner");
 #endif
 
-    atomic_store_explicit(&mutex->owner, -1, memory_order_release);
-
     acquire_lock(&mutex->wait_lock);
-    if (!list_empty(&mutex->waiters)) {
-        struct task *next =
-            list_first_entry(&mutex->waiters, struct mutex_waiter, list)->t;
-        set_task_running(next);
+
+    if (list_empty(&mutex->waiters)) {
+        atomic_store_explicit(&mutex->owner, -1, memory_order_release);
+        release_lock(&mutex->wait_lock);
+        return;
     }
+
+    struct mutex_waiter *w =
+        list_first_entry(&mutex->waiters, struct mutex_waiter, list);
+
+    atomic_store_explicit(&mutex->owner, w->t->pid, memory_order_release);
+    list_del(&w->list);
     release_lock(&mutex->wait_lock);
+    set_task_running(w->t);
 }
+
 
 void mutex_destroy(mutex_t *mutex)
 {
+#ifdef DEBUG
+    if (atomic_load(&mutex->owner) != -1 || !list_empty(&mutex->waiters))
+        panic("Destroying mutex in use or with waiters\n");
+#endif
 }

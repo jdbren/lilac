@@ -18,14 +18,15 @@ BOOTDIR?=$(EXEC_PREFIX)/boot
 INCLUDEDIR?=$(PREFIX)/include
 
 FLAGS=-D__lilac__ -D__KERNEL__ -DLOG_CPUID -Werror -Iinclude -ffreestanding \
-	-Wall -Wextra -Wno-sign-compare -Wundef -Wframe-larger-than=2048 \
+	-Wall -Wextra -Wno-sign-compare -Wundef -Wframe-larger-than=600 \
 	-Wno-unused-parameter -Wno-unused-function -Wno-unused-variable -Wno-undef
 CFLAGS:=$(CFLAGS) $(FLAGS) -std=gnu23 -fanalyzer -fstack-protector-strong \
 	-fno-strict-aliasing -fno-PIE -fno-common -mno-red-zone \
 	-fno-strict-overflow -fno-delete-null-pointer-checks -fno-stack-check \
 	-fno-allow-store-data-races -fno-asynchronous-unwind-tables \
 	-ftrivial-auto-var-init=zero -fzero-init-padding-bits=all
-# -DDEBUG_VFS -DDEBUG_FORK -DDEBUG_KMM -DDEBUG_KMALLOC -DDEBUG_PAGING -DDEBUG_FAT -DDEBUG_TMPFS -DDEBUG_ELF
+# -DDEBUG_VFS -DDEBUG_FORK -DDEBUG_FAULT -DDEBUG_MM -DDEBUG_KMALLOC
+# -DDEBUG_PAGING -DDEBUG_FAT -DDEBUG_TMPFS -DDEBUG_ELF
 CXXFLAGS:=$(CXXFLAGS) $(FLAGS) -D_GLIBCXX_NO_ASSERTIONS \
 	-fno-exceptions -fno-rtti -fpermissive -std=c++23
 LDFLAGS:=$(LDFLAGS) -nostdlib

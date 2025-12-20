@@ -93,18 +93,21 @@ void pgflt_handler(long error_code, struct interrupt_frame *frame)
     klog(LOG_DEBUG, "Page fault at %p, Code: %lx, IP: %p\n", addr, error_code, frame->ip);
 #endif
     void *handler = find_exception(frame->ip);
+    const bool user_addr = addr < __USER_MAX_ADDR && addr > 0x1000;
 
-    if (error_code & X86_FAULT_USER || addr <= __USER_MAX_ADDR) {
-        if (addr >= __USER_MAX_ADDR || addr <= 0x1000) {
+    if (error_code & X86_FAULT_USER) {
+        if (!user_addr) {
             do_raise(current, SIGSEGV);
-            return;
+        } else {
+            user_page_fault(error_code, frame, addr);
         }
+    } else if (user_addr) {
         user_page_fault(error_code, frame, addr);
     } else if (handler && addr < __KERNEL_BASE) {
         klog(LOG_DEBUG, "Page fault at %x handled by %p\n", frame->ip, handler);
         frame->ip = (uintptr_t)handler;
     } else {
-        kerror("Page fault detected\n");
+        panic("Kernel page fault at %p (code %lx, cr2 %p)\n", (void*)frame->ip, error_code, (void*)addr);
     }
 }
 

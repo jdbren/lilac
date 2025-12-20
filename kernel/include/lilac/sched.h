@@ -6,6 +6,7 @@
 #include <lilac/process.h>
 
 void sched_init(void);
+void sched_ap_rq_init(int cpu);
 void sched_clock_init(void);
 void schedule(void);
 void sched_tick(void);
@@ -19,6 +20,7 @@ struct task * find_child_by_pid(struct task *parent, int pid);
 int do_fork(void);
 void idle(void);
 
+void sched_post_switch_unlock(void);
 void rq_add(struct task *p);
 void rq_del(struct task *p);
 void set_task_running(struct task *p);

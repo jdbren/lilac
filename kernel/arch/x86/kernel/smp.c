@@ -2,6 +2,7 @@
 #include <lilac/boot.h>
 #include <lilac/percpu.h>
 #include <lilac/timer.h>
+#include <lilac/sched.h>
 #include <mm/kmm.h>
 #include <mm/page.h>
 
@@ -45,7 +46,7 @@ struct cpu_local cpu_local_storage = {
 };
 
 __align(16)
-unsigned char ap_stack[0x8000];
+unsigned char ap_stack[__KERNEL_STACK_SZ * CONFIG_MAX_CPUS];
 
 #ifndef __x86_64__
 void syscall_init(void) {}
@@ -57,17 +58,25 @@ void ap_startup(void)
     u8 id = get_lapic_id();
     arch_disable_interrupts();
     tss_init();
-    set_tss_esp0((uintptr_t)ap_stack + 0x1000 * (id+1));
+    set_tss_esp0((uintptr_t)ap_stack + __KERNEL_STACK_SZ * (id+1));
     load_idt();
     ap_lapic_enable();
     syscall_init();
     percpu_init_cpu();
-    // timer_tick_init();
+    sched_ap_rq_init(id);
+    timer_tick_init();
     klog(LOG_DEBUG, "AP %d started\n", id);
-    // arch_enable_interrupts();
 
-    while (1)
+    int int_count = 0;
+    while (1) {
+        asm ("sti");
         asm ("hlt");
+        int_count++;
+        if (int_count % 1000 == 0) {
+            // klog(LOG_DEBUG, "AP %d still alive, handled %d interrupts\n", id, int_count);
+            schedule();
+        }
+    }
 }
 
 extern char _percpu_start;

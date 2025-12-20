@@ -275,6 +275,7 @@ static void prepare_task_env(struct task *p, char **envp, char *env_loc, char *e
 
 static void start_process(void)
 {
+    sched_post_switch_unlock();
     struct mm_info *mem = current->mm;
     klog(LOG_DEBUG, "Process %d starting\n", current->pid);
 
@@ -430,6 +431,7 @@ static struct task * clone_process(struct task *parent)
 
 static void return_from_fork(void)
 {
+    sched_post_switch_unlock();
     klog(LOG_DEBUG, "PID %d: Returning from fork\n", current->pid);
     arch_return_from_fork(current->regs, current->kstack);
 }

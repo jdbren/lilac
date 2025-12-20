@@ -611,14 +611,18 @@ SYSCALL_DECL2(dup2, int, oldfd, int, newfd)
 static char * build_absolute_path(struct dentry *d)
 {
     if (!d) return ERR_PTR(-EINVAL);
-
-    char tmp[1024] = {0};
-    char *buf = kmalloc(1024);
-    if (!buf) return ERR_PTR(-ENOMEM);
+    char *tmp = kmalloc(PATH_MAX);
+    if (!tmp) return ERR_PTR(-ENOMEM);
+    char *buf = kmalloc(PATH_MAX);
+    if (!buf) {
+        kfree(tmp);
+        return ERR_PTR(-ENOMEM);
+    }
     buf[0] = '\0';
 
     if (d == root_dentry) {
         strcpy(buf, "/");
+        kfree(tmp);
         return buf;
     } else {
         strcpy(buf, d->d_name);
@@ -631,15 +635,16 @@ static char * build_absolute_path(struct dentry *d)
 #endif
         if (cur == current->fs.root_d) {
             // Reached root
-            snprintf(tmp, 64, "%c%s", '/', buf);
+            snprintf(tmp, PATH_MAX, "%c%s", '/', buf);
             strcpy(buf, tmp);
             break;
         } else {
-            snprintf(tmp, 64, "%s/%s", cur->d_name, buf);
+            snprintf(tmp, PATH_MAX, "%s/%s", cur->d_name, buf);
             strcpy(buf, tmp);
         }
         cur = cur->d_parent;
     }
+    kfree(tmp);
     return buf;
 }
 

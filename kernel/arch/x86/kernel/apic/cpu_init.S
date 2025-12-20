@@ -47,7 +47,7 @@ _L8060:
 	cpuid
 	shrl	$24, %ebx
 	# set up a stack
-	movl	$0x1000, %eax
+	movl	$__KERNEL_STACK_SZ, %eax
 	mul		%ebx
 	addl	$__pa(ap_stack), %eax
 	mov		%eax, %esp

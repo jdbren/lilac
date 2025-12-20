@@ -59,7 +59,11 @@ int scan_partitions(struct gendisk *disk)
 
     klog(LOG_INFO, "Scanning partitions...\n");
     klog(LOG_INFO, "Driver: %s\n", disk->driver);
-    char buf[512];
+    char *buf = kmalloc(512);
+    if (!buf) {
+        klog(LOG_ERROR, "Failed to allocate memory for partition scan\n");
+        return -ENOMEM;
+    }
     const struct MBR *mbr;
 	const struct mbr_part_entry *mbr_part;
     const struct gpt_part_entry *gpt_part;

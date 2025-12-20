@@ -30,6 +30,8 @@ typedef volatile atomic_flag spinlock_t;
 
 #define release_lock(spin) atomic_flag_clear(spin)
 
+#define try_acquire_lock(spin) (!atomic_flag_test_and_set(spin))
+
 struct lockref {
     spinlock_t lock;
     int count;
