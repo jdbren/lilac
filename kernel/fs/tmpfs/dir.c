@@ -64,9 +64,12 @@ int tmpfs_readdir(struct file *file, struct dirent *dirp, unsigned int count)
 #endif
     while (i < count && pos < dir->num_entries) {
         if (entry->inode) {
-            strcpy(dirp[pos].d_name, entry->name);
-            dirp[pos].d_ino = entry->inode->i_ino;
-            dirp[pos].d_reclen = sizeof(struct dirent);
+            strncpy(dirp[i].d_name, entry->name, sizeof(dirp[i].d_name));
+            dirp[i].d_ino = entry->inode->i_ino;
+            dirp[i].d_off = pos;
+            dirp[i].d_reclen = sizeof(struct dirent);
+            dirp[i].d_type = S_ISDIR(entry->inode->i_mode) ? DT_DIR : DT_REG;
+            dirp[i].pad = 0;
             ++pos;
             ++i;
         }

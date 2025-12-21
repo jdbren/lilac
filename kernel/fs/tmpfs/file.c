@@ -1,6 +1,7 @@
 #include <lilac/fs.h>
 #include <lilac/log.h>
 #include <lilac/libc.h>
+#include <lilac/timer.h>
 #include <mm/kmalloc.h>
 
 #include "tmpfs_internal.h"
@@ -15,6 +16,8 @@ int tmpfs_create(struct inode *parent, struct dentry *new_dentry, umode_t mode)
     new_inode->i_mode = mode | S_IFREG;
     file_info->data = kmalloc(4096);
     new_inode->i_size = 4096;
+    new_inode->i_count = 1;
+    new_inode->i_ctime = new_inode->i_mtime = new_inode->i_atime = get_unix_time();
     new_dentry->d_inode = new_inode;
 
     struct tmpfs_dir *parent_dir = (struct tmpfs_dir*)parent->i_private;

@@ -57,8 +57,8 @@ int __fat32_read_all_dirent(struct file *file, struct dirent **dirents_ptr)
     }
 
     for (entry = (struct fat_file*)raw_buf;
-    entry->name[0] != 0 && (u8*)entry < (u8*)entry + count;
-    entry++) {
+            entry->name[0] != 0 && (u8*)entry < (u8*)raw_buf + count;
+            entry++) {
         if (INVALID_ENTRY(entry) || entry->name[0] == 0x0)
             continue;
         // if (entry->name[0] == 0x0)
@@ -84,6 +84,11 @@ int __fat32_read_all_dirent(struct file *file, struct dirent **dirents_ptr)
             for (int j = 0; j < 3 && entry->ext[j] != ' '; j++)
                 dir_buf[i].d_name[c++] = entry->ext[j];
         }
+        dir_buf[i].d_name[c] = '\0';
+        dir_buf[i].d_ino = file->f_dentry->d_inode->i_ino;
+        dir_buf[i].d_reclen = sizeof(struct dirent);
+        dir_buf[i].d_off = file->f_pos + i;
+        dir_buf[i].d_type = (entry->attributes & FAT_DIR_ATTR) ? DT_DIR : DT_REG;
         ++i;
     }
 

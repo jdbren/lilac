@@ -4,6 +4,7 @@
 #include <lilac/log.h>
 #include <lilac/libc.h>
 #include <lilac/err.h>
+#include <lilac/time.h>
 #include <drivers/blkdev.h>
 #include <mm/kmalloc.h>
 
@@ -86,6 +87,9 @@ struct inode *fat_build_inode(struct super_block *sb, struct fat_inode *info)
 
     inode->i_ino = unique_ino();
     inode->i_size = info->entry.file_size;
+    inode->i_atime = fat_time_to_unix(info->entry.last_access_date, 0);
+    inode->i_mtime = fat_time_to_unix(info->entry.last_write_date, info->entry.last_write_time);
+    inode->i_ctime = fat_time_to_unix(info->entry.creation_date, info->entry.creation_time);
     inode->i_private = info;
     inode->i_mode |= info->entry.attributes & FAT_DIR_ATTR ? S_IFDIR : S_IFREG;
 

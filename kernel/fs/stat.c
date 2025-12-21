@@ -24,12 +24,13 @@ int vfs_stat(const struct file *f, struct stat *st)
     // st->st_dev = i_ptr->i_sb->s_bdev->devnum;
     st->st_dev = 0;
     st->st_mode = i_ptr->i_mode;
-    st->st_nlink = 0;
+    st->st_nlink = i_ptr->i_count;
     st->st_uid = 0;
     st->st_gid = 0;
     st->st_rdev = i_ptr->i_rdev;
     st->st_size = i_ptr->i_size;
-    // st->st_blksize = i_ptr->i_sb->s_blocksize;
+    if (i_ptr->i_sb)
+        st->st_blksize = i_ptr->i_sb->s_blocksize;
     st->st_blksize = 512;
     st->st_blocks = i_ptr->i_blocks;
     st->st_atim = (struct timespec){i_ptr->i_atime, 0};

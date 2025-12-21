@@ -395,7 +395,7 @@ SYSCALL_DECL1(close, int, fd)
 }
 
 
-ssize_t vfs_getdents(struct file *file, struct dirent *dirp, unsigned int buf_size)
+ssize_t vfs_getdents(struct file *file, struct dirent *dirp, int buf_size)
 {
     struct inode *inode = file->f_dentry->d_inode;
     int dir_cnt;
@@ -416,7 +416,8 @@ ssize_t vfs_getdents(struct file *file, struct dirent *dirp, unsigned int buf_si
     file->f_pos += dir_cnt;
     return dir_cnt > 0 ? dir_cnt * (int)sizeof(struct dirent) : dir_cnt;
 }
-SYSCALL_DECL3(getdents, unsigned int, fd, struct dirent*, dirp, size_t, buf_size)
+
+SYSCALL_DECL3(getdents, int, fd, struct dirent*, dirp, int, buf_size)
 {
     struct file *file = get_file_handle(fd);
     unsigned char *buf;

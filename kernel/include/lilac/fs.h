@@ -122,13 +122,26 @@ struct super_operations {
     void (*shutdown)(struct super_block *sb);
 };
 
+/*
+ * File types
+ */
+#define    DT_UNKNOWN     0
+#define    DT_FIFO        1
+#define    DT_CHR         2
+#define    DT_DIR         4
+#define    DT_BLK         6
+#define    DT_REG         8
+#define    DT_LNK        10
+#define    DT_SOCK       12
+#define    DT_WHT        14
+
 struct dirent {
-    unsigned long   d_ino;        /* file number of entry */
-    long            d_off;        /* directory offset of entry */
-    unsigned short  d_reclen;    /* length of this record */
-    unsigned char   d_type;        /* file type, see below */
-    unsigned short  d_namlen;    /* length of string in d_name */
-    char            d_name[64];    /* name must be no longer than this */
+    unsigned long   d_ino;   /* file number of entry */
+    unsigned long   d_off;      /* directory offset of entry */
+    unsigned short  d_reclen;   /* length of this record */
+    char            d_name[128];
+    char            pad;
+    char            d_type;
 };
 
 struct file {
@@ -174,7 +187,7 @@ ssize_t vfs_read_at(struct file *file, void *buf, size_t count, unsigned long po
 ssize_t vfs_read(struct file *file, void *buf, size_t count);
 ssize_t vfs_write(struct file *file, const void *buf, size_t count);
 int vfs_close(struct file *file);
-ssize_t vfs_getdents(struct file *file, struct dirent *dirp, unsigned int buf_size);
+ssize_t vfs_getdents(struct file *file, struct dirent *dirp, int buf_size);
 int vfs_create(const char *path, umode_t mode);
 int vfs_mkdir(const char *path, umode_t mode);
 int vfs_mount(const char *source, const char *target,

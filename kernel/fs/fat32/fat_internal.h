@@ -182,6 +182,7 @@ struct inode *fat_build_inode(struct super_block *sb, struct fat_inode *info);
 
 void get_fat_name(char fatname[12], const struct dentry *find);
 void str_toupper(char *str);
+time_t fat_time_to_unix(u16 date, u16 time);
 
 ssize_t __fat32_read_dir(struct fat_disk *disk, volatile u8 **buffer, int clst);
 int __fat32_read_all_dirent(struct file *file, struct dirent **dirents_ptr);
