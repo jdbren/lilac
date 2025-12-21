@@ -258,7 +258,7 @@ struct dentry *fat32_init(void *dev, struct super_block *sb)
     atomic_store(&sb->s_active, true);
     INIT_LIST_HEAD(&sb->s_inodes);
     list_add(&root_inode->i_list, &sb->s_inodes);
-    sb->private = fat_disk;
+    sb->s_fs_info = fat_disk;
     strncpy(bdev->name, (const char*)fat_disk->bpb.extended_section.volume_label, 11);
 
     // Read the FAT table

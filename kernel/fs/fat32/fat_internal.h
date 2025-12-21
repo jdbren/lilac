@@ -74,6 +74,17 @@ struct __packed fat_file {
     u32 file_size;
 };
 
+struct fat_lfn {
+    u8 order;
+    u8 name1[10];
+    u8 attr;
+    u8 type;
+    u8 checksum;
+    u8 name2[12];
+    u16 cluster;
+    u8 name3[4];
+} __packed;
+
 #define LONG_FNAME 0x0F
 #define FAT_RO_ATTR 0x01
 #define FAT_HIDDEN_ATTR 0x02
@@ -130,9 +141,9 @@ struct fat_disk {
     struct fat_FAT_buf FAT;
 };
 
-#define INVALID_ENTRY(entry) \
-    ((u8)(entry)->name[0] == FAT_UNUSED \
-    || ((entry)->attributes & FAT_VOL_LABEL) || (entry)->attributes == LONG_FNAME)
+// Filter out Volume ID entries (0x08) but allow LFN entries (which also have 0x08 set)
+// LFN entries should be handled explicitly before checking INVALID_ENTRY
+#define INVALID_ENTRY(x) (((x)->attributes & 0x08) && ((x)->attributes != LONG_FNAME))
 
 #define FAT_VALUE(FAT, clst) \
     ((FAT).FAT_buf[(clst) - (FAT).first_clst] & 0x0FFFFFFF)
@@ -200,5 +211,9 @@ int fat_write_FAT(struct fat_disk *fat_disk, struct gendisk *gd);
 
 int __do_fat32_read(const struct file *file, u32 clst, volatile u8 *buffer, size_t num_clst);
 int __do_fat32_write(const struct file *file, u32 clst, const u8 *buffer, size_t num_clst);
+
+int fat_strcasecmp(const char *s1, const char *s2);
+void fat_get_lfn_part(struct fat_file *entry, char *buffer);
+void fat_get_sfn(struct fat_file *entry, char *buffer);
 
 #endif

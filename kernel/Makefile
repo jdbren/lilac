@@ -9,7 +9,7 @@ endif
 
 CFLAGS?=-Og
 LDFLAGS?=
-LIBS?=./libk.a ./drivers/acpi/acpi.lib
+LIBS?=./drivers/acpi/acpi.lib ./libk.a
 
 DESTDIR?=sysroot
 PREFIX?=/usr

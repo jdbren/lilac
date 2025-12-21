@@ -13,7 +13,7 @@ ssize_t fat32_read(struct file *file, void *file_buf, size_t count)
 {
     ssize_t bytes_read = -1;
     u32 start_clst;
-    struct fat_disk *disk = (struct fat_disk*)file->f_dentry->d_inode->i_sb->private;
+    struct fat_disk *disk = (struct fat_disk*)file->f_dentry->d_inode->i_sb->s_fs_info;
     struct fat_file *fat_file = (struct fat_file*)file->f_dentry->d_inode->i_private;
     if (fat_file->cl_low == 0 || file->f_pos >= fat_file->file_size)
         return 0;
@@ -47,7 +47,7 @@ ssize_t fat32_write(struct file *file, const void *file_buf, size_t count)
 {
     ssize_t bytes_written = -1;
     u32 start_clst;
-    struct fat_disk *disk = (struct fat_disk*)file->f_dentry->d_inode->i_sb->private;
+    struct fat_disk *disk = (struct fat_disk*)file->f_dentry->d_inode->i_sb->s_fs_info;
     struct fat_file *fat_file = (struct fat_file*)file->f_dentry->d_inode->i_private;
     u32 offset = file->f_pos % disk->bytes_per_clst;
     u32 num_clst = ROUND_UP(count + offset, disk->bytes_per_clst) /
@@ -90,7 +90,7 @@ int __do_fat32_read(const struct file *file, u32 clst, volatile u8 *buffer,
     size_t clst_read = 0;
     const struct inode *inode = file->f_dentry->d_inode;
     struct gendisk *gd = inode->i_sb->s_bdev->disk;
-    struct fat_disk *fat_disk = (struct fat_disk*)inode->i_sb->private;
+    struct fat_disk *fat_disk = (struct fat_disk*)inode->i_sb->s_fs_info;
 
     while (clst < 0x0FFFFFF8 && clst_read < num_clst) {
         __fat_read_clst(fat_disk, gd, clst, (void*)buffer);
@@ -113,7 +113,7 @@ int __do_fat32_write(const struct file *file, u32 clst, const u8 *buffer,
     long next_val;
     const struct inode *inode = file->f_dentry->d_inode;
     struct gendisk *gd = inode->i_sb->s_bdev->disk;
-    struct fat_disk *fat_disk = (struct fat_disk*)inode->i_sb->private;
+    struct fat_disk *fat_disk = (struct fat_disk*)inode->i_sb->s_fs_info;
 
     while (clst_writ < num_clst) {
         __fat_write_clst(fat_disk, gd, clst, buffer);

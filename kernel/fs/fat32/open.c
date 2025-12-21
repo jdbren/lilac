@@ -20,7 +20,7 @@ int fat32_open(struct inode *inode, struct file *file)
 int fat32_create(struct inode *parent, struct dentry *new, umode_t mode)
 {
     struct fat_file *entry = NULL;
-    struct fat_disk *disk = (struct fat_disk*)parent->i_sb->private;
+    struct fat_disk *disk = (struct fat_disk*)parent->i_sb->s_fs_info;
     struct gendisk *hd = parent->i_sb->s_bdev->disk;
     struct fat_file *parent_dir = (struct fat_file*)parent->i_private;
     u32 clst = parent_dir->cl_low + (u32)(parent_dir->cl_high << 16);

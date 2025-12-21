@@ -111,7 +111,7 @@ struct super_block {
     spinlock_t          s_lock;      /* Protects the sb and inode list */
     struct list_head    s_inodes;    /* all inodes for this fs */
 
-    void *private;    /* Filesystem private info */
+    void *s_fs_info;    /* Filesystem private info */
 };
 
 struct super_operations {

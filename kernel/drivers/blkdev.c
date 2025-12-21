@@ -96,6 +96,10 @@ int scan_partitions(struct gendisk *disk)
             if (status) {
                 klog(LOG_WARN, "Invalid partition found at lba %d\n",
                     gpt_part->starting_lba);
+            } else {
+                klog(LOG_INFO, "Partition %d: LBA %lu - %lu\n", j,
+                    gpt_part->starting_lba, gpt_part->ending_lba);
+                disk->num_partitions++;
             }
         }
         disk->state = GD_ADDED;

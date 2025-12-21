@@ -39,11 +39,14 @@ int __fat32_read_all_dirent(struct file *file, struct dirent **dirents_ptr)
 {
     int i = 0;
     int count = 0;
-    struct fat_disk *disk = (struct fat_disk*)file->f_dentry->d_inode->i_sb->private;
+    struct fat_disk *disk = (struct fat_disk*)file->f_dentry->d_inode->i_sb->s_fs_info;
     volatile u8 *raw_buf = NULL;
     struct fat_file *entry;
     struct dirent *dir_buf;
     int num_dirents = 8;
+    char lfn[256];
+
+    memset(lfn, 0, sizeof(lfn));
 
     if ((count = __fat32_read_dir(disk, &raw_buf, __fat_get_clst_num(file, disk))) <= 0) {
         klog(LOG_ERROR, "__fat32_read_all_dirent: Failed to read directory data\n");
@@ -59,10 +62,21 @@ int __fat32_read_all_dirent(struct file *file, struct dirent **dirents_ptr)
     for (entry = (struct fat_file*)raw_buf;
             entry->name[0] != 0 && (u8*)entry < (u8*)raw_buf + count;
             entry++) {
-        if (INVALID_ENTRY(entry) || entry->name[0] == 0x0)
+
+        if (entry->name[0] == FAT_UNUSED) {
+            memset(lfn, 0, sizeof(lfn));
             continue;
-        // if (entry->name[0] == 0x0)
-        //     break;
+        }
+
+        if (entry->attributes == LONG_FNAME) {
+            fat_get_lfn_part(entry, lfn);
+            continue;
+        }
+
+        if (INVALID_ENTRY(entry) || entry->name[0] == 0x0) {
+            memset(lfn, 0, sizeof(lfn));
+            continue;
+        }
 
         if (i >= num_dirents) {
             num_dirents *= 2;
@@ -76,15 +90,15 @@ int __fat32_read_all_dirent(struct file *file, struct dirent **dirents_ptr)
             kfree(dir_buf);
             dir_buf = tmp;
         }
-        int c = 0;
-        for (c = 0; c < 8 && entry->name[c] != ' '; c++)
-            dir_buf[i].d_name[c] = entry->name[c];
-        if (entry->ext[0] != ' ') {
-            dir_buf[i].d_name[c++] = '.';
-            for (int j = 0; j < 3 && entry->ext[j] != ' '; j++)
-                dir_buf[i].d_name[c++] = entry->ext[j];
+
+        if (lfn[0]) {
+            strncpy(dir_buf[i].d_name, lfn, sizeof(dir_buf[i].d_name) - 1);
+            dir_buf[i].d_name[sizeof(dir_buf[i].d_name) - 1] = '\0';
+        } else {
+            fat_get_sfn(entry, dir_buf[i].d_name);
         }
-        dir_buf[i].d_name[c] = '\0';
+        memset(lfn, 0, sizeof(lfn));
+
         dir_buf[i].d_ino = file->f_dentry->d_inode->i_ino;
         dir_buf[i].d_reclen = sizeof(struct dirent);
         dir_buf[i].d_off = file->f_pos + i;
@@ -171,7 +185,7 @@ static void mk_new_dirent(struct fat_file *entry, u32 new_clst, const char *name
 int fat32_mkdir(struct inode *dir, struct dentry *new_dentry, umode_t mode)
 {
     struct fat_file *entry = NULL;
-    struct fat_disk *disk = (struct fat_disk*)dir->i_sb->private;
+    struct fat_disk *disk = (struct fat_disk*)dir->i_sb->s_fs_info;
     struct gendisk *hd = dir->i_sb->s_bdev->disk;
     struct fat_file *parent_dir = (struct fat_file*)dir->i_private;
     int clst = parent_dir->cl_low + ((u32)parent_dir->cl_high << 16);

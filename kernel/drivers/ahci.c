@@ -76,6 +76,7 @@ static int __ahci_read(struct ahci_device *dev, u32 startl, u32 starth,
     u32 count, u16 *buf);
 static int __ahci_write(struct ahci_device *dev, u32 startl, u32 starth,
     u32 count, u16 *buf);
+static int ahci_identify(struct ahci_device *dev, u16 *buf);
 
 // Initialize AHCI controller
 void ahci_init(hba_mem_t *abar_phys)
@@ -203,12 +204,27 @@ void ahci_port_rebase(hba_port_t *port, int portno)
 
 static void ahci_install_device(struct ahci_device *dev)
 {
+    u16 id_buf[256] = {0};
     struct gendisk *new_disk = kzmalloc(sizeof(*new_disk));
     if (!new_disk) {
         kerror("Failed to allocate gendisk\n");
     }
-    strcpy(new_disk->driver, "AHCI");
 
+    // issue ata identify command
+    if (ahci_identify(dev, id_buf) == 0) {
+        // Identify successful
+        new_disk->sector_size = ata_id_sector_size(id_buf);
+        new_disk->sector_count = ata_id_sector_count(id_buf);
+        klog(LOG_DEBUG, "Sector size: %u bytes\n", new_disk->sector_size);
+        klog(LOG_DEBUG, "Sector count: %lu\n", new_disk->sector_count);
+        // TODO temp for debugging
+        assert(new_disk->sector_size == 512);
+        assert(new_disk->sector_count > 0);
+    } else {
+        kerror("Failed to identify AHCI device at port %d\n", dev->portno);
+    }
+
+    strcpy(new_disk->driver, "AHCI");
     new_disk->major = SATA_DEVICE;
     new_disk->first_minor = dev->portno * 16;
     new_disk->ops = &ahci_ops;
@@ -263,6 +279,70 @@ int ahci_write(struct gendisk *disk, u64 lba, const void *buf, u32 count)
     assert(count <= 128);
     return __ahci_write(disk->private, lba & 0xFFFFFFFF, lba >> 32, count,
         (void*)virt_to_phys((void*)buf));
+}
+
+static int ahci_identify(struct ahci_device *dev, u16 *buf)
+{
+    hba_port_t *port = dev->port;
+    acquire_lock(&dev->port_lock);
+
+    int ret = 0;
+    int slot = find_cmdslot(port);
+    if (slot == -1) {
+        klog(LOG_ERROR, "ahci: No free command slot\n");
+        ret = -EIO;
+        goto out;
+    }
+
+    hba_cmd_header_t *cmdheader = (hba_cmd_header_t*)get_clb(dev->portno);
+    cmdheader += slot;
+    cmdheader->cfl = sizeof(fis_reg_h2d_t)/sizeof(u32);
+    cmdheader->w = 0;
+    cmdheader->prdtl = 1;
+
+    hba_cmd_tbl_t *cmdtbl = (hba_cmd_tbl_t*)get_cmdtbl(dev->portno, slot);
+    memset(cmdtbl, 0, sizeof(*cmdtbl) + sizeof(hba_prdt_entry_t));
+
+    cmdtbl->prdt_entry[0].dba = (u32)virt_to_phys(buf);
+    cmdtbl->prdt_entry[0].dbc = 511;
+    cmdtbl->prdt_entry[0].i = 1;
+
+    fis_reg_h2d_t *cmdfis = (fis_reg_h2d_t*)(&cmdtbl->cfis);
+    cmdfis->fis_type = FIS_TYPE_REG_H2D;
+    cmdfis->c = 1;
+    cmdfis->command = ATA_CMD_IDENTIFY;
+    cmdfis->device = 0;
+
+    int spin = 0;
+    while ((port->tfd & (ATA_DEV_BUSY | ATA_DEV_DRQ)) && spin < 1000000)
+        spin++;
+
+    if (spin == 1000000) {
+        klog(LOG_ERROR, "ahci: Port is hung\n");
+        ret = -EIO;
+        goto out;
+    }
+
+    port->ci = 1<<slot;
+
+    while (1) {
+        if ((port->ci & (1<<slot)) == 0)
+            break;
+        if (port->is & HBA_PxIS_TFES) {
+            klog(LOG_ERROR, "ahci: Identify error\n");
+            ret = -EIO;
+            goto out;
+        }
+    }
+
+    if (port->is & HBA_PxIS_TFES) {
+        klog(LOG_ERROR, "ahci: Identify error\n");
+        ret = -EIO;
+    }
+
+out:
+    release_lock(&dev->port_lock);
+    return ret;
 }
 
 // DMA - Read

@@ -12,6 +12,9 @@ struct gendisk {
     char driver[8];
     const struct disk_operations *ops;
     struct block_device *partitions;
+    u32 num_partitions;
+    u32 sector_size;
+    u64 sector_count;
     // struct request_queue *queue;
     void *private;
     spinlock_t lock;

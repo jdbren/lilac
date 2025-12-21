@@ -1,6 +1,55 @@
 #include "fat_internal.h"
 #include <lilac/fs.h>
 
+int fat_strcasecmp(const char *s1, const char *s2)
+{
+    while (*s1 && *s2) {
+        char c1 = *s1;
+        char c2 = *s2;
+        if (c1 >= 'a' && c1 <= 'z') c1 -= 32;
+        if (c2 >= 'a' && c2 <= 'z') c2 -= 32;
+        if (c1 != c2) return c1 - c2;
+        s1++;
+        s2++;
+    }
+    return *s1 - *s2;
+}
+
+void fat_get_lfn_part(struct fat_file *entry, char *buffer)
+{
+    struct fat_lfn *lfn = (struct fat_lfn*)entry;
+    int i;
+    int order = lfn->order & 0x3F;
+    int offset = (order - 1) * 13;
+    char *p = buffer + offset;
+
+    // Ensure we don't overflow the 256 byte buffer
+    // 13 chars per entry. Max index 255.
+    if (offset + 13 >= 256)
+        return;
+
+    assert(lfn->attr == LONG_FNAME);
+    assert(p + 13 < buffer + 256);
+
+    // UCS-2 to ASCII (simple truncation)
+    for (i = 0; i < 5; i++) p[i] = lfn->name1[i * 2];
+    for (i = 0; i < 6; i++) p[5 + i] = lfn->name2[i * 2];
+    for (i = 0; i < 2; i++) p[11 + i] = lfn->name3[i * 2];
+}
+
+void fat_get_sfn(struct fat_file *entry, char *buffer)
+{
+    int i, j = 0;
+    for (i = 0; i < 8 && entry->name[i] != ' '; i++)
+        buffer[j++] = entry->name[i];
+    if (entry->ext[0] != ' ') {
+        buffer[j++] = '.';
+        for (i = 0; i < 3 && entry->ext[i] != ' '; i++)
+            buffer[j++] = entry->ext[i];
+    }
+    buffer[j] = 0;
+}
+
 void get_fat_name(char fatname[12], const struct dentry *find)
 {
     int i, j;
