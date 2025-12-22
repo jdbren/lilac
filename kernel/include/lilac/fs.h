@@ -23,32 +23,33 @@ struct super_block;
 struct dirent;
 struct vm_desc;
 
-enum file_type {
-    TYPE_FILE, TYPE_DIR, TYPE_DEV, TYPE_SPECIAL, TYPE_TTY
-};
-
 struct inode {
-    unsigned long       i_ino;
-    struct list_head    i_list;
     umode_t             i_mode;
-    atomic_uint         i_count;
+    uid_t               i_uid;
+    gid_t               i_gid;
     const struct inode_operations *i_op;
     struct super_block *i_sb;
 
-    u64         i_size;
-    u64         i_atime;
-    u64         i_mtime;
-    u64         i_ctime;
-    spinlock_t  i_lock;    /* i_blocks, i_size */
-    u32         i_blocks;
+    spinlock_t          i_lock;    /* i_blocks, i_size */
+    atomic_bool         i_dirty;
+    unsigned int        i_flags;
+    mutex_t             i_mutex;
+    unsigned long       i_state;
 
-    unsigned long    i_state;
-    struct semaphore i_rwsem;
+    ino_t               i_ino;
+    struct list_head    i_list; /* sb list of inodes */
+    atomic_uint         i_count;
+    unsigned int        i_nlink;
+    u64                 i_size;
+    u64                 i_atime;
+    u64                 i_mtime;
+    u64                 i_ctime;
+    u32                 i_blocks;
+    dev_t               i_rdev;
 
-    struct hlist_node    i_hash;
-    struct hlist_head    i_dentry;
+    struct hlist_node   i_hash;
+    struct hlist_head   i_dentry;
 
-    dev_t i_rdev;
     const struct file_operations *i_fop;
 
     void *i_private; /* fs or device private pointer */
@@ -58,12 +59,15 @@ struct __cacheline_align inode_operations {
     struct dentry *(*lookup)(struct inode *, struct dentry *, unsigned int);
     int (*open)(struct inode *, struct file *);
     int (*create)(struct inode *, struct dentry *, umode_t);
+    int (*link)(struct dentry *,struct inode *,struct dentry *);
+    int (*unlink)(struct inode *,struct dentry *);
+    int (*symlink)(struct inode *,struct dentry *,const char *);
     int (*mkdir)(struct inode *, struct dentry *, umode_t);
     int (*rmdir)(struct inode *, struct dentry *);
     int (*mknod)(struct inode *, struct dentry *, umode_t, dev_t);
     int (*rename)(struct inode *, struct dentry *,
-            struct inode *, struct dentry *, unsigned int);
-    int (*update_time)(struct inode *, int);
+                    struct inode *, struct dentry *);
+    int (*readlink) (struct dentry *, char __user *,int);
 };
 
 
@@ -114,12 +118,20 @@ struct super_block {
     void *s_fs_info;    /* Filesystem private info */
 };
 
+struct writeback_control {
+    unsigned long nr_to_write;
+    unsigned long pages_skipped;
+};
+
 struct super_operations {
     struct inode *(*alloc_inode)(struct super_block *sb);
     void (*destroy_inode)(struct inode *);
-    void (*dirty_inode)(struct inode *, int flags);
-    int (*write_inode)(struct inode *);
-    void (*shutdown)(struct super_block *sb);
+    void (*dirty_inode) (struct inode *, int flags);
+    int (*write_inode) (struct inode *, struct writeback_control *wbc);
+    int (*drop_inode) (struct inode *);
+    void (*evict_inode) (struct inode *);
+    void (*put_super) (struct super_block *);
+    int (*sync_fs)(struct super_block *sb, int wait);
 };
 
 /*
@@ -163,7 +175,7 @@ struct file {
 };
 
 struct file_operations {
-    int     (*lseek)(struct file *, int, int);
+    off_t   (*lseek)(struct file *, off_t, int);
     ssize_t (*read)(struct file *, void *, size_t);
     ssize_t (*write)(struct file *, const void *, size_t);
     int     (*readdir)(struct file *, struct dirent *, unsigned int);
@@ -198,6 +210,9 @@ int vfs_dupf(int fd);
 int vfs_dup(int oldfd, int newfd);
 
 struct dentry * vfs_lookup(const char *path);
+struct dentry * lookup_path_from(struct dentry *parent, const char *path);
+struct dentry * lookup_path(const char *path);
+struct dentry * dlookup(struct dentry *parent, char *name);
 
 void fs_init(void);
 struct dentry *mount_bdev(struct block_device *bdev, int (*fill_super)(struct super_block*));
@@ -205,13 +220,9 @@ struct dentry *mount_bdev(struct block_device *bdev, int (*fill_super)(struct su
 struct super_block * alloc_sb(struct block_device *bdev);
 void destroy_sb(struct super_block *sb);
 
-struct dentry * lookup_path_from(struct dentry *parent, const char *path);
-struct dentry * lookup_path(const char *path);
-struct dentry * dlookup(struct dentry *parent, char *name);
-
+struct dentry * alloc_dentry(struct dentry *d_parent, const char *name);
 void dget(struct dentry *d);
 void dput(struct dentry *d);
-struct dentry * alloc_dentry(struct dentry *d_parent, const char *name);
 void destroy_dentry(struct dentry *d);
 void dcache_add(struct dentry *d);
 void dcache_remove(struct dentry *d);

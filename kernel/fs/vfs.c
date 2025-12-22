@@ -82,28 +82,49 @@ void fs_init(void)
 #define SEEK_CUR 1
 #define SEEK_END 2
 
+off_t vfs_lseek_unlocked(struct file *file, off_t offset, int whence)
+{
+    struct inode *inode = file->f_dentry->d_inode;
+
+    switch (whence) {
+    case SEEK_CUR:
+        if (offset == 0)
+            return file->f_pos;
+        offset += file->f_pos;
+        break;
+    case SEEK_END:
+        acquire_lock(&inode->i_lock);
+        offset += inode->i_size;
+        release_lock(&inode->i_lock);
+        break;
+    case SEEK_SET:
+        break;
+    default:
+        return -EINVAL;
+    }
+
+    if (offset < 0)
+        return -EINVAL;
+
+    if (offset != file->f_pos) {
+        file->f_pos = offset;
+    }
+
+    return offset;
+}
+
 off_t vfs_lseek(struct file *file, off_t offset, int whence)
 {
     off_t ret = 0;
+    if (file->f_op->lseek)
+        return file->f_op->lseek(file, offset, whence);
+
     mutex_lock(&file->f_pos_lock);
-
-    if (whence == SEEK_SET) {
-        file->f_pos = offset;
-    } else if (whence == SEEK_CUR) {
-        file->f_pos += offset;
-    } else if (whence == SEEK_END) {
-        acquire_lock(&file->f_dentry->d_inode->i_lock);
-        file->f_pos = file->f_dentry->d_inode->i_size + offset;
-        release_lock(&file->f_dentry->d_inode->i_lock);
-    } else {
-        ret = -EINVAL;
-    }
-
-    if (ret >= 0)
-        ret = file->f_pos;
+    vfs_lseek_unlocked(file, offset, whence);
     mutex_unlock(&file->f_pos_lock);
     return ret;
 }
+
 SYSCALL_DECL3(lseek, int, fd, off_t, offset, int, whence)
 {
     struct file *file = get_file_handle(fd);
@@ -130,11 +151,11 @@ struct dentry * vfs_lookup(const char *path)
     return lookup_path_from(start, path);
 }
 
-static int create_file_at(struct dentry *new, umode_t mode)
+static int create_file_at(struct dentry *new_d, umode_t mode)
 {
-    klog(LOG_DEBUG, "Creating file %s with mode %o\n", new->d_name, mode);
-    struct inode *parent_inode = new->d_parent->d_inode;
-    return parent_inode->i_op->create(parent_inode, new, mode);
+    klog(LOG_DEBUG, "Creating file %s with mode %o\n", new_d->d_name, mode);
+    struct inode *parent_inode = new_d->d_parent->d_inode;
+    return parent_inode->i_op->create(parent_inode, new_d, mode);
 }
 
 struct file *vfs_open(const char *path, int flags, int mode)
@@ -482,7 +503,6 @@ int vfs_mkdir(const char *path, umode_t mode)
         return err;
     }
 
-    dget(new_dentry);
     dcache_add(new_dentry);
     klog(LOG_DEBUG, "VFS: Created directory %s\n", new_dentry->d_name);
     return 0;
@@ -523,7 +543,6 @@ int vfs_create(const char *path, umode_t mode)
     }
 
     struct dentry *new_dentry = alloc_dentry(parent, basename);
-    dget(new_dentry);
     dcache_add(new_dentry);
 #ifdef DEBUG_VFS
     klog(LOG_DEBUG, "Creating %s\n", new_dentry->d_name);

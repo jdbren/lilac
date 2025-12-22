@@ -16,8 +16,10 @@ struct dentry *dlookup(struct dentry *parent, char *name)
             name[i] = toupper(name[i]);
     }
     hlist_for_each_entry(d, &parent->d_children, d_sib) {
-        if (strcmp(d->d_name, name) == 0)
+        if (strcmp(d->d_name, name) == 0) {
+            dget(d);
             return d;
+        }
     }
     return NULL;
 }
@@ -134,11 +136,19 @@ struct dentry * lookup_path_from(struct dentry *parent, const char *path)
             }
 
             inode = parent->d_inode;
+            if (!S_ISDIR(inode->i_mode)) {
+                klog(LOG_DEBUG, "VFS: %s is not a directory\n", parent->d_name);
+                kfree(name);
+                destroy_dentry(find);
+                return ERR_PTR(-ENOTDIR);
+            }
+
             if ((err = PTR_ERR(inode->i_op->lookup(inode, find, 0))) < 0) {
                 kfree(name);
                 destroy_dentry(find);
                 return ERR_PTR(err);
             }
+
             dcache_add(find);
             // If the inode is NULL, we've reached a dead end (negative dentry)
             if (find->d_inode == NULL)
