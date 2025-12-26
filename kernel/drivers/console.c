@@ -6,20 +6,16 @@
 #include <mm/kmm.h>
 
 
-#if (!defined(DEBUG_KMM) && !defined(DEBUG_PAGING))
-int write_to_screen = 1;
-#else
 int write_to_screen = 0;
-#endif
 
-char default_buf[30*80];
+char default_buf[25*80];
 
 struct console consoles[8] = {
     [0 ... 7] = {
         .lock = SPINLOCK_INIT,
         .cx = 0,
         .cy = 0,
-        .height = 30,
+        .height = 25,
         .width = 80,
         .data = default_buf,
         .first_row = 0
@@ -37,6 +33,7 @@ void console_newline(struct console *con)
         u32 phys_r = (con->first_row + con->cy) % con->height;
         memset(&con->data[phys_r * con->width], ' ', con->width);
     }
+    graphics_redraw();
 }
 
 

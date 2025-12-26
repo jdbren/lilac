@@ -10,6 +10,8 @@
 #include "paging.h"
 #include "timer.h"
 
+u32 max_cpuid_leaf;
+
 static void __set_memory_size(struct multiboot_tag_efi_mmap *mmap)
 {
     efi_memory_desc_t *entry = (efi_memory_desc_t*)mmap->efi_mmap;
@@ -30,6 +32,7 @@ void x86_setup_mem(void)
 // Additional setup after mm and boot info ready
 void arch_setup(void)
 {
+    mtrr_dump();
     apic_init(boot_info.acpi.madt);
     x86_timer_init();
     ap_init();

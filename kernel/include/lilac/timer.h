@@ -21,10 +21,13 @@ struct clock_source {
         u32 mult;   // fixed-point scale factor
         u32 shift;
     } scale;
+    u64 start_tick;
 };
 
 extern struct clock_source *__system_clock;
 extern u64 ticks_per_ms;
+extern atomic_uint time_seq;
+extern u64 system_time_base_ns;
 
 void timer_init(void);
 void timer_tick_init(void); // arch
@@ -80,6 +83,17 @@ u64 mul_u64_u32_shr(u64 a, u32 mul, unsigned int shift)
     return ret;
 }
 
+static inline u64 clock_ticks_to_ns(struct clock_source *cs, u64 t)
+{
+    u32 mult = READ_ONCE(cs->scale.mult);
+    u32 shift = READ_ONCE(cs->scale.shift);
+#ifdef __SIZEOF_INT128__
+    __uint128_t prod = (__uint128_t) t * mult;
+    return (u64)(prod >> shift);
+#else
+    return mul_u64_u32_shr(t, mult, shift);
+#endif
+}
 
 static inline u64 ns_to_ticks(u64 ns)
 {
@@ -96,14 +110,7 @@ static inline u64 ns_to_ticks(u64 ns)
 static inline u64 ticks_to_ns(u64 t)
 {
     struct clock_source *cs = READ_ONCE(__system_clock);
-    u32 mult = READ_ONCE(cs->scale.mult);
-    u32 shift = READ_ONCE(cs->scale.shift);
-#ifdef __SIZEOF_INT128__
-    __uint128_t prod = (__uint128_t) t * mult;
-    return (u64)(prod >> shift);
-#else
-    return mul_u64_u32_shr(t, mult, shift);
-#endif
+    return clock_ticks_to_ns(cs, t);
 }
 
 #endif

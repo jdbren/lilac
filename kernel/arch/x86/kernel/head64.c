@@ -6,12 +6,14 @@
 #include <asm/cpu-flags.h>
 #include <asm/msr.h>
 #include <asm/segments.h>
+#include <asm/cpu.h>
 
 #include "gdt.h"
 #include "idt.h"
 #include "paging.h"
 #include "apic.h"
 #include "timer.h"
+#include "io.h"
 
 #define STACK_CHK_GUARD 0x595e9fbd94fda766
 
@@ -43,8 +45,10 @@ void syscall_init(void)
 __noreturn __no_stack_chk
 void x86_64_kernel_early(void)
 {
+    set_cpuid_max();
     parse_multiboot((uintptr_t)&mbinfo);
 
+    serial_init();
     idt_init();
     x86_setup_mem();
 

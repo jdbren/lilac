@@ -136,6 +136,8 @@ void lapic_enable(uintptr_t addr) {
 
     lapic_base = (uintptr_t)map_phys((void*)addr, 0x1000, MEM_PF_UC | MEM_PF_WRITE);
 
+    klog(LOG_DEBUG, "Local APIC mapped at %p\n", (void*)lapic_base);
+
     /* Set the Spurious Interrupt Vector Register bit 8 to start receiving interrupts */
     write_reg(APIC_REG_SPUR, 0xff | 0x100);
 

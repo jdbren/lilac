@@ -1,6 +1,19 @@
 #include "io.h"
 #include <lilac/port.h>
 
+#define COM2 0x2F8
+
+void serial_init(void)
+{
+    outb(COM2 + 1, 0x00); // disable interrupts
+    outb(COM2 + 3, 0x80); // DLAB on
+    outb(COM2 + 0, 0x01); // divisor low (115200)
+    outb(COM2 + 1, 0x00); // divisor high
+    outb(COM2 + 3, 0x03); // 8n1
+    outb(COM2 + 2, 0xC7); // FIFO
+    outb(COM2 + 4, 0x0B); // IRQs, RTS/DSR
+}
+
 u32 read_port(u32 Address, u32 Width)
 {
     switch (Width) {

@@ -12,7 +12,11 @@
 #define IA32_SYSENTER_ESP   0x175
 #define IA32_SYSENTER_EIP   0x176
 
+#define IA32_MTRR_CAP       0x0FE
 #define IA32_PAT            0x277
+#define IA32_MTRR_DEF_TYPE  0x2ff
+#define IA32_MTRR_PHYSBASEn(x) (0x200 + 2*(x))
+#define IA32_MTRR_PHYSMASKn(x) (0x201 + 2*(x))
 
 #define IA32_EFER           0xc0000080
 #define IA32_STAR           0xc0000081
@@ -44,6 +48,20 @@ inline static void read_msr(u32 msr, u32 *lo, u32 *hi)
 
 inline static void write_msr(u32 msr, u32 lo, u32 hi)
 {
+    asm volatile("wrmsr" :: "a"(lo), "d"(hi), "c"(msr));
+}
+
+inline static u64 rdmsr(u32 msr)
+{
+    u32 lo, hi;
+    asm volatile("rdmsr" : "=a"(lo), "=d"(hi) : "c"(msr));
+    return ((u64)hi << 32) | lo;
+}
+
+inline static void wrmsr(u32 msr, u64 value)
+{
+    u32 lo = (u32)(value & 0xFFFFFFFF);
+    u32 hi = (u32)(value >> 32);
     asm volatile("wrmsr" :: "a"(lo), "d"(hi), "c"(msr));
 }
 

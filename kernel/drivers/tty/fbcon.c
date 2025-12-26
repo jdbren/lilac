@@ -11,7 +11,7 @@ void fbcon_init(struct vc_state *vc, int)
 {
     extern struct framebuffer *fb;
     vc->display_data = fb;
-    vc->screen_buf = fb->fb;
+    vc->screen_buf = fb->fb_shadow;
 }
 
 
@@ -19,14 +19,16 @@ static inline u8* fb_get_char_pixel(struct framebuffer *fb, int y, int x, int pi
 {
     y = y * fb->font->height + pixel_y;
     x = x * fb->font->width;
-    return fb->fb + (y * fb->fb_pitch) + (x * fb->bypp);
+    return fb->fb_shadow + (y * fb->fb_pitch) + (x * fb->bypp);
 }
 
 static void fb_clear_rect_pixels(struct framebuffer *fb, int x, int y, int width, int height)
 {
     for (int py = 0; py < height; py++) {
         u8 *row = fb->fb + ((y + py) * fb->fb_pitch) + (x * fb->bypp);
+        u8 *shadow_row = fb->fb_shadow + ((y + py) * fb->fb_pitch) + (x * fb->bypp);
         for (int px = 0; px < width; px++) {
+            memcpy(shadow_row + (px * fb->bypp), &fb->fb_bg, fb->bypp);
             memcpy(row + (px * fb->bypp), &fb->fb_bg, fb->bypp);
         }
     }
@@ -137,6 +139,8 @@ void fbcon_scroll(struct vc_state *vt, int top, int bottom, int dir, int lines)
             fbcon_move_chars(vt, top, 0, top + lines, 0, bottom - top - lines + 1, vt->xs);
         fbcon_clear_region(vt, top, 0, lines, vt->xs);
     }
+
+    graphics_redraw();
 }
 
 
@@ -160,11 +164,12 @@ static void draw_cursor(struct vc_state *vt, int cx, int cy)
         u32 line = offs;
 
         for (int x = 0; x < fb->font->width; x++) {
+            u8 *shadow_pixel_addr = fb->fb_shadow + line;
             u8 *pixel_addr = fb->fb + line;
             u32 current_color = 0;
             u32 inverted_color = 0;
 
-            memcpy(&current_color, pixel_addr, fb->bypp);
+            memcpy(&current_color, shadow_pixel_addr, fb->bypp);
 
             if (current_color == fb->fb_fg)
                 inverted_color = fb->fb_bg;
@@ -173,6 +178,7 @@ static void draw_cursor(struct vc_state *vt, int cx, int cy)
             else
                 inverted_color = fb->fb_fg;
 
+            memcpy(shadow_pixel_addr, &inverted_color, fb->bypp);
             memcpy(pixel_addr, &inverted_color, fb->bypp);
             line += fb->bypp;
         }

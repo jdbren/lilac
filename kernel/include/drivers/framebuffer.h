@@ -25,6 +25,7 @@ struct framebuffer_color {
 
 struct framebuffer {
     u8 *fb;
+    u8 *fb_shadow;
     struct font *font;
     u32 fb_width, fb_height;
     u32 fb_pitch;
@@ -39,6 +40,7 @@ void graphics_init(void);
 void graphics_putc(u16 c, u32 cx, u32 cy);
 void graphics_clear(void);
 void graphics_scroll(void);
+void graphics_redraw(void);
 
 struct framebuffer_color graphics_getcolor(void);
 void graphics_setcolor(u32 fg, u32 bg);

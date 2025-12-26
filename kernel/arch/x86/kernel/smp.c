@@ -73,8 +73,8 @@ void ap_startup(void)
         asm ("hlt");
         int_count++;
         if (int_count % 1000 == 0) {
-            // klog(LOG_DEBUG, "AP %d still alive, handled %d interrupts\n", id, int_count);
-            schedule();
+            klog(LOG_DEBUG, "AP %d still alive, handled %d interrupts\n", id, int_count);
+            // schedule();
         }
     }
 }

@@ -18,7 +18,6 @@ void pciConfigWrite(u8 bus, u8 slot, u8 func, u8 offset, u32 data,
 
 void pcie_add_map(ACPI_TABLE_MCFG *mcfg);
 void pci_read_device(ACPI_DEVICE_INFO *Info);
-void pcie_read_device(ACPI_DEVICE_INFO *Info);
 
 
 struct pci_device {

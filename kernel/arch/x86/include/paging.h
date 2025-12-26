@@ -51,6 +51,12 @@ typedef u32 pte_t;
 #define X86_FAULT_SS        0x40
 #define X86_FAULT_SGX       (1 << 15)
 
+#define MTRR_TYPE_UC  0x00
+#define MTRR_TYPE_WC  0x01
+#define MTRR_TYPE_WT  0x04
+#define MTRR_TYPE_WP  0x05
+#define MTRR_TYPE_WB  0x06
+
 #define PG_STRONG_UC (PG_CACHE_DISABLE | PG_WRITE_THROUGH)
 
 void *__get_physaddr(void *virtualaddr);
@@ -59,6 +65,7 @@ void x86_setup_mem(void);
 void init_phys_mem_mapping(size_t memory_sz_kb);
 
 int x86_to_page_flags(int flags);
+void mtrr_dump(void);
 
 #ifdef __x86_64__
 pdpte_t * get_or_alloc_pdpt(pml4e_t *pml4, void *virt, u16 flags);

@@ -7,6 +7,7 @@
 #include <lilac/panic.h>
 #include <mm/kmm.h>
 #include <mm/kmalloc.h>
+#include <mm/page.h>
 #include <drivers/ahci.h>
 
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
@@ -14,14 +15,16 @@
 #define PCI_CONFIG_ADDRESS 0xCF8
 #define PCI_CONFIG_DATA 0xCFC
 
-static struct {
+static struct pcie_mmio_map {
     uintptr_t base;
+    void *virt_base;
     u8 start_bus;
     u8 end_bus;
 } *pcie_mmio_maps;
 static int pcie_mmio_map_cnt;
 
-static uintptr_t get_pci_mmio_addr(int bus, int device, int function);
+static void * get_pci_mmio_addr(int bus, int device, int function);
+void pcie_read_device(ACPI_DEVICE_INFO *Info, int bus);
 static ACPI_STATUS pcie_init_device(ACPI_HANDLE ObjHandle, UINT32 Level,
     void *Context, void **ReturnValue);
 
@@ -35,8 +38,17 @@ int pcie_bus_init(ACPI_HANDLE PciBus)
     else
         kerror("No MCFG table found\n");
 
-    status = AcpiWalkNamespace(ACPI_TYPE_DEVICE, PciBus, INT_MAX,
- 		pcie_init_device, NULL, NULL, NULL);
+    size_t bus_num = 0;
+    ACPI_OBJECT bbn_obj;
+    ACPI_BUFFER bbn_buffer = { sizeof(bbn_obj), &bbn_obj };
+    status = AcpiEvaluateObject(PciBus, "_BBN", NULL, &bbn_buffer);
+    if (ACPI_SUCCESS(status) && bbn_obj.Type == ACPI_TYPE_INTEGER) {
+        bus_num = bbn_obj.Integer.Value;
+    }
+
+    klog(LOG_DEBUG, "Reading PCIe devices on bus %u at depth 1\n", (unsigned) bus_num);
+    status = AcpiWalkNamespace(ACPI_TYPE_DEVICE, PciBus, 1,
+ 		pcie_init_device, NULL, (void *)bus_num, NULL);
 
     if (ACPI_FAILURE(status))
         return -1;
@@ -52,43 +64,48 @@ static ACPI_STATUS pcie_init_device(ACPI_HANDLE ObjHandle, UINT32 Level,
     Path.Length = sizeof(Buffer);
     Path.Pointer = Buffer;
     ACPI_DEVICE_INFO *Info = kzmalloc(sizeof(*Info));
+    int bus = (int)(size_t)Context;
 
     Status = AcpiGetName(ObjHandle, ACPI_FULL_PATHNAME, &Path);
-    // if (ACPI_SUCCESS(Status))
-    //     printf(" %s\n", Path.Pointer);
+    if (ACPI_SUCCESS(Status))
+        klog(LOG_DEBUG, "\tFound %s on bus %d\n", Path.Pointer, bus);
 
     Status = AcpiGetObjectInfo(ObjHandle, &Info);
     if (ACPI_SUCCESS(Status)) {
         if (Info->Valid & ACPI_VALID_ADR)
-            pcie_read_device(Info);
+            pcie_read_device(Info, bus);
     }
 
     kfree(Info);
     return AE_OK;
 }
 
-void pcie_read_device(ACPI_DEVICE_INFO *Info)
+void pcie_read_device(ACPI_DEVICE_INFO *Info, int bus)
 {
     struct pci_device *pci_dev;
+    u8 dev, fn;
 
     if (!(Info->Valid & ACPI_VALID_ADR))
         return;
 
-    pci_dev = (struct pci_device*)
-        get_pci_mmio_addr(0, Info->Address >> 16, Info->Address & 0xFFFF);
+    dev = (Info->Address >> 16) & 0xFF;
+    fn = Info->Address & 0x7;
 
-    if (!pci_dev) {
-        klog(LOG_ERROR, "Failed to get MMIO address for PCI device at %lx\n",
-            Info->Address);
+    pci_dev = (struct pci_device *) get_pci_mmio_addr(bus, dev, fn);
+    if (!pci_dev || pci_dev->VendorID == 0xFFFF) {
         return;
     }
 
-    if (pci_dev->BaseClass == 1 && pci_dev->SubClass == 6) {
-        klog(LOG_INFO, "Found AHCI Controller\n");
-        ahci_init((void*)(uintptr_t)(pci_dev->u.type0.BaseAddresses[5] & 0xFFFFF000));
+    if ((pci_dev->HeaderType & 0x7F) == 0x00 &&
+            pci_dev->BaseClass == 0x01 &&
+            pci_dev->SubClass == 0x06 &&
+            pci_dev->ProgIf == 0x01) {
+        klog(LOG_INFO, "Found AHCI Controller at %02x:%02x.%x\n", bus, dev, fn);
+        ahci_init((void *)(uintptr_t)(pci_dev->u.type0.BaseAddresses[5] & 0xFFFFF000));
     }
 }
 
+/*
 void pci_read_device(ACPI_DEVICE_INFO *Info)
 {
     ACPI_STATUS Status;
@@ -109,6 +126,7 @@ void pci_read_device(ACPI_DEVICE_INFO *Info)
         }
     }
 }
+*/
 
 
 /**
@@ -116,24 +134,19 @@ void pci_read_device(ACPI_DEVICE_INFO *Info)
 */
 
 // Get the MMIO address for a PCI device
-static uintptr_t get_pci_mmio_addr(int bus, int device, int function)
+static void * get_pci_mmio_addr(int bus, int device, int function)
 {
-    uintptr_t addr;
-    for (int i = 0; i < 256; i++) {
-        if (pcie_mmio_maps[i].base == 0)
-            break;
-        if (bus >= pcie_mmio_maps[i].start_bus
-        && bus <= pcie_mmio_maps[i].end_bus) {
-            addr = pcie_mmio_maps[i].base;
-            addr += ((bus - pcie_mmio_maps[i].start_bus) << 20
-                | device << 15 | function << 12);
+    for (int i = 0; i < pcie_mmio_map_cnt; i++) {
+        struct pcie_mmio_map *m = &pcie_mmio_maps[i];
+        if (bus < m->start_bus || bus > m->end_bus)
+            continue;
 
-            map_to_self((void*)addr, 1024, MEM_PF_WRITE | MEM_PF_UC);
-            return addr;
-        }
+        u32 offset = ((bus - m->start_bus) << 20) | (device << 15) | (function << 12);
+
+        return (void*)((uintptr_t)m->virt_base + offset);
     }
 
-    return 0;
+    return NULL;
 }
 
 // Add a PCI MMIO map from the ACPI MCFG table
@@ -141,30 +154,48 @@ void pcie_add_map(ACPI_TABLE_MCFG *mcfg)
 {
     ACPI_MCFG_ALLOCATION *mcfg_alloc;
 
-    pcie_mmio_map_cnt = 4;
-    pcie_mmio_maps = kcalloc(pcie_mmio_map_cnt, sizeof(*pcie_mmio_maps));
+    pcie_mmio_map_cnt = 0;
+    pcie_mmio_maps = kcalloc(4, sizeof(*pcie_mmio_maps));
+    size_t cap = 4;
+
+    klog(LOG_INFO, "Parsing MCFG table for PCIe MMIO maps...\n");
+
     if (!pcie_mmio_maps) {
         kerror("Failed to allocate memory for PCIe MMIO maps\n");
     }
 
     mcfg_alloc = (ACPI_MCFG_ALLOCATION*)((uintptr_t)mcfg + sizeof(*mcfg));
-
-    for (int i = 0;
-        (uintptr_t)mcfg_alloc < (uintptr_t)mcfg + mcfg->Header.Length;
-        mcfg_alloc++, i++)
+    while ((uintptr_t)mcfg_alloc < (uintptr_t)mcfg + mcfg->Header.Length)
     {
-        if (i >= pcie_mmio_map_cnt) {
-            pcie_mmio_map_cnt *= 2;
-            pcie_mmio_maps = krealloc(pcie_mmio_maps,
-                                pcie_mmio_map_cnt * sizeof(*pcie_mmio_maps));
+        if (pcie_mmio_map_cnt == cap) {
+            cap *= 2;
+            pcie_mmio_maps = krealloc(pcie_mmio_maps, cap * sizeof(*pcie_mmio_maps));
             if (!pcie_mmio_maps) {
-                kerror("Failed to allocate memory for PCIe MMIO maps\n");
+                kerror("Failed to reallocate memory for PCIe MMIO maps\n");
             }
         }
-        pcie_mmio_maps[i].base = mcfg_alloc->Address;
-        pcie_mmio_maps[i].start_bus = mcfg_alloc->StartBusNumber;
-        pcie_mmio_maps[i].end_bus = mcfg_alloc->EndBusNumber;
+
+        uint8_t start = mcfg_alloc->StartBusNumber;
+        uint8_t end = mcfg_alloc->EndBusNumber;
+        size_t size = (end - start + 1) << 20;
+
+        void *va = get_free_vaddr(PAGE_UP_COUNT(size));
+
+        map_pages((void *)mcfg_alloc->Address, va,
+            MEM_PF_WRITE | MEM_PF_UC | MEM_PF_NO_EXEC, PAGE_UP_COUNT(size));
+
+        pcie_mmio_maps[pcie_mmio_map_cnt++] =
+            (struct pcie_mmio_map) {
+                .base = mcfg_alloc->Address,
+                .virt_base = va,
+                .start_bus = start,
+                .end_bus = end,
+            };
+
+        mcfg_alloc++;
     }
+
+    klog(LOG_INFO, "Added %d PCIe MMIO maps\n", pcie_mmio_map_cnt);
 }
 
 

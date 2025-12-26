@@ -133,7 +133,7 @@ void init_phys_mem_mapping(size_t memory_sz_kb)
 
     u32 pml4_ndx = get_pml4_index(phys_mem_mapping); // index 256
     pml4[pml4_ndx] = (pml4e_t)(__pa(((uintptr_t)phys_map_pdpt) & ~0xfff) |
-        PG_WRITE | PG_STRONG_UC | PG_PRESENT);
+        PG_WRITE | PG_PRESENT);
 
     // Get mem size in GB
     u32 mem_size_gb = memory_sz_kb / (1024 * 1024);
@@ -141,7 +141,7 @@ void init_phys_mem_mapping(size_t memory_sz_kb)
     for (u32 i = 0; i <= mem_size_gb; i++) {
         u32 pdpt_ndx = get_pdpt_index(i*0x40000000UL);
         phys_map_pdpt[pdpt_ndx] = (pdpte_t)((i*0x40000000UL) | PG_WRITE |
-            PG_STRONG_UC | PG_HUGE_PAGE | PG_GLOBAL | PG_PRESENT);
+            PG_HUGE_PAGE | PG_GLOBAL | PG_PRESENT);
     }
 }
 
@@ -158,7 +158,7 @@ int kernel_pt_init(uintptr_t start, uintptr_t end)
 
     if (!ENTRY_PRESENT(pml4[pml4_ndx])) {
         pml4[pml4_ndx] = (pml4e_t)(virt_to_phys(get_zeroed_page()) | PG_WRITE |
-            PG_WRITE_THROUGH | PG_PRESENT);
+            PG_PRESENT);
     }
     while (start != end) {
         u32 pdpt_ndx = get_pdpt_index(start);
@@ -167,7 +167,7 @@ int kernel_pt_init(uintptr_t start, uintptr_t end)
             kerror("PDPT was already present in kheap area");
         } else {
             pdpt[pdpt_ndx] = (pdpte_t)(virt_to_phys(get_zeroed_page())
-                | PG_WRITE | PG_STRONG_UC | PG_GLOBAL | PG_PRESENT);
+                | PG_WRITE | PG_GLOBAL | PG_PRESENT);
         }
         start += 0x40000000UL;
     }
@@ -225,8 +225,7 @@ void * arch_map_frame_bitmap(size_t size)
     if (size > 0x200000)
         kerror("Cannot map more than 2MB for frame bitmap yet");
     pde_t *pd = (pde_t*)ENTRY_ADDR(pdpt[pdpt_ndx]);
-    pd[pd_ndx] = (pde_t)((uintptr_t)phys | PG_WRITE | PG_STRONG_UC |
-        PG_HUGE_PAGE | 1);
+    pd[pd_ndx] = (pde_t)((uintptr_t)phys | PG_WRITE | PG_HUGE_PAGE | PG_PRESENT);
     __native_flush_tlb_single(virt);
     return virt;
 }
