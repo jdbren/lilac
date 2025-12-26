@@ -122,6 +122,11 @@ ssize_t pipe_write(struct file *f, const void *buf, size_t count)
         return -EIO;
     }
 
+    if (pipe->n_readers == 0) {
+        klog(LOG_WARN, "pipe_write: No readers, cannot write\n");
+        return -EPIPE;
+    }
+
     klog(LOG_DEBUG, "pipe_write: Writing %lu bytes to pipe %p\n", count, f);
 
     if (pipe->data_size == pipe->buf_size) {

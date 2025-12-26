@@ -49,6 +49,25 @@ struct regs_state {
 };
 #endif /* __x86_64__ */
 
+void dump_regs(struct regs_state *regs);
+
+static inline unsigned long read_cr0(void)
+{
+    unsigned long val;
+    asm ("mov %%cr0, %0" : "=r"(val));
+    return val;
+}
+
+static inline void write_cr0(unsigned long val)
+{
+    asm ("mov %0, %%cr0" :: "r"(val));
+}
+
+static inline void wbinvd(void)
+{
+    asm volatile("wbinvd" ::: "memory");
+}
+
 #endif /* !__ASSEMBLY__ */
 
 #ifdef __x86_64__

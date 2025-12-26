@@ -166,17 +166,16 @@ ACPI_STATUS detect_top_level_device(ACPI_HANDLE ObjHandle, UINT32 Level,
 
     /* Get the full path of this device and print it */
     Status = AcpiGetName(ObjHandle, ACPI_FULL_PATHNAME, &Path);
-    // if (ACPI_SUCCESS(Status))
-    //     printf("\t%s\n", Path.Pointer);
+    if (ACPI_SUCCESS(Status))
+        klog(LOG_DEBUG, "Root device: %s\n", Path.Pointer);
 
     /* Get the device info for this device */
     Status = AcpiGetObjectInfo(ObjHandle, &Info);
 
     if (ACPI_SUCCESS(Status) && Info->Valid & ACPI_VALID_HID) {
-        if (!strcmp(Info->HardwareId.String, "PNP0A03"))
-            klog(LOG_INFO, "Found PCI bridge\n");
+        if (!strcmp(Info->HardwareId.String, "PNP0A03")) {
+        }
         if (!strcmp(Info->HardwareId.String, "PNP0A08")) {
-            klog(LOG_INFO, "Found PCIe bridge\n");
             pcie_bus_init(ObjHandle);
         }
     }

@@ -6,7 +6,9 @@
 #include <lilac/fs.h>
 #include <mm/kmm.h>
 #include <mm/mm.h>
+#include <mm/page.h>
 #include <utility/termius.h>
+#include <asm/cpu.h>
 
 #define WINDOW_BORDER 16
 
@@ -19,12 +21,18 @@ struct framebuffer *fb = &fb_data;
 
 static void put_pixel(struct framebuffer *screen, u32 x, u32 y, u32 color) {
     u32 where = x * screen->fb_width + y * screen->fb_pitch;
-    screen->fb[where] = color & 0xff;              // BLUE
-    screen->fb[where + 1] = (color >> 8) & 0xff;   // GREEN
-    screen->fb[where + 2] = (color >> 16) & 0xff;  // RED
+    screen->fb_shadow[where] = color & 0xff;              // BLUE
+    screen->fb_shadow[where + 1] = (color >> 8) & 0xff;   // GREEN
+    screen->fb_shadow[where + 2] = (color >> 16) & 0xff;  // RED
 }
 
 #define PIXEL u32
+
+
+inline void graphics_redraw(void)
+{
+    arch_memcpy_optimized(fb->fb, fb->fb_shadow, fb->fb_pitch * fb->fb_height);
+}
 
 void graphics_putc(u16 c, u32 cx, u32 cy)
 {
@@ -49,6 +57,7 @@ void graphics_putc(u16 c, u32 cx, u32 cy)
         mask = 1 << (font->width - 1);
         /* display a row */
         for(x = 0; x < font->width; x++) {
+            *((PIXEL*)(fb->fb_shadow + line)) = *((unsigned int*)glyph) & mask ? fb->fb_fg : fb->fb_bg;
             *((PIXEL*)(fb->fb + line)) = *((unsigned int*)glyph) & mask ? fb->fb_fg : fb->fb_bg;
             /* adjust to the next pixel */
             mask >>= 1;
@@ -70,15 +79,11 @@ void print_charset(u32 start_x, u32 start_y)
 
 void graphics_scroll(void)
 {
-    u8 *dst, *src;
     u32 line_size = fb->fb_pitch * termius_font.font->height;
+    u32 total = fb->fb_pitch * fb->fb_height;
 
-    for (dst = fb->fb, src = fb->fb + line_size;
-            src < fb->fb + fb->fb_pitch * fb->fb_height;
-            dst += line_size, src += line_size) {
-        memcpy(dst, src, line_size);
-    }
-    memset(dst, 0, line_size);
+    memmove(fb->fb_shadow, fb->fb_shadow + line_size, total - line_size);
+    memset(fb->fb_shadow + total - line_size, 0, line_size);
 }
 
 struct framebuffer_color graphics_getcolor(void)
@@ -88,7 +93,8 @@ struct framebuffer_color graphics_getcolor(void)
 
 void graphics_clear(void)
 {
-    memset(fb->fb, 0, fb->fb_pitch * fb->fb_height);
+    memset(fb->fb_shadow, 0, fb->fb_pitch * fb->fb_height);
+    graphics_redraw();
 }
 
 void graphics_setcolor(u32 fg, u32 bg)
@@ -138,16 +144,18 @@ void fb_init(void)
 
 void graphics_init(void)
 {
+    extern int write_to_screen;
     struct multiboot_tag_framebuffer *mfb = boot_info.mbd.framebuffer;
     if (mfb->common.framebuffer_type != MULTIBOOT_FRAMEBUFFER_TYPE_RGB
         || mfb->common.framebuffer_bpp != 32) {
         kerror("Unsupported framebuffer type\n");
     }
 
-    fb->fb = (u8*)map_phys(
-            (void*)(uintptr_t)mfb->common.framebuffer_addr,
-            mfb->common.framebuffer_pitch * mfb->common.framebuffer_height,
-            MEM_PF_WRITE|MEM_PF_UC);
+    u64 fb_phys = mfb->common.framebuffer_addr;
+    size_t fb_size = PAGE_ROUND_UP(mfb->common.framebuffer_pitch * mfb->common.framebuffer_height);
+    mmio_map_buffer_wc(fb_phys, fb_size);
+    fb->fb = (u8*)map_phys((void*)fb_phys, fb_size, MEM_PF_WRITE|MEM_PF_GLOBAL);
+    fb->fb_shadow = get_free_pages(fb_size / PAGE_SIZE, ALLOC_NORMAL);
     fb->fb_width = mfb->common.framebuffer_width;
     fb->fb_height = mfb->common.framebuffer_height;
     fb->fb_pitch = mfb->common.framebuffer_pitch;
@@ -159,7 +167,12 @@ void graphics_init(void)
     graphics_clear();
     fb->font = &termius_font;
     // print_font_info(&termius_font);
+    write_to_screen = 1;
     kstatus(STATUS_OK, "Graphics mode terminal initialized\n");
+    klog(LOG_DEBUG, "Framebuffer: %dx%d, pitch %d, bpp %d\n",
+        fb->fb_width, fb->fb_height, fb->fb_pitch, fb->bypp);
+    klog(LOG_DEBUG, "FB address: phys=0x%llx, virt=0x%p, shadow=0x%p, size=0x%lx\n",
+        fb_phys, fb->fb, fb->fb_shadow, fb_size);
 }
 
 

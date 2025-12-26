@@ -74,7 +74,7 @@ void idt_init(void)
     idt_entry(0x80, (uintptr_t)syscall_handler, __KERNEL_CS, 0, INT_GATE | DPL_3);
 
     pic_initialize();
-
+    pit_init();
     load_idt();
 }
 

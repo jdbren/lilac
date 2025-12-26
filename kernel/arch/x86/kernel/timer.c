@@ -21,8 +21,7 @@
 #define PIT_FREQUENCY 1193182
 
 extern void timer_handler(void);
-extern void init_PIT(int freq);
-u64 read_pit_count(void);
+u64 pit_read_ticks(void);
 
 static int hpet_enabled = 0;
 
@@ -49,7 +48,7 @@ static struct clock_source hpet_clock = {
 
 static struct clock_source pit_clock = {
     .name = "pit",
-    .read = read_pit_count,
+    .read = pit_read_ticks,
     .freq_hz = PIT_FREQUENCY,
     .scale = { .mult = (1000000000ull << 22) / PIT_FREQUENCY, .shift = 22 },
 };
@@ -173,24 +172,4 @@ void x86_timer_init(void)
 
     klog(LOG_INFO, "TSC frequency: %llu Hz\n", tsc_clock.freq_hz);
     klog(LOG_INFO, "Boot Unix time: %lld seconds since epoch\n", boot_unix_time);
-}
-
-u64 read_pit_count(void)
-{
-	unsigned count = 0;
-
-	// al = channel in bits 6 and 7, remaining bits clear
-	outb(0x43, 0);
-
-	count = inb(0x40);			// Low byte
-	count |= inb(0x40) << 8;		// High byte
-
-	return count;
-}
-
-void set_pit_count(unsigned count)
-{
-	// Set low byte
-	outb(0x40, count & 0xFF);			// Low byte
-	outb(0x40, (count & 0xFF00) >> 8);	// High byte
 }

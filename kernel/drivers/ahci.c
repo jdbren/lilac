@@ -81,9 +81,15 @@ static int ahci_identify(struct ahci_device *dev, u16 *buf);
 // Initialize AHCI controller
 void ahci_init(hba_mem_t *abar_phys)
 {
+    static bool initialized = false;
     int size;
     u32 pi;
     int i = 0;
+
+    if (initialized)
+        return;
+
+    initialized = true;
 
     abar = map_phys((void*)abar_phys, PAGE_SIZE, MEM_PF_WRITE | MEM_PF_UC);
 

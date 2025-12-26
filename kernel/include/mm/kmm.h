@@ -58,4 +58,6 @@ static inline int unmap_page(void *virtualaddr)
     return unmap_pages(virtualaddr, 1);
 }
 
+void mmio_map_buffer_wc(uintptr_t paddr, size_t size);
+
 #endif

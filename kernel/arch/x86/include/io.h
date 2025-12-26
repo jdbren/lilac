@@ -3,6 +3,8 @@
 
 #include <lilac/types.h>
 
+void serial_init(void);
+
 void outb(u16 port, u8 value);
 void outw(u16 port, u16 value);
 void outl(u16 port, u32 value);
