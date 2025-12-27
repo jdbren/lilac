@@ -118,14 +118,13 @@ gdt_init:
 
 .global get_tss
 .type get_tss, @function
+// args: cpu id
 get_tss:
 	push %ebp
 	mov %esp, %ebp
 	push %ebx
+	mov 8(%ebp), %ebx
 
-	movl $1, %eax
-	cpuid
-	shrl $24, %ebx
 	leal tss, %ecx
 	movl $0x68, %eax
 	mul  %ebx
@@ -141,12 +140,12 @@ get_tss:
 tss_init:
 	push %ebp
 	mov  %esp, %ebp
-	push %ebx
 
-	call get_tss # eax = &tss, edx = cpu_id
-	mov %edx, %ebx
+	push $0   # cpu id
+	call get_tss # eax = &tss
+	add  $4, %esp
 
-	leal gdt_entries+48(, %edx, 8), %edx   # TSS descriptor for this CPU
+	leal gdt_entries+__TSS, %edx   # TSS descriptor
 	movl $0, 4(%eax)
 	movl $__KERNEL_DS, 8(%eax)
 
@@ -161,12 +160,9 @@ tss_init:
 	shrl $8, %eax
 	mov  %al, (%edx)
 
-	movl $8, %eax
-	mulw %bx  		# RPL 0 selector index
-	addw $6 * 8, %ax
+	movw $__TSS, %ax
 	ltr  %ax
 
-	pop %ebx
 	pop %ebp
 	ret
 
@@ -175,7 +171,9 @@ set_tss_esp0:
 	push %ebp
 	movl %esp, %ebp
 	push %ebx
+	push %gs:4   # cpu id
 	call get_tss
+	add  $4, %esp
 	movl 8(%ebp), %ebx
 	movl %ebx, 4(%eax)
 	pop %ebx
@@ -188,21 +186,19 @@ set_tss_esp0:
 .global gdt
 gdt:
 gdt_descr:
-	.word 14 * 64 - 1
+	.word gdt_entries_end - gdt_entries - 1
 	.long gdt_entries
 
 .align 8
 .global gdt_entries
 gdt_entries:
 	.quad 0x0
-	.quad 0x00CF9A000000FFFF
-	.quad 0x00CF92000000FFFF
-	.quad 0x00CFFA000000FFFF
-	.quad 0x00CFF2000000FFFF
+	.quad 0x00CF9A000000FFFF    # kernel code
+	.quad 0x00CF92000000FFFF    # kernel data
+	.quad 0x00CFFA000000FFFF    # user code
+	.quad 0x00CFF2000000FFFF    # user data
 	.quad 0x00CF92000000FFFF    # per-cpu data descriptor (base=0)
-	.rept 8
-	.quad 0x0000890000000067
-	.endr
+	.quad 0x0000890000000067    # TSS descriptor
 gdt_entries_end:
 
 
@@ -218,6 +214,6 @@ boot_page_table768:
 
 .align 16
 tss:
-	.rept 8
+.rept CONFIG_MAX_CPUS
 	.skip 0x68
-	.endr
+.endr

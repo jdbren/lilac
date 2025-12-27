@@ -9,6 +9,9 @@
 #define PERCPU_SECTION ".data.percpu"
 #define __percpu __section(PERCPU_SECTION) __align(PERCPU_ALIGN)
 
+// Linker sym
+extern char _percpu_start;
+extern char _percpu_end;
 
 struct __align(64) cpu_local {
     struct cpu_local *self;

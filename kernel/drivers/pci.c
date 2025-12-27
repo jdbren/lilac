@@ -184,9 +184,13 @@ void pcie_add_map(ACPI_TABLE_MCFG *mcfg)
         uint8_t end = mcfg_alloc->EndBusNumber;
         size_t size = (end - start + 1) << 20;
 
+#ifdef __x86_64__
         void *va = get_free_vaddr(PAGE_UP_COUNT(size));
+#else
+        void *va = (void*)0x90000000;
+#endif
 
-        map_pages((void *)mcfg_alloc->Address, va,
+        map_pages((void *)(uintptr_t)mcfg_alloc->Address, va,
             MEM_PF_WRITE | MEM_PF_UC | MEM_PF_NO_EXEC, PAGE_UP_COUNT(size));
 
         pcie_mmio_maps[pcie_mmio_map_cnt++] =

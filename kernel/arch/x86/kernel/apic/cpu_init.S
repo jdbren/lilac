@@ -113,6 +113,8 @@ init_cpu:
 	mov %ax, %ss
 	add $__KERNEL_BASE, %esp
 	xor %ebp, %ebp
+	ljmp $__KERNEL_CS,$.high
+.high:
 	push %ebx  # pass cpu id as first arg
-	ljmp $__KERNEL_CS,$ap_startup
+	call ap_startup
 #endif
