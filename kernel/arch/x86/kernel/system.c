@@ -35,7 +35,9 @@ void arch_setup(void)
     mtrr_dump();
     apic_init(boot_info.acpi.madt);
     x86_timer_init();
+#ifdef CONFIG_SMP
     ap_init();
+#endif
 }
 
 void print_system_info(void)

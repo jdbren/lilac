@@ -12,7 +12,8 @@
 
 struct __align(64) cpu_local {
     struct cpu_local *self;
-    unsigned long id;
+    unsigned int id;
+    unsigned int lapic_id;
     long scratch;
     void *priv; // architecture specific data
     void *user_stack;
@@ -55,7 +56,7 @@ extern uintptr_t __per_cpu_offset[CONFIG_MAX_CPUS];
 
 void percpu_mem_init(void);
 void percpu_bsp_mem_init(void);
-void percpu_init_cpu(void);
+void percpu_init_cpu(int id);
 
 
 #endif

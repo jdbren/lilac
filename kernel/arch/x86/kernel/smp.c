@@ -48,31 +48,37 @@ struct cpu_local cpu_local_storage = {
 __align(16)
 unsigned char ap_stack[__KERNEL_STACK_SZ * CONFIG_MAX_CPUS];
 
+extern volatile int bspdone;
+extern volatile int aprunning;
+
 #ifndef __x86_64__
 void syscall_init(void) {}
 #endif
 
 __noreturn
-void ap_startup(void)
+void ap_startup(int id)
 {
-    u8 id = get_lapic_id();
+    u8 lapicid = get_lapic_id();
     arch_disable_interrupts();
-    tss_init();
+    while (!bspdone)
+        asm volatile ("pause" ::: "memory");
+    percpu_init_cpu(id);
+    klog(LOG_DEBUG, "CPU %d (LAPIC ID %d) starting up\n", id, lapicid);
+    tss_init(id);
     set_tss_esp0((uintptr_t)ap_stack + __KERNEL_STACK_SZ * (id+1));
     load_idt();
     ap_lapic_enable();
     syscall_init();
-    percpu_init_cpu();
     sched_ap_rq_init(id);
     timer_tick_init();
-    klog(LOG_DEBUG, "AP %d started\n", id);
+    klog(LOG_INFO, "CPU %d is online\n", id);
 
     int int_count = 0;
     while (1) {
         asm ("sti");
         asm ("hlt");
         int_count++;
-        if (int_count % 1000 == 0) {
+        if (int_count % 100000 == 0) {
             klog(LOG_DEBUG, "AP %d still alive, handled %d interrupts\n", id, int_count);
             // schedule();
         }
@@ -107,6 +113,7 @@ static void *alloc_percpu_area(int pages)
     return p;
 }
 
+#ifdef CONFIG_SMP
 void percpu_mem_init(void)
 {
     int cpu_count = boot_info.ncpus;
@@ -155,12 +162,25 @@ void percpu_bsp_mem_init(void)
     __per_cpu_offset[0] = (uintptr_t)area - (uintptr_t)&_percpu_start;
     klog(LOG_DEBUG, "Per-CPU area for CPU 0: %p (offset %lx)\n",
             area, __per_cpu_offset[0]);
-    percpu_init_cpu();
+    percpu_init_cpu(0);
 }
 
-void percpu_init_cpu(void)
+#else
+
+void percpu_bsp_mem_init(void)
 {
-    u8 cpu_id = get_lapic_id();
+    __per_cpu_offset[0] = 0;
+    klog(LOG_DEBUG, "Per-CPU area for CPU 0: %p (offset %lx)\n", area, __per_cpu_offset[0]);
+    percpu_init_cpu(0);
+}
+
+void percpu_mem_init(void) {}
+
+#endif
+
+void percpu_init_cpu(int cpu_id)
+{
+    u8 lapicid = get_lapic_id();
     uintptr_t base = (uintptr_t)&_percpu_start + per_cpu_offset(cpu_id);
 #ifdef __x86_64__
     set_gs_base(base);
@@ -170,7 +190,8 @@ void percpu_init_cpu(void)
 
     struct cpu_local *local = (struct cpu_local *)base;
     local->id = cpu_id;
-    local->priv = get_tss();
+    local->lapic_id = lapicid;
+    local->priv = get_tss(cpu_id);
 
     klog(LOG_DEBUG, "Initialized cpu local struct for CPU %d at %p\n", cpu_id, (void*)base);
 }

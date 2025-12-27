@@ -152,19 +152,21 @@ void ap_lapic_enable(void)
 }
 
 
-volatile u8 aprunning;
-u8 bspdone;
+volatile int aprunning = 0;
+volatile int bspdone = 0;
 
 int ap_init(void)
 {
     int ncpus = boot_info.ncpus;
     u8 bspid;
+    int timeout = 100000;
     extern void ap_tramp(void);
 
     if (ncpus == 1)
         return 0;
 
     bspid = get_lapic_id();
+    klog(LOG_INFO, "AP init: BSP ID %d, waking %d APs\n", bspid, ncpus - 1);
     // copy the AP trampoline code to a fixed address in low memory
 
     map_to_self((void*)0x8000, PAGE_SIZE, MEM_PF_WRITE);
@@ -175,45 +177,55 @@ int ap_init(void)
     volatile u32 *const ipi_data = (volatile u32* const)(base + ICR_DATA);
 
     arch_enable_interrupts();
-    for (int i = 0; i < ncpus; i++) {
-        if (i == bspid)
-            continue;
+    struct lapic_entry *lapic = boot_info.acpi.madt->lapics;
+    while (lapic) {
+        int running = atomic_load(&aprunning);
+        int id = lapic->apic_id;
+        if (id == bspid)
+            goto next;
+
+        klog(LOG_DEBUG, "Waking CPU %d...\n", id);
 
         // send INIT IPI
         *((volatile u32*)(base + 0x280)) = 0;               // clear errors
-        *ap_select = (*ap_select & 0x00ffffff) | (i << 24); // select AP
+        *ap_select = (*ap_select & 0x00ffffff) | (id << 24); // select AP
         *ipi_data = (*ipi_data & 0xfff00000) | 0x00C500;    // INIT IPI
-        usleep(10000);                                      // wait
 
+        timeout = 100000;
         do {
             asm volatile ("pause" : : : "memory");
-        } while (*ipi_data & (1 << 12));                    // wait for deliv
+        } while ((*ipi_data & (1 << 12)) && timeout--);
+        if (timeout <= 0)
+            klog(LOG_WARN, "INIT IPI delivery stuck for CPU %d\n", id);
 
-        *ap_select = (*ap_select & 0x00ffffff) | (i << 24);
-        *ipi_data = (*ipi_data & 0xfff00000) | 0x008500;    // deassert
-
-        do {
-            asm volatile ("pause" : : : "memory");
-        } while (*ipi_data & (1 << 12));
-        usleep(10000);                                          // wait
+        usleep(10000);                                      // wait 10ms
 
         // send STARTUP IPI
         *((volatile u32*)(base + 0x280)) = 0;
         for (int j = 0; j < 2; j++) {
-            *ap_select = (*ap_select & 0x00ffffff) | (i << 24);
+            *ap_select = (*ap_select & 0x00ffffff) | (id << 24);
             *ipi_data = (*ipi_data & 0xfff0f800) | 0x000608;    // STARTUP IPI
-            usleep(200);                                        // wait 200 usec?
-        }
+            usleep(200);                                        // wait 200 usec
 
-        do {
-            asm volatile ("pause" : : : "memory");
-        } while (*ipi_data & (1 << 12));
+            timeout = 100000;
+            while ((*ipi_data & (1 << 12)) && timeout--)
+                asm volatile ("pause" ::: "memory");
+            if (running + 1 == atomic_load(&aprunning))
+                break; // AP started
+            if (timeout <= 0) klog(LOG_WARN, "SIPI %d delivery stuck for CPU %d\n", j+1, id);
+        }
+next:
+        lapic = lapic->next;
     }
 
-    // release the AP spinlocks
-    bspdone = 1;
-    usleep(10000);
     arch_disable_interrupts();
+
+    klog(LOG_DEBUG, "Waiting for APs to report...\n");
+    asm volatile ("mfence" ::: "memory");
+    timeout = 5000000;
+    while (atomic_load(&aprunning) < ncpus - 1 && timeout--)
+        asm volatile ("pause" ::: "memory");
+    bspdone = 1;
 
     kstatus(STATUS_OK, "APs running: %d\n", aprunning);
     unmap_from_self((void*)0x8000, PAGE_SIZE);
