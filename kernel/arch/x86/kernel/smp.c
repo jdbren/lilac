@@ -55,6 +55,39 @@ extern volatile int aprunning;
 void syscall_init(void) {}
 #endif
 
+#if defined __i386__
+static struct gdt_ptr ap_gdt_ptrs[CONFIG_MAX_CPUS];
+static struct gdt_entry ap_gdt_entries[CONFIG_MAX_CPUS-1][GDT_NUM_ENTRIES];
+extern struct gdt_entry gdt_entries[GDT_NUM_ENTRIES];
+
+void ap_gdt_init(int cpu)
+{
+    struct gdt_entry *entry = ap_gdt_entries[cpu - 1];
+    memcpy(entry, &gdt_entries, sizeof(gdt_entries));
+
+    struct gdt_entry *tss_entry = &entry[GDT_ENTRY_TSS];
+    struct tss *tss = get_tss(cpu);
+    tss->ss0 = __KERNEL_DS;
+    tss->esp0 = (uintptr_t)ap_stack + __KERNEL_STACK_SZ * (cpu + 1);
+    tss_entry->base_low = (u32)tss & 0xFFFF;
+    tss_entry->base_mid = ((u32)tss >> 16) & 0xFF;
+    tss_entry->base_high = ((u32)tss >> 24) & 0xFF;
+    tss_entry->access = 0x89; // present, ring 0, type 9 (available 32-bit TSS)
+
+    struct gdt_ptr *gdtp = &ap_gdt_ptrs[cpu - 1];
+    gdtp->limit = sizeof(gdt_entries) - 1;
+    gdtp->base = (void *)&ap_gdt_entries[cpu - 1];
+    load_gdt(gdtp);
+    load_tr(__TSS);
+}
+#else
+void ap_gdt_init(int cpu)
+{
+    tss_init(cpu);
+}
+#endif
+
+
 __noreturn
 void ap_startup(int id)
 {
@@ -62,11 +95,11 @@ void ap_startup(int id)
     arch_disable_interrupts();
     while (!bspdone)
         asm volatile ("pause" ::: "memory");
+    load_idt();
+    ap_gdt_init(id);
     percpu_init_cpu(id);
     klog(LOG_DEBUG, "CPU %d (LAPIC ID %d) starting up\n", id, lapicid);
-    tss_init(id);
     set_tss_esp0((uintptr_t)ap_stack + __KERNEL_STACK_SZ * (id+1));
-    load_idt();
     ap_lapic_enable();
     syscall_init();
     sched_ap_rq_init(id);
@@ -78,9 +111,9 @@ void ap_startup(int id)
         asm ("sti");
         asm ("hlt");
         int_count++;
-        if (int_count % 100000 == 0) {
+        if (int_count % 10000 == 0) {
             klog(LOG_DEBUG, "AP %d still alive, handled %d interrupts\n", id, int_count);
-            // schedule();
+            schedule();
         }
     }
 }
@@ -89,20 +122,23 @@ extern char _percpu_start;
 extern char _percpu_end;
 
 #ifndef __x86_64__
-/* call on each CPU to point GS at 'base' */
-void set_gs_base_32(uint32_t base)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wuninitialized"
+void set_gs_base_32(u32 base)
 {
-    extern struct gdt_entry gdt_entries[];
-    struct gdt_entry *e = &gdt_entries[GDT_ENTRY_PERCPU];
+    struct gdt_ptr gdtp;
+    store_gdt(&gdtp);
+
+    struct gdt_entry *e = &gdtp.base[GDT_ENTRY_PERCPU];
 
     e->base_low = base & 0xFFFF;
     e->base_mid = (base >> 16) & 0xFF;
     e->base_high = (base >> 24) & 0xFF;
 
     asm volatile("mfence" ::: "memory");
-
-    asm volatile("mov %[sel], %%ax\n\tmov %%ax, %%gs" :: [sel] "i"(__KERNEL_GS) : "ax");
+    asm volatile("mov %0, %%gs" :: "r"(__KERNEL_GS));
 }
+#pragma GCC diagnostic pop
 #endif
 
 static void *alloc_percpu_area(int pages)

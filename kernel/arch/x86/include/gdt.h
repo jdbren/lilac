@@ -75,9 +75,29 @@ struct tss {
 } __packed;
 #endif
 
+struct gdt_ptr {
+    u16 limit;
+    struct gdt_entry *base;
+} __packed;
+
 void gdt_init(void);
 void tss_init(int cpu_id);
 void set_tss_esp0(uintptr_t esp0);
 struct tss* get_tss(int cpu_id);
+
+static inline void store_gdt(struct gdt_ptr *gdtp)
+{
+    asm volatile ("sgdt (%0)" : : "r"(gdtp));
+}
+
+static inline void load_gdt(struct gdt_ptr *gdtp)
+{
+    asm volatile ("lgdt (%0)" : : "r"(gdtp));
+}
+
+static inline void load_tr(u16 tss_selector)
+{
+    asm volatile ("ltr %0" : : "r"(tss_selector));
+}
 
 #endif

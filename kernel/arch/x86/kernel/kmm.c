@@ -245,13 +245,16 @@ void mmio_map_buffer_wc(uintptr_t paddr, size_t sizen)
 
     /* Now set the WC MTRR for framebuffer */
     int n = find_free_mtrr();
-    if (n < 0)
-        panic("No free MTRRs available\n");
+    if (n < 0) {
+        klog(LOG_WARN, "No free MTRRs for framebuffer region\n");
+        goto out;
+    }
 
     klog(LOG_DEBUG, "Setting MTRR %d for FB: base=0x%lx size=0x%lx type=WC\n",
          n, fb_base, size);
     mtrr_set_region(n, fb_base, size, MTRR_TYPE_WC);
 
+out:
     mtrr_enable();
     mtrr_dump();
 }

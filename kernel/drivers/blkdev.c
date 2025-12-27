@@ -94,7 +94,7 @@ int scan_partitions(struct gendisk *disk)
                 continue;
             status = create_block_dev(disk, gpt_part, j);
             if (status) {
-                klog(LOG_WARN, "Invalid partition found at lba %d\n",
+                klog(LOG_WARN, "Skipping partition starting at lba %d\n",
                     gpt_part->starting_lba);
             } else {
                 klog(LOG_INFO, "Partition %d: LBA %lu - %lu\n", j,
@@ -136,7 +136,7 @@ static int create_block_dev(struct gendisk *disk,
     enum fs_type type = get_part_type(disk, part_entry);
     if (type < 0) {
         kfree(bdev);
-        klog(LOG_ERROR, "Invalid partition type\n");
+        klog(LOG_WARN, "Unrecognized partition type\n");
         return -1;
     }
 

@@ -151,7 +151,7 @@ void graphics_init(void)
         kerror("Unsupported framebuffer type\n");
     }
 
-    u64 fb_phys = mfb->common.framebuffer_addr;
+    uintptr_t fb_phys = (uintptr_t)mfb->common.framebuffer_addr;
     size_t fb_size = PAGE_ROUND_UP(mfb->common.framebuffer_pitch * mfb->common.framebuffer_height);
     mmio_map_buffer_wc(fb_phys, fb_size);
     fb->fb = (u8*)map_phys((void*)fb_phys, fb_size, MEM_PF_WRITE|MEM_PF_GLOBAL);

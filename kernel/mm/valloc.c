@@ -31,6 +31,10 @@ static void *find_vaddr(int num_pages)
     if (num_pages <= 0)
         return NULL;
 
+#ifdef DEBUG_KMM
+    klog(LOG_DEBUG, "Finding %d pages in kernel heap bitmap\n", num_pages);
+#endif
+
     void *ptr = NULL;
     int start = 0;
     int count = 0;

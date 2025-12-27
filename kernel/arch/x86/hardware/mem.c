@@ -26,6 +26,7 @@ void x86_memcpy_dwords(void *dst, const void *src, size_t size)
     }
 }
 
+#ifdef __x86_64__
 void x86_memcpy_qwords(void *dst, const void *src, size_t size)
 {
     void *d = dst;
@@ -50,6 +51,7 @@ void x86_memcpy_qwords(void *dst, const void *src, size_t size)
         while (remaining--) *d8++ = *s8++;
     }
 }
+#endif
 
 void x86_memcpy_sse_nt(void *dst, const void *src, size_t size)
 {
