@@ -293,13 +293,13 @@ void AcpiOsPrintf(const char *Format, ...)
 {
     va_list Args;
     va_start(Args, Format);
-    vprintf(Format, Args);
+    kvlog_raw(Format, Args);
     va_end(Args);
 }
 
 void AcpiOsVprintf(const char *Format, va_list Args)
 {
-    vprintf(Format, Args);
+    kvlog_raw(Format, Args);
 }
 
 

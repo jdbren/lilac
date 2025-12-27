@@ -313,14 +313,14 @@ AcpiInfo (
     ...)
 {
     va_list                 ArgList;
+    char                    FormatWithPrefix[512];
 
 
     ACPI_MSG_REDIRECT_BEGIN;
-    AcpiOsPrintf (ACPI_MSG_INFO);
 
+    snprintf (FormatWithPrefix, sizeof(FormatWithPrefix), ACPI_MSG_INFO "%s\n", Format);
     va_start (ArgList, Format);
-    AcpiOsVprintf (Format, ArgList);
-    AcpiOsPrintf ("\n");
+    AcpiOsVprintf (FormatWithPrefix, ArgList);
     va_end (ArgList);
 
     ACPI_MSG_REDIRECT_END;

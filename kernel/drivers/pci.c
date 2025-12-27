@@ -67,8 +67,13 @@ static ACPI_STATUS pcie_init_device(ACPI_HANDLE ObjHandle, UINT32 Level,
     int bus = (int)(size_t)Context;
 
     Status = AcpiGetName(ObjHandle, ACPI_FULL_PATHNAME, &Path);
-    if (ACPI_SUCCESS(Status))
+    if (ACPI_SUCCESS(Status)) {
+#ifdef DEBUG_PCI
         klog(LOG_DEBUG, "\tFound %s on bus %d\n", Path.Pointer, bus);
+#endif
+    } else {
+        return Status;
+    }
 
     Status = AcpiGetObjectInfo(ObjHandle, &Info);
     if (ACPI_SUCCESS(Status)) {

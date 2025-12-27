@@ -17,6 +17,13 @@ struct __packed MADTEntry {
     u8 Length;
 };
 
+struct __packed lapic_entry {
+    struct lapic_entry *next;
+    u8 acpi_cpu_id;
+    u8 apic_id;
+    u32 flags;
+};
+
 struct ioapic {
     struct ioapic *next;
     u32 address;
@@ -49,6 +56,7 @@ struct lapic_nmi {
 
 struct madt_info {
     u32 lapic_addr;
+    struct lapic_entry *lapics;
     struct ioapic *ioapics;
     struct int_override *int_overrides;
     struct ioapic_nmi *ioapic_nmis;

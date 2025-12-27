@@ -63,6 +63,7 @@
 #define __user
 
 #define TIMER_HZ 1000
+#define CONFIG_SMP
 #define CONFIG_MAX_CPUS 32
 
 #endif

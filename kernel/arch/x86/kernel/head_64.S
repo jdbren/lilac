@@ -135,36 +135,32 @@ gdt_init:
 	leaq gdt_descr, %rax
 	movq $gdt_entries, 2(%rax)
 	lgdt (%rax)
+	xor  %rdi, %rdi    # cpu id 0
 	call tss_init
 	ret
 
 .globl get_tss
 .type get_tss, @function
-// args: none
-// returns &tss, + ecx = cpu id in asm
+// args: rdi = cpu id
+// returns &tss
 get_tss:
-	push %rbx
-	mov  $1, %rax
-	cpuid
-	mov  %rbx, %rcx
-	shr  $24, %rcx
 	movq $0x68, %rax
-	mul  %rcx
+	mul  %rdi
 	lea  tss(%rax), %rax
-	pop  %rbx
 	ret
 
 .global tss_init
 .type tss_init, @function
+// args: rdi = cpu id
 tss_init:
 	push %rbp
 	mov  %rsp, %rbp
 
-	call get_tss # eax = &tss, ecx = cpu_id
+	call get_tss # rax = &tss
 
-	mov  %rcx, %rdx
-    shl  $4, %rdx             # %rdx = %rcx * 16
-    add  $gdt_entries+56, %rdx # %rdx = gdt_entries + 56 + (%rcx * 16)
+	mov  %rdi, %rdx
+    shl  $4, %rdx             # %rdx = %rdx * 16
+    add  $gdt_entries+56, %rdx
 	movq $0, 4(%rax)
 
 	# 16..31 base
@@ -187,7 +183,7 @@ tss_init:
 	movl %eax, (%rdx)
 
 	mov  $16, %eax
-	mul  %ecx  		# RPL 0 selector index
+	mul  %edi  		# RPL 0 selector index
 	add  $7 * 8, %ax
 	ltr  %ax
 
@@ -199,8 +195,10 @@ tss_init:
 set_tss_esp0:
 	push %rbp
 	mov  %rsp, %rbp
+	mov  %rdi, %rcx
+	mov  %gs:8, %edi   # cpu id
 	call get_tss
-	movq  %rdi, 4(%rax)
+	movq %rcx, 4(%rax)
 	pop  %rbp
 	ret
 
@@ -210,7 +208,7 @@ set_tss_esp0:
 .global gdt
 gdt_descr:
 gdt:
-	.word 7 * 64 + 8 * 128 - 1
+	.word gdt_entries_end - gdt_entries - 1
 	.quad __pa(gdt_entries)
 
 .align 16
@@ -223,7 +221,7 @@ gdt_entries:
 	.quad 0x00CFF2000000FFFF    # User data
 	.quad 0x00AFFA000000FFFF    # User 64 bit code
     # TSS
-	.rept 8
+	.rept CONFIG_MAX_CPUS
 	.quad 0x0000890000000067
     .quad 0x0000000000000000
 	.endr
@@ -252,6 +250,6 @@ boot_pt0_high:
 
 .align 16
 tss:
-	.rept 8
+	.rept CONFIG_MAX_CPUS
 	.skip 0x68
 	.endr

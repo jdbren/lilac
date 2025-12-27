@@ -19,6 +19,15 @@ static bool is_valid(struct SDTHeader *addr)
     return true;
 }
 
+static struct lapic_entry* parse_lapic(struct MADTEntry *entry)
+{
+    struct lapic_entry *info = kzmalloc(sizeof(struct lapic_entry));
+    info->acpi_cpu_id = ((u8*)entry)[2];
+    info->apic_id = ((u8*)entry)[3];
+    info->flags = ((u32*)entry)[1];
+    return info;
+}
+
 static struct ioapic* parse_ioapic(struct MADTEntry *entry)
 {
     struct ioapic *info = kzmalloc(sizeof(struct ioapic));
@@ -70,6 +79,7 @@ struct madt_info* parse_madt(struct SDTHeader *addr)
     info->lapic_addr = madt->LocalApicAddress;
 
     struct MADTEntry *entry = (struct MADTEntry*)(madt + 1);
+    struct lapic_entry *lapicptr;
     struct ioapic *ioptr;
     struct int_override *intptr;
     struct ioapic_nmi *ionmiptr;
@@ -79,6 +89,9 @@ struct madt_info* parse_madt(struct SDTHeader *addr)
         switch (entry->Type) {
             case 0:
                 info->core_cnt++;
+                lapicptr = parse_lapic(entry);
+                lapicptr->next = info->lapics;
+                info->lapics = lapicptr;
                 break;
             case 1:
                 info->ioapic_cnt++;

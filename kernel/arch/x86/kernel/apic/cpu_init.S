@@ -28,35 +28,29 @@ _L8030_GDT_value:
 .align 64
 .org 0x8040
 _L8040:
-	xorw	%ax, %ax
-	movw	%ax, %ds
-	lgdt	0x8030
-	movl	%cr0, %eax
-	orl		$1, %eax
-	movl	%eax, %cr0
-	ljmp	$8, $0x8060
+	xorw %ax, %ax
+	movw %ax, %ds
+	lgdt 0x8030
+	movl %cr0, %eax
+	orl  $X86_CR0_PE, %eax
+	movl %eax, %cr0
+	ljmp $8, $0x8060
 .align 32
 .code32
 .org 0x8060
 _L8060:
-	movw	$0x10, %ax
-	movw	%ax, %ds
-	movw	%ax, %ss
-	# get Local APIC ID
-	mov		$1, %eax
-	cpuid
-	shrl	$24, %ebx
+	movw $0x10, %ax
+	movw %ax, %ds
+	movw %ax, %ss
+	# get a CPU id
+	mov  $1, %ebx
+	lock xaddl %ebx, __pa(aprunning)
+	inc  %ebx          # ebx = cpu id
 	# set up a stack
-	movl	$__KERNEL_STACK_SZ, %eax
-	mul		%ebx
-	addl	$__pa(ap_stack), %eax
-	mov		%eax, %esp
-	push	%ebx
-	# spinlock, wait for the BSP to finish
-1:  pause
-	cmpb		$0, __pa(bspdone)
-	jz			1b
-	lock incb 	__pa(aprunning)
+	mov  $__KERNEL_STACK_SZ, %eax
+	mul  %ebx
+	addl $__pa(ap_stack), %eax
+	mov  %eax, %esp
 
 #ifdef __x86_64__
 init_cpu:
@@ -93,6 +87,9 @@ init_cpu:
 	pushq $._high
 	lretq
 ._high:
+	xor %rax, %rax
+	xor %rbp, %rbp
+	mov %ebx, %edi  # pass cpu id as first arg
 	call ap_startup
 #else // 32-bit mode
 init_cpu:
@@ -115,5 +112,7 @@ init_cpu:
 	mov %ax, %gs
 	mov %ax, %ss
 	add $__KERNEL_BASE, %esp
+	xor %ebp, %ebp
+	push %ebx  # pass cpu id as first arg
 	ljmp $__KERNEL_CS,$ap_startup
 #endif
