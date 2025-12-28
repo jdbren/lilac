@@ -7,8 +7,8 @@
 #include <acpi/madt.h>
 #include <mm/kmalloc.h>
 #include <mm/kmm.h>
-#include "apic.h"
-#include "pic.h"
+#include <asm/apic.h>
+#include <asm/pic.h>
 
 #define IOAPIC_REGSEL     0x0
 #define IOAPIC_DATA       0x10

@@ -1,11 +1,11 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <drivers/keyboard.h>
-#include <asm/segments.h>
 #include <lilac/log.h>
-#include "idt.h"
-#include "io.h"
-#include "apic.h"
+#include <asm/segments.h>
+#include <asm/idt.h>
+#include <asm/io.h>
+#include <asm/apic.h>
 
 #define KEYBOARD_DATA_PORT 0x60
 

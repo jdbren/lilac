@@ -1,7 +1,7 @@
 #include <lilac/syscall.h>
 #include <lilac/sched.h>
 #include <asm/regs.h>
-#include "gdt.h"
+#include <asm/gdt.h>
 
 #ifdef __x86_64__
 void x86_dump_regs(struct regs_state *regs)

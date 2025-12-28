@@ -7,7 +7,7 @@
 #include <asm/cpu-flags.h>
 #include <asm/msr.h>
 #include <asm/cpu.h>
-#include "cpu-features.h"
+#include <asm/cpu.h>
 #include "paging.h"
 
 uintptr_t __walk_pages(void *vaddr)

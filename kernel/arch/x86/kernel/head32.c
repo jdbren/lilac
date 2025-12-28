@@ -6,12 +6,13 @@
 #include <mm/kmm.h>
 #include <drivers/framebuffer.h>
 
-#include "apic.h"
-#include "gdt.h"
-#include "idt.h"
+#include <asm/apic.h>
+#include <asm/gdt.h>
+#include <asm/idt.h>
+#include <asm/cpu.h>
+
 #include "paging.h"
 #include "timer.h"
-#include "cpu-features.h"
 
 #if UINT32_MAX == UINTPTR_MAX
 #define STACK_CHK_GUARD 0xe2dee396

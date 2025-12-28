@@ -1,6 +1,6 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include "apic.h"
+#include <asm/apic.h>
 #include <acpi/madt.h>
 
 void apic_init(struct madt_info *madt)

@@ -1,4 +1,4 @@
-#include "io.h"
+#include <asm/io.h>
 #include <lilac/port.h>
 
 #define COM2 0x2F8

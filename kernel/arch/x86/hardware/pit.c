@@ -1,5 +1,5 @@
 #include <lilac/types.h>
-#include "io.h"
+#include <asm/io.h>
 
 #define PIT_CH0         0x40
 #define PIT_CMD         0x43
