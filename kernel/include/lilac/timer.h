@@ -26,7 +26,6 @@ struct clock_source {
 
 extern struct clock_source *__system_clock;
 extern u64 ticks_per_ms;
-extern atomic_uint time_seq;
 extern u64 system_time_base_ns;
 
 void timer_init(void);

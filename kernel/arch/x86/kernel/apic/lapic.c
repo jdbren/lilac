@@ -5,6 +5,7 @@
 #include <lilac/lilac.h>
 #include <lilac/boot.h>
 #include <lilac/timer.h>
+#include <lilac/sync.h>
 #include <mm/kmm.h>
 #include <asm/msr.h>
 #include "timer.h"
@@ -193,7 +194,7 @@ int ap_init(void)
 
         timeout = 100000;
         do {
-            asm volatile ("pause" : : : "memory");
+            pause();
         } while ((*ipi_data & (1 << 12)) && timeout--);
         if (timeout <= 0)
             klog(LOG_WARN, "INIT IPI delivery stuck for CPU %d\n", id);
@@ -209,7 +210,7 @@ int ap_init(void)
 
             timeout = 100000;
             while ((*ipi_data & (1 << 12)) && timeout--)
-                asm volatile ("pause" ::: "memory");
+                pause();
             if (running + 1 == atomic_load(&aprunning))
                 break; // AP started
             if (timeout <= 0) klog(LOG_WARN, "SIPI %d delivery stuck for CPU %d\n", j+1, id);
@@ -224,7 +225,7 @@ next:
     asm volatile ("mfence" ::: "memory");
     timeout = 5000000;
     while (atomic_load(&aprunning) < ncpus - 1 && timeout--)
-        asm volatile ("pause" ::: "memory");
+        pause();
     bspdone = 1;
 
     kstatus(STATUS_OK, "APs running: %d\n", aprunning);

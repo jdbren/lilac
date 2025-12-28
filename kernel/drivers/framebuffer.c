@@ -29,7 +29,7 @@ static void put_pixel(struct framebuffer *screen, u32 x, u32 y, u32 color) {
 #define PIXEL u32
 
 
-inline void graphics_redraw(void)
+void graphics_redraw(void)
 {
     arch_memcpy_optimized(fb->fb, fb->fb_shadow, fb->fb_pitch * fb->fb_height);
 }
@@ -153,7 +153,8 @@ void graphics_init(void)
 
     uintptr_t fb_phys = (uintptr_t)mfb->common.framebuffer_addr;
     size_t fb_size = PAGE_ROUND_UP(mfb->common.framebuffer_pitch * mfb->common.framebuffer_height);
-    mmio_map_buffer_wc(fb_phys, fb_size);
+    assert(fb_size < (1 << 26)); // 64 MB
+    mmio_map_buffer_wc(fb_phys, (1 << 26));
     fb->fb = (u8*)map_phys((void*)fb_phys, fb_size, MEM_PF_WRITE|MEM_PF_GLOBAL);
     fb->fb_shadow = get_free_pages(fb_size / PAGE_SIZE, ALLOC_NORMAL);
     fb->fb_width = mfb->common.framebuffer_width;

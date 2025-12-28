@@ -4,24 +4,23 @@
 #include <lilac/log.h>
 #include <lilac/sched.h>
 
-static inline void nop(unsigned long x) {}
+static void nop(unsigned long x) {}
 
 void (*handle_tick)(unsigned long) = nop;
 s64 boot_unix_time = 0;
 atomic_uint time_seq = 0;
 u64 system_time_base_ns = 0;
+static spinlock_t clock_write_lock = SPINLOCK_INIT;
 
 void set_clock_source(struct clock_source *clock)
 {
-    u64 current_ns = 0;
-    struct clock_source *old = READ_ONCE(__system_clock);
-    if (old) {
-        current_ns = get_sys_time_ns();
-    }
+    acquire_lock(&clock_write_lock);
+    u64 current_ns = get_sys_time_ns();
 
     unsigned int seq = atomic_load_explicit(&time_seq, memory_order_relaxed);
-    atomic_store_explicit(&time_seq, seq + 1, memory_order_release);
-    atomic_thread_fence(memory_order_release);
+    atomic_store_explicit(&time_seq, seq + 1, memory_order_relaxed);
+    // write barrier
+    atomic_thread_fence(memory_order_acq_rel);
 
     system_time_base_ns = current_ns;
     clock->start_tick = clock->read();
@@ -30,6 +29,8 @@ void set_clock_source(struct clock_source *clock)
     WRITE_ONCE(__system_clock, clock);
 
     atomic_store_explicit(&time_seq, seq + 2, memory_order_release);
+
+    release_lock(&clock_write_lock);
 
     klog(LOG_INFO, "System clock set to %s (%llu Hz)\n",
          clock->name, clock->freq_hz);
@@ -60,19 +61,12 @@ u64 get_sys_time_ns(void)
 
     do {
         seq = atomic_load_explicit(&time_seq, memory_order_acquire);
-        if (seq & 1) {
-            continue;
-        }
-
         struct clock_source *cs = READ_ONCE(__system_clock);
-        if (!cs) return 0;
 
-        u64 ticks = cs->read();
-        u64 delta = ticks - cs->start_tick;
+        u64 delta = cs->read() - cs->start_tick;
         ns = system_time_base_ns + clock_ticks_to_ns(cs, delta);
 
-        atomic_thread_fence(memory_order_acquire); // necessary?
-    } while (seq != atomic_load_explicit(&time_seq, memory_order_acquire));
+    } while (seq & 1 || seq != atomic_load_explicit(&time_seq, memory_order_acquire));
 
     return ns;
 }

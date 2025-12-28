@@ -21,16 +21,16 @@ typedef volatile atomic_flag spinlock_t;
 #define pause __builtin_ia32_pause
 #endif
 
-#define spin_lock_init(spin) atomic_flag_clear(spin);
+#define spin_lock_init(spin) atomic_flag_clear_explicit(spin, memory_order_relaxed);
 
 #define acquire_lock(spin) do { \
-    while(atomic_flag_test_and_set(spin)) \
-		pause(); \
+    while(atomic_flag_test_and_set_explicit(spin, memory_order_acquire)) \
+        pause(); \
 } while (0)
 
-#define release_lock(spin) atomic_flag_clear(spin)
+#define release_lock(spin) atomic_flag_clear_explicit(spin, memory_order_release)
 
-#define try_acquire_lock(spin) (!atomic_flag_test_and_set(spin))
+#define try_acquire_lock(spin) (!atomic_flag_test_and_set_explicit(spin, memory_order_acquire))
 
 struct lockref {
     spinlock_t lock;
