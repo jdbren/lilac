@@ -10,7 +10,6 @@
 #include <lilac/ioctl.h>
 #include <drivers/keyboard.h>
 
-#include "vt100.h"
 
 ssize_t tty_read(struct file *f, void *buf, size_t count);
 ssize_t tty_write(struct file *f, const void *buf, size_t count);

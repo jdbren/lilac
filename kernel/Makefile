@@ -63,6 +63,7 @@ kernel/process.o \
 kernel/reboot.o \
 kernel/sched.o \
 kernel/signal.o \
+kernel/smp.o \
 kernel/sync.o \
 kernel/syscall.o \
 kernel/time.o \

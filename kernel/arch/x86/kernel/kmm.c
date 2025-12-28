@@ -83,13 +83,13 @@ void mtrr_dump(void)
     u64 def = rdmsr(IA32_MTRR_DEF_TYPE);
     unsigned var_count = cap & 0xFF;
 
-    klog(LOG_INFO, "MTRR Dump:\n");
+    klog(LOG_DEBUG, "MTRR Dump:\n");
     klog(LOG_INFO, " IA32_MTRR_CAP: 0x%lx\n", cap);
     klog(LOG_INFO, " IA32_MTRR_DEF_TYPE: 0x%lx\n", def);
     for (unsigned i = 0; i < var_count; i++) {
         u64 base = rdmsr(IA32_MTRR_PHYSBASEn(i));
         u64 mask = rdmsr(IA32_MTRR_PHYSMASKn(i));
-        klog(LOG_INFO, " MTRR %d: Base=0x%lx, Mask=0x%lx\n", i, base, mask);
+        klog(LOG_DEBUG, " MTRR %d: Base=0x%lx, Mask=0x%lx\n", i, base, mask);
     }
 }
 
@@ -257,5 +257,4 @@ void mmio_map_buffer_wc(uintptr_t paddr, size_t sizen)
 
 out:
     mtrr_enable();
-    mtrr_dump();
 }

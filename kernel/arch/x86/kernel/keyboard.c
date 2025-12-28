@@ -20,5 +20,4 @@ void kbd_int_init(void)
 {
     idt_entry(0x20 + 1, (uintptr_t)kbd_handler, __KERNEL_CS, 0, INT_GATE);
     ioapic_entry(1, 0x20 + 1, 0, 0);
-    kstatus(STATUS_OK, "Keyboard interrupt handler initialized\n");
 }

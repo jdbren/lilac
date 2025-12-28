@@ -46,5 +46,6 @@ struct framebuffer_color graphics_getcolor(void);
 void graphics_setcolor(u32 fg, u32 bg);
 
 void fb_init(void);
+struct framebuffer * get_framebuffer(void);
 
 #endif

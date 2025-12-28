@@ -105,7 +105,14 @@ ssize_t console_write(struct file *file, const void *buf, size_t count)
 void console_init(void)
 {
     struct console *con = &consoles[0];
-    console_clear(con);
-    print_system_info();
-    write_to_screen = 0;
+    struct framebuffer *fb = get_framebuffer();
+    con->height = fb->fb_height / fb->font->height;
+    con->width = fb->fb_width / (fb->font->width + fb->width_pad);
+    con->data = kzmalloc(con->height * con->width);
+}
+
+void console_write_screen(int enable)
+{
+    console_clear(&consoles[0]);
+    write_to_screen = enable;
 }

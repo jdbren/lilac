@@ -31,17 +31,19 @@ __noreturn __no_stack_chk
 void start_kernel(void)
 {
     mm_init();
-    graphics_init();
-
-    init_ctors();
     percpu_bsp_mem_init();
+    init_ctors();
+    graphics_init();
+    console_init();
+    kstatus(STATUS_OK, "Booting LilacOS v"KERNEL_VERSION" (on "KERNEL_ARCH")\n");
+
     acpi_early_init();
     percpu_mem_init();
     arch_setup();
 
-    kbd_int_init();
     timer_init();
     syscall_init();
+    smp_init();
 
     acpi_early_cleanup();
     acpi_subsystem_init();
@@ -52,11 +54,12 @@ void start_kernel(void)
     sched_init();
     fb_init();
     kbd_init();
-    console_init();
     tty_init();
-    sched_clock_init();
 
     kstatus(STATUS_OK, "Kernel initialized\n");
+    print_system_info();
+    console_write_screen(0);
+    sched_clock_init();
 
     idle();
     unreachable();

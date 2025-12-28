@@ -58,19 +58,6 @@
 #define ANSI    3
 
 
-
-/* Two tables for user-defined character map conversions.
- * defmap.h should contain all characters 0-255 in ascending order
- * to default to no conversion.    jl 04.09.1997
- */
-
-unsigned char vt_inmap[256] = {
-#include "defmap.h"
-};
-unsigned char vt_outmap[256] = {
-#include "defmap.h"
-};
-
 /* Taken from the Linux kernel source: linux/drivers/char/console.c */
 static char * vt_map[] = {
 /* 8-bit Latin-1 mapped to the PC character set: '.' means non-printable */

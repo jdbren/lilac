@@ -169,13 +169,17 @@ void graphics_init(void)
     fb->font = &termius_font;
     // print_font_info(&termius_font);
     write_to_screen = 1;
-    kstatus(STATUS_OK, "Graphics mode terminal initialized\n");
     klog(LOG_DEBUG, "Framebuffer: %dx%d, pitch %d, bpp %d\n",
         fb->fb_width, fb->fb_height, fb->fb_pitch, fb->bypp);
     klog(LOG_DEBUG, "FB address: phys=0x%llx, virt=0x%p, shadow=0x%p, size=0x%lx\n",
         fb_phys, fb->fb, fb->fb_shadow, fb_size);
+    kstatus(STATUS_OK, "Graphics mode terminal initialized\n");
 }
 
+struct framebuffer *get_framebuffer(void)
+{
+    return fb;
+}
 
 /**********************************/
 

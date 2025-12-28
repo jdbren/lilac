@@ -296,5 +296,6 @@ static const struct inode_operations keyboard_iops = {
 
 void kbd_init(void)
 {
+    kbd_int_init();
     dev_create("/dev/kbd0", &keyboard_fops, &keyboard_iops, S_IFCHR|S_IREAD, INPUT_DEVICE);
 }

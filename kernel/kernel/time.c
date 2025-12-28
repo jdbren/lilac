@@ -91,12 +91,12 @@ void usleep(u32 micros)
 {
     // Get current time
     u64 start = get_sys_time_ns();
-    u64 end = start + micros * 1000;
+    u64 end = start + (u64)micros * 1000;
     // if (end - start > 100000) {
     //     yield();
     // }
     while (get_sys_time_ns() < end) {
-        asm volatile("nop");
+        pause();
     }
 }
 

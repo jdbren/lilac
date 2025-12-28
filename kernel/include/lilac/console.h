@@ -89,6 +89,7 @@ struct vc_state {
 extern int write_to_screen;
 
 void console_init(void);
+void console_write_screen(int enable);
 ssize_t console_write(struct file *file, const void *buf, size_t count);
 
 extern const struct con_display_ops fbcon_ops;

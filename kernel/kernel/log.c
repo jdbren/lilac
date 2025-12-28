@@ -18,7 +18,7 @@
 #endif
 
 static int log_level = LOG_LEVEL;
-spinlock_t log_lock = SPINLOCK_INIT;
+static spinlock_t log_lock = SPINLOCK_INIT;
 
 void set_log_level(int level)
 {
@@ -34,13 +34,14 @@ void kvlog_raw(const char *data, va_list args)
 
 void kvlog(int level, const char *data, va_list args)
 {
+    if (!data || log_level > level) return;
+
     int orig_write_to_screen = write_to_screen;
     long long stime = (long long) get_sys_time_ns();
 
     acquire_lock(&log_lock);
     struct framebuffer_color text_color = graphics_getcolor();
 
-    if (!data || log_level > level) return;
     if (level == LOG_ERROR)
         write_to_screen = 1;
 

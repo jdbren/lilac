@@ -35,9 +35,6 @@ void arch_setup(void)
     mtrr_dump();
     apic_init(boot_info.acpi.madt);
     x86_timer_init();
-#ifdef CONFIG_SMP
-    ap_init();
-#endif
 }
 
 void print_system_info(void)
@@ -55,7 +52,7 @@ void print_system_info(void)
     memcpy(str + 4, &regs[3], 4);
     memcpy(str + 8, &regs[2], 4);
     str[12] = '\0';
-    printf("CPU Vendor: %s, ", str);
+    printf("CPU: %s, ", str);
 
     __cpuid(0x80000000, regs[0], regs[1], regs[2], regs[3]);
 
@@ -68,7 +65,7 @@ void print_system_info(void)
 
     memcpy(str, regs, sizeof(regs));
     str[sizeof(regs)] = '\0';
-    printf("%s\n", str);
+    printf("%s (%d cores)\n", str, boot_info.ncpus);
 
     __cpuid(0x80000005, regs[0], regs[1], regs[2], regs[3]);
     printf("Cache line: %u bytes, ", regs[2] & 0xff);

@@ -1,9 +1,7 @@
 #ifndef _LILAC_PERCPU_H
 #define _LILAC_PERCPU_H
 
-#include <lilac/compiler.h>
-#include <lilac/config.h>
-#include <lilac/types.h>
+#include <lilac/lilac.h>
 
 #define PERCPU_ALIGN 64
 #define PERCPU_SECTION ".data.percpu"
@@ -61,5 +59,7 @@ void percpu_mem_init(void);
 void percpu_bsp_mem_init(void);
 void percpu_init_cpu(int id);
 
+void smp_init(void);
+int  ap_init(void);
 
 #endif
