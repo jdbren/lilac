@@ -7,13 +7,13 @@
 #include <asm/msr.h>
 #include <asm/segments.h>
 #include <asm/cpu.h>
+#include <asm/gdt.h>
+#include <asm/idt.h>
+#include <asm/io.h>
+#include <asm/apic.h>
 
-#include "gdt.h"
-#include "idt.h"
 #include "paging.h"
-#include "apic.h"
 #include "timer.h"
-#include "io.h"
 
 #define STACK_CHK_GUARD 0x595e9fbd94fda766
 

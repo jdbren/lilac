@@ -3,6 +3,8 @@
 #ifndef x86_IDT_H
 #define x86_IDT_H
 
+#ifndef __ASSEMBLY__
+
 #include <lilac/types.h>
 
 #define INT_GATE  0x8E
@@ -22,5 +24,7 @@ void load_idt(void);
 void idt_entry(int num, uintptr_t offset, u16 selector, u8 ist_or_unused, u8 attr);
 
 void pit_init(void);
+
+#endif /* __ASSEMBLY__ */
 
 #endif

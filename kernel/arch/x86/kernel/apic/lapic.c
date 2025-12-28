@@ -1,6 +1,6 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include "apic.h"
+#include <asm/apic.h>
 
 #include <lilac/lilac.h>
 #include <lilac/boot.h>
@@ -8,9 +8,9 @@
 #include <lilac/sync.h>
 #include <mm/kmm.h>
 #include <asm/msr.h>
+#include <asm/cpu.h>
+#include <asm/idt.h>
 #include "timer.h"
-#include "cpu-features.h"
-#include "idt.h"
 
 #define IA32_APIC_BASE_MSR_ENABLE 0x800
 

@@ -3,9 +3,6 @@
 #ifndef x86_APIC_H
 #define x86_APIC_H
 
-#include <lilac/types.h>
-#include <acpi/madt.h>
-
 #define APIC_REG_ID      0x020
 #define APIC_REG_VER     0x030
 #define APIC_REG_TPR     0x080
@@ -65,6 +62,11 @@
 
 #define CPUID_6_EAX_ARAT (1<<2) // 1 if APIC timer is always running even in deep c states
 
+#ifndef __ASSEMBLY__
+
+#include <lilac/types.h>
+#include <acpi/madt.h>
+
 void apic_init(struct madt_info *madt);
 void lapic_enable(uintptr_t apic_base);
 void ap_lapic_enable(void);
@@ -77,5 +79,7 @@ u8 get_lapic_id(void);
 void apic_tsc_deadline(void);
 void tsc_deadline_set(u64 deadline);
 void apic_periodic(u32 ms);
+
+#endif // __ASSEMBLY__
 
 #endif

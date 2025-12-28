@@ -1,5 +1,5 @@
 #include <lilac/interrupt.h>
-#include "idt.h"
+#include <asm/idt.h>
 
 int install_isr(int num, void (*handler))
 {

@@ -9,10 +9,9 @@
 #include <asm/segments.h>
 #include <asm/msr.h>
 #include <asm/cpu-flags.h>
-
-#include "idt.h"
-#include "gdt.h"
-#include "apic.h"
+#include <asm/idt.h>
+#include <asm/gdt.h>
+#include <asm/apic.h>
 #include "timer.h"
 
 static inline void set_gs_base(u64 base)

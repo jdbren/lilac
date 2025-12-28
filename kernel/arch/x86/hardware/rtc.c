@@ -1,7 +1,6 @@
 #include <lilac/log.h>
 #include <lilac/timer.h>
-
-#include "io.h"
+#include <asm/io.h>
 
 #define CURRENT_YEAR  2024
 static int century_register = 0x00;

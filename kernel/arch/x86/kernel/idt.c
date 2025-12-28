@@ -2,9 +2,8 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/types.h>
 #include <lilac/config.h>
-#include "cpufaults.h"
-#include "idt.h"
-#include "pic.h"
+#include <asm/idt.h>
+#include <asm/pic.h>
 #include <asm/segments.h>
 
 #define IDT_SIZE 256
@@ -49,6 +48,26 @@ inline void load_idt(void)
 {
     asm volatile("lidt %0" : : "m"(idtptr));
 }
+
+void div0();
+void debug();
+void nmi();
+void brkp();
+void ovflw();
+void bnd();
+void invldop();
+void dna();
+void dblflt();
+void invldtss();
+void segnp();
+void ssflt();
+void gpflt();
+void pgflt();
+void res();
+void flpexc();
+void align();
+void mchk();
+void simd();
 
 void idt_init(void)
 {

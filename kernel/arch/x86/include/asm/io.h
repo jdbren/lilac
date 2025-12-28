@@ -1,6 +1,8 @@
 #ifndef _ARCH_I386_IO_H
 #define _ARCH_I386_IO_H
 
+#ifndef __ASSEMBLY__
+
 #include <lilac/types.h>
 
 void serial_init(void);
@@ -12,5 +14,7 @@ u8   inb(u16 port);
 u16  inw(u16 port);
 u32  inl(u16 port);
 void io_wait(void);
+
+#endif /* __ASSEMBLY__ */
 
 #endif

@@ -4,7 +4,8 @@
 #ifndef __ASSEMBLY__
 
 #include <lilac/types.h>
-#include <asm/cpuid-bits.h>
+#include <asm/cpu-features.h>
+#include <asm/cpu-flags.h>
 
 extern u32 max_cpuid_leaf;
 

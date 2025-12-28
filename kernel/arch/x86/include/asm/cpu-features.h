@@ -1,8 +1,12 @@
 #ifndef _LILAC_CPUID_H
 #define _LILAC_CPUID_H
 
-#include <lilac/types.h>
 #include <asm/cpuid-bits.h>
+
+#ifndef __ASSEMBLY__
+
+#include <lilac/types.h>
+#include <lilac/log.h>
 
 static inline void cpuid(u32 leaf, u32 *eax, u32 *ebx, u32 *ecx, u32 *edx)
 {
@@ -12,5 +16,7 @@ static inline void cpuid(u32 leaf, u32 *eax, u32 *ebx, u32 *ecx, u32 *edx)
          leaf, *eax, *ebx, *ecx, *edx);
 #endif
 }
+
+#endif /* __ASSEMBLY__ */
 
 #endif

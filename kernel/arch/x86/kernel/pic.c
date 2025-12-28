@@ -1,8 +1,8 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/types.h>
-#include "pic.h"
-#include "io.h"
+#include <asm/pic.h>
+#include <asm/io.h>
 
 void pic_initialize(void)
 {

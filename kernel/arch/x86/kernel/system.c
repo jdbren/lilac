@@ -5,8 +5,8 @@
 #include <lilac/boot.h>
 #include <lilac/percpu.h>
 
-#include "cpu-features.h"
-#include "apic.h"
+#include <asm/cpu-features.h>
+#include <asm/apic.h>
 #include "paging.h"
 #include "timer.h"
 

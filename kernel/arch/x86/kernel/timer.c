@@ -12,11 +12,10 @@
 #include <lilac/log.h>
 #include <acpi/hpet.h>
 #include <asm/segments.h>
-
-#include "cpu-features.h"
-#include "apic.h"
-#include "idt.h"
-#include "io.h"
+#include <asm/cpu-features.h>
+#include <asm/apic.h>
+#include <asm/idt.h>
+#include <asm/io.h>
 
 #define PIT_FREQUENCY 1193182
 
