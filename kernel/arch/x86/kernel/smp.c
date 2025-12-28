@@ -60,6 +60,8 @@ static struct gdt_ptr ap_gdt_ptrs[CONFIG_MAX_CPUS];
 static struct gdt_entry ap_gdt_entries[CONFIG_MAX_CPUS-1][GDT_NUM_ENTRIES];
 extern struct gdt_entry gdt_entries[GDT_NUM_ENTRIES];
 
+// On x86, we need to set up a separate GDT for each CPU to hold
+// the TSS and per-CPU segment
 void ap_gdt_init(int cpu)
 {
     struct gdt_entry *entry = ap_gdt_entries[cpu - 1];
@@ -81,6 +83,7 @@ void ap_gdt_init(int cpu)
     load_tr(__TSS);
 }
 #else
+// On x64 we get KERNEL_GS_BASE via swapgs, so no per-CPU GDT is needed
 void ap_gdt_init(int cpu)
 {
     tss_init(cpu);
@@ -91,25 +94,26 @@ void ap_gdt_init(int cpu)
 __noreturn
 void ap_startup(int id)
 {
-    u8 lapicid = get_lapic_id();
-    arch_disable_interrupts();
     while (!bspdone)
-        asm volatile ("pause" ::: "memory");
+        pause();
+
     load_idt();
     ap_gdt_init(id);
     percpu_init_cpu(id);
-    klog(LOG_DEBUG, "CPU %d (LAPIC ID %d) starting up\n", id, lapicid);
     set_tss_esp0((uintptr_t)ap_stack + __KERNEL_STACK_SZ * (id+1));
+
+    klog(LOG_DEBUG, "CPU %d (LAPIC ID %d) starting up\n", id, get_lapic_id());
+
     ap_lapic_enable();
     syscall_init();
     sched_ap_rq_init(id);
     timer_tick_init();
+
     klog(LOG_INFO, "CPU %d is online\n", id);
 
-    int int_count = 0;
+    long int_count = 0;
     while (1) {
-        asm ("sti");
-        asm ("hlt");
+        asm ("sti\n\thlt");
         int_count++;
         if (int_count % 10000 == 0) {
             klog(LOG_DEBUG, "AP %d still alive, handled %d interrupts\n", id, int_count);
@@ -118,15 +122,10 @@ void ap_startup(int id)
     }
 }
 
-extern char _percpu_start;
-extern char _percpu_end;
-
 #ifndef __x86_64__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wuninitialized"
 void set_gs_base_32(u32 base)
 {
-    struct gdt_ptr gdtp;
+    volatile struct gdt_ptr gdtp;
     store_gdt(&gdtp);
 
     struct gdt_entry *e = &gdtp.base[GDT_ENTRY_PERCPU];
@@ -138,7 +137,6 @@ void set_gs_base_32(u32 base)
     asm volatile("mfence" ::: "memory");
     asm volatile("mov %0, %%gs" :: "r"(__KERNEL_GS));
 }
-#pragma GCC diagnostic pop
 #endif
 
 static void *alloc_percpu_area(int pages)
@@ -206,7 +204,7 @@ void percpu_bsp_mem_init(void)
 void percpu_bsp_mem_init(void)
 {
     __per_cpu_offset[0] = 0;
-    klog(LOG_DEBUG, "Per-CPU area for CPU 0: %p (offset %lx)\n", area, __per_cpu_offset[0]);
+    klog(LOG_DEBUG, "Per-CPU area for CPU 0: %p (offset %lx)\n", &_percpu_start, __per_cpu_offset[0]);
     percpu_init_cpu(0);
 }
 

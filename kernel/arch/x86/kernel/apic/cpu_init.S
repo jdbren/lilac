@@ -42,10 +42,10 @@ _L8060:
 	movw $0x10, %ax
 	movw %ax, %ds
 	movw %ax, %ss
-	# get a CPU id
+	# get a CPU id from 1..N
 	mov  $1, %ebx
 	lock xaddl %ebx, __pa(aprunning)
-	inc  %ebx          # ebx = cpu id
+	inc  %ebx          # ebx = logical cpu id
 	# set up a stack
 	mov  $__KERNEL_STACK_SZ, %eax
 	mul  %ebx

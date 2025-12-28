@@ -86,8 +86,10 @@ void ahci_init(hba_mem_t *abar_phys)
     u32 pi;
     int i = 0;
 
-    if (initialized)
+    if (initialized) {
+        klog(LOG_WARN, "AHCI controller already initialized\n");
         return;
+    }
 
     initialized = true;
 

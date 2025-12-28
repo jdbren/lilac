@@ -174,6 +174,7 @@ ACPI_STATUS detect_top_level_device(ACPI_HANDLE ObjHandle, UINT32 Level,
 
     if (ACPI_SUCCESS(Status) && Info->Valid & ACPI_VALID_HID) {
         if (!strcmp(Info->HardwareId.String, "PNP0A03")) {
+            // TODO: PCI init
         }
         if (!strcmp(Info->HardwareId.String, "PNP0A08")) {
             pcie_bus_init(ObjHandle);

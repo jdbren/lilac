@@ -1,6 +1,7 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <mm/kmm.h>
+#include <lilac/math.h>
 #include <lilac/panic.h>
 #include <asm/regs.h>
 #include <asm/cpu-flags.h>
@@ -98,7 +99,7 @@ static int find_free_mtrr(void)
     unsigned var_count = cap & 0xFF;
 
     for (unsigned i = 0; i < var_count; i++) {
-        u64 mask = rdmsr(0x201 + 2*i);
+        u64 mask = rdmsr(IA32_MTRR_PHYSMASKn(i));
         if ((mask & (1ULL << 11)) == 0)
             return i;
     }
@@ -205,7 +206,7 @@ static int find_overlapping_mtrr(u64 fb_base, u64 fb_size)
 
 void mmio_map_buffer_wc(uintptr_t paddr, size_t sizen)
 {
-    const u64 size = 64ULL * 1024 * 1024;   /* 64 MiB */
+    const u64 size = is_pow_2(sizen) ? sizen : next_pow_2(sizen);
     u64 fb_base = paddr & ~(size - 1);
     u64 fb_end = fb_base + size;
 
