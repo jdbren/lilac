@@ -4,6 +4,7 @@
 #include <lilac/fs.h>
 #include <lilac/device.h>
 #include <lilac/err.h>
+#include <lilac/log.h>
 
 #define K_STOP      256
 #define K_F1        257
@@ -241,7 +242,9 @@ void kb_code(int scancode)
     }
 
     if (c) {
-        // klog(LOG_DEBUG, "Keycode: %x\n", c);
+#ifdef DEBUG_KEYBOARD
+        klog(LOG_DEBUG, "Keycode: %x\n", c);
+#endif
         kbd_send(c);
     }
 }

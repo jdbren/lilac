@@ -1,5 +1,6 @@
 #include <asm/io.h>
 #include <lilac/port.h>
+#include <lilac/panic.h>
 
 #define COM2 0x2F8
 
@@ -12,6 +13,52 @@ void serial_init(void)
     outb(COM2 + 3, 0x03); // 8n1
     outb(COM2 + 2, 0xC7); // FIFO
     outb(COM2 + 4, 0x0B); // IRQs, RTS/DSR
+/*
+    i8042_wait_input();
+    outb(0x64, 0xAD);   // disable keyboard
+
+    i8042_wait_input();
+    outb(0x64, 0xA7);   // disable mouse
+
+    while (inb(0x64) & 0x01) {
+        inb(0x60);
+    }
+
+    i8042_wait_input();
+    outb(0x64, 0xAA); // self test
+
+    i8042_wait_output();
+    u8 resp = inb(0x60);
+
+    if (resp != 0x55) {
+        klog(LOG_ERROR, "PS/2 controller self-test failed (response: 0x%02x)\n", resp);
+        return;
+    }
+
+    i8042_wait_input();
+    outb(0x64, 0x20);
+    i8042_wait_output();
+    u8 cfg = inb(0x60);
+    klog(LOG_INFO, "PS/2 controller config: 0x%02x\n", cfg);
+
+    cfg |= 0x01;     // enable IRQ1
+    cfg &= ~(1 << 6); // disable translation
+
+    i8042_wait_input();
+    outb(0x64, 0x60);
+
+    i8042_wait_input();
+    outb(0x60, cfg);
+
+    i8042_wait_input();
+    outb(0x64, 0xAE);  // enable keyboard port
+
+    i8042_wait_input();
+    outb(0x64, 0x20);
+    i8042_wait_output();
+    cfg = inb(0x60);
+    klog(LOG_INFO, "New PS/2 controller config: 0x%02x\n", cfg);
+*/
 }
 
 u32 read_port(u32 Address, u32 Width)

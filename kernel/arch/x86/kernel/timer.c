@@ -143,11 +143,9 @@ void timer_tick_init(void)
     if (tsc_deadline()) {
         apic_tsc_deadline();
         handle_tick = tsc_deadline_tick;
-        set_clock_source(&tsc_clock);
     } else if (invariant_tsc()) {
         // tsc periodic
         apic_periodic(TIMER_HZ / 1000);
-        set_clock_source(&tsc_clock);
     } else {
         apic_periodic(TIMER_HZ / 1000);
     }
@@ -168,6 +166,10 @@ void x86_timer_init(void)
     tsc_clock.freq_hz = calc_tsc_hz();
     set_clock_scale(&tsc_clock);
     boot_unix_time = rtc_init() - rdtsc() / tsc_clock.freq_hz;
+
+    if (invariant_tsc()) {
+        set_clock_source(&tsc_clock);
+    }
 
     klog(LOG_INFO, "TSC frequency: %llu Hz\n", tsc_clock.freq_hz);
     klog(LOG_INFO, "Boot Unix time: %lld seconds since epoch\n", boot_unix_time);

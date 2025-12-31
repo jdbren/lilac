@@ -80,6 +80,7 @@ int scan_partitions(struct gendisk *disk)
     if (mbr_part->type != 0xEE) {
 		// Not yet implemented
 		// mbr_read(mbr);
+        klog(LOG_WARN, "MBR partitioning not supported\n");
         return -1;
 	} else {
         disk->ops->disk_read(disk, 1, buf, 1);
@@ -109,12 +110,12 @@ int scan_partitions(struct gendisk *disk)
 }
 
 // Look for a block device with the given number
-struct block_device *get_bdev(dev_t devnum)
+struct block_device *get_bdev(int major)
 {
     for (int i = 0; i < num_disks; i++) {
         struct block_device *bdev = disks[i]->partitions;
         while (bdev) {
-            if (bdev->devnum == devnum)
+            if ((bdev->devnum >> 20) == major)
                 return bdev;
             bdev = bdev->next;
         }

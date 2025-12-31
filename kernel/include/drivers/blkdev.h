@@ -56,6 +56,6 @@ struct gpt_part_entry;
 __must_check
 int add_gendisk(struct gendisk *disk);
 int scan_partitions(struct gendisk *disk);
-struct block_device *get_bdev(dev_t devnum);
+struct block_device *get_bdev(int major);
 
 #endif

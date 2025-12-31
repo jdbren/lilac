@@ -59,11 +59,12 @@ static void root_init(struct block_device *bdev)
 
 void fs_init(void)
 {
-    dev_t devt = DEVICE_ID(SATA_DEVICE, 0);
+    int dev_major = SATA_DEVICE;
     struct block_device *bdev;
 
-    scan_partitions(NULL);
-    bdev = get_bdev(devt);
+    if (scan_partitions(NULL))
+        kerror("Partition scan failed\n");
+    bdev = get_bdev(dev_major);
     if (!bdev)
         kerror("Failed to get root block device\n");
 

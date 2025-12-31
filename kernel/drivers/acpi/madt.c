@@ -45,9 +45,7 @@ static struct int_override* parse_override(struct MADTEntry *entry)
     info->bus = ((u8*)entry)[2];
     info->source = ((u8*)entry)[3];
 
-#ifdef DEBUG_APIC
-    klog(LOG_DEBUG, "Override: %x %x %x %x\n", info->flags, info->global_system_interrupt, info->bus, info->source);
-#endif
+    klog(LOG_DEBUG, "Override: flags=%x int=%x bus=%x source=%x\n", info->flags, info->global_system_interrupt, info->bus, info->source);
     return info;
 }
 
@@ -97,8 +95,6 @@ struct madt_info* parse_madt(struct SDTHeader *addr)
                 info->ioapic_cnt++;
                 if (info->ioapic_cnt > 1) {
                     klog(LOG_WARN, "Multiple IOAPICs not supported\n");
-                    info->ioapic_cnt--;
-                    continue;
                 }
                 ioptr = parse_ioapic(entry);
                 ioptr->next = info->ioapics;
