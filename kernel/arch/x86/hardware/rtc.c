@@ -17,21 +17,25 @@ enum {
     cmos_data    = 0x71
 };
 
-static int get_update_in_progress_flag() {
+static int get_update_in_progress_flag()
+{
     outb(cmos_address, 0x0A);
     return (inb(cmos_data) & 0x80);
 }
 
-static unsigned char get_RTC_register(int reg) {
+static unsigned char get_RTC_register(int reg)
+{
     outb(cmos_address, reg);
     return inb(cmos_data);
 }
 
-static int is_leap_year(int year) {
+static int is_leap_year(int year)
+{
     return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
 }
 
-static int days_in_month(int month, int year) {
+static int days_in_month(int month, int year)
+{
     if (month == 2) {
         return is_leap_year(year) ? 29 : 28;
     }
@@ -39,12 +43,15 @@ static int days_in_month(int month, int year) {
     return days_in_months[month - 1]; // month is 1-12
 }
 
-static s64 calculate_unix_time(int seconds, int minutes, int hours, int day, int month, int year) {
+static s64 calculate_unix_time(int seconds, int minutes, int hours, int day,
+        int month, int year)
+{
     long total_seconds = 0;
 
     // Calculate seconds for the complete years since 1970
     for (int y = 1970; y < year; y++) {
-        total_seconds += is_leap_year(y) ? 31622400 : 31536000; // 365 * 24 * 60 * 60 or 366 * 24 * 60 * 60
+        total_seconds += is_leap_year(y) ? 31622400 : 31536000;
+        // 365 * 24 * 60 * 60 or 366 * 24 * 60 * 60
     }
 
     // Calculate seconds for the complete months of the current year
@@ -61,7 +68,8 @@ static s64 calculate_unix_time(int seconds, int minutes, int hours, int day, int
     return total_seconds;
 }
 
-static struct timestamp read_rtc(void) {
+static struct timestamp read_rtc(void)
+{
     unsigned char century = 0;
     unsigned char last_second;
     unsigned char last_minute;
@@ -95,7 +103,7 @@ static struct timestamp read_rtc(void) {
         last_year = year;
         last_century = century;
 
-        while (get_update_in_progress_flag());           // Make sure an update isn't in progress
+        while (get_update_in_progress_flag());
         second = get_RTC_register(0x00);
         minute = get_RTC_register(0x02);
         hour = get_RTC_register(0x04);
@@ -143,7 +151,8 @@ static struct timestamp read_rtc(void) {
     return ts;
 }
 
-long long rtc_init(void) {
+long long rtc_init(void)
+{
     struct timestamp ts = read_rtc();
     klog(LOG_INFO, "RTC: %04u/%02u/%02u %02u:%02u:%02u\n",
         ts.year, ts.month, ts.day, ts.hour, ts.minute, ts.second);

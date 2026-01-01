@@ -1,5 +1,4 @@
-#include <stdlib.h>
-#include <stdint.h>
+#include <lilac/types.h>
 
 void x86_memcpy_dwords(void *dst, const void *src, size_t size)
 {

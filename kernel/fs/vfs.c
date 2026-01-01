@@ -386,7 +386,8 @@ int vfs_close(struct file *file)
 {
     klog(LOG_DEBUG, "vfs_close: file = %p, dentry = %p\n", file, file->f_dentry);
 #ifdef DEBUG_VFS_FULL
-    klog(LOG_DEBUG, "vfs_close: fdtable = %p, max = %d\n", current->fs.files.fdarray, current->fs.files.max);
+    klog(LOG_DEBUG, "vfs_close: fdtable = %p, max = %d\n",
+        current->fs.files.fdarray, current->fs.files.max);
     for (size_t i = 0; i < current->fs.files.max; i++) {
         klog(LOG_DEBUG, "table[%u] = %p\n", i, current->fs.files.fdarray[i]);
     }
@@ -408,7 +409,8 @@ SYSCALL_DECL1(close, int, fd)
         return PTR_ERR(file);
 
 #ifdef DEBUG_VFS
-    klog(LOG_DEBUG, "syscall close: Closing fd %d, file %p, dentry %p\n", fd, file, file->f_dentry);
+    klog(LOG_DEBUG, "syscall close: Closing fd %d, file %p, dentry %p\n",
+        fd, file, file->f_dentry);
 #endif
     err = vfs_close(file);
 
@@ -589,7 +591,8 @@ int vfs_dup(int oldfd, int newfd)
     fget(f);
 
 #ifdef DEBUG_VFS
-    klog(LOG_DEBUG, "vfs_dup: file %p, dentry %p, oldfd %d, newfd %d\n", f, f->f_dentry, oldfd, newfd);
+    klog(LOG_DEBUG, "vfs_dup: file %p, dentry %p, oldfd %d, newfd %d\n",
+        f, f->f_dentry, oldfd, newfd);
 #endif
 
     int ret;
@@ -652,7 +655,8 @@ static char * build_absolute_path(struct dentry *d)
     struct dentry *cur = d->d_parent;
     while (cur) {
 #ifdef DEBUG_VFS
-        klog(LOG_DEBUG, "build_absolute_path: cur = %p, name = %s, buf = %s\n", cur, cur->d_name, buf);
+        klog(LOG_DEBUG, "build_absolute_path: cur = %p, name = %s, buf = %s\n",
+            cur, cur->d_name, buf);
 #endif
         if (cur == current->fs.root_d) {
             // Reached root
@@ -688,4 +692,37 @@ SYSCALL_DECL2(getcwd, char*, buf, size_t, size)
     len = copy_to_user(buf, path, len + 1);
     kfree(path);
     return len < 0 ? len : 0;
+}
+
+int vfs_rmdir(const char *path)
+{
+    struct dentry *dentry = vfs_lookup(path);
+    if (IS_ERR(dentry))
+        return PTR_ERR(dentry);
+
+    struct inode *inode = dentry->d_inode;
+    if (!inode)
+        return -ENOENT;
+
+    if (!S_ISDIR(inode->i_mode))
+        return -ENOTDIR;
+
+    if (!inode->i_op->rmdir)
+        return -EPERM;
+
+    return inode->i_op->rmdir(inode->i_sb, dentry);
+}
+
+SYSCALL_DECL1(rmdir, const char*, path)
+{
+    char *path_buf;
+    long err;
+
+    path_buf = get_user_path(path);
+    if (IS_ERR(path_buf))
+        return PTR_ERR(path_buf);
+
+    err = vfs_rmdir(path_buf);
+    kfree(path_buf);
+    return err;
 }
