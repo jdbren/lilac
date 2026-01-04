@@ -2,49 +2,18 @@
 #include <lilac/log.h>
 #include <lilac/libc.h>
 #include <lilac/timer.h>
+#include <lilac/err.h>
 #include <mm/kmalloc.h>
 
 #include "tmpfs_internal.h"
 
 
-int tmpfs_create(struct inode *parent, struct dentry *new_dentry, umode_t mode)
-{
-    struct inode *new_inode = parent->i_sb->s_op->alloc_inode(parent->i_sb);
-    struct tmpfs_file *file_info = kzmalloc(sizeof(*file_info));
-
-    new_inode->i_private = file_info;
-    new_inode->i_mode = mode | S_IFREG;
-    file_info->data = kmalloc(4096);
-    new_inode->i_size = 4096;
-    new_inode->i_count = 1;
-    new_inode->i_ctime = new_inode->i_mtime = new_inode->i_atime = get_unix_time();
-    new_dentry->d_inode = new_inode;
-
-    struct tmpfs_dir *parent_dir = (struct tmpfs_dir*)parent->i_private;
-    parent_dir->num_entries++;
-    parent_dir->children = krealloc(parent_dir->children, parent_dir->num_entries * sizeof(struct tmpfs_entry));
-
-    struct tmpfs_entry *new_entry = parent_dir->children + parent_dir->num_entries - 1;
-    memset(new_entry, 0, sizeof(*new_entry));
-    new_entry->inode = new_inode;
-    strcpy(new_entry->name, new_dentry->d_name);
-    new_entry->type = TMPFS_FILE;
-
-    return 0;
-}
-
-int tmpfs_open(struct inode *inode, struct file *file)
-{
-    file->f_op = &tmpfs_fops;
-    return 0;
-}
-
-int tmpfs_close(struct inode *inode, struct file *file)
+static int tmpfs_close(struct inode *inode, struct file *file)
 {
     return 0;
 }
 
-ssize_t tmpfs_read(struct file *file, void *buf, size_t cnt)
+static ssize_t tmpfs_read(struct file *file, void *buf, size_t cnt)
 {
     struct inode *inode = file->f_dentry->d_inode;
     struct tmpfs_file *tmp_inode = (struct tmpfs_file*)inode->i_private;
@@ -62,7 +31,7 @@ ssize_t tmpfs_read(struct file *file, void *buf, size_t cnt)
     return read;
 }
 
-ssize_t tmpfs_write(struct file *file, const void *buf, size_t cnt)
+static ssize_t tmpfs_write(struct file *file, const void *buf, size_t cnt)
 {
     struct inode *inode = file->f_dentry->d_inode;
     struct tmpfs_file *tmp_inode = (struct tmpfs_file*)inode->i_private;
@@ -79,3 +48,42 @@ ssize_t tmpfs_write(struct file *file, const void *buf, size_t cnt)
 
     return written;
 }
+
+static
+int tmpfs_readdir(struct file *file, struct dirent *dirp, unsigned int count)
+{
+    struct inode *inode = file->f_dentry->d_inode;
+    struct tmpfs_dir *dir = (struct tmpfs_dir*)inode->i_private;
+    struct tmpfs_entry *entry = dir->children;
+    size_t pos = file->f_pos;
+    u32 i = 0;
+#ifdef DEBUG_TMPFS
+    klog(LOG_DEBUG, "tmpfs_readdir: inode = %p, dir = %p\n", inode, dir);
+#endif
+    while (i < count && pos < dir->num_entries) {
+#ifdef DEBUG_TMPFS
+        klog(LOG_DEBUG, "tmpfs_readdir: reading entry %u/%lu: name=%s\n",
+            pos, dir->num_entries, entry->name);
+#endif
+        if (entry->inode) {
+            strncpy(dirp[i].d_name, entry->name, sizeof(dirp[i].d_name));
+            dirp[i].d_ino = entry->inode->i_ino;
+            dirp[i].d_off = pos;
+            dirp[i].d_reclen = sizeof(struct dirent);
+            dirp[i].d_type = S_ISDIR(entry->inode->i_mode) ? DT_DIR : DT_REG;
+            dirp[i].pad = 0;
+            ++pos;
+            ++i;
+        }
+        entry++;
+    }
+
+    return i;
+}
+
+const struct file_operations tmpfs_fops = {
+    .read = tmpfs_read,
+    .write = tmpfs_write,
+    .readdir = tmpfs_readdir,
+    .release = tmpfs_close
+};

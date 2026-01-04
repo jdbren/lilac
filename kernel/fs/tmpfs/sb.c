@@ -1,11 +1,18 @@
 #include <lilac/fs.h>
 #include <lilac/log.h>
 #include <lilac/err.h>
+#include <lilac/timer.h>
 #include "tmpfs_internal.h"
 
 #include <mm/kmalloc.h>
 
-struct inode* tmpfs_alloc_inode(struct super_block *sb)
+static int unique_ino(void)
+{
+    static unsigned long ino = 1;
+    return ++ino;
+}
+
+static struct inode* tmpfs_alloc_inode(struct super_block *sb)
 {
     struct inode *inode = kzmalloc(sizeof(struct inode));
     if (!inode) {
@@ -13,15 +20,18 @@ struct inode* tmpfs_alloc_inode(struct super_block *sb)
         return ERR_PTR(-ENOMEM);
     }
 
+    inode->i_ino = unique_ino();
     inode->i_sb = sb;
     inode->i_op = &tmpfs_iops;
     inode->i_count = 1;
+    inode->i_atime = inode->i_mtime = inode->i_ctime = get_unix_time();
+    inode->i_nlink = 1;
     list_add_tail(&inode->i_list, &sb->s_inodes);
 
     return inode;
 }
 
-void tmpfs_destroy_inode(struct inode *inode)
+static void tmpfs_destroy_inode(struct inode *inode)
 {
     if (inode->i_private)
         kfree(inode->i_private);
@@ -63,3 +73,8 @@ struct dentry* tmpfs_init(void *device, struct super_block *sb)
 
     return root_dentry;
 }
+
+const struct super_operations tmpfs_sops = {
+    .alloc_inode = tmpfs_alloc_inode,
+    .destroy_inode = tmpfs_destroy_inode
+};

@@ -37,8 +37,8 @@ void fat_destroy_inode(struct inode *inode)
 
 static int unique_ino(void)
 {
-	static unsigned long ino = 1;
-	return ++ino;
+    static unsigned long ino = 1;
+    return ++ino;
 }
 
 static struct inode *fat_iget(struct super_block *sb, unsigned long pos)

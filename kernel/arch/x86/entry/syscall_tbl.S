@@ -1,12 +1,8 @@
 // Syscall table and defs
 #define __ASSEMBLY__
-#include <lilac/errno.h>
+#include <user/errno.h>
 
 sys_restart_syscall:
-	mov $-ENOSYS, %eax
-	ret
-
-sys_rmdir:
 	mov $-ENOSYS, %eax
 	ret
 
@@ -72,17 +68,14 @@ syscall_table:
 	sc_tbl_entry munmap		# 45
 	sc_tbl_entry nanosleep	# 46
 	sc_tbl_entry gettimeofday
+	sc_tbl_entry link		# 48
+	sc_tbl_entry unlink		# 49
+	sc_tbl_entry symlink	# 50
+	sc_tbl_entry readlink	# 51
 /*
-	sc_tbl_entry link		# 26
-	sc_tbl_entry unlink		# 27
-	sc_tbl_entry symlink	# 28
-	sc_tbl_entry readlink	# 29
 	sc_tbl_entry chmod		# 30
 	sc_tbl_entry chown		# 31
 	sc_tbl_entry lstat		# 32
-	sc_tbl_entry fstat		# 33
-	sc_tbl_entry fcntl		# 34
-	sc_tbl_entry ioctl		# 35
 	sc_tbl_entry getuid		# 36
 	sc_tbl_entry setuid		# 37
 	sc_tbl_entry alarm		# 38
@@ -91,9 +84,6 @@ syscall_table:
 	sc_tbl_entry mknod		# 41
 	sc_tbl_entry access		# 42
 	sc_tbl_entry sync 		# 43
-	sc_tbl_entry kill		# 44
 	sc_tbl_entry rename		# 45
-	sc_tbl_entry signal		# 46
-	sc_tbl_entry dup2		# 47
 */
 syscall_table_end:

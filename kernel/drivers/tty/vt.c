@@ -36,7 +36,7 @@
 #include <lilac/tty.h>
 #include <lilac/console.h>
 #include <lilac/log.h>
-#include <lilac/errno.h>
+#include <lilac/err.h>
 #include <drivers/keyboard.h>
 
 /*

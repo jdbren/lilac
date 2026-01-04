@@ -2,6 +2,7 @@
 #include <lilac/log.h>
 #include <lilac/err.h>
 #include <lilac/libc.h>
+#include <lilac/sync.h>
 #include <mm/kmalloc.h>
 
 #include "utils.h"
@@ -66,7 +67,7 @@ struct dentry * alloc_dentry(struct dentry *d_parent, const char *name)
 
     new_dentry->d_parent = d_parent;
     new_dentry->d_sb = i_parent->i_sb;
-    new_dentry->d_name = (char*)name;
+    new_dentry->d_name = (char*)strdup(name);
     spin_lock_init(&new_dentry->d_lock);
     INIT_HLIST_HEAD(&new_dentry->d_children);
     INIT_HLIST_NODE(&new_dentry->d_sib);
@@ -101,7 +102,7 @@ struct dentry * lookup_path_from(struct dentry *parent, const char *path)
 {
     int n_pos = 0;
     struct inode *inode;
-    struct dentry *find;
+    struct dentry *find, *tmp;
     char *name;
     long err = 0;
 
@@ -114,13 +115,18 @@ struct dentry * lookup_path_from(struct dentry *parent, const char *path)
 #ifdef DEBUG_VFS
         klog(LOG_DEBUG, "VFS: Looking up %s\n", name);
 #endif
+        acquire_lock(&parent->d_lock);
+
         if (strcmp(name, ".") == 0) {
             kfree(name);
+            release_lock(&parent->d_lock);
             continue;
         } else if (strcmp(name, "..") == 0) {
             kfree(name);
+            tmp = parent;
             if (parent->d_parent != NULL)
                 parent = parent->d_parent;
+            release_lock(&tmp->d_lock);
             continue;
         }
 
@@ -132,6 +138,7 @@ struct dentry * lookup_path_from(struct dentry *parent, const char *path)
             find = alloc_dentry(parent, name);
             if (IS_ERR_OR_NULL(find)) {
                 kfree(name);
+                release_lock(&parent->d_lock);
                 return find;
             }
 
@@ -140,27 +147,33 @@ struct dentry * lookup_path_from(struct dentry *parent, const char *path)
                 klog(LOG_DEBUG, "VFS: %s is not a directory\n", parent->d_name);
                 kfree(name);
                 destroy_dentry(find);
+                release_lock(&parent->d_lock);
                 return ERR_PTR(-ENOTDIR);
             }
 
             if ((err = PTR_ERR(inode->i_op->lookup(inode, find, 0))) < 0) {
                 kfree(name);
                 destroy_dentry(find);
+                release_lock(&parent->d_lock);
                 return ERR_PTR(err);
             }
 
             dcache_add(find);
+            kfree(name);
             // If the inode is NULL, we've reached a dead end (negative dentry)
-            if (find->d_inode == NULL)
+            if (find->d_inode == NULL) {
+                release_lock(&parent->d_lock);
                 return find;
-        }
-        else {
+            }
+        } else {
 #ifdef DEBUG_VFS
             klog(LOG_DEBUG, "VFS: Found %s in cache\n", name);
 #endif
             kfree(name);
-            if (find->d_inode == NULL)
+            if (find->d_inode == NULL) {
+                release_lock(&parent->d_lock);
                 return find;
+            }
 
             if (find->d_mount) {
 #ifdef DEBUG_VFS
@@ -169,6 +182,7 @@ struct dentry * lookup_path_from(struct dentry *parent, const char *path)
                 find = find->d_mount->mnt_root;
             }
         }
+        release_lock(&parent->d_lock);
         parent = find;
     }
     return parent;

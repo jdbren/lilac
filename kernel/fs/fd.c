@@ -59,8 +59,7 @@ int get_fd_exact_replace(struct fdtable *files, int fd, struct file *file)
     }
 
     if (files->fdarray[fd]) {
-        if (files->fdarray[fd])
-            vfs_close(files->fdarray[fd]);
+        vfs_close(files->fdarray[fd]);
         files->fdarray[fd] = NULL;
     }
 

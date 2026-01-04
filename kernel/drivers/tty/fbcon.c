@@ -32,6 +32,7 @@ static void fb_clear_rect_pixels(struct framebuffer *fb, int x, int y, int width
             memcpy(row + (px * fb->bypp), &fb->fb_bg, fb->bypp);
         }
     }
+    graphics_redraw_region(x, y, width, height);
 }
 
 /**
@@ -107,6 +108,9 @@ void fbcon_move_chars(struct vc_state *vc,
             }
         }
     }
+
+    graphics_redraw_region(dx * fb->font->width, dy * fb->font->height,
+                          width * fb->font->width, height * char_h);
 }
 
 
@@ -139,8 +143,6 @@ void fbcon_scroll(struct vc_state *vt, int top, int bottom, int dir, int lines)
             fbcon_move_chars(vt, top, 0, top + lines, 0, bottom - top - lines + 1, vt->xs);
         fbcon_clear_region(vt, top, 0, lines, vt->xs);
     }
-
-    graphics_redraw();
 }
 
 
@@ -190,6 +192,11 @@ static void draw_cursor(struct vc_state *vt, int cx, int cy)
 void fbcon_cursor(struct vc_state *vc, int mode)
 {
     draw_cursor(vc, vc->curx, vc->cury);
+    // struct framebuffer *fb = vc->display_data;
+    // if (fb && fb->font) {
+    //     graphics_redraw_region(vc->curx * fb->font->width, vc->cury * fb->font->height,
+    //                           fb->font->width, fb->font->height);
+    // }
 }
 
 void fbcon_color(struct vc_state *vc, unsigned int fg, unsigned int bg)

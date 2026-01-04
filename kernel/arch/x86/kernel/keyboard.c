@@ -26,19 +26,21 @@ static inline void kbd_wait(void)
 
 void kbd_int_init(void)
 {
+    u8 resp;
     idt_entry(0x20 + 1, (uintptr_t)kbd_handler, __KERNEL_CS, 0, INT_GATE);
     ioapic_entry(1, 0x20 + 1, 0, 0);
-/*
-    i8042_wait_input();
+
     outb(KEYBOARD_DATA_PORT, 0xFF);   // reset keyboard
-    io_wait();
-    u8 resp = inb(KEYBOARD_DATA_PORT);
+    do {
+        resp = inb(KEYBOARD_DATA_PORT);
+    } while (resp != 0xfa && resp != 0x55 && resp != 0xaa);
     if (resp != 0xFA && resp != 0xAA) {
         klog(LOG_ERROR, "Keyboard reset failed (response: 0x%02x)\n", resp);
         return;
     }
-    io_wait();
-    resp = inb(KEYBOARD_DATA_PORT);
+    do {
+        resp = inb(KEYBOARD_DATA_PORT);
+    } while (resp != 0xfa && resp != 0x55 && resp != 0xaa);
     if (resp != 0xFA && resp != 0xAA) {
         klog(LOG_ERROR, "Keyboard reset failed (response: 0x%02x)\n", resp);
         return;
@@ -51,10 +53,4 @@ void kbd_int_init(void)
     outb(KEYBOARD_DATA_PORT, 0xf4); // enable scanning
     kbd_wait();
 
-    outb(KEYBOARD_DATA_PORT, 0xee); // echo
-    kbd_wait();
-    if (inb(KEYBOARD_DATA_PORT) != 0xee) {
-        klog(LOG_ERROR, "Keyboard controller not responding to echo\n");
-    }
-*/
 }

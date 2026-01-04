@@ -1,3 +1,5 @@
+#include "utils.h"
+
 #include <lilac/libc.h>
 #include <lilac/err.h>
 #include <lilac/fs.h>
@@ -140,4 +142,45 @@ char * get_user_path(const char *path)
         return ERR_PTR(-ENAMETOOLONG);
     }
     return kpath;
+}
+
+char * build_absolute_path(struct dentry *d)
+{
+    if (!d) return ERR_PTR(-EINVAL);
+    char *tmp = kmalloc(PATH_MAX);
+    if (!tmp) return ERR_PTR(-ENOMEM);
+    char *buf = kmalloc(PATH_MAX);
+    if (!buf) {
+        kfree(tmp);
+        return ERR_PTR(-ENOMEM);
+    }
+    buf[0] = '\0';
+
+    if (d == root_dentry) {
+        strcpy(buf, "/");
+        kfree(tmp);
+        return buf;
+    } else {
+        strcpy(buf, d->d_name);
+    }
+
+    struct dentry *cur = d->d_parent;
+    while (cur) {
+#ifdef DEBUG_VFS
+        klog(LOG_DEBUG, "build_absolute_path: cur = %p, name = %s, buf = %s\n",
+            cur, cur->d_name, buf);
+#endif
+        if (cur == current->fs.root_d) {
+            // Reached root
+            snprintf(tmp, PATH_MAX, "%c%s", '/', buf);
+            strcpy(buf, tmp);
+            break;
+        } else {
+            snprintf(tmp, PATH_MAX, "%s/%s", cur->d_name, buf);
+            strcpy(buf, tmp);
+        }
+        cur = cur->d_parent;
+    }
+    kfree(tmp);
+    return buf;
 }

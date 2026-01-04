@@ -48,6 +48,64 @@ static void build_mode_string(mode_t mode, char *buf)
     buf[10] = '\0';
 }
 
+static long long file_size_digits(long long size)
+{
+    long long digits = 1;
+    while (size >= 10) {
+        size /= 10;
+        digits++;
+    }
+    return digits;
+}
+
+static void print_long(const char *dir, const char *sep, char **names, int count)
+{
+    for (int i = 0; i < count; ++i) {
+        char path[1024];
+        int needed = snprintf(path, sizeof(path), "%s%s%s", dir, sep, names[i]);
+        if (needed < 0 || needed >= (int)sizeof(path)) {
+            fprintf(stderr, "ls: path too long: %s%s%s\n", dir, sep, names[i]);
+            continue;
+        }
+
+        struct stat st;
+        if (lstat(path, &st) == -1) {
+            fprintf(stderr, "ls: lstat %s: %s\n", path, strerror(errno));
+            continue;
+        }
+
+        char perms[11];
+        build_mode_string(st.st_mode, perms);
+
+        // struct passwd *pw = getpwuid(st.st_uid);
+        // struct group *gr = getgrgid(st.st_gid);
+        char timebuf[32] = "";
+        struct tm *tm = localtime(&st.st_mtime);
+        if (tm)
+            strftime(timebuf, sizeof(timebuf), "%b %e %H:%M", tm);
+
+        printf("%s %2ld %s %s %8lld %s %s",
+                perms,
+                (long)st.st_nlink,
+                "root",
+                "root",
+                (long long)st.st_size,
+                timebuf[0] ? timebuf : "???",
+                names[i]);
+
+        if (S_ISLNK(st.st_mode)) {
+            char linkbuf[1024];
+            ssize_t len = readlink(path, linkbuf, sizeof(linkbuf) - 1);
+            if (len > 0) {
+                linkbuf[len] = '\0';
+                printf(" -> %s", linkbuf);
+            }
+        }
+
+        putchar('\n');
+    }
+}
+
 int main(int argc, char *argv[])
 {
     int show_long = 0;
@@ -119,39 +177,7 @@ int main(int argc, char *argv[])
     qsort(names, count, sizeof(char *), compare_names);
 
     if (show_long) {
-        for (int i = 0; i < count; ++i) {
-            char path[1024];
-            int needed = snprintf(path, sizeof(path), "%s%s%s", dir, sep, names[i]);
-            if (needed < 0 || needed >= (int)sizeof(path)) {
-                fprintf(stderr, "ls: path too long: %s%s%s\n", dir, sep, names[i]);
-                continue;
-            }
-
-            struct stat st;
-            if (lstat(path, &st) == -1) {
-                fprintf(stderr, "ls: lstat %s: %s\n", path, strerror(errno));
-                continue;
-            }
-
-            char perms[11];
-            build_mode_string(st.st_mode, perms);
-
-            // struct passwd *pw = getpwuid(st.st_uid);
-            // struct group *gr = getgrgid(st.st_gid);
-            char timebuf[32] = "";
-            struct tm *tm = localtime(&st.st_mtime);
-            if (tm)
-                strftime(timebuf, sizeof(timebuf), "%b %e %H:%M", tm);
-
-            printf("%s %2ld %s %s %6lld %s %s\n",
-                   perms,
-                   (long)st.st_nlink,
-                   "root",
-                   "root",
-                   (long long)st.st_size,
-                   timebuf[0] ? timebuf : "???",
-                   names[i]);
-        }
+        print_long(dir, sep, names, count);
     } else {
         const int col_width = 14;
         const int cols = (80 + 1) / (col_width + 2);

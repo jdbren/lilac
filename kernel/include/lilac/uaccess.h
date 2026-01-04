@@ -35,8 +35,11 @@ static inline int check_access(void *addr, size_t size)
     return 0;
 }
 
-__must_check
-static inline int copy_to_user(void *dst, const void *src, size_t size)
+/**
+ * Copy size bytes to user space. Returns 0 on success
+ */
+static __must_check inline
+int copy_to_user(void *dst, const void *src, size_t size)
 {
     if (!access_ok(dst, size)) {
         klog(LOG_WARN, "copy_to_user: dst not accessible\n");
@@ -45,8 +48,11 @@ static inline int copy_to_user(void *dst, const void *src, size_t size)
     return arch_user_copy(dst, src, size);
 }
 
-__must_check
-static inline int copy_from_user(void *dst, const void *src, size_t size)
+/**
+ * Copy size bytes from user space. Returns 0 on success
+ */
+static __must_check inline
+int copy_from_user(void *dst, const void *src, size_t size)
 {
     if (!access_ok(src, size)) {
         klog(LOG_WARN, "copy_from_user: src not accessible\n");
@@ -59,7 +65,8 @@ static inline int copy_from_user(void *dst, const void *src, size_t size)
  * Copies a NUL-terminated string from user space to kernel space.
  * Returns the number of bytes copied.
  */
-static __must_check inline int strncpy_from_user(char *dst, const char *src, size_t max_size)
+static __must_check inline
+int strncpy_from_user(char *dst, const char *src, size_t max_size)
 {
     if (!access_ok(src, 1)) {
         klog(LOG_WARN, "strncpy_from_user: src (%x) not accessible\n", src);
@@ -68,8 +75,8 @@ static __must_check inline int strncpy_from_user(char *dst, const char *src, siz
     return arch_strncpy_from_user(dst, src, max_size);
 }
 
-__must_check
-static inline int strnlen_user(const char *str, int max)
+static __must_check inline
+int strnlen_user(const char *str, int max)
 {
     if (!access_ok(str, 1)) {
         klog(LOG_WARN, "strnlen_user: str not accessible\n");
@@ -78,8 +85,8 @@ static inline int strnlen_user(const char *str, int max)
     return arch_strnlen_user(str, max);
 }
 
-__must_check
-static inline int user_str_ok(const char *str, int max_size)
+static __must_check inline
+int user_str_ok(const char *str, int max_size)
 {
     struct mm_info *mm = current->mm;
     int len = strnlen_user(str, max_size);

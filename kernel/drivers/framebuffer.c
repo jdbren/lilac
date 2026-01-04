@@ -28,10 +28,22 @@ static void put_pixel(struct framebuffer *screen, u32 x, u32 y, u32 color) {
 
 #define PIXEL u32
 
+void graphics_redraw_region(u32 x, u32 y, u32 w, u32 h)
+{
+    u8 *src = fb->fb_shadow + y * fb->fb_pitch + x * fb->bypp;
+    u8 *dst = fb->fb + y * fb->fb_pitch + x * fb->bypp;
+    size_t bytes = w * fb->bypp;
+
+    for (u32 i = 0; i < h; i++) {
+        memcpy_wc_opt(dst, src, bytes);
+        src += fb->fb_pitch;
+        dst += fb->fb_pitch;
+    }
+}
 
 void graphics_redraw(void)
 {
-    arch_memcpy_optimized(fb->fb, fb->fb_shadow, fb->fb_pitch * fb->fb_height);
+    memcpy_wc_opt(fb->fb, fb->fb_shadow, fb->fb_pitch * fb->fb_height);
 }
 
 void graphics_putc(u16 c, u32 cx, u32 cy)

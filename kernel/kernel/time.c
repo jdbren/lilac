@@ -3,6 +3,7 @@
 #include <lilac/syscall.h>
 #include <lilac/log.h>
 #include <lilac/sched.h>
+#include <lilac/uaccess.h>
 
 static void nop(unsigned long x) {}
 
@@ -69,6 +70,21 @@ u64 get_sys_time_ns(void)
     } while (seq & 1 || seq != atomic_load_explicit(&time_seq, memory_order_acquire));
 
     return ns;
+}
+
+SYSCALL_DECL1(time, time_t *, t)
+{
+    struct task *p = current;
+    long long ret = get_unix_time();
+
+    if (t) {
+        if (access_ok(t, sizeof(time_t)))
+            *t = ret;
+        else
+            ret = -EFAULT;
+    }
+
+    return ret;
 }
 
 SYSCALL_DECL2(gettimeofday, struct timeval*, tv, struct timezone*, tz)

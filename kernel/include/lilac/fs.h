@@ -56,18 +56,19 @@ struct inode {
 };
 
 struct __cacheline_align inode_operations {
-    struct dentry *(*lookup)(struct inode *, struct dentry *, unsigned int);
+    struct dentry * (*lookup)(struct inode *, struct dentry *, unsigned int);
+    const char * (*get_link) (struct dentry *, struct inode *);
     int (*open)(struct inode *, struct file *);
     int (*create)(struct inode *, struct dentry *, umode_t);
-    int (*link)(struct dentry *,struct inode *,struct dentry *);
-    int (*unlink)(struct inode *,struct dentry *);
-    int (*symlink)(struct inode *,struct dentry *,const char *);
-    int (*mkdir)(struct inode *, struct dentry *, umode_t);
-    int (*rmdir)(struct inode *, struct dentry *);
+    int (*link)(struct dentry *old_d, struct inode *dir, struct dentry *new_d);
+    int (*unlink)(struct inode *dir, struct dentry *victim);
+    int (*symlink)(struct inode *dir, struct dentry *link_d, const char *target);
+    int (*mkdir)(struct inode *dir, struct dentry *new_d, umode_t);
+    int (*rmdir)(struct inode *dir, struct dentry *victim);
     int (*mknod)(struct inode *, struct dentry *, umode_t, dev_t);
     int (*rename)(struct inode *, struct dentry *,
                     struct inode *, struct dentry *);
-    int (*readlink) (struct dentry *, char __user *,int);
+    int (*readlink)(struct dentry *, char __user *, int);
 };
 
 

@@ -41,6 +41,7 @@ void graphics_putc(u16 c, u32 cx, u32 cy);
 void graphics_clear(void);
 void graphics_scroll(void);
 void graphics_redraw(void);
+void graphics_redraw_region(u32 x, u32 y, u32 w, u32 h);
 
 struct framebuffer_color graphics_getcolor(void);
 void graphics_setcolor(u32 fg, u32 bg);

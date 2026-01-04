@@ -14,9 +14,13 @@ void x86_memcpy_qwords(void *dst, const void *src, size_t size);
 void x86_memcpy_sse_nt(void *dst, const void *src, size_t size);
 
 #ifdef __x86_64__
-#define arch_memcpy_optimized(dst, src, size) x86_memcpy_qwords(dst, src, size)
+void * x64_memcpy_opt(void *dst, const void *src, size_t size);
+
+#define arch_memcpy_opt(dst, src, size) x86_memcpy_qwords(dst, src, size)
+#define memcpy_wc_opt(dst, src, size) x64_memcpy_opt(dst, src, size)
 #else
-#define arch_memcpy_optimized(dst, src, size) x86_memcpy_dwords(dst, src, size)
+#define arch_memcpy_opt(dst, src, size) x86_memcpy_dwords(dst, src, size)
+#define memcpy_wc_opt(dst, src, size) x86_memcpy_dwords(dst, src, size)
 #endif
 
 static inline void set_cpuid_max(void)

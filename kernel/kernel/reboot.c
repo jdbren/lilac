@@ -50,18 +50,3 @@ SYSCALL_DECL1(reboot, unsigned long, how)
         }
     }
 }
-
-SYSCALL_DECL1(time, long long *, t)
-{
-    struct task *p = current;
-    long long ret = get_unix_time();
-
-    if (t) {
-        if (access_ok(t, sizeof(long long)))
-            *t = ret;
-        else
-            ret = -EFAULT;
-    }
-
-    return ret;
-}

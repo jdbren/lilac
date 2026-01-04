@@ -5,7 +5,7 @@
 #include <asm/segments.h>
 #include <asm/msr.h>
 #include <asm/gdt.h>
-#include <lilac/errno.h>
+#include <user/errno.h>
 #include <lilac/syscall.h>
 
 #include "macros.S"

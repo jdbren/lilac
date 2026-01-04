@@ -80,8 +80,7 @@ fs/fat32/file.o \
 fs/fat32/inode.o \
 fs/fat32/name.o \
 fs/fat32/open.o \
-fs/tmpfs/tmpfs.o \
-fs/tmpfs/dir.o \
+fs/tmpfs/inode.o \
 fs/tmpfs/file.o \
 fs/tmpfs/sb.o \
 fs/vfs.o \

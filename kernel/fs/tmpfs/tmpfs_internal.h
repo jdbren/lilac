@@ -13,7 +13,7 @@
 struct tmpfs_entry {
     struct inode *inode;
     unsigned short type;
-    char name[50];
+    char name[NAME_MAX];
 };
 
 struct tmpfs_file {
@@ -30,17 +30,5 @@ struct tmpfs_dir {
 extern const struct super_operations tmpfs_sops;
 extern const struct inode_operations tmpfs_iops;
 extern const struct file_operations tmpfs_fops;
-
-int tmpfs_create(struct inode *parent, struct dentry *new_dentry, umode_t mode);
-ssize_t tmpfs_read(struct file *file, void *buf, size_t cnt);
-ssize_t tmpfs_write(struct file *file, const void *buf, size_t cnt);
-int tmpfs_readdir(struct file *file, struct dirent *dirp, unsigned int count);
-int tmpfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode);
-int tmpfs_open(struct inode *inode, struct file *file);
-int tmpfs_close(struct inode *inode, struct file *file);
-struct dentry *tmpfs_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags);
-
-struct inode* tmpfs_alloc_inode(struct super_block *sb);
-void tmpfs_destroy_inode(struct inode *inode);
 
 #endif

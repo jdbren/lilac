@@ -24,7 +24,8 @@ struct inode * pipe_alloc_inode()
         return NULL;
     ino->i_mode = S_IFIFO|S_IREAD|S_IWRITE;
     ino->i_count = 1;
-    ino->i_atime = ino->i_ctime = ino->i_mtime = get_sys_time_ns();
+    ino->i_nlink = 1;
+    ino->i_atime = ino->i_ctime = ino->i_mtime = get_unix_time();
     ino->i_fop = &pipe_fops;
     ino->i_size = PAGE_SIZE;
     return ino;
@@ -188,8 +189,8 @@ SYSCALL_DECL1(pipe, int, pipefd[2])
     if (IS_ERR(p))
         return PTR_ERR(p);
 
-    struct file *read_end = kzmalloc(sizeof(*read_end));
-    struct file *write_end = kzmalloc(sizeof(*write_end));
+    struct file *read_end = alloc_file(NULL);
+    struct file *write_end = alloc_file(NULL);
     if (!read_end || !write_end) {
         destroy_pipe(p);
         kfree(read_end);
@@ -220,5 +221,7 @@ SYSCALL_DECL1(pipe, int, pipefd[2])
 
     pipefd[0] = rfd;
     pipefd[1] = wfd;
+
+    klog(LOG_DEBUG, "pipe: Created pipe with fds %d (read) and %d (write)\n", rfd, wfd);
     return 0;
 }

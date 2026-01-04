@@ -24,7 +24,7 @@ int vfs_stat(const struct file *f, struct stat *st)
     // st->st_dev = i_ptr->i_sb->s_bdev->devnum;
     st->st_dev = 0;
     st->st_mode = i_ptr->i_mode;
-    st->st_nlink = i_ptr->i_count;
+    st->st_nlink = i_ptr->i_nlink;
     st->st_uid = 0;
     st->st_gid = 0;
     st->st_rdev = i_ptr->i_rdev;

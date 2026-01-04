@@ -89,3 +89,12 @@ make DESTDIR=$SYSROOT install
 dash 5.6.1
 LIBS="-ledit -lncurses" ./configure --build=x86_64-linux-gnu --host=x86_64-lilac --with-libedit --prefix=/usr
 make
+
+libgmp 6.3.0
+./configure --host=x86_64-lilac --build=x86_64-linux-gnu --prefix=/usr CC="x86_64-lilac-gcc -std=c11" CC_FOR_BUILD="gcc -std=c11"
+
+mpfr 4.2.2
+./configure --host=x86_64-lilac --build=x86_64-linux-gnu --prefix=/usr CFLAGS="-isystem=/home/jack/lilac/sysroot"
+
+mpc 1.3.1
+./configure --host=x86_64-lilac --build=x86_64-linux-gnu --prefix=/usr CFLAGS="-isystem=/home/jack/lilac/sysroot -D__int64_t_defined=1"
