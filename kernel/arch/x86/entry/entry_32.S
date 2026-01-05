@@ -4,7 +4,7 @@
 #include <generated/asm-offsets.h>
 #include <asm/segments.h>
 #include <lilac/syscall.h>
-#include <lilac/errno.h>
+#include <user/errno.h>
 
 #include "macros.S"
 

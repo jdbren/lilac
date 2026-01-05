@@ -128,7 +128,7 @@ void tss_init(int cpu_id);
 void set_tss_esp0(uintptr_t esp0);
 struct tss* get_tss(int cpu_id);
 
-static inline void store_gdt(struct gdt_ptr *gdtp)
+static inline void store_gdt(volatile struct gdt_ptr *gdtp)
 {
     asm volatile ("sgdt (%0)" : : "r"(gdtp));
 }

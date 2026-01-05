@@ -122,6 +122,8 @@ void ap_startup(int id)
 }
 
 #ifndef __x86_64__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wuninitialized"
 void set_gs_base_32(u32 base)
 {
     volatile struct gdt_ptr gdtp;
@@ -136,6 +138,7 @@ void set_gs_base_32(u32 base)
     asm volatile("mfence" ::: "memory");
     asm volatile("mov %0, %%gs" :: "r"(__KERNEL_GS));
 }
+#pragma GCC diagnostic pop
 #endif
 
 static void *alloc_percpu_area(int pages)
