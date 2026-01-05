@@ -16,6 +16,7 @@
 #include <asm/apic.h>
 #include <asm/idt.h>
 #include <asm/io.h>
+#include <x86gprintrin.h>
 
 #define PIT_FREQUENCY 1193182
 
@@ -24,16 +25,14 @@ u64 pit_read_ticks(void);
 
 static int hpet_enabled = 0;
 
-u64 rdtsc(void)
+static inline u64 tsc_read(void)
 {
-    unsigned long eax, edx;
-    __asm__ ("rdtsc" : "=a"(eax), "=d"(edx));
-    return ((u64)edx << 32) | eax;
+    return __rdtsc();
 }
 
 static struct clock_source tsc_clock = {
     .name = "tsc",
-    .read = rdtsc,
+    .read = tsc_read,
     .freq_hz = 0,
     .scale = { .mult = 0, .shift = 0 },
 };
@@ -122,10 +121,10 @@ static u64 calc_tsc_hz(void)
         return tsc_hz;
     }
 
-    u64 init_read = rdtsc();
+    u64 init_read = tsc_read();
     u64 ticks_in_10ms = 0;
     usleep(10000);
-    ticks_in_10ms = rdtsc() - init_read;
+    ticks_in_10ms = tsc_read() - init_read;
     return ticks_in_10ms * 100; // Convert to Hz
 }
 
@@ -133,7 +132,7 @@ void tsc_deadline_tick(unsigned long x)
 {
     // should calculate the next timer event to fire
     // for now, just set it to 1ms from now
-    u64 tsc_now = rdtsc();
+    u64 tsc_now = tsc_read();
     u64 tpm = READ_ONCE(ticks_per_ms);
     tsc_deadline_set(tsc_now + tpm);
 }
@@ -165,7 +164,7 @@ void x86_timer_init(void)
 
     tsc_clock.freq_hz = calc_tsc_hz();
     set_clock_scale(&tsc_clock);
-    boot_unix_time = rtc_init() - rdtsc() / tsc_clock.freq_hz;
+    boot_unix_time = rtc_init() - tsc_read() / tsc_clock.freq_hz;
 
     if (invariant_tsc()) {
         set_clock_source(&tsc_clock);

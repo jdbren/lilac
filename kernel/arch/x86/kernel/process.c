@@ -11,6 +11,7 @@
 #include <mm/page.h>
 #include <mm/kmalloc.h>
 #include <asm/regs.h>
+#include <asm/cpu.h>
 
 #include "paging.h"
 
@@ -270,7 +271,13 @@ void save_fp_regs(struct task *p)
         p->fp_regs = kzmalloc(512);
     if (!p->fp_regs)
         kerror("Out of memory allocating FP regs\n");
-    asm volatile("fxsave %0" : : "m" (*(char (*)[512])p->fp_regs) : "memory");
+#ifdef __x86_64__
+    __builtin_ia32_fxsave64(p->fp_regs);
+#else
+    __builtin_ia32_fxsave(p->fp_regs);
+#endif
+    // set TS flag
+    // write_cr0(read_cr0() | X86_CR0_TS);
 }
 
 void copy_fp_regs(struct task *dst, struct task *src)
@@ -287,7 +294,12 @@ void restore_fp_regs(struct task *p)
 {
     if (p->fp_regs == NULL)
         return;
-    asm volatile("fxrstor %0" : : "m" (*(const char (*)[512])p->fp_regs) : "memory");
+#ifdef __x86_64__
+    __builtin_ia32_fxrstor64(p->fp_regs);
+#else
+    __builtin_ia32_fxrstor(p->fp_regs);
+#endif
+    // asm ("clts");
 }
 
 __section(".sigtramp") __noreturn
