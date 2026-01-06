@@ -152,9 +152,9 @@ $(ARCH_GEN_INCLUDES_DIR):
 
 $(ARCH_GEN_INCLUDES_DIR)/%.s: $(ARCHDIR)/%.c | $(ARCH_GEN_INCLUDES_DIR)
 ifndef VERBOSE
-	@$(CC) -S -P -Iinclude -I$(ARCHDIR)/include -o $@ -ffreestanding $<
+	@$(CC) -S -P -Iinclude -I$(ARCHDIR)/include -o $@ -ffreestanding $< $(KERNEL_ARCH_CFLAGS)
 else
-	$(CC) -S -P -Iinclude -I$(ARCHDIR)/include -o $@ -ffreestanding $<
+	$(CC) -S -P -Iinclude -I$(ARCHDIR)/include -o $@ -ffreestanding $< $(KERNEL_ARCH_CFLAGS)
 endif
 
 $(ARCH_GEN_INCLUDES_DIR)/%.h: $(ARCH_GEN_INCLUDES_DIR)/%.s

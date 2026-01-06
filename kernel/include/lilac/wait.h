@@ -36,6 +36,7 @@ struct wq_entry {
 
 int sleep_on(struct waitqueue *wq);
 struct task * wake_first(struct waitqueue *wq);
+void wake_all(struct waitqueue *wq);
 
 void notify_parent(struct task *parent, struct task *child);
 

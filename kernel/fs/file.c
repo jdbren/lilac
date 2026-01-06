@@ -1,5 +1,6 @@
 #include <lilac/fs.h>
 #include <lilac/err.h>
+#include <lilac/log.h>
 #include <mm/kmalloc.h>
 
 struct file * alloc_file(struct dentry *d)
@@ -29,7 +30,9 @@ void fput(struct file *file)
     struct inode *inode = NULL;
     if (dentry)
         inode = dentry->d_inode;
-
+#ifdef DEBUG_VFS_FULL
+    klog(LOG_DEBUG, "fput: file = %p, count = %u\n", file, file->f_count - 1);
+#endif
     if (--file->f_count)
         return;
 

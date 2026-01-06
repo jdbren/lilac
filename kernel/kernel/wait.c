@@ -29,18 +29,28 @@ static inline void release_wq_entry(struct wq_entry *wait)
     kfree(wait);
 }
 
+static inline void __add_wait_entry(struct wq_entry *wait, struct waitqueue *wq)
+{
+    list_add_tail(&wait->entry, &wq->task_list);
+}
+
 static void add_wait_entry(struct wq_entry *wait, struct waitqueue *wq)
 {
     acquire_lock(&wq->lock);
-    list_add_tail(&wait->entry, &wq->task_list);
+    __add_wait_entry(wait, wq);
     release_lock(&wq->lock);
+}
+
+static inline void __remove_wait_entry(struct wq_entry *wait)
+{
+    list_del_init(&wait->entry);
 }
 
 static void remove_wait_entry(struct wq_entry *wait, struct waitqueue *wq)
 {
     if (!list_empty(&wait->entry)) {
         acquire_lock(&wq->lock);
-        list_del_init(&wait->entry);
+        __remove_wait_entry(wait);
         release_lock(&wq->lock);
     }
 }
@@ -209,6 +219,19 @@ struct task * wake_first(struct waitqueue *wq)
         set_task_running(task);
 
     return task;
+}
+
+void wake_all(struct waitqueue *wq)
+{
+    struct wq_entry *wait, *tmp;
+    klog(LOG_DEBUG, "Waking all tasks in waitqueue %p\n", wq);
+
+    acquire_lock(&wq->lock);
+    list_for_each_entry_safe(wait, tmp, &wq->task_list, entry) {
+        __remove_wait_entry(wait);
+        set_task_running(wait->task);
+    }
+    release_lock(&wq->lock);
 }
 
 void notify_parent(struct task *parent, struct task *child)

@@ -60,7 +60,9 @@ struct pipe_buf * create_pipe(size_t buf_size)
     p->n_readers = 1;
     p->n_writers = 1;
     p->files = 2;
-
+#ifdef DEBUG_PIPE
+    klog(LOG_DEBUG, "Pipe created successfully: %p\n", p);
+#endif
     return p;
 }
 
@@ -68,7 +70,9 @@ void destroy_pipe(struct pipe_buf *p)
 {
     if (!p)
         return;
-
+#ifdef DEBUG_PIPE
+    klog(LOG_DEBUG, "Destroying pipe %p\n", p);
+#endif
     if (p->p_inode)
         kfree(p->p_inode);
 
@@ -83,7 +87,6 @@ ssize_t pipe_read(struct file *f, void *buf, size_t count)
     if (count == 0 || !buf || !f)
         return 0;
 
-    klog(LOG_DEBUG, "pipe_read: Reading %lu bytes from pipe %p\n", count, f);
 
     struct pipe_buf *pipe = f->pipe;
     int pos, to_read;
@@ -92,6 +95,9 @@ ssize_t pipe_read(struct file *f, void *buf, size_t count)
         return -EIO;
     }
 
+#ifdef DEBUG_PIPE
+    klog(LOG_DEBUG, "pipe_read: Reading %lu bytes from pipe %p\n", count, pipe);
+#endif
     if (pipe->data_size == 0) {
         if (pipe->n_writers == 0) {
             klog(LOG_DEBUG, "pipe_read: No writers, returning 0 bytes\n");
@@ -119,19 +125,25 @@ ssize_t pipe_write(struct file *f, const void *buf, size_t count)
         return 0;
     struct pipe_buf *pipe = f->pipe;
     if (!pipe) {
-        klog(LOG_ERROR, "pipe_read: Invalid pipe buffer\n");
+        klog(LOG_ERROR, "pipe_write: Invalid pipe buffer\n");
         return -EIO;
     }
 
     if (pipe->n_readers == 0) {
         klog(LOG_WARN, "pipe_write: No readers, cannot write\n");
+        do_raise(current, SIGPIPE);
         return -EPIPE;
     }
-
-    klog(LOG_DEBUG, "pipe_write: Writing %lu bytes to pipe %p\n", count, f);
-
+#ifdef DEBUG_PIPE
+    klog(LOG_DEBUG, "pipe_write: Writing %lu bytes to pipe %p\n", count, pipe);
+#endif
     if (pipe->data_size == pipe->buf_size) {
         sleep_on(&pipe->write_wq);
+        if (pipe->n_readers == 0) {
+            klog(LOG_WARN, "pipe_write: No readers after wake, raising SIGPIPE\n");
+            do_raise(current, SIGPIPE);
+            return -EPIPE;
+        }
     }
 
     acquire_lock(&pipe->lock);
@@ -159,22 +171,25 @@ int pipe_close(struct inode *i, struct file *f)
     struct pipe_buf *p = f->pipe;
     acquire_lock(&p->lock);
 
-    if (f->f_mode & O_WRONLY) {
+    if ((f->f_mode & O_ACCMODE) == O_WRONLY) {
         p->n_writers--;
-    } else if (f->f_mode & O_RDONLY) {
+    } else if ((f->f_mode & O_ACCMODE) == O_RDONLY) {
         p->n_readers--;
+        if (p->n_readers == 0)
+            wake_all(&p->write_wq);
     } else {
-        klog(LOG_WARN, "pipe_close: Unknown pipe mode %o\n", f->f_mode);
+        klog(LOG_ERROR, "pipe_close: Unknown pipe mode %o\n", f->f_mode);
     }
 
-    if (--p->files == 0) {
-        destroy_pipe(p);
-        klog(LOG_DEBUG, "pipe_close: Pipe %p destroyed\n", p);
-        goto out;
-    }
-
+    p->files--;
     release_lock(&p->lock);
-out:
+
+    klog(LOG_DEBUG, "pipe_close: Closed pipe %p, remaining files: %u\n", p, p->files);
+
+    if (p->files == 0) {
+        destroy_pipe(p);
+    }
+
     f->pipe = NULL;
     return 0;
 }
@@ -197,8 +212,6 @@ SYSCALL_DECL1(pipe, int, pipefd[2])
         kfree(write_end);
         return -ENOMEM;
     }
-    fget(read_end);
-    fget(write_end);
 
     read_end->f_op = &pipe_fops;
     read_end->f_mode = O_RDONLY;
