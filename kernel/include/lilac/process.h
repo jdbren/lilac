@@ -95,8 +95,8 @@ struct task {
     struct fs_info fs;
     struct task_info info;
 
-    struct sighandlers *sighandlers;
-    struct sigpending pending;
+    struct sighandlers *sighand;
+    sigset_t pending;
     sigset_t blocked;
 
     struct tty *ctty;

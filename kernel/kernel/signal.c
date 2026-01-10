@@ -10,11 +10,13 @@
 #define TERM_SIG (_SIGHUP | _SIGINT | _SIGKILL | _SIGPIPE | _SIGALRM | _SIGTERM)
 #define CORE_SIG (_SIGQUIT | _SIGILL | _SIGABRT | _SIGSEGV | _SIGFPE)
 #define STOP_SIG (_SIGSTOP | _SIGTSTP | _SIGTTIN | _SIGTTOU)
+static const sigset_t unblockable = _SIGKILL | _SIGSTOP;
 
 int handle_signal(void)
 {
+    struct task *p = current;
     int sig;
-    sigset_t pending = current->pending.signal & ~current->blocked;
+    sigset_t pending = sig_get_active(p);
 
     if (pending == 0)
         return 0; // No pending unblocked signals
@@ -25,39 +27,39 @@ int handle_signal(void)
     else
         sig = __builtin_ffs(pending) - 1;
 
-    struct ksigaction *ka = &current->sighandlers->actions[sig];
-    int sig_bit = (1 << sig);
-    current->pending.signal &= ~sig_bit;
-    if (current->pending.signal == 0)
-        current->flags.sig_pending = 0;
+    struct ksigaction *ka = &p->sighand->actions[sig];
+    sigdelset(&p->pending, sig);
+    if (p->pending == 0)
+        p->flags.sig_pending = 0;
 
+    int sig_bit = (1 << sig);
     if (ka->sa.sa_handler == SIG_IGN) {
-        klog(LOG_WARN, "handle_signal: Signal %d ignored by process %d\n", sig, current->pid);
+        klog(LOG_WARN, "handle_signal: Signal %d ignored by process %d\n", sig, p->pid);
     } else if (ka->sa.sa_handler == SIG_DFL) {
         if (sig_bit & (TERM_SIG | CORE_SIG)) { // core dump not implemented
-            klog(LOG_INFO, "Process %d received termination signal %d, exiting\n", current->pid, sig);
-            current->exit_status = WSIGNALED(sig);
+            klog(LOG_INFO, "Process %d received termination signal %d, exiting\n", p->pid, sig);
+            p->exit_status = WSIGNALED(sig);
             do_exit();
         } else if (sig_bit & STOP_SIG) {
             klog(LOG_INFO, "handling stop signal %d\n", sig);
-            set_task_stopped(current);
-            current->exit_status = WSTOPPED(sig);
-            do_raise(current->parent, SIGCHLD);
-            current->flags.need_resched = 1;
+            set_task_stopped(p);
+            p->exit_status = WSTOPPED(sig);
+            do_raise(p->parent, SIGCHLD);
+            p->flags.need_resched = 1;
         } else if (sig_bit & _SIGCONT) {
-            klog(LOG_INFO, "Process %d received SIGCONT, continuing\n", current->pid);
+            klog(LOG_INFO, "Process %d received SIGCONT, continuing\n", p->pid);
         } else if (sig_bit & _SIGCHLD) {
             return 0; // Ignore SIGCHLD by default
         } else {
-            klog(LOG_WARN, "Unhandled signal %d in process %d\n", sig, current->pid);
+            klog(LOG_WARN, "Unhandled signal %d in process %d\n", sig, p->pid);
         }
     } else {
-        klog(LOG_DEBUG, "Delivering signal %d to process %d\n", sig, current->pid);
+        klog(LOG_DEBUG, "Delivering signal %d to process %d\n", sig, p->pid);
         arch_prepare_signal(ka->sa.sa_handler, sig);
-        current->blocked |= ka->sa.sa_mask;
+        p->blocked |= ka->sa.sa_mask;
         if (!(ka->sa.sa_flags & SA_NODEFER))
-            current->blocked |= sig_bit;
-        current->flags.signaled = 1;
+            p->blocked |= sig_bit;
+        p->flags.signaled = 1;
     }
 
     return 0;
@@ -79,8 +81,8 @@ int do_raise(struct task *p, int sig)
 #ifdef DEBUG_SIGNAL
     klog(LOG_DEBUG, "Raising signal %d for process %d\n", sig, p->pid);
 #endif
-    sigset_t pending = p->pending.signal;
-    struct ksigaction *ka = &p->sighandlers->actions[sig];
+    sigset_t pending = p->pending;
+    struct ksigaction *ka = &p->sighand->actions[sig];
 
     if (sig == SIGCONT && p->state == TASK_STOPPED) {
         klog(LOG_DEBUG, "Continuing stopped process %d due to SIGCONT\n", p->pid);
@@ -97,7 +99,7 @@ int do_raise(struct task *p, int sig)
         return PTR_ERR(SIG_IGN); // Ignored signal
     }
 
-    p->pending.signal |= (1 << sig);
+    sigaddset(&p->pending, sig);
     p->flags.sig_pending = 1;
 
     if (p->state == TASK_SLEEPING && !sigisblocked(p, sig)) {
@@ -174,7 +176,7 @@ SYSCALL_DECL2(signal, int, sig, __sighandler_t, handler)
         return -EINVAL;
     }
 
-    struct ksigaction *ka = &current->sighandlers->actions[sig];
+    struct ksigaction *ka = &current->sighand->actions[sig];
     __sighandler_t old_handler = ka->sa.sa_handler;
     ka->sa.sa_handler = handler;
 
@@ -196,7 +198,7 @@ SYSCALL_DECL3(sigaction, int, signum, const struct sigaction *, act, struct siga
         return -EFAULT;
     }
 
-    struct ksigaction *ka = &current->sighandlers->actions[signum];
+    struct ksigaction *ka = &current->sighand->actions[signum];
 
     if (oldact) {
         oldact->sa_handler = ka->sa.sa_handler;
@@ -231,7 +233,7 @@ SYSCALL_DECL3(sigprocmask, int, how, const sigset_t *, set, sigset_t *, oldset)
     }
 
     if (set) {
-        sigset_t new_mask = *set;
+        sigset_t new_mask = SIG_APPLY_MASK(*set, unblockable);
         switch (how) {
             case SIG_BLOCK:
                 current->blocked |= new_mask;
@@ -258,7 +260,7 @@ SYSCALL_DECL1(sigpending, sigset_t *, set)
         return -EFAULT;
     }
 
-    *set = current->pending.signal;
+    *set = current->pending;
     klog(LOG_DEBUG, "sigpending: Pending signals for process %d: 0x%lx\n", current->pid, *set);
     return 0;
 }
@@ -269,10 +271,11 @@ SYSCALL_DECL1(sigsuspend, sigset_t*, set)
         klog(LOG_WARN, "sigsuspend: Invalid user memory for pending signals\n");
         return -EFAULT;
     }
+    sigset_t newmask = SIG_APPLY_MASK(*set, unblockable);
 
     sigset_t oldmask = current->blocked;
-    klog(LOG_DEBUG, "sigsuspend: changing mask from %lx to %lx", oldmask, *set);
-    current->blocked = *set;
+    klog(LOG_DEBUG, "sigsuspend: changing mask from %lx to %lx", oldmask, newmask);
+    current->blocked = newmask;
 
     while (!current->flags.sig_pending) {
         current->state = TASK_SLEEPING;

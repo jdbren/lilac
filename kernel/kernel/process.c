@@ -351,7 +351,7 @@ struct task *init_process(void)
     this->info.argv[0] = strdup("init");
     this->info.envp = kcalloc(1, sizeof(char*));
     memcpy(this->name, "init", 5);
-    this->sighandlers = alloc_sighandlers();
+    this->sighand = alloc_sighandlers();
     INIT_LIST_HEAD(&this->children);
     hash_add(pid_table, &this->pid_hash, this->pid);
     hash_add(pgid_table, &this->pgid_hash, this->pgid);
@@ -422,9 +422,9 @@ static struct task * clone_process(struct task *parent)
     fget(child->info.exec_file);
     copy_fs_info(&child->fs, &parent->fs);
 
-    child->sighandlers = alloc_sighandlers();
-    copy_sighandlers(child->sighandlers, parent->sighandlers);
-    child->pending = (struct sigpending){0};
+    child->sighand = alloc_sighandlers();
+    copy_sighandlers(child->sighand, parent->sighand);
+    child->pending = 0;
 
     strncat(child->name, " (fork)", 31);
     return child;
@@ -470,8 +470,8 @@ static void exec_and_return(void)
     task->state = TASK_RUNNING;
     // Reset custom signal handlers to default
     for (int i = 0; i < _NSIG; i++) {
-        if ((long)task->sighandlers->actions[i].sa.sa_handler > (long)SIG_IGN) {
-            task->sighandlers->actions[i].sa.sa_handler = SIG_DFL;
+        if ((long)task->sighand->actions[i].sa.sa_handler > (long)SIG_IGN) {
+            task->sighand->actions[i].sa.sa_handler = SIG_DFL;
         }
     }
 
@@ -631,7 +631,7 @@ void cleanup_task(struct task *p)
     cleanup_task_info(&p->info);
     cleanup_files(&p->fs);
     cleanup_memory(p->mm);
-    put_sighandlers(p->sighandlers);
+    put_sighandlers(p->sighand);
 }
 
 void reap_task(struct task *p)

@@ -195,7 +195,7 @@ int tty_release(struct inode *inode, struct file *file)
 static inline int is_ignored(int sig)
 {
     return sigisblocked(current, sig) ||
-        (current->sighandlers->actions[sig].sa.sa_handler == SIG_IGN);
+        (current->sighand->actions[sig].sa.sa_handler == SIG_IGN);
 }
 
 /**

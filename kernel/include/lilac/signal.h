@@ -90,6 +90,15 @@ struct task;
 
 #define sigisblocked(t, sig) ((t)->blocked & (1 << (sig)))
 #define sigispending(t) ((t)->flags.sig_pending)
+#define sigaddset(set, sig) (*(set) |= (1 << (sig)))
+#define sigdelset(set, sig) (*(set) &= ~(1 << (sig)))
+#define sigemptyset(set) (*(set) = 0)
+#define sigfillset(set) (*(set) = ~0UL)
+#define sigismember(set, sig) ((*(set) & (1 << (sig))) != 0)
+
+#define SIG_APPLY_MASK(set, mask) ((set) & ~(mask))
+
+#define sig_get_active(t) SIG_APPLY_MASK(t->pending, t->blocked)
 
 int do_raise(struct task *p, int sig);
 int handle_signal(void);

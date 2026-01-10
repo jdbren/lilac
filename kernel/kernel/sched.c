@@ -38,7 +38,7 @@ struct task __rootp = {
     .ppid = 0,
     .lock = SPINLOCK_INIT,
     .mm = &root_mm,
-    .sighandlers = &root_sighand,
+    .sighand = &root_sighand,
 };
 
 static struct mm_info __idle_mm[CONFIG_MAX_CPUS];
@@ -51,7 +51,7 @@ static struct task __idle_tasks[CONFIG_MAX_CPUS] = {
         .pid = 0,
         .ppid = 0,
         .lock = SPINLOCK_INIT,
-        .sighandlers = &root_sighand,
+        .sighand = &root_sighand,
     }
 };
 
