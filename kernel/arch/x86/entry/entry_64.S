@@ -58,6 +58,7 @@ syscall_entry:
 	call *%rax
 
 .bad_syscall:
+	mov  %rax, RAX(%rsp) # Update saved regs with return value
 	push %rax
 	call x86_kernel_exit
 	pop  %r12 # orignal return value

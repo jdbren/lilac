@@ -39,7 +39,13 @@ int handle_signal(void)
             current->exit_status = WSIGNALED(sig);
             do_exit();
         } else if (sig_bit & STOP_SIG) {
-            klog(LOG_WARN, "signal: stop signal %d not implemented", sig);
+            klog(LOG_INFO, "handling stop signal %d\n", sig);
+            set_task_stopped(current);
+            current->exit_status = WSTOPPED(sig);
+            do_raise(current->parent, SIGCHLD);
+            current->flags.need_resched = 1;
+        } else if (sig_bit & _SIGCONT) {
+            klog(LOG_INFO, "Process %d received SIGCONT, continuing\n", current->pid);
         } else if (sig_bit & _SIGCHLD) {
             return 0; // Ignore SIGCHLD by default
         } else {
@@ -60,9 +66,8 @@ int handle_signal(void)
 SYSCALL_DECL0(sigreturn)
 {
     klog(LOG_DEBUG, "sigreturn called by process %d\n", current->pid);
-    arch_restore_post_signal();
     current->flags.signaled = 1;
-    return 0;
+    return arch_restore_post_signal();
 }
 
 int do_raise(struct task *p, int sig)
@@ -77,6 +82,11 @@ int do_raise(struct task *p, int sig)
     sigset_t pending = p->pending.signal;
     struct ksigaction *ka = &p->sighandlers->actions[sig];
 
+    if (sig == SIGCONT && p->state == TASK_STOPPED) {
+        klog(LOG_DEBUG, "Continuing stopped process %d due to SIGCONT\n", p->pid);
+        set_task_running(p);
+    }
+
     if (sig & pending) {
         klog(LOG_DEBUG, "Signal %d already pending for process %d\n", sig, p->pid);
         return 0; // Signal already pending
@@ -90,7 +100,7 @@ int do_raise(struct task *p, int sig)
     p->pending.signal |= (1 << sig);
     p->flags.sig_pending = 1;
 
-    if (p->state == TASK_SLEEPING && !signal_blocked(p, sig)) {
+    if (p->state == TASK_SLEEPING && !sigisblocked(p, sig)) {
         klog(LOG_DEBUG, "Waking up process %d for signal %d\n", p->pid, sig);
         p->flags.interrupted = 1;
         set_task_running(p);

@@ -192,12 +192,70 @@ int tty_release(struct inode *inode, struct file *file)
     return 0;
 }
 
+static inline int is_ignored(int sig)
+{
+    return sigisblocked(current, sig) ||
+        (current->sighandlers->actions[sig].sa.sa_handler == SIG_IGN);
+}
+
+/**
+ *	__tty_check_change	-	check for POSIX terminal changes
+ *	@tty: tty to check
+ *	@sig: signal to send
+ *
+ *	If we try to write to, or set the state of, a terminal and we're
+ *	not in the foreground, send a SIGTTOU.  If the signal is blocked or
+ *	ignored, go ahead and perform the operation.  (POSIX 7.2)
+ *
+ *	Locking: ctrl.lock
+ */
+int __tty_check_change(struct tty *tty, int sig)
+{
+    unsigned long flags;
+    int ret = 0;
+
+    if (current->ctty != tty)
+        return 0;
+
+    int pgrp = current->pgid;
+
+    // spin_lock_irqsave(&tty->ctrl.lock, flags);
+    acquire_lock(&tty->ctrl.lock);
+    int tty_pgrp = tty->ctrl.pgrp;
+    release_lock(&tty->ctrl.lock);
+    // spin_unlock_irqrestore(&tty->ctrl.lock, flags);
+
+    if (tty_pgrp && pgrp != tty_pgrp) {
+        if (is_ignored(sig)) {
+            if (sig == SIGTTIN)
+                ret = -EIO;
+        } // TODO
+        /*else if (is_current_pgrp_orphaned()) {
+            ret = -EIO;
+        }*/ else {
+            kill_pgrp(pgrp, sig);
+            // set_thread_flag(TIF_SIGPENDING);
+            ret = -ERESTART;
+        }
+    }
+
+    if (!tty_pgrp)
+        klog(LOG_WARN, "tty %p, sig=%d, tty->pgrp == NULL!\n", tty, sig);
+
+    return ret;
+}
+
+
 ssize_t tty_read(struct file *f, void *buf, size_t count)
 {
     struct tty *tty = file_get_tty(f);
 
     if (!tty || !tty->ldisc_ops->read)
         return -EIO;
+
+    int ret = __tty_check_change(tty, SIGTTIN);
+    if (ret < 0)
+        return ret;
 
     return tty->ldisc_ops->read(tty, f, buf, count, f->f_pos);
 }
@@ -209,7 +267,13 @@ ssize_t tty_write(struct file *f, const void *buf, size_t count)
     if (!tty || !tty->ldisc_ops->write)
         return -EIO;
 
-    return tty->ldisc_ops->write(tty, NULL, buf, count);
+    if (L_TOSTOP(tty)) {
+        int ret = __tty_check_change(tty, SIGTTOU);
+        if (ret < 0)
+            return ret;
+    }
+
+    return tty->ldisc_ops->write(tty, f, buf, count);
 }
 
 

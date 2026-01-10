@@ -354,7 +354,7 @@ void arch_prepare_signal(void *pc, int signo)
     regs->sp = (uintptr_t)ustack;
 }
 
-void arch_restore_post_signal(void)
+long arch_restore_post_signal(void)
 {
     struct regs_state *regs = (struct regs_state*)current->regs;
     uintptr_t *stack = (uintptr_t*)regs->sp;
@@ -369,4 +369,5 @@ void arch_restore_post_signal(void)
     // Restore registers from user stack
     memcpy(regs, stack, sizeof(struct regs_state));
     klog(LOG_DEBUG, "Post signal restored regs: ip=%lx sp=%lx\n", regs->ip, regs->sp);
+    return regs->ax; // original return value
 }

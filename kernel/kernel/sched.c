@@ -182,6 +182,20 @@ void set_task_running(struct task *p)
     release_lock(&p->lock);
 }
 
+void set_task_stopped(struct task *p)
+{
+    struct rq *rq = cpu_rq(p->cpu);
+    acquire_lock(&p->lock);
+    acquire_lock(&rq->lock);
+    if (p->on_rq)
+        __rq_del(rq, p);
+    p->state = TASK_STOPPED;
+    p->flags.state_change = 1;
+    klog(LOG_DEBUG, "Task %d is now stopped\n", p->pid);
+    release_lock(&rq->lock);
+    release_lock(&p->lock);
+}
+
 void set_task_sleeping(struct task *p)
 {
     struct rq *rq = cpu_rq(p->cpu);
@@ -226,6 +240,7 @@ void set_current_state(u8 state)
             break;
         case TASK_ZOMBIE:
             current->state = TASK_ZOMBIE;
+            current->flags.state_change = 1;
             if (current->on_rq)
                 rq_del(current);
             break;

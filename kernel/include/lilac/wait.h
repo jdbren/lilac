@@ -19,6 +19,7 @@
 #define WEXITED(exitval) (exitval << 8)
 #define WSIGNALED(sig) (sig & 0x7f)
 #define WSTOPPED(sig) (SSTOPPED | ((sig & 0x7f) << 8))
+#define WCOREDUMP(sig) ((sig & 0x7f) | SCORE)
 
 
 struct waitqueue {

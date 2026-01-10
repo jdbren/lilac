@@ -3,7 +3,7 @@
 
 #include <lib/list.h>
 #include <user/signal-defs.h>
-#include <lilac/signo.h>
+#include <user/signo.h>
 // #include <user/siginfo.h>
 
 #define _SIGHUP		(1 << SIGHUP)
@@ -88,8 +88,8 @@ typedef struct ucontext {
 
 struct task;
 
-#define signal_blocked(t, sig) ((t)->blocked & (1 << (sig)))
-#define signal_pending(t) ((t)->flags.sig_pending)
+#define sigisblocked(t, sig) ((t)->blocked & (1 << (sig)))
+#define sigispending(t) ((t)->flags.sig_pending)
 
 int do_raise(struct task *p, int sig);
 int handle_signal(void);

@@ -424,6 +424,7 @@ static struct task * clone_process(struct task *parent)
 
     child->sighandlers = alloc_sighandlers();
     copy_sighandlers(child->sighandlers, parent->sighandlers);
+    child->pending = (struct sigpending){0};
 
     strncat(child->name, " (fork)", 31);
     return child;
@@ -467,6 +468,12 @@ static void exec_and_return(void)
     task->kstack = (void*)INIT_STACK(mem->kstack);
     task->pc = (uintptr_t)start_process;
     task->state = TASK_RUNNING;
+    // Reset custom signal handlers to default
+    for (int i = 0; i < _NSIG; i++) {
+        if ((long)task->sighandlers->actions[i].sa.sa_handler > (long)SIG_IGN) {
+            task->sighandlers->actions[i].sa.sa_handler = SIG_DFL;
+        }
+    }
 
     jump_new_proc(task);
     panic("exec_and_return: Should never be reached\n");

@@ -37,6 +37,7 @@ syscall_handler:
 	xor  %ebp, %ebp
 	call *%eax
 .bad_syscall:
+	mov  %eax, EAX(%esp) # Update saved regs with return value
 	push %eax
 	call x86_kernel_exit
 	pop  %eax

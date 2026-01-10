@@ -24,6 +24,7 @@ void sched_post_switch_unlock(void);
 void rq_add(struct task *p);
 void rq_del(struct task *p);
 void set_task_running(struct task *p);
+void set_task_stopped(struct task *p);
 void set_task_sleeping(struct task *p);
 void set_current_state(u8 state);
 
