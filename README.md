@@ -1,6 +1,6 @@
 # LILAC OS
 
-https://github.com/user-attachments/assets/186bfa01-bcdb-4158-8105-13598781cb6f
+https://github.com/user-attachments/assets/acd1639e-30f1-4e09-84ad-2e75e0c77be9
 
 Updated 3/31/25 -
 Running in long mode (x86_64) is now supported. I have ported the newlib
