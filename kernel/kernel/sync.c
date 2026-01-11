@@ -19,7 +19,7 @@ void sem_wait(sem_t *sem)
 {
     while (1) {
         while (likely(atomic_load_explicit(&sem->count, memory_order_acquire) < 1))
-            pause();
+            __pause();
         int tmp = atomic_fetch_add_explicit(&sem->count, -1, memory_order_acq_rel);
         if (likely(tmp >= 1))
             break;

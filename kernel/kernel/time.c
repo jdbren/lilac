@@ -1,8 +1,10 @@
 #include <lilac/time.h>
 #include <lilac/timer.h>
+#include <lilac/timer_event.h>
 #include <lilac/syscall.h>
 #include <lilac/log.h>
 #include <lilac/sched.h>
+#include <lilac/percpu.h>
 #include <lilac/uaccess.h>
 
 static void nop(unsigned long x) {}
@@ -12,6 +14,15 @@ s64 boot_unix_time = 0;
 atomic_uint time_seq = 0;
 u64 system_time_base_ns = 0;
 static spinlock_t clock_write_lock = SPINLOCK_INIT;
+
+DEFINE_PER_CPU(struct rb_root_cached, timer_event_tree) = RB_ROOT_CACHED;
+
+bool timer_ev_less(struct rb_node *a, const struct rb_node *b)
+{
+    struct timer_event *eva = rb_entry(a, struct timer_event, node);
+    struct timer_event *evb = rb_entry(b, struct timer_event, node);
+    return eva->expires < evb->expires;
+}
 
 void set_clock_source(struct clock_source *clock)
 {
@@ -46,12 +57,13 @@ void timer_init(void)
 void timer_tick(void)
 {
     handle_tick(1000);
+    timer_ev_tick();
     sched_tick();
 }
 
 s64 get_unix_time(void)
 {
-    return boot_unix_time + get_sys_time_ns() / 1'000'000'000ull;
+    return boot_unix_time + get_sys_time_ns() / NS_PER_SEC;
 }
 
 // Get system timer in 1 ns intervals
@@ -102,27 +114,122 @@ SYSCALL_DECL2(gettimeofday, struct timeval*, tv, struct timezone*, tz)
     return 0;
 }
 
+
+static void timer_ev_enqueue(struct timer_event *ev, struct task *p)
+{
+    struct rb_root_cached *root = get_cpu_var(timer_event_tree);
+    timer_ev_add(ev, root);
+    list_add_tail(&ev->task_list, &p->timer_ev_list);
+}
+
+static void timer_ev_dequeue(struct timer_event *ev)
+{
+    struct rb_root_cached *root = get_cpu_var(timer_event_tree);
+    timer_ev_del(ev, root);
+    list_del(&ev->task_list);
+}
+
+void timer_ev_tick(void)
+{
+    u64 now_ns = get_sys_time_ns();
+    struct rb_root_cached *root = get_cpu_var(timer_event_tree);
+    struct rb_node *node;
+
+    while ((node = root->rb_leftmost) != NULL) {
+        struct timer_event *ev = rb_entry(node, struct timer_event, node);
+        if (ev->expires > now_ns)
+            break;
+
+        timer_ev_dequeue(ev);
+        ev->callback(ev);
+    }
+}
+
+static void sleep_ev_callback(struct timer_event *ev)
+{
+    set_task_running((struct task*)ev->context);
+}
+
+void busy_wait_usec(u32 micros)
+{
+    u64 start = get_sys_time_ns();
+    u64 end = start + (u64)micros * 1000;
+    while (get_sys_time_ns() < end)
+        __pause();
+}
+
 __attribute__((optimize("O0")))
 void usleep(u32 micros)
 {
-    // Get current time
     u64 start = get_sys_time_ns();
     u64 end = start + (u64)micros * 1000;
-    // if (end - start > 100000) {
-    //     yield();
-    // }
-    while (get_sys_time_ns() < end) {
-        pause();
+    if (micros >= 1000) {
+        struct timer_event ev;
+        ev.expires = end;
+        ev.callback = sleep_ev_callback;
+        ev.context = (void *)current;
+
+        set_task_sleeping(current);
+        timer_ev_enqueue(&ev, current);
+        schedule();
+    } else {
+        while (get_sys_time_ns() < end)
+            __pause();
     }
 }
 
 SYSCALL_DECL2(nanosleep, const struct timespec*, duration, struct timespec*, rem)
 {
-    u64 total_ns = duration->tv_sec * 1'000'000'000ull + duration->tv_nsec;
+    u64 total_ns = duration->tv_sec * NS_PER_SEC + duration->tv_nsec;
     usleep(total_ns / 1000);
     return 0;
 }
 
+static void alarm_handler(struct timer_event *ev)
+{
+    do_raise((struct task *)ev->context, SIGALRM);
+    kfree(ev);
+}
+
+static unsigned int alarm_cancel(struct task *p, u64 now_ns)
+{
+    unsigned int sec_remaining = 0;
+    struct timer_event *ev, *tmp;
+    list_for_each_entry_safe(ev, tmp, &p->timer_ev_list, task_list) {
+        if (ev->callback == alarm_handler) {
+            sec_remaining = ev->expires > now_ns ?
+                (unsigned int)((ev->expires - now_ns) / NS_PER_SEC) : 0;
+            timer_ev_dequeue(ev);
+            kfree(ev);
+            break;
+        }
+    }
+    return sec_remaining;
+}
+
+SYSCALL_DECL1(alarm, unsigned int, seconds)
+{
+    struct task *p = current;
+    struct timer_event *ev;
+    u64 now = get_sys_time_ns();
+    u64 exp = now + (u64)seconds * NS_PER_SEC;
+
+    klog(LOG_DEBUG, "Process %d set alarm for %u seconds\n", p->pid, seconds);
+
+    unsigned int rem = alarm_cancel(p, now);
+    if (!seconds)
+        return rem;
+
+    ev = kmalloc(sizeof(*ev));
+    if (!ev)
+        return -ENOMEM;
+    ev->expires = exp;
+    ev->callback = alarm_handler;
+    ev->context = p;
+
+    timer_ev_enqueue(ev, p);
+    return rem;
+}
 
 
 static int is_leap_year(int year) {

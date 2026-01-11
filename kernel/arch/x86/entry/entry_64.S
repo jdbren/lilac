@@ -61,7 +61,7 @@ syscall_entry:
 	mov  %rax, RAX(%rsp) # Update saved regs with return value
 	push %rax
 	call x86_kernel_exit
-	pop  %r12 # orignal return value
+	pop  %r12 # original return value
 	test %rax,%rax
 
 	# reset interrupt stack

@@ -72,6 +72,8 @@ syscall_table:
 	sc_tbl_entry unlink		# 49
 	sc_tbl_entry symlink	# 50
 	sc_tbl_entry readlink	# 51
+	sc_tbl_entry alarm		# 52
+	sc_tbl_entry pause		# 53
 /*
 	sc_tbl_entry chmod		# 30
 	sc_tbl_entry chown		# 31

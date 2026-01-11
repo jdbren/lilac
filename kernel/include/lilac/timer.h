@@ -32,11 +32,15 @@ void timer_init(void);
 void timer_tick_init(void); // arch
 void timer_tick(void);
 
+void busy_wait_usec(u32 micros);
 void usleep(u32 micros);
 u64 get_sys_time_ns(void);
 s64 get_unix_time(void);
 struct timestamp get_timestamp(void);
 
+#define NS_PER_SEC 1'000'000'000ull
+#define NS_PER_MS 1'000'000ull
+#define NS_PER_US 1000ull
 #define TIME_FORMAT "%04u/%02u/%02u %02u:%02u:%02u"
 
 extern s64 boot_unix_time;

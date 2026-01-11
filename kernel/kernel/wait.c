@@ -149,32 +149,54 @@ static struct task * find_stopped_child(struct task *parent, int pid)
     return NULL;
 }
 
+static pid_t handle_exited_child(struct task *child, int *status)
+{
+    pid_t child_pid = child->pid;
+    if (status) {
+        *status = child->exit_status;
+        klog(LOG_DEBUG, "wait_any: Child %d exited with status %d\n", child_pid, *status);
+    }
+    reap_task(child);
+    kfree(child);
+    return child_pid;
+}
+
+static pid_t handle_stopped_child(struct task *child, int *status)
+{
+    klog(LOG_DEBUG, "wait_any: Child %d has stopped\n", child->pid);
+    if (status)
+        *status = child->exit_status;
+    return child->pid;
+}
+
+static pid_t check_children(int *status, bool wait_stopped)
+{
+    struct task *child = find_exited_child(current, WAIT_ANY);
+    if (child)
+        return handle_exited_child(child, status);
+
+    if (wait_stopped) {
+        child = find_stopped_child(current, WAIT_ANY);
+        if (child)
+            return handle_stopped_child(child, status);
+    }
+
+    return 0;
+}
+
 static pid_t wait_any(int *status, bool nohang, bool wait_stopped)
 {
+    pid_t result;
+
     if (list_empty(&current->children)) {
         klog(LOG_DEBUG, "Process %d has no children to wait for\n", current->pid);
         return -ECHILD;
     }
-    struct task *child = find_exited_child(current, WAIT_ANY);
-    if (child) {
-        pid_t child_pid = child->pid;
-        if (status) {
-            *status = child->exit_status;
-            klog(LOG_DEBUG, "wait_any: Child %d exited with status %d\n", child_pid, *status);
-        }
-        reap_task(child);
-        kfree(child);
-        return child_pid;
-    }
-    if (wait_stopped) {
-        child = find_stopped_child(current, WAIT_ANY);
-        if (child) {
-            klog(LOG_DEBUG, "wait_any: Child %d has stopped\n", child->pid);
-            if (status)
-                *status = child->exit_status;
-            return child->pid;
-        }
-    }
+
+    // Check if any child has already exited or stopped
+    result = check_children(status, wait_stopped);
+    if (result != 0)
+        return result;
 
     if (nohang)
         return 0;
@@ -183,26 +205,10 @@ static pid_t wait_any(int *status, bool nohang, bool wait_stopped)
     current->waiting_any = true;
     sleep_task_on(current, &wait_q, NULL);
 
-    // After being woken up, check for exited children again
-    child = find_exited_child(current, WAIT_ANY);
-    if (child) {
-        pid_t child_pid = child->pid;
-        if (status)
-            *status = child->exit_status;
-        reap_task(child);
-        kfree(child);
-        return child_pid;
-    }
-
-    if (wait_stopped) {
-        child = find_stopped_child(current, WAIT_ANY);
-        if (child) {
-            klog(LOG_DEBUG, "wait_any: Child %d has stopped\n", child->pid);
-            if (status)
-                *status = child->exit_status;
-            return child->pid;
-        }
-    }
+    // After being woken up, check for exited or stopped children again
+    result = check_children(status, wait_stopped);
+    if (result != 0)
+        return result;
 
     if (!list_empty(&current->children)) {
         klog(LOG_INFO, "wait_any: No child has exited after being woken up, returning -EINTR\n");

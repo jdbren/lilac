@@ -94,7 +94,7 @@ __noreturn
 void ap_startup(int id)
 {
     while (!bspdone)
-        pause();
+        __pause();
 
     load_idt();
     ap_gdt_init(id);

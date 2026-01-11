@@ -65,6 +65,15 @@ int handle_signal(void)
     return 0;
 }
 
+SYSCALL_DECL0(pause)
+{
+    klog(LOG_DEBUG, "Process %d called pause\n", current->pid);
+    set_task_sleeping(current);
+    while (!current->flags.sig_pending)
+        yield();
+    return -EINTR;
+}
+
 SYSCALL_DECL0(sigreturn)
 {
     klog(LOG_DEBUG, "sigreturn called by process %d\n", current->pid);

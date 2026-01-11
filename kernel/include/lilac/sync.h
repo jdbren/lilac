@@ -16,16 +16,16 @@ typedef volatile atomic_flag spinlock_t;
 #define SPINLOCK_INIT ATOMIC_FLAG_INIT
 
 #ifdef __x86_64__
-#define pause __builtin_ia32_pause
+#define __pause __builtin_ia32_pause
 #else
-#define pause __builtin_ia32_pause
+#define __pause __builtin_ia32_pause
 #endif
 
 #define spin_lock_init(spin) atomic_flag_clear_explicit(spin, memory_order_relaxed);
 
 #define acquire_lock(spin) do { \
     while(atomic_flag_test_and_set_explicit(spin, memory_order_acquire)) \
-        pause(); \
+        __pause(); \
 } while (0)
 
 #define release_lock(spin) atomic_flag_clear_explicit(spin, memory_order_release)

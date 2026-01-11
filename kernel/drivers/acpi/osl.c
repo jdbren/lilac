@@ -126,7 +126,7 @@ void AcpiOsSleep(UINT64 Milliseconds)
 
 void AcpiOsStall(UINT32 Microseconds)
 {
-    usleep(Microseconds);
+    busy_wait_usec(Microseconds);
 }
 
 void AcpiOsWaitEventsComplete(void) {}

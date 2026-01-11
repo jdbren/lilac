@@ -92,7 +92,7 @@ static unsigned long apic_get_timer_hz(void)
     write_reg(APIC_TIMER_DIV, 0b1011);
     write_reg(APIC_LVT_TIMER, APIC_LVT_MASKED);
     write_reg(APIC_TIMER_INIT, 0xFFFFFFFF); // Set the timer to the maximum value
-    usleep(10000);
+    busy_wait_usec(10000);
     ticks_in_10ms = 0xFFFFFFFF - read_reg(APIC_TIMER_CURR); // Read the current timer value
     return (ticks_in_10ms * 100); // Convert to Hz (10ms)
 }
@@ -194,23 +194,23 @@ int ap_init(void)
 
         timeout = 100000;
         do {
-            pause();
+            __pause();
         } while ((*ipi_data & (1 << 12)) && timeout--);
         if (timeout <= 0)
             klog(LOG_WARN, "INIT IPI delivery stuck for CPU %d\n", id);
 
-        usleep(10000);                                      // wait 10ms
+        busy_wait_usec(10000);                                      // wait 10ms
 
         // send STARTUP IPI
         *((volatile u32*)(base + 0x280)) = 0;
         for (int j = 0; j < 2; j++) {
             *ap_select = (*ap_select & 0x00ffffff) | (id << 24);
             *ipi_data = (*ipi_data & 0xfff0f800) | 0x000608;    // STARTUP IPI
-            usleep(200);                                        // wait 200 usec
+            busy_wait_usec(200);                                        // wait 200 usec
 
             timeout = 100000;
             while ((*ipi_data & (1 << 12)) && timeout--)
-                pause();
+                __pause();
             if (running + 1 == atomic_load(&aprunning))
                 break; // AP started
             if (timeout <= 0) klog(LOG_WARN, "SIPI %d delivery stuck for CPU %d\n", j+1, id);
@@ -225,7 +225,7 @@ next:
     asm volatile ("mfence" ::: "memory");
     timeout = 5000000;
     while (atomic_load(&aprunning) < ncpus - 1 && timeout--)
-        pause();
+        __pause();
     bspdone = 1;
 
     kstatus(STATUS_OK, "APs running: %d\n", aprunning);

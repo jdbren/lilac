@@ -123,7 +123,7 @@ static u64 calc_tsc_hz(void)
 
     u64 init_read = tsc_read();
     u64 ticks_in_10ms = 0;
-    usleep(10000);
+    busy_wait_usec(10000);
     ticks_in_10ms = tsc_read() - init_read;
     return ticks_in_10ms * 100; // Convert to Hz
 }

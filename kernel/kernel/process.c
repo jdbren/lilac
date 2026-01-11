@@ -353,9 +353,11 @@ struct task *init_process(void)
     memcpy(this->name, "init", 5);
     this->sighand = alloc_sighandlers();
     INIT_LIST_HEAD(&this->children);
+    INIT_LIST_HEAD(&this->sibling);
     hash_add(pid_table, &this->pid_hash, this->pid);
     hash_add(pgid_table, &this->pgid_hash, this->pgid);
     hash_add(sid_table, &this->sid_hash, this->sid);
+    INIT_LIST_HEAD(&this->timer_ev_list);
 
     return this;
 }
@@ -425,6 +427,8 @@ static struct task * clone_process(struct task *parent)
     child->sighand = alloc_sighandlers();
     copy_sighandlers(child->sighand, parent->sighand);
     child->pending = 0;
+
+    INIT_LIST_HEAD(&child->timer_ev_list);
 
     strncat(child->name, " (fork)", 31);
     return child;
