@@ -4,6 +4,7 @@
 #include <lilac/config.h>
 #include <lilac/libc.h>
 #include <lilac/log.h>
+#include <lilac/panic.h>
 #include <acpi/madt.h>
 #include <mm/kmalloc.h>
 #include <mm/kmm.h>
@@ -57,9 +58,19 @@ static inline u32 read_reg(const u8 offset)
 void ioapic_init(struct ioapic *ioapic, struct int_override *over, u8 num_over)
 {
     pic_disable();
+
+    while (ioapic->next && ioapic->gsi_base != 0)
+        ioapic = ioapic->next;
+
     ioapic_base = (uintptr_t)map_phys((void*)(uintptr_t)ioapic->address, PAGE_SIZE,
         MEM_PF_UC | MEM_PF_WRITE);
     ioapic_gsi_base = ioapic->gsi_base;
+
+    klog(LOG_INFO, "IOAPIC ID: %u, Version: 0x%02x, GSI base: %u\n",
+        read_reg(IOAPIC_ID) >> 24,
+        read_reg(IOAPIC_VER) & 0xFF,
+        ioapic->gsi_base);
+
     num_overrides = num_over;
     overrides = kcalloc(num_over, sizeof(struct int_override));
     if (!overrides) {
@@ -68,14 +79,21 @@ void ioapic_init(struct ioapic *ioapic, struct int_override *over, u8 num_over)
     }
     for (int i = 0; i < num_over; over = over->next, i++) {
         memcpy(overrides + i, over, sizeof(struct int_override));
-        overrides[i].next = 0;
+        overrides[i].next = NULL;
     }
     kstatus(STATUS_OK, "IOAPIC initialized\n");
 }
 
 void ioapic_entry(u8 irq, u8 vector, u8 flags, u8 dest)
 {
-    irq = get_redir_num(irq);
+    u8 gsi = get_redir_num(irq);
+
+    if (gsi < ioapic_gsi_base) {
+        panic("IOAPIC: GSI %u < base %u (irq=%u)\n", gsi, ioapic_gsi_base, irq);
+    }
+
+    u8 pin = gsi - ioapic_gsi_base;
+
     redir_entry_t entry = {
         .vector = vector,
         .flags = flags,
@@ -88,6 +106,6 @@ void ioapic_entry(u8 irq, u8 vector, u8 flags, u8 dest)
     klog(LOG_DEBUG, "IOAPIC entry: irq %d, vector %d, flags %d, dest %d\n",
         irq, entry.vector, entry.flags, entry.dest);
 #endif
-    write_reg(IOAPIC_REDTBL(irq), *(u32*)&entry);
-    write_reg(IOAPIC_REDTBL(irq) + 1, *((u32*)&entry + 1));
+    write_reg(IOAPIC_REDTBL(pin), *(u32*)&entry);
+    write_reg(IOAPIC_REDTBL(pin) + 1, *((u32*)&entry + 1));
 }

@@ -98,31 +98,6 @@ static int sleep_task_on(struct task *p, struct waitqueue *wq, wq_wake_func_t ca
     return finish_wait(wq, wait);
 }
 
-static pid_t wait_for(struct task *p, int *status, bool nohang)
-{
-    if (p->state != TASK_ZOMBIE) {
-        if (nohang) {
-            klog(LOG_DEBUG, "Task %d has not exited yet, returning immediately\n", p->pid);
-            return 0;
-        }
-        klog(LOG_DEBUG, "Process %d: Waiting for task %d\n", get_pid(), p->pid);
-        p->parent_wait = true;
-        sleep_task_on(current, &wait_q, NULL);
-    }
-
-    pid_t pid = p->pid;
-    if (p->state != TASK_ZOMBIE) {
-        klog(LOG_INFO, "Task %d has not exited yet after being woken up\n", pid);
-        return -EINTR;
-    }
-
-    if (status)
-        *status = p->exit_status;
-    reap_task(p);
-    klog(LOG_DEBUG, "Task %d has exited, continuing task %d\n", pid, get_pid());
-    kfree(p);
-    return pid;
-}
 
 static struct task * find_exited_child(struct task *parent, int pid)
 {
@@ -169,6 +144,44 @@ static pid_t handle_stopped_child(struct task *child, int *status)
     return child->pid;
 }
 
+static pid_t wait_for(struct task *p, int *status, bool nohang, bool wait_stopped)
+{
+    u8 state = READ_ONCE(p->state);
+
+    if (state == TASK_ZOMBIE) {
+        return handle_exited_child(p, status);
+    } else if (state == TASK_STOPPED && wait_stopped) {
+        return handle_stopped_child(p, status);
+    }
+
+    if (nohang) {
+        klog(LOG_DEBUG, "Task %d has not exited yet, returning immediately\n", p->pid);
+        return 0;
+    }
+
+    klog(LOG_DEBUG, "Process %d: Waiting for task %d\n", get_pid(), p->pid);
+    p->parent_wait = true;
+    int ret = sleep_task_on(current, &wait_q, NULL);
+    if (ret < 0) {
+#ifdef DEBUG_SCHED
+        klog(LOG_DEBUG, "sleep_task_on returned %d while waiting for task %d\n", ret, p->pid);
+#endif
+        return ret;
+    }
+
+    pid_t pid = p->pid;
+    klog(LOG_DEBUG, "Task %d has exited or stopped, continuing task %d\n", pid, get_pid());
+    if (status)
+        *status = p->exit_status;
+
+    if (p->state == TASK_ZOMBIE) {
+        reap_task(p);
+        kfree(p);
+    }
+    return pid;
+}
+
+
 static pid_t check_children(int *status, bool wait_stopped)
 {
     struct task *child = find_exited_child(current, WAIT_ANY);
@@ -201,11 +214,9 @@ static pid_t wait_any(int *status, bool nohang, bool wait_stopped)
     if (nohang)
         return 0;
 
-    // No child has exited yet, so wait for one
     current->waiting_any = true;
     sleep_task_on(current, &wait_q, NULL);
 
-    // After being woken up, check for exited or stopped children again
     result = check_children(status, wait_stopped);
     if (result != 0)
         return result;
@@ -218,21 +229,25 @@ static pid_t wait_any(int *status, bool nohang, bool wait_stopped)
     return -ECHILD; // no children at all
 }
 
+// TODO: POSIX says when SIGCHLD is SIG_IGN, then wait all children and return ECHILD
+
 SYSCALL_DECL3(waitpid, int, pid, int*, status, int, options)
 {
-    if (pid < -1 || pid == 0)
-        return -EINVAL;
     if (status && !access_ok(status, sizeof(int)))
         return -EFAULT;
     if (pid == -1) {
         return wait_any(status, options & WNOHANG, options & WUNTRACED);
+    } else if (pid < -1 || pid == 0) {
+        pid_t pgid = (pid < -1) ? -pid : current->pgid;
+        return -EINVAL; // TODO: implement process group waiting
     }
+
     struct task *p = find_child_by_pid(current, pid);
     if (!p)
         return -ECHILD;
     if (p->ppid != current->pid)
         return -ECHILD;
-    return wait_for(p, status, options & WNOHANG);
+    return wait_for(p, status, options & WNOHANG, options & WUNTRACED);
 }
 
 int sleep_on(struct waitqueue *wq)

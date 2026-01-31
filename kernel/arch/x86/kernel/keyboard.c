@@ -3,6 +3,7 @@
 #include <drivers/keyboard.h>
 #include <lilac/log.h>
 #include <lilac/panic.h>
+#include <lilac/timer.h>
 #include <asm/segments.h>
 #include <asm/idt.h>
 #include <asm/io.h>
@@ -31,9 +32,10 @@ void kbd_int_init(void)
     ioapic_entry(1, 0x20 + 1, 0, 0);
 
     outb(KEYBOARD_DATA_PORT, 0xFF);   // reset keyboard
+    u64 timeout = get_sys_time_ns() + 100000000;
     do {
         resp = inb(KEYBOARD_DATA_PORT);
-    } while (resp != 0xfa && resp != 0x55 && resp != 0xaa);
+    } while (resp != 0xfa && resp != 0x55 && resp != 0xaa && get_sys_time_ns() < timeout);
     if (resp != 0xFA && resp != 0xAA) {
         klog(LOG_ERROR, "Keyboard reset failed (response: 0x%02x)\n", resp);
         return;

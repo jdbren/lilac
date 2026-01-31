@@ -152,6 +152,7 @@ static const struct inode_operations fb_iops = {
 void fb_init(void)
 {
     dev_create("/dev/fb0", &fb_fops, &fb_iops, S_IFCHR|S_IREAD|S_IWRITE, MEM_DEVICE);
+    kstatus(STATUS_OK, "Framebuffer device initialized\n");
 }
 
 void graphics_init(void)

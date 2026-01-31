@@ -1,8 +1,34 @@
 #include <asm/io.h>
 #include <lilac/port.h>
 #include <lilac/panic.h>
+#include <lilac/tty.h>
+#include <asm/idt.h>
+#include <asm/apic.h>
+#include <asm/segments.h>
 
 #define COM2 0x2F8
+
+extern void serial_handler(void);
+
+void serial_int(void)
+{
+    u8 lsr = inb(COM2 + 5);
+    if (lsr & (1 << 1)) klog(LOG_ERROR, "Overrun error\n");
+    if (lsr & (1 << 2)) klog(LOG_ERROR, "Parity error\n");
+    if (lsr & (1 << 3)) klog(LOG_ERROR, "Framing error\n");
+    while (lsr & 1) {
+        tty_recv_char(inb(COM2));
+        lsr = inb(COM2 + 5);
+    }
+}
+
+void serial_irq_init(void)
+{
+    idt_entry(0x20 + 3, (uintptr_t)serial_handler, __KERNEL_CS, 0, INT_GATE);
+    ioapic_entry(3, 0x20 + 3, 0, 0);
+    outb(COM2 + 1, 0x01); // enable RX irq
+    klog(LOG_INFO, "Serial IRQ initialized\n");
+}
 
 void serial_init(void)
 {
@@ -11,7 +37,7 @@ void serial_init(void)
     outb(COM2 + 0, 0x01); // divisor low (115200)
     outb(COM2 + 1, 0x00); // divisor high
     outb(COM2 + 3, 0x03); // 8n1
-    outb(COM2 + 2, 0xC7); // FIFO
+    outb(COM2 + 2, 0x07); // FIFO
     outb(COM2 + 4, 0x0B); // IRQs, RTS/DSR
 
     i8042_wait_input();

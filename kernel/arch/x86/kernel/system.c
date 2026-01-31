@@ -1,12 +1,13 @@
 #include <lilac/lilac.h>
+#include <lilac/boot.h>
+#include <lilac/percpu.h>
 #include <lilac/timer.h>
 #include <drivers/framebuffer.h>
 #include <mm/kmm.h>
-#include <lilac/boot.h>
-#include <lilac/percpu.h>
 
 #include <asm/cpu-features.h>
 #include <asm/apic.h>
+#include <asm/io.h>
 #include "paging.h"
 #include "timer.h"
 
@@ -34,6 +35,7 @@ void arch_setup(void)
 {
     mtrr_dump();
     apic_init(boot_info.acpi.madt);
+    serial_irq_init();
     x86_timer_init();
 }
 

@@ -8,8 +8,8 @@
 #include <lilac/sched.h>
 #include <lilac/console.h>
 #include <lilac/tty.h>
-#include <drivers/keyboard.h>
 #include <lilac/timer.h>
+#include <drivers/keyboard.h>
 #include <drivers/framebuffer.h>
 #include <acpi/acpi.h>
 #include <lib/icxxabi.h>

@@ -112,12 +112,8 @@ void ap_startup(int id)
 
     long int_count = 0;
     while (1) {
-        asm ("sti\n\thlt");
-        int_count++;
-        if (int_count % 10000 == 0) {
-            klog(LOG_DEBUG, "AP %d still alive, handled %d interrupts\n", id, int_count);
-            schedule();
-        }
+        __asm__ ("sti");
+        __asm__ ("hlt");
     }
 }
 

@@ -36,8 +36,8 @@ const struct inode_operations tty_iops = {
 //
 
 const struct termios default_termios = {
-    .c_iflag = 0,
-    .c_oflag = 0,
+    .c_iflag = IXON | ICRNL | BRKINT | IGNPAR,
+    .c_oflag = ONLCR,
     .c_cflag = B38400 | CS8 | CREAD | HUPCL | CLOCAL,
     .c_lflag = ISIG | ICANON | ECHO | ECHOE | ECHOK | ECHONL | ECHOCTL | IEXTEN,
     .c_line = 0,
@@ -290,6 +290,8 @@ void tty_init(void)
         strcat(path, tty->name);
         dev_create(path, &tty_fops, &tty_iops, mode, TTY_DEVICE);
     }
+
+    kstatus(STATUS_OK, "TTY subsystem initialized\n");
 
     // tty = &ttys[0];
     // tty->vc->cury = 10;

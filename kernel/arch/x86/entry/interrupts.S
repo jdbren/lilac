@@ -208,3 +208,4 @@ isr_no_err simd
 .text
 isr_device timer_handler timer_tick
 isr_device kbd_handler keyboard_int
+isr_device serial_handler serial_int
