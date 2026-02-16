@@ -4,7 +4,7 @@
 #include <lilac/types.h>
 #include <lilac/sync.h>
 #include <lilac/wait.h>
-#include <user/termbits.h>
+#include <lilac/termbits.h>
 
 /*
  * (Note: the *_driver.minor_start values 1, 64, 128, 192 are

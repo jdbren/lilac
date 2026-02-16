@@ -2,8 +2,8 @@
 #define _LILAC_SIGNAL_H
 
 #include <lib/list.h>
+#include <lilac/signo.h>
 #include <user/signal-defs.h>
-#include <user/signo.h>
 // #include <user/siginfo.h>
 
 #define _SIGHUP		(1 << SIGHUP)

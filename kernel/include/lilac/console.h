@@ -3,7 +3,7 @@
 
 #include <lilac/types.h>
 #include <lilac/sync.h>
-#include <user/lilac/keyboard.h>
+#include <user/keyboard.h>
 
 struct file;
 struct tty;
