@@ -61,6 +61,7 @@ struct task {
     // ---
     void *regs;     // CPU registers
     void *fp_regs;  // Floating point / SIMD registers
+    void *tls;      // Thread-local storage
 
     spinlock_t lock;
 
@@ -134,7 +135,8 @@ struct task * get_pgrp_leader(int pgid);
 struct task * get_any_pgrp_member(pid_t pgid);
 
 // Architecture-specific functions
-void             arch_prepare_context_switch(struct task *next);
+void             arch_pre_context_switch(struct task *prev, struct task *next);
+void             arch_post_context_switch(struct task *p);
 struct mm_info * arch_process_mmap(bool is_64_bit);
 struct mm_info * arch_process_remap(struct mm_info *existing);
 struct mm_info * arch_copy_mmap(struct mm_info *parent);

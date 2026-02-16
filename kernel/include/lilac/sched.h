@@ -7,7 +7,7 @@
 
 void sched_init(void);
 void sched_ap_rq_init(int cpu);
-void sched_clock_init(void);
+void sched_clock_enable(void);
 void schedule(void);
 void sched_tick(void);
 void yield(void);

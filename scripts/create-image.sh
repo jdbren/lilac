@@ -9,7 +9,7 @@ if [[ -f "uefi.img" ]]; then
     mv uefi.img uefi.img.old
 fi
 
-dd if=/dev/zero of=uefi.img bs=512 count=128MB
+dd if=/dev/zero of=uefi.img bs=512 count=1GB
 
 parted uefi.img --script mklabel gpt
 parted uefi.img --script mkpart ESP fat32 1MiB 100%

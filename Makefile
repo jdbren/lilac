@@ -8,8 +8,8 @@ ifeq ($(V),1)
 export VERBOSE=1
 endif
 
-.PHONY: all clean distclean install install-libc install-system
-.PHONY: kernel init user libc shell copy-headers
+.PHONY: all clean distclean install install-system
+.PHONY: kernel init user copy-headers
 
 all: kernel init libc
 
@@ -22,40 +22,15 @@ copy-headers:
 install: copy-headers
 	$(MAKE) -C kernel install
 
-install-system: install install-libc init user shell
+install-system: install init user
 	$(MAKE) -C init install
 
-# LIBC
-libc: copy-headers
-	@if [ ! -d build-libc ]; then \
-		mkdir -p build-libc; \
-		env -i PATH="$$PATH" /bin/sh -c 'cd build-libc; \
-		$(LIBC_DIR)/configure \
-			--prefix=$(PREFIX) \
-			--target=$(TARGET) \
-			--disable-multilib \
-			--enable-newlib-multithread=no'; \
-	fi
-	$(MAKE) -s -C build-libc all
-
-install-libc: libc
-	$(MAKE) -s DESTDIR=$(DESTDIR) -C build-libc install
-	cp -r $(DESTDIR)$(PREFIX)/$(TARGET)/* $(SYSROOT)$(PREFIX)/ || true
-	rm -rf $(DESTDIR)$(PREFIX)/$(TARGET) || true
-
 # USERSPACE
-init: install-libc
+init:
 	$(MAKE) -C init
 
-user: install-libc
+user:
 	$(MAKE) -C user
-
-shell: install-libc
-	@if [ -d ../gush ]; then \
-		$(MAKE) -C ../gush; \
-		mkdir -p ./sysroot/sbin; \
-		cp ../gush/gush ./sysroot/sbin/; \
-	fi
 
 # CLEAN
 clean:
@@ -63,10 +38,6 @@ clean:
 		echo "CLEAN	$$PROJECT"; \
   		($(MAKE) -s -C $$PROJECT clean) \
 	done
-	@if [ -d ../gush ]; then \
-		$(MAKE) -s -C ../gush clean; \
-	fi
-	rm -rf build-libc
 	rm -rf sysroot
 
 distclean: clean
