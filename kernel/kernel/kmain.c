@@ -59,7 +59,7 @@ void start_kernel(void)
     kstatus(STATUS_OK, "Kernel initialized\n");
     print_system_info();
     console_write_screen(0);
-    sched_clock_init();
+    sched_clock_enable();
 
     idle();
     unreachable();

@@ -56,6 +56,7 @@ int main()
     // Try to run a shell
     execl("/bin/bash", "-", NULL); // will not work yet
     execl("/bin/dash", "sh", "-lE", NULL);
+    execl("/usr/bin/dash", "sh", "-lE", NULL);
     execl("/sbin/gush", "gush", NULL); // my custom shell
     return 1;
 }

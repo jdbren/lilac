@@ -2,12 +2,16 @@
 #include <lilac/boot.h>
 #include <lilac/percpu.h>
 #include <lilac/timer.h>
+#include <lilac/syscall.h>
+#include <lilac/uaccess.h>
 #include <drivers/framebuffer.h>
 #include <mm/kmm.h>
 
 #include <asm/cpu-features.h>
 #include <asm/apic.h>
 #include <asm/io.h>
+#include <asm/prctl.h>
+#include <asm/msr.h>
 #include "paging.h"
 #include "timer.h"
 
@@ -85,4 +89,17 @@ void print_system_info(void)
     printf("Current time: " TIME_FORMAT "\n\n",
         ts.year, ts.month, ts.day, ts.hour, ts.minute, ts.second);
     graphics_setcolor(RGB_WHITE, RGB_BLACK);
+}
+
+SYSCALL_DECL2(arch_prctl, int, code, unsigned long, addr)
+{
+    if (code == ARCH_SET_FS) {
+        if (!access_ok((void*)addr, 0))
+            return -EFAULT;
+        wrmsr(IA32_FS_BASE, addr);
+    } else {
+        return -EINVAL;
+    }
+
+    return 0;
 }

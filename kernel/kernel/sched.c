@@ -267,7 +267,7 @@ void schedule_task(struct task *new_task)
 #endif
 }
 
-void sched_clock_init(void)
+void sched_clock_enable(void)
 {
     sched_timer = 1;
     yield();
@@ -292,8 +292,9 @@ static void context_switch(struct task *prev, struct task *next)
     klog(LOG_DEBUG, "\tStack: %p\n", next->kstack);
 #endif
     save_fp_regs(prev);
-    arch_prepare_context_switch(next);
+    arch_pre_context_switch(prev, next);
     __context_switch_asm(prev, next);
+    arch_post_context_switch(prev);
     restore_fp_regs(prev);
 }
 

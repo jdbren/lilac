@@ -2,6 +2,7 @@
 #include <lilac/sched.h>
 #include <asm/regs.h>
 #include <asm/gdt.h>
+#include <asm/msr.h>
 
 #ifdef __x86_64__
 void x86_dump_regs(struct regs_state *regs)
@@ -49,7 +50,13 @@ int x86_kernel_exit(void)
     return 0;
 }
 
-void arch_prepare_context_switch(struct task *next)
+void arch_pre_context_switch(struct task *prev, struct task *next)
 {
     set_tss_esp0((uintptr_t)next->mm->kstack + __KERNEL_STACK_SZ);
+    prev->tls = (void*)rdmsr(IA32_FS_BASE);
+}
+
+void arch_post_context_switch(struct task *p)
+{
+     wrmsr(IA32_FS_BASE, (uintptr_t)p->tls);
 }
