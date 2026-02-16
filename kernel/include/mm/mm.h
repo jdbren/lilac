@@ -4,7 +4,7 @@
 #include <lilac/types.h>
 #include <lilac/sync.h>
 
-#include <user/mman-bits.h>
+#include <lilac/mman-bits.h>
 
 #define VM_NONE         0x0000
 #define VM_READ         0x0001

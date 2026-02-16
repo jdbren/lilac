@@ -4,7 +4,7 @@
 #define KERNEL_KEYBOARD_H
 
 #include <lilac/types.h>
-#include <user/lilac/keyboard.h>
+#include <user/keyboard.h>
 
 #define KB_SHIFT    1
 #define KB_CTRL     2

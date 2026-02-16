@@ -1,6 +1,6 @@
 #ifndef LILAC_IOCTL_H
 #define LILAC_IOCTL_H
 
-#include <user/ioctls.h>
+#include <lilac/ioctls.h>
 
 #endif

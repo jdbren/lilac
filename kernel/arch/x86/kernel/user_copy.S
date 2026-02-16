@@ -1,6 +1,6 @@
 // uaccess.S - x86 assembly code for user access functions
 #define __ASSEMBLY__
-#include <user/errno.h>
+#include <lilac/errno.h>
 
 .text
 /*

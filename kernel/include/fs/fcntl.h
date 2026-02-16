@@ -2,7 +2,7 @@
 #define _FS_FCNTL_H
 
 #include <lilac/types.h>
-#include <user/fcntl.h>
+#include <lilac/fcntl.h>
 
 #define S_ISDIR(mode)  (((mode) & S_IFMT) == S_IFDIR)
 #define S_ISCHR(mode)  (((mode) & S_IFMT) == S_IFCHR)

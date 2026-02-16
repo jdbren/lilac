@@ -1,6 +1,6 @@
 // Syscall table and defs
 #define __ASSEMBLY__
-#include <user/errno.h>
+#include <lilac/errno.h>
 
 sys_restart_syscall:
 	mov $-ENOSYS, %eax
