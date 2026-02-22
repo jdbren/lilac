@@ -1,0 +1,4 @@
+[submodule "musl"]
+	path = musl
+	url = https://github.com/jdbren/musl.git
+	branch = lilac-os
