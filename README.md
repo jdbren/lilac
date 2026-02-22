@@ -74,18 +74,18 @@ See scripts/create-image.sh
 First run config.sh. ARCH defaults to x86_64.
 You can now build and boot into a vm using qemu.sh.
 
-ncurses 5.7
-CFLAGS="-Wno-implicit-function-declaration -Wno-incompatible-pointer-types" ./configure --host=x86_64-lilac --disable-widec --without-cxx --prefix=/usr --without-manpages --enable-termcap --disable-hashmap --without-hashed-db
+ncurses 6.5
+CFLAGS="-Wno-implicit-function-declaration -Wno-incompatible-pointer-types" ./configure --host=x86_64-lilac --disable-widec --without-cxx --prefix=/usr --without-manpages
 make
 make DESTDIR=$SYSROOT install
 
-libedit 20150325-3.1
-CFLAGS="-fcommon -std=gnu89" ./configure --build=x86_64-linux-gnu --host=x86_64-lilac --disable-widec --prefix=/usr
+libedit-20100424-3.0
+CFLAGS="-fcommon -std=gnu89" ./configure --host=x86_64-lilac --disable-widec --prefix=/usr
 make
 make DESTDIR=$SYSROOT install
 
-dash 5.6.1
-LIBS="-ledit -lncurses" ./configure --build=x86_64-linux-gnu --host=x86_64-lilac --with-libedit --prefix=/usr
+dash
+LIBS="-ledit -lncurses" CFLAGS="-Wno-implicit-function-declaration" ./configure --host=x86_64-lilac --with-libedit --prefix=/usr
 make
 
 libgmp 6.3.0
