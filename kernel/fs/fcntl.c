@@ -3,6 +3,7 @@
 #include <lilac/fs.h>
 #include <lilac/syscall.h>
 #include <lilac/sched.h>
+#include <lilac/uaccess.h>
 
 
 SYSCALL_DECL3(fcntl, int, fd, int, cmd, unsigned long, arg)
@@ -54,16 +55,49 @@ SYSCALL_DECL3(fcntl, int, fd, int, cmd, unsigned long, arg)
 
 SYSCALL_DECL2(access, const char *, pathname, int, mode)
 {
+    if (mode & ~7) return -EINVAL;
     const char *path = get_user_path(pathname);
     if (IS_ERR(path))
         return PTR_ERR(path);
+
+    struct dentry *d = vfs_lookup(path);
+    kfree(path);
+    if (IS_ERR(d))
+        return PTR_ERR(d);
+
+    if (!d->d_inode)
+        return -ENOENT;
+    if (mode == 0)
+        return 0;
+    // TODO: full permission check
     return 0;
 }
 
 SYSCALL_DECL3(faccessat, int, dirfd, const char *, pathname, int, mode)
 {
+    if (!access_ok(pathname, 1)) return -EFAULT;
+    if (mode & ~7) return -EINVAL;
+
+    if (dirfd == AT_FDCWD || pathname[0] == '/')
+        return sys_access(pathname, mode);
+
+    struct file *dir = get_file_handle(dirfd);
+    if (IS_ERR(dir))
+        return PTR_ERR(dir);
+
     const char *path = get_user_path(pathname);
     if (IS_ERR(path))
         return PTR_ERR(path);
+
+    struct dentry *d = lookup_path_from(dir->f_dentry, path);
+    kfree(path);
+    if (IS_ERR(d))
+        return PTR_ERR(d);
+
+    if (!d->d_inode)
+        return -ENOENT;
+    if (mode == 0)
+        return 0;
+    // TODO: full permission check
     return 0;
 }

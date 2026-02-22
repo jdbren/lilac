@@ -53,7 +53,6 @@ void mutex_init(mutex_t *mutex)
 
 static void __mutex_lock_slow(mutex_t *mutex)
 {
-    long id = get_pid();
     struct mutex_waiter waiter = {.list = LIST_HEAD_INIT(waiter.list), .t = current};
 
     acquire_lock(&mutex->wait_lock);

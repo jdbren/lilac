@@ -1,6 +1,2 @@
-#ifndef _ACPICA_H
-#define _ACPICA_H
-
+#pragma once
 #include "../drivers/acpi/acpica/acpi.h"
-
-#endif

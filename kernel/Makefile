@@ -19,7 +19,7 @@ INCLUDEDIR?=$(PREFIX)/include
 
 FLAGS=-D__lilac__ -D__KERNEL__ -DLOG_CPUID -Werror -Iinclude -ffreestanding \
 	-Wall -Wextra -Wno-sign-compare -Wundef -Wframe-larger-than=600 \
-	-Wno-unused-parameter -Wno-unused-function -Wno-unused-variable -Wno-undef
+	-Wno-unused-parameter
 CFLAGS:=$(CFLAGS) $(FLAGS) -std=gnu23 -fanalyzer -fstack-protector-strong \
 	-fno-strict-aliasing -fno-PIE -fno-common -mno-red-zone \
 	-fno-strict-overflow -fno-delete-null-pointer-checks -fno-stack-check \

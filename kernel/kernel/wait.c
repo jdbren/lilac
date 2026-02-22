@@ -13,7 +13,7 @@ static struct waitqueue wait_q = {
 };
 
 static inline
-struct wq_entry * alloc_wq_entry(struct task *p, struct waitqueue *wq)
+struct wq_entry * alloc_wq_entry(struct task *p)
 {
     struct wq_entry *wait = kmalloc(sizeof(*wait));
     if (!wait) {
@@ -87,7 +87,7 @@ static int sleep_task_on(struct task *p, struct waitqueue *wq, wq_wake_func_t ca
     klog(LOG_DEBUG, "Process %d: Sleeping on waitqueue\n", p->pid);
 #endif
     set_task_sleeping(p);
-    wait = alloc_wq_entry(p, wq);
+    wait = alloc_wq_entry(p);
     if (!wait) {
         klog(LOG_ERROR, "Failed to allocate wait entry for task %d\n", p->pid);
         return -ENOMEM;
@@ -238,7 +238,7 @@ SYSCALL_DECL3(waitpid, int, pid, int*, status, int, options)
     if (pid == -1) {
         return wait_any(status, options & WNOHANG, options & WUNTRACED);
     } else if (pid < -1 || pid == 0) {
-        pid_t pgid = (pid < -1) ? -pid : current->pgid;
+        // pid_t pgid = (pid < -1) ? -pid : current->pgid;
         return -EINVAL; // TODO: implement process group waiting
     }
 

@@ -110,7 +110,6 @@ int __do_fat32_write(const struct file *file, u32 clst, const u8 *buffer,
         return -1;
 
     size_t clst_writ = 0;
-    long next_val;
     const struct inode *inode = file->f_dentry->d_inode;
     struct gendisk *gd = inode->i_sb->s_bdev->disk;
     struct fat_disk *fat_disk = (struct fat_disk*)inode->i_sb->s_fs_info;

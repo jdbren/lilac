@@ -23,6 +23,7 @@ static inline void * fault_page_alloc(void)
     return page;
 }
 
+// TODO flags
 static int do_file_fault(struct vm_desc *vma, uintptr_t pgaddr, unsigned long flags)
 {
     struct file *f = vma->vm_file;
@@ -90,6 +91,7 @@ map_page_out:
     return FAULT_SUCCESS;
 }
 
+// TODO flags
 static int do_anon_fault(struct vm_desc *vma, uintptr_t pgaddr, unsigned long flags)
 {
     void *page = get_zeroed_pages(1, ALLOC_NORMAL);

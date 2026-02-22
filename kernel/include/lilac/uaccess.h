@@ -80,7 +80,6 @@ int strnlen_user(const char *str, int max)
 static __must_check inline
 int user_str_ok(const char *str, int max_size)
 {
-    struct mm_info *mm = current->mm;
     int len = strnlen_user(str, max_size);
     if (len < 0) {
         klog(LOG_WARN, "user_str_ok: str (%x) not accessible\n", str);

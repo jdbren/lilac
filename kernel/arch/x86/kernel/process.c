@@ -17,8 +17,7 @@
 
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 
-static u32 *const pd = (u32*)0xFFFFF000UL;
-
+__maybe_unused
 static void load_cr3(uintptr_t cr3)
 {
     asm volatile ("mov %0, %%cr3" : : "r"(cr3));
@@ -43,6 +42,8 @@ static void print_page_structs(u32 *cr3)
 #endif
 
 #ifndef __x86_64__
+static u32 *const pd = (u32*)0xFFFFF000UL;
+
 static struct mm_info * make_32_bit_mmap()
 {
     size_t *cr3 = get_zeroed_page();
@@ -90,7 +91,7 @@ static struct mm_info * make_64_bit_mmap()
 static struct mm_info * make_64_bit_mmap() {return NULL;}
 #endif
 
-struct mm_info * arch_process_mmap(bool is_64_bit)
+struct mm_info * arch_process_mmap(__maybe_unused bool is_64_bit)
 {
 #ifdef __x86_64__
     return make_64_bit_mmap();

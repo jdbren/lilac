@@ -1,67 +1,5 @@
 #include <lilac/libc.h>
 
-static char * character(char *str, char c, char *end)
-{
-    if (str < end) {
-        *str++ = c;
-    }
-    return str;
-}
-
-static char * string(char *str, const char *s, char *end)
-{
-    if (!s) {
-        s = "(null)";
-    }
-    while (*s && str < end) {
-        *str++ = *s++;
-    }
-    return str;
-}
-
-static char * convert(unsigned long num, int base)
-{
-    static char Representation[]= "0123456789ABCDEF";
-    static char buffer[50];
-    char *ptr;
-
-    ptr = &buffer[49];
-    *ptr = '\0';
-
-    do {
-        *--ptr = Representation[num % base];
-        num /= base;
-    } while (num != 0);
-
-    return(ptr);
-}
-
-static char * convert_signed(long num, int base)
-{
-    static char Representation[]= "0123456789ABCDEF";
-    static char buffer[50];
-    char *ptr;
-    int negative = 0;
-
-    if (num < 0) {
-        negative = 1;
-        num = -num;
-    }
-
-    ptr = &buffer[49];
-    *ptr = '\0';
-
-    do {
-        *--ptr = Representation[num % base];
-        num /= base;
-    } while (num != 0);
-
-    if (negative) {
-        *--ptr = '-';
-    }
-
-    return(ptr);
-}
 
 int vsnprintf(char *restrict buf, size_t size, const char *restrict fmt, va_list args)
 {
@@ -154,7 +92,6 @@ int vsnprintf(char *restrict buf, size_t size, const char *restrict fmt, va_list
 
         /* temporary output buffer */
         char outbuf[64];
-        char *out = outbuf;
         size_t outlen = 0;
         char sign_char = 0;
         bool is_num = false;

@@ -42,7 +42,9 @@ const struct inode_operations fat_iops = {
 /**
  *  Utility functions
 **/
+#ifdef DEBUG_FAT
 static void print_fat32_data(volatile struct fat_BS*);
+#endif
 
 __must_check
 static inline int fat_read_bpb(struct fat_disk *fat_disk, struct gendisk *gd)
@@ -286,6 +288,7 @@ error:
     return NULL;
 }
 
+#ifdef DEBUG_FAT
 static void print_fat32_data(volatile struct fat_BS *ptr)
 {
     klog(LOG_DEBUG, "FAT32 data:\n");
@@ -307,3 +310,4 @@ static void print_fat32_data(volatile struct fat_BS *ptr)
     klog(LOG_DEBUG, "Volume ID: %x\n", ptr->extended_section.volume_id);
     klog(LOG_DEBUG, "Signature: %x\n", ptr->extended_section.signature);
 }
+#endif

@@ -19,13 +19,6 @@ static struct font termius_font;
 static struct framebuffer fb_data;
 struct framebuffer *fb = &fb_data;
 
-static void put_pixel(struct framebuffer *screen, u32 x, u32 y, u32 color) {
-    u32 where = x * screen->fb_width + y * screen->fb_pitch;
-    screen->fb_shadow[where] = color & 0xff;              // BLUE
-    screen->fb_shadow[where + 1] = (color >> 8) & 0xff;   // GREEN
-    screen->fb_shadow[where + 2] = (color >> 16) & 0xff;  // RED
-}
-
 #define PIXEL u32
 
 void graphics_redraw_region(u32 x, u32 y, u32 w, u32 h)
@@ -117,7 +110,7 @@ void graphics_setcolor(u32 fg, u32 bg)
 
 static void print_font_info(struct font *terminal_font);
 
-int fb_mmap(struct file *file, struct vm_desc *vma)
+int fb_mmap(__unused struct file *file, struct vm_desc *vma)
 {
     uintptr_t phys_addr = (uintptr_t)boot_info.mbd.framebuffer->common.framebuffer_addr + vma->vm_pgoff * PAGE_SIZE;
     size_t size = MIN((vma->end - vma->start) / PAGE_SIZE, boot_info.mbd.framebuffer->common.framebuffer_pitch
@@ -213,6 +206,7 @@ void psf_init_font()
     // no unicode yet
 }
 
+__maybe_unused
 static void print_font_info(struct font *terminal_font)
 {
     printf("Font width: %d, height: %d\n", terminal_font->font->width, terminal_font->font->height);
