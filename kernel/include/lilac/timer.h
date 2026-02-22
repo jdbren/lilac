@@ -44,7 +44,7 @@ struct timestamp get_timestamp(void);
 #define TIME_FORMAT "%04u/%02u/%02u %02u:%02u:%02u"
 
 extern s64 boot_unix_time;
-extern void (*handle_tick)(unsigned long);
+extern void (*handle_tick)(unsigned long ms);
 
 void set_clock_source(struct clock_source *clock);
 

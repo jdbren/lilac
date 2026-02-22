@@ -12,6 +12,7 @@
 #include <lilac/fs.h>
 #include <lilac/libc.h>
 
+#if defined(DEBUG_MM) || defined(DEBUG_VMA)
 static void print_vma_list(struct mm_info *mm)
 {
     struct vm_desc *vma = mm->mmap;
@@ -21,6 +22,7 @@ static void print_vma_list(struct mm_info *mm)
         vma = vma->vm_next;
     }
 }
+#endif
 
 static int convert_mmap_flags(int prot, int flags)
 {
@@ -186,8 +188,9 @@ static struct vm_desc * create_new_vma_after(struct mm_info *mm,
 }
 
 
-static struct vm_desc *create_new_vma_at(struct mm_info *mm,
-    uintptr_t vaddr, size_t length, int flags)
+__maybe_unused static
+struct vm_desc *create_new_vma_at(struct mm_info *mm, uintptr_t vaddr,
+    size_t length, int flags)
 {
     uintptr_t end = PAGE_ROUND_UP(vaddr + length);
     if (end < vaddr)
@@ -262,7 +265,7 @@ static void mmap_fixed_unmap_range(struct mm_info *mm, uintptr_t start,
             vma->mm->total_vm -= end - vma->start;
             vma->start = end;
         }
- 
+
         vma = next;
     }
 }
@@ -458,7 +461,7 @@ SYSCALL_DECL1(sbrk, intptr_t, increment)
 }
 
 // TODO: flimsy HACK, not POSIX
-SYSCALL_DECL2(memfd_create, const char *, name, unsigned int, flags)
+SYSCALL_DECL2(memfd_create, const char *, name, __unused unsigned int, flags)
 {
     klog(LOG_WARN, "memfd_create is not fully implemented, using a temporary file as a placeholder\n");
     static int n = 0;

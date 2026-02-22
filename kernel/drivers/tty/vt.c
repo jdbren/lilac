@@ -158,6 +158,7 @@ int vt_open(struct tty *tty, struct file *file)
 * Control chars
 */
 
+__maybe_unused
 static void lf(struct vc_state *vc)
 {
     /* don't scroll if above bottom of scrolling region, or
@@ -169,6 +170,7 @@ static void lf(struct vc_state *vc)
         vc->con_ops->con_scroll(vc, vc->scroll_top, vc->scroll_bottom, S_UP, 1);
 }
 
+__maybe_unused
 static void ri(struct vc_state *vc)
 {
     /* don't scroll if below top of scrolling region, or
@@ -180,17 +182,20 @@ static void ri(struct vc_state *vc)
         vc->con_ops->con_scroll(vc, vc->scroll_top, vc->scroll_bottom, S_DOWN, 1);
 }
 
+__maybe_unused
 static void cr(struct vc_state *vc)
 {
     vc->curx = 0;
 }
 
+__maybe_unused
 static void bs(struct vc_state *vc)
 {
     if (vc->curx)
         vc->curx--;
 }
 
+__maybe_unused
 static void del(struct vc_state *vc)
 {
     /* ignored */
@@ -1191,7 +1196,7 @@ void vt_close(struct tty *tty, struct file *f)
 
 int vt_ioctl(struct tty *tty, int cmd, unsigned long arg)
 {
-    struct vc_state *v = tty->driver_data;
+    // struct vc_state *v = tty->driver_data;
     switch (cmd) {
     default:
         return -EINVAL;

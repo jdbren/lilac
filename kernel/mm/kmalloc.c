@@ -60,7 +60,7 @@ struct __align(32) sb_header {
 
 struct remote_free {
     struct remote_free *next;
-    void *ptr;
+    const void *ptr;
 };
 
 static_assert(sizeof(struct sb_header) <= 32, "Superblock header too large");
@@ -209,7 +209,7 @@ void *kcalloc(size_t num, size_t size)
     return kzmalloc(num * size);
 }
 
-void kfree(void *ptr)
+void kfree(const void *ptr)
 {
     if (ptr == NULL) return;
 

@@ -128,13 +128,11 @@ static u64 calc_tsc_hz(void)
     return ticks_in_10ms * 100; // Convert to Hz
 }
 
-void tsc_deadline_tick(unsigned long x)
+void tsc_deadline_tick(unsigned long ms)
 {
-    // should calculate the next timer event to fire
-    // for now, just set it to 1ms from now
     u64 tsc_now = tsc_read();
     u64 tpm = READ_ONCE(ticks_per_ms);
-    tsc_deadline_set(tsc_now + tpm);
+    tsc_deadline_set(tsc_now + tpm * ms);
 }
 
 void timer_tick_init(void)

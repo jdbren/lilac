@@ -15,16 +15,12 @@ extern "C" {
 #define O_EXCL      000004000
 #define O_NONBLOCK  000040000
 #define O_NOCTTY    000100000
-#if __BSD_VISIBLE || defined(__KERNEL__)
 #define	O_DIRECT    000400000
-#endif
-#if __POSIX_VISIBLE >= 200809 || defined(__KERNEL__)
 #define O_CLOEXEC   001000000
 #define O_NOFOLLOW  004000000
 #define O_DIRECTORY 010000000
 #define O_EXEC      020000000
 #define O_SEARCH    020000000
-#endif
 #define O_SYNC      040000000
 
 #define O_DSYNC O_SYNC
@@ -78,30 +74,15 @@ extern "C" {
 #define	F_UNLCK		3	/* remove lock(s) */
 #define	F_UNLKSYS	4	/* remove remote locks for a given system */
 
-#if __BSD_VISIBLE || __POSIX_VISIBLE >= 200809
 /* Special descriptor value to denote the cwd in calls to openat(2) etc. */
-#define AT_FDCWD -2
+#define AT_FDCWD -100
 
 /* Flag values for faccessat2) et al. */
 #define AT_EACCESS                 0x0001
 #define AT_SYMLINK_NOFOLLOW        0x0002
 #define AT_SYMLINK_FOLLOW          0x0004
 #define AT_REMOVEDIR               0x0008
-#if __GNU_VISIBLE
 #define AT_EMPTY_PATH              0x0010
-#define _AT_NULL_PATHNAME_ALLOWED  0x4000 /* Internal flag used by futimesat */
-#endif
-#endif
-
-#if __BSD_VISIBLE
-/* lock operations for flock(2) */
-#define	LOCK_SH		0x01		/* shared file lock */
-#define	LOCK_EX		0x02		/* exclusive file lock */
-#define	LOCK_NB		0x04		/* don't block when locking */
-#define	LOCK_UN		0x08		/* unlock file */
-#endif
-
-/*#include <sys/stdtypes.h>*/
 
 /* file segment locking set data type - information passed to system by user */
 struct flock {

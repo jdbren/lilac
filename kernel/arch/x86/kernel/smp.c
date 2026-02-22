@@ -114,6 +114,7 @@ void ap_startup(int id)
     while (1) {
         __asm__ ("sti");
         __asm__ ("hlt");
+        int_count++;
     }
 }
 

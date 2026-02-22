@@ -7,9 +7,9 @@
 #include <lilac/percpu.h>
 #include <lilac/uaccess.h>
 
-static void nop(unsigned long x) {}
+static void nop(__unused unsigned long x) {}
 
-void (*handle_tick)(unsigned long) = nop;
+void (*handle_tick)(unsigned long ms) = nop;
 s64 boot_unix_time = 0;
 atomic_uint time_seq = 0;
 u64 system_time_base_ns = 0;
@@ -56,7 +56,7 @@ void timer_init(void)
 
 void timer_tick(void)
 {
-    handle_tick(1000);
+    handle_tick(1);
     timer_ev_tick();
     sched_tick();
 }
@@ -86,7 +86,6 @@ u64 get_sys_time_ns(void)
 
 SYSCALL_DECL1(time, time_t *, t)
 {
-    struct task *p = current;
     long long ret = get_unix_time();
 
     if (t) {
@@ -180,8 +179,29 @@ void usleep(u32 micros)
 
 SYSCALL_DECL2(nanosleep, const struct timespec*, duration, struct timespec*, rem)
 {
+    if (!access_ok(duration, sizeof(struct timespec))) return -EFAULT;
+    if (rem && !access_ok(rem, sizeof(struct timespec))) return -EFAULT;
+
+    u64 start_ns = get_sys_time_ns();
     u64 total_ns = duration->tv_sec * NS_PER_SEC + duration->tv_nsec;
+
     usleep(total_ns / 1000);
+
+    u64 end_ns = get_sys_time_ns();
+    if (task_interrupted_ack()) {
+        if (rem) {
+            u64 elapsed_ns = end_ns - start_ns;
+            if (elapsed_ns < total_ns) {
+                u64 remaining_ns = total_ns - elapsed_ns;
+                rem->tv_sec = remaining_ns / NS_PER_SEC;
+                rem->tv_nsec = remaining_ns % NS_PER_SEC;
+            } else {
+                rem->tv_sec = 0;
+                rem->tv_nsec = 0;
+            }
+        }
+        return -EINTR;
+    }
     return 0;
 }
 

@@ -211,7 +211,7 @@ static inline int is_ignored(int sig)
  */
 int __tty_check_change(struct tty *tty, int sig)
 {
-    unsigned long flags;
+    // unsigned long flags;
     int ret = 0;
 
     if (current->ctty != tty)

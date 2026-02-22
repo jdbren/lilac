@@ -875,7 +875,6 @@ SYSCALL_DECL2(symlink, const char*, target, const char*, linkpath)
 SYSCALL_DECL3(readlink, const char*, path, char *, buf, int, bufsize)
 {
     struct dentry *dentry;
-    long len;
 
     if (!access_ok(buf, bufsize))
         return -EFAULT;

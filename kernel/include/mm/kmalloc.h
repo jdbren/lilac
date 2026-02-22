@@ -5,7 +5,7 @@
 
 #include <lilac/types.h>
 
-void  kfree(void *addr);
+void kfree(const void *addr);
 
 [[gnu::malloc(kfree)]] void* kmalloc(size_t size);
 [[gnu::malloc(kfree)]] void* kzmalloc(size_t size);

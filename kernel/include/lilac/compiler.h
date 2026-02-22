@@ -18,4 +18,7 @@
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
+#define __unused __attribute__((unused))
+#define __maybe_unused [[maybe_unused]]
+
 #endif /* _LILAC_COMPILER_H */

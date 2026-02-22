@@ -18,7 +18,8 @@
 static const unsigned long i_hash_shift = 16;
 static const unsigned long i_hash_mask = (1 << i_hash_shift) - 1;
 
-static unsigned long hash(struct super_block *sb, unsigned long hashval)
+__maybe_unused static
+unsigned long hash(struct super_block *sb, unsigned long hashval)
 {
     unsigned long tmp;
 
@@ -124,6 +125,7 @@ void iput(struct inode *inode)
     }
 }
 
+/*
 int insert_inode(struct super_block *sb, struct inode *inode)
 {
     return 0;
@@ -138,3 +140,4 @@ struct inode *lookup_inode(struct super_block *sb, unsigned long hashval)
 {
     return NULL;
 }
+*/
