@@ -1,4 +1,5 @@
 #include <iostream>
+#include <unistd.h>
 #include <sys/syscall.h>
 
 using namespace std;
@@ -6,5 +7,5 @@ using namespace std;
 int main()
 {
     cout << "Calling shutdown..." << endl;
-    return syscall1(SYS_reboot, 1);
+    return syscall(SYS_reboot, 1);
 }

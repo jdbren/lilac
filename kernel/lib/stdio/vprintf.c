@@ -74,8 +74,11 @@ int vprintf(const char *restrict format, va_list args)
         }
         if (isdigit(*format)) {
             use_width = true;
-            width = format[0] - '0';
-            format++;
+            width = 0;
+            while (isdigit(*format)) {
+                width = width * 10 + (*format - '0');
+                format++;
+            }
         }
         if (*format == '.') {
             format++;
@@ -317,9 +320,25 @@ int vprintf(const char *restrict format, va_list args)
             }
             else if (*format == 'x') {
                 format++;
-                long i = va_arg(args, long);
+                unsigned long i = va_arg(args, unsigned long);
                 char *s = convert(i, 16);
                 unsigned len = strlen(s);
+                if (use_width) {
+                    if (width < len)
+                        len = width;
+                    while (len < width && !left_justify) {
+                        if (zero_pad) {
+                            if (!print("0", 1))
+                                return -1;
+                        }
+                        else {
+                            if(!print(" ", 1))
+                                return -1;
+                        }
+                        written++;
+                        width--;
+                    }
+                }
                 if (!print(s, len))
                     return -1;
                 written += len;

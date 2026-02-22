@@ -26,7 +26,8 @@ CFLAGS:=$(CFLAGS) $(FLAGS) -std=gnu23 -fanalyzer -fstack-protector-strong \
 	-fno-allow-store-data-races -fno-asynchronous-unwind-tables \
 	-ftrivial-auto-var-init=zero -fzero-init-padding-bits=all
 # -DDEBUG_VFS -DDEBUG_FORK -DDEBUG_FAULT -DDEBUG_MM -DDEBUG_KMALLOC
-# -DDEBUG_PAGING -DDEBUG_FAT -DDEBUG_TMPFS -DDEBUG_ELF
+# -DDEBUG_PAGING -DDEBUG_FAT -DDEBUG_TMPFS -DDEBUG_ELF -DDEBUG_SIGNAL
+# -DDEBUG_APIC -DDEBUG_ENTRY -DDEBUG_TTY
 CXXFLAGS:=$(CXXFLAGS) $(FLAGS) -D_GLIBCXX_NO_ASSERTIONS \
 	-fno-exceptions -fno-rtti -fpermissive -std=c++23
 LDFLAGS:=$(LDFLAGS) -nostdlib
@@ -67,6 +68,7 @@ kernel/smp.o \
 kernel/sync.o \
 kernel/syscall.o \
 kernel/time.o \
+kernel/user.o \
 kernel/wait.o \
 mm/kmalloc.o \
 mm/mm.o \

@@ -718,9 +718,9 @@ SYSCALL_DECL2(getcwd, char*, buf, size_t, size)
         return -ERANGE;
     }
 
-    len = copy_to_user(buf, path, len + 1);
+    int ret = copy_to_user(buf, path, len + 1);
     kfree(path);
-    return len < 0 ? len : 0;
+    return ret != 0 ? ret : len+1;
 }
 
 int vfs_rmdir(const char *path)
@@ -891,4 +891,95 @@ SYSCALL_DECL3(readlink, const char*, path, char *, buf, int, bufsize)
         return -EINVAL;
 
     return dentry->d_inode->i_op->readlink(dentry, buf, bufsize);
+}
+
+struct iovec {
+    void *iov_base;	/* Pointer to data.  */
+    size_t iov_len;	/* Length of data.  */
+};
+
+SYSCALL_DECL3(readv, int, fd, const struct iovec __user *, iov, int, iovcnt)
+{
+    struct file *file;
+    struct iovec kiov;
+    ssize_t total = 0;
+
+    if (iovcnt < 0 || iovcnt > 1024)
+        return -EINVAL;
+
+    file = get_file_handle(fd);
+    if (IS_ERR(file))
+        return PTR_ERR(file);
+
+    if ((file->f_mode & O_ACCMODE) == O_WRONLY)
+        return -EBADF;
+
+    for (int i = 0; i < iovcnt; i++) {
+        if (copy_from_user(&kiov, &iov[i], sizeof(kiov)))
+            return -EFAULT;
+        if (!kiov.iov_len)
+            continue;
+
+        unsigned char *kbuf = kmalloc(kiov.iov_len);
+        if (!kbuf)
+            return total > 0 ? total : -ENOMEM;
+
+        ssize_t bytes = vfs_read(file, kbuf, kiov.iov_len);
+        if (bytes > 0) {
+            if (copy_to_user(kiov.iov_base, kbuf, bytes)) {
+                kfree(kbuf);
+                return total > 0 ? total : -EFAULT;
+            }
+            total += bytes;
+        }
+        kfree(kbuf);
+        if (bytes < 0)
+            return total > 0 ? total : bytes;
+        if ((size_t)bytes < kiov.iov_len)
+            break;
+    }
+    return total;
+}
+
+SYSCALL_DECL3(writev, int, fd, const struct iovec __user *, iov, int, iovcnt)
+{
+    struct file *file;
+    struct iovec kiov;
+    ssize_t total = 0;
+
+    if (iovcnt < 0 || iovcnt > 1024)
+        return -EINVAL;
+
+    file = get_file_handle(fd);
+    if (IS_ERR(file))
+        return PTR_ERR(file);
+
+    if ((file->f_mode & O_ACCMODE) == O_RDONLY)
+        return -EBADF;
+
+    for (int i = 0; i < iovcnt; i++) {
+        if (copy_from_user(&kiov, &iov[i], sizeof(kiov)))
+            return -EFAULT;
+        if (!kiov.iov_len)
+            continue;
+
+        unsigned char *kbuf = kmalloc(kiov.iov_len);
+        if (!kbuf)
+            return total > 0 ? total : -ENOMEM;
+
+        if (copy_from_user(kbuf, kiov.iov_base, kiov.iov_len)) {
+            kfree(kbuf);
+            return total > 0 ? total : -EFAULT;
+        }
+
+        ssize_t bytes = vfs_write(file, kbuf, kiov.iov_len);
+        kfree(kbuf);
+        if (bytes > 0)
+            total += bytes;
+        if (bytes < 0)
+            return total > 0 ? total : bytes;
+        if ((size_t)bytes < kiov.iov_len)
+            break;
+    }
+    return total;
 }

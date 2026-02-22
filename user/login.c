@@ -6,7 +6,7 @@
 #include <termios.h>
 #include <sys/wait.h>
 
-int main()
+int main(int argc, char *argv[])
 {
     char name[64] = {0};
     setsid();
@@ -51,10 +51,10 @@ int main()
 
     setenv("TERM", "vt220", 1);
     setenv("HOME", "/root", 1);
-    setenv("SHELL", "/bin/dash", 1);
+    setenv("SHELL", "/bin/sh", 1);
 
     // Try to run a shell
-    execl("/bin/bash", "-", NULL); // will not work yet
+    execl("/bin/sh", "sh", "-lE", NULL);
     execl("/bin/dash", "sh", "-lE", NULL);
     execl("/usr/bin/dash", "sh", "-lE", NULL);
     execl("/sbin/gush", "gush", NULL); // my custom shell

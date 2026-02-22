@@ -36,6 +36,10 @@ int vfs_stat(const struct file *f, struct stat *st)
     st->st_atim = (struct timespec){i_ptr->i_atime, 0};
     st->st_mtim = (struct timespec){i_ptr->i_mtime, 0};
     st->st_ctim = (struct timespec){i_ptr->i_ctime, 0};
+#ifdef DEBUG_VFS
+    klog(LOG_DEBUG, "vfs_stat: inode=%lu, size=%lu, mode=%o\n",
+        st->st_ino, st->st_size, st->st_mode);
+#endif
     return 0;
 }
 
