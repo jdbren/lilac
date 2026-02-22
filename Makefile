@@ -1,35 +1,46 @@
-PROJECTS=kernel init user
+PROJECTS=kernel init user musl
 
-include kbuild.config
+-include kbuild.config
 export DESTDIR=$(SYSROOT)
-export LIBC_DIR?=$(shell realpath ./newlib)
 
 ifeq ($(V),1)
 export VERBOSE=1
 endif
 
 .PHONY: all clean distclean install install-system
-.PHONY: kernel init user copy-headers
+.PHONY: kernel init user copy-headers config
 
-all: kernel init
+all: kernel
+
+kbuild.config:
+	./config.sh
+
+config:
+	@if [ ! -f musl/config.mak ]; then \
+		cd musl && ./configure --target=x86_64-lilac --prefix=/usr --disable-shared --enable-debug; \
+	fi
 
 kernel: copy-headers
 	$(MAKE) -C kernel
 
-copy-headers:
+copy-headers: config
+	$(MAKE) -C musl install-headers
 	$(MAKE) -C kernel install-headers
 
 install: copy-headers
 	$(MAKE) -C kernel install
 
-install-system: install init user
+install-libc: copy-headers
+	$(MAKE) -C musl install
+
+install-system: install install-libc init user
 	$(MAKE) -C init install
 
 # USERSPACE
-init:
+init: install-libc
 	$(MAKE) -C init
 
-user:
+user: install-libc
 	$(MAKE) -C user
 
 # CLEAN
