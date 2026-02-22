@@ -34,6 +34,18 @@ void x86_dump_regs(struct regs_state *regs)
 }
 #endif
 
+#ifdef DEBUG_ENTRY
+void x86_debug_syscall_entry(struct regs_state *regs)
+{
+    klog(LOG_DEBUG, "Syscall entry: RAX = %ld\n", (long) regs->ax);
+}
+
+void x86_debug_syscall_exit(struct regs_state *regs)
+{
+    klog(LOG_DEBUG, "Syscall exit: RAX = %ld\n", (long) regs->ax);
+}
+#endif
+
 int x86_kernel_entry(struct regs_state *regs)
 {
     current->regs = (void*)regs;

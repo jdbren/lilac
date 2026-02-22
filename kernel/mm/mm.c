@@ -12,6 +12,16 @@
 #include <lilac/fs.h>
 #include <lilac/libc.h>
 
+static void print_vma_list(struct mm_info *mm)
+{
+    struct vm_desc *vma = mm->mmap;
+    klog(LOG_DEBUG, "VMA list for process %d:\n", current->pid);
+    while (vma) {
+        klog(LOG_DEBUG, "  VMA: %p-%p, flags: %x\n", (void*)vma->start, (void*)vma->end, vma->vm_flags);
+        vma = vma->vm_next;
+    }
+}
+
 static int convert_mmap_flags(int prot, int flags)
 {
     int mflags = 0;
@@ -78,6 +88,26 @@ void vma_list_insert(struct vm_desc *vma, struct vm_desc **list)
         vma_list->vm_next->vm_prev = vma;
 
     vma_list->vm_next = vma;
+
+#if defined(DEBUG_MM) || defined(DEBUG_VMA)
+    print_vma_list(vma->mm);
+#endif
+}
+
+static void vma_list_remove(struct vm_desc *vma, struct vm_desc **list)
+{
+    vma->mm->total_vm -= vma->end - vma->start;
+
+    if (vma->vm_prev)
+        vma->vm_prev->vm_next = vma->vm_next;
+    else
+        *list = vma->vm_next;
+
+    if (vma->vm_next)
+        vma->vm_next->vm_prev = vma->vm_prev;
+
+    vma->vm_next = NULL;
+    vma->vm_prev = NULL;
 }
 
 static struct vm_desc * create_brk_seg(struct mm_info *mm)
@@ -190,6 +220,53 @@ static struct vm_desc *create_new_vma_at(struct mm_info *mm,
     return vma;
 }
 
+// Unmap any VMAs overlapping [start, end), splitting partially-covered ones.
+static void mmap_fixed_unmap_range(struct mm_info *mm, uintptr_t start,
+                                   uintptr_t end)
+{
+    struct vm_desc *vma = mm->mmap;
+
+    while (vma && vma->end <= start)
+        vma = vma->vm_next;
+
+    while (vma && vma->start < end) {
+        struct vm_desc *next = vma->vm_next;
+
+        if (vma->start >= start && vma->end <= end) {
+            // Entirely contained — remove it
+            vma_list_remove(vma, &mm->mmap);
+            kfree(vma);
+        } else if (vma->start < start && vma->end > end) {
+            // VMA spans beyond both sides — split into two
+            struct vm_desc *tail = kzmalloc(sizeof(*tail));
+            if (!tail)
+                return; // best-effort
+            *tail = *vma;
+            tail->start = end;
+            vma->end = start;
+            // Fix up accounting for the original (now smaller) vma
+            vma->mm->total_vm -= (end - start);
+            // Insert the tail after the current vma
+            tail->vm_prev = vma;
+            tail->vm_next = vma->vm_next;
+            if (vma->vm_next)
+                vma->vm_next->vm_prev = tail;
+            vma->vm_next = tail;
+            break; // no more overlaps possible
+        } else if (vma->start < start) {
+            // Overlaps at the end — truncate
+            vma->mm->total_vm -= vma->end - start;
+            vma->end = start;
+        } else {
+            // Overlaps at the beginning — shrink from front
+            vma->mm->total_vm -= end - vma->start;
+            vma->start = end;
+        }
+ 
+        vma = next;
+    }
+}
+
 // TODO: implement file-backed mmap properly
 int do_mmap_file(struct vm_desc *vma, struct file *file, unsigned long offset)
 {
@@ -219,16 +296,29 @@ SYSCALL_DECL6(mmap, void*, addr, size_t, length, int, prot,
     if (flags & MAP_FIXED) {
         if (pgaddr == 0 || (uintptr_t)addr % PAGE_SIZE != 0)
             return -EINVAL;
-        vma = create_new_vma_at(current->mm, pgaddr, num_pages * PAGE_SIZE, mflags);
+        uintptr_t map_end = pgaddr + (uintptr_t)num_pages * PAGE_SIZE;
+        if (map_end < pgaddr || map_end >= __USER_MAX_ADDR)
+            return -EINVAL;
+        mmap_fixed_unmap_range(current->mm, pgaddr, map_end);
+        vma = kzmalloc(sizeof(*vma));
+        if (!vma)
+            return -ENOMEM;
+        vma->mm = current->mm;
+        vma->start = pgaddr;
+        vma->end = map_end;
+        vma->vm_flags = mflags;
     } else {
         if (pgaddr == 0)
             pgaddr = __USER_MMAP_START; // arbitrary high address
+        klog(LOG_DEBUG, "mmap anonymous: pgaddr = %p, num_pages = %d\n", (void*)pgaddr, num_pages);
         vma = create_new_vma_after(current->mm, pgaddr, num_pages * PAGE_SIZE, mflags);
     }
 
     if (IS_ERR(vma)) {
+        klog(LOG_ERROR, "mmap: Failed to create VMA: %ld\n", PTR_ERR(vma));
         return PTR_ERR(vma);
     } else if (vma == NULL) {
+        klog(LOG_ERROR, "mmap: Failed to create VMA: unknown error\n");
         return -ENOMEM;
     }
 
@@ -281,6 +371,9 @@ int brk(void *addr)
     struct vm_desc *vma = mm->mmap;
     uintptr_t addr_val = (uintptr_t)addr;
 
+    if (addr_val < mm->start_brk)
+        return 0;
+
     while (vma && vma->start != mm->start_brk) {
         vma = vma->vm_next;
     }
@@ -307,8 +400,7 @@ SYSCALL_DECL1(brk, void*, addr)
 {
     klog(LOG_DEBUG, "brk called with addr: %p\n", addr);
     int ret = brk(addr);
-    if (ret < 0)
-        return ret;
+    klog(LOG_DEBUG, "brk result: %d, new brk: %p\n", ret, current->mm->brk);
     return (uintptr_t)current->mm->brk;
 }
 
@@ -368,6 +460,7 @@ SYSCALL_DECL1(sbrk, intptr_t, increment)
 // TODO: flimsy HACK, not POSIX
 SYSCALL_DECL2(memfd_create, const char *, name, unsigned int, flags)
 {
+    klog(LOG_WARN, "memfd_create is not fully implemented, using a temporary file as a placeholder\n");
     static int n = 0;
     char buf[64];
     while (*name && *name == '/')

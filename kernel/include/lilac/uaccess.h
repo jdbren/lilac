@@ -3,37 +3,29 @@
 
 #include <lilac/lilac.h>
 #include <lilac/sched.h>
+#include <mm/mm.h>
 
 extern int arch_user_copy(void *dst, const void *src, size_t size);
 extern int arch_strncpy_from_user(char *dst, const char *src, size_t max_size);
 extern int arch_strnlen_user(const char *str, size_t max_size);
 
-#define _is_code(addr, size, mm) \
+#define __is_code(addr, size, mm) \
     ((uintptr_t)(addr) >= mm->start_code && (uintptr_t)(addr) + size < mm->end_code)
-#define _is_stack(addr, size, mm) \
+#define __is_stack(addr, size, mm) \
     ((uintptr_t)(addr) >= mm->start_stack && (uintptr_t)(addr) + size < __USER_STACK)
-#define _is_data(addr, size, mm) \
+#define __is_data(addr, size, mm) \
     ((uintptr_t)(addr) >= mm->start_data && (uintptr_t)(addr) + size < mm->end_data)
-#define _is_brk(addr, size, mm) \
+#define __is_brk(addr, size, mm) \
     ((uintptr_t)(addr) + size < mm->brk)
 
 #define __access_ok(addr, size, mm) (addr && \
-    (_is_data(addr, size, mm) || _is_stack(addr, size, mm) || \
-    _is_brk(addr, size, mm) || _is_code(addr, size, mm)))
+    (__is_data(addr, size, mm) || __is_stack(addr, size, mm) || \
+    __is_brk(addr, size, mm) || __is_code(addr, size, mm)))
 
 #define access_ok(addr, size) ({ \
     struct mm_info *mm = current->mm; \
-    __access_ok(addr, size, mm); \
+    __access_ok(addr, size, mm) || (find_vma(mm, (uintptr_t)addr) != NULL); \
 })
-
-__must_check
-static inline int check_access(void *addr, size_t size)
-{
-    if (!access_ok(addr, size)) {
-        return -EFAULT;
-    }
-    return 0;
-}
 
 /**
  * Copy size bytes to user space. Returns 0 on success

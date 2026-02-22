@@ -18,6 +18,8 @@
 #include <mm/page.h>
 #include <lilac/uaccess.h>
 
+#pragma GCC diagnostic ignored "-Warray-bounds"
+
 #define INIT_STACK(KSTACK) ((uintptr_t)KSTACK + __KERNEL_STACK_SZ - sizeof(size_t))
 
 static int num_tasks;
@@ -250,7 +252,7 @@ static unsigned int prepare_task_args(struct task *p, char **argv, char *argv_lo
     return argc;
 }
 
-static void prepare_task_env(struct task *p, char **envp, char *env_loc, char *env_max)
+static int prepare_task_env(struct task *p, char **envp, char *env_loc, char *env_max)
 {
     // Write env to user stack
     u32 envc = 0;
@@ -271,6 +273,17 @@ static void prepare_task_env(struct task *p, char **envp, char *env_loc, char *e
         klog(LOG_DEBUG, "Env %d: %s\n", i, envp[i]);
     }
 #endif
+    return envc;
+}
+
+static unsigned int count_task_vec(char *const vec[])
+{
+    unsigned int cnt = 0;
+    if (!vec)
+        return 0;
+    while (vec[cnt] && cnt < 31)
+        cnt++;
+    return cnt;
 }
 
 static void start_process(void)
@@ -295,36 +308,58 @@ static void start_process(void)
     mem->start_stack = (uintptr_t)(__USER_STACK - __USER_STACK_SZ);
     set_vm_areas(mem);
 
-    uintptr_t argv, argc, envp;
+    unsigned int argc = count_task_vec(current->info.argv);
+    unsigned int envc = count_task_vec(current->info.envp);
+
+    // Copy argument and environment strings into brk area
     char *env_loc = (char*)mem->brk;
     char *arg_loc = env_loc + 0x1400;
     sbrk(0x2000);
 
-    uintptr_t *stack = (void*)(__USER_STACK - sizeof(void*)*16);
-    if (!current->info.envp) {
-        envp = 0;
-    } else {
-        envp = (uintptr_t)stack;
-        prepare_task_env(current, (char**)stack, env_loc, arg_loc);
-    }
+    /*
+     * Set up the initial user stack per the System V ABI convention
+     * expected by musl's _start / _start_c / __libc_start_main:
+     *
+     *   sp[0]              = argc
+     *   sp[1 .. argc]      = argv[0 .. argc-1]
+     *   sp[argc+1]         = NULL              (argv terminator)
+     *   sp[argc+2 .. +1+envc] = envp[0 .. envc-1]
+     *   sp[argc+envc+2]    = NULL              (envp terminator)
+     *   sp[...]            = 0, 0              (AT_NULL auxiliary vector)
+     *
+     * _start_c(long *p):  argc = p[0]; argv = (void*)(p+1);
+     * __libc_start_main:  envp = argv + argc + 1;
+     *                     __auxv scanned past envp NULL terminator.
+     */
+    size_t nslots = 1 + (argc + 1) + (envc + 1) + 2;
+    uintptr_t *sp = (uintptr_t *)__USER_STACK - nslots;
+    sp = (uintptr_t *)((uintptr_t)sp & ~(uintptr_t)0xf);
 
-    stack = (void*)((uintptr_t)stack - sizeof(void*)*32);
+    sp[0] = (uintptr_t)argc;
+
+    char **argv_ptr = (char **)(sp + 1);
+    char **envp_ptr = argv_ptr + argc + 1;
+
     if (!current->info.argv) {
-        argv = 0;
-        argc = 0;
+        argv_ptr[0] = NULL;
     } else {
-        argv = (uintptr_t)stack;
-        argc = prepare_task_args(current, (char**)stack, arg_loc, arg_loc + 0xc00);
+        prepare_task_args(current, argv_ptr, arg_loc, arg_loc + 0xc00);
     }
 
-    stack = (void*)((uintptr_t)stack & ~(sizeof(void*)*2 - 1));
-    --stack;
-    *--stack = envp;
-    *--stack = argv;
-    *--stack = argc;
+    if (!current->info.envp) {
+        envp_ptr[0] = NULL;
+    } else {
+        prepare_task_env(current, envp_ptr, env_loc, arg_loc);
+    }
 
-    klog(LOG_DEBUG, "Going to user mode, jmp = %p, stack = %p\n", jmp, stack);
-    jump_usermode(jmp, (void*)stack, current->kstack);
+    // Empty auxiliary vector (AT_NULL = 0)
+    uintptr_t *auxv = (uintptr_t *)(envp_ptr + envc + 1);
+    auxv[0] = 0;
+    auxv[1] = 0;
+
+    klog(LOG_DEBUG, "Going to user mode, jmp = %p, sp = %p, argc = %d, argv = %p, envp = %p\n",
+        jmp, sp, argc, argv_ptr, envp_ptr);
+    jump_usermode(jmp, (void*)sp, current->kstack);
 }
 
 struct task *init_process(void)
@@ -574,6 +609,7 @@ static int do_execve(const char *path, char *const argv[], char *const envp[])
 SYSCALL_DECL3(execve, const char*, path, char* const*, argv, char* const*, envp)
 {
     int err = 0;
+    klog(LOG_DEBUG, "execve called with path = %s, argv = %p, envp = %p\n", path, argv, envp);
     if (!access_ok(path, 1) || !access_ok(argv, 1) || !access_ok(envp, 1))
         return -EFAULT;
 

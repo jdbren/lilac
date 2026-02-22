@@ -69,7 +69,7 @@ static void print_long(const char *dir, const char *sep, char **names, int count
         }
 
         struct stat st;
-        if (lstat(path, &st) == -1) {
+        if (stat(path, &st) == -1) {
             fprintf(stderr, "ls: lstat %s: %s\n", path, strerror(errno));
             continue;
         }

@@ -6,6 +6,7 @@
 #define __lilac__   1
 #define _LILAC      1
 
+#undef PAGE_SIZE
 #define PAGE_SIZE           4096
 #define PAGE_SHIFT          12
 

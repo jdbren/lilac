@@ -341,7 +341,11 @@ static int tcsetattr(struct tty *t, struct termios *term)
 
     if (!valid_cflag(tmp.c_cflag))
         return -EINVAL;
-
+#ifdef DEBUG_TTY
+    klog(LOG_DEBUG, "tcsetattr\n");
+    klog(LOG_DEBUG, "termios: iflag=0x%x, oflag=0x%x, cflag=0x%x, lflag=0x%x\n",
+         tmp.c_iflag, tmp.c_oflag, tmp.c_cflag, tmp.c_lflag);
+#endif
     acquire_lock(&t->termios_lock);
 
     struct termios old = t->termios;

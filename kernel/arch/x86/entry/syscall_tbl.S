@@ -75,6 +75,14 @@ syscall_table:
 	sc_tbl_entry alarm		# 52
 	sc_tbl_entry pause		# 53
 	sc_tbl_entry arch_prctl	# 54
+	sc_tbl_entry getuid		# 55
+	sc_tbl_entry getgid		# 56
+	sc_tbl_entry geteuid	# 57
+	sc_tbl_entry getegid	# 58
+	sc_tbl_entry access		# 59
+	sc_tbl_entry readv		# 60
+	sc_tbl_entry writev		# 61
+	sc_tbl_entry faccessat	# 62
 /*
 	sc_tbl_entry chmod		# 30
 	sc_tbl_entry chown		# 31

@@ -11,7 +11,7 @@ endif
 .PHONY: all clean distclean install install-system
 .PHONY: kernel init user copy-headers
 
-all: kernel init libc
+all: kernel init
 
 kernel: copy-headers
 	$(MAKE) -C kernel

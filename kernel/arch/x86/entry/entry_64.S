@@ -35,6 +35,10 @@ syscall_entry:
 	mov  %rsp,%rdi
 	call x86_kernel_entry
 
+#ifdef DEBUG_ENTRY
+	mov  %rsp,%rdi
+	call x86_debug_syscall_entry
+#endif
 	mov  RAX(%rsp),%rax
 	cmp  $MAX_SYSCALL,%rax
 	jle  .do_syscall
@@ -60,6 +64,12 @@ syscall_entry:
 .bad_syscall:
 	mov  %rax, RAX(%rsp) # Update saved regs with return value
 	push %rax
+
+#ifdef DEBUG_ENTRY
+	lea  8(%rsp), %rdi
+	call x86_debug_syscall_exit
+#endif
+
 	call x86_kernel_exit
 	pop  %r12 # original return value
 	test %rax,%rax

@@ -51,3 +51,19 @@ SYSCALL_DECL3(fcntl, int, fd, int, cmd, unsigned long, arg)
             return -EINVAL;
     }
 }
+
+SYSCALL_DECL2(access, const char *, pathname, int, mode)
+{
+    const char *path = get_user_path(pathname);
+    if (IS_ERR(path))
+        return PTR_ERR(path);
+    return 0;
+}
+
+SYSCALL_DECL3(faccessat, int, dirfd, const char *, pathname, int, mode)
+{
+    const char *path = get_user_path(pathname);
+    if (IS_ERR(path))
+        return PTR_ERR(path);
+    return 0;
+}

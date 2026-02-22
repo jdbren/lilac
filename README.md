@@ -46,20 +46,18 @@ make
 make install
 ```
 ```bash
-../gcc/configure --target=$TARGET --with-sysroot=$HOME/lilac/sysroot --enable-languages=c,c++ --disable-fixincludes
+../gcc/configure --target=$TARGET --with-sysroot=$HOME/lilac/sysroot --enable-languages=c,c++ \
+    --disable-fixincludes --disable-nls --enable-static
 make all-gcc
-# Need to have system headers in the sysroot include dir. Get these from newlib.
-mkdir -p $HOME/lilac/sysroot/usr/local
-cp -r $HOME/lilac/newlib/newlib/libc/include $HOME/lilac/sysroot/usr/local/include
+make install-gcc
+# then install libc
+# in musl
+./configure --target=x86_64-lilac --prefix=/usr --disable-shared --enable-debug
+make
+make DESTDIR=$HOME/lilac/sysroot install
+# back to gcc
 make all-target-libgcc
-make install-gcc install-target-libgcc
-```
-```bash
-# Add a crt0 for compiling user space programs
-x86_64-lilac-gcc -o crt0.o -c ~/lilac/init/crt0.S
-mv crt0.o /usr/local/lib/gcc/x86_64-lilac/16.0.0/ # or where ever the compiler is
-# Also make sure to install libc to the sysroot
-make install-libc # in lilac dir
+make install-target-libgcc
 ```
 ```bash
 # C++ support
