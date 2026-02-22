@@ -3,16 +3,12 @@
 https://github.com/user-attachments/assets/acd1639e-30f1-4e09-84ad-2e75e0c77be9
 
 Updated 3/31/25 -
-Running in long mode (x86_64) is now supported. I have ported the newlib
-C library, and modified binutils and gcc sources to customize the compiler
-when it may be helpful. Newlib is included as a submodule. Get it with
-```bash
-git submodule init
-git submodule update --remote
-```
+Running in long mode (x86_64) is now supported. I have ported the musl
+C library (somewhat complete), and modified binutils and gcc sources to 
+customize the compiler. musl is included as a submodule.
 
-https://github.com/jdbren/gcc/releases/tag/gcc-15.2.0-lilac \
-https://github.com/jdbren/binutils-gdb/releases/tag/binutils-2.45-lilac
+https://github.com/jdbren/gcc/tree/gcc-15-lilac \
+https://github.com/jdbren/binutils-gdb/tree/binutils-2_45-lilac
 
 ------------------------------------------------------------------------------
 Lilac is an operating system kernel running on x86. It is a fun project to learn
