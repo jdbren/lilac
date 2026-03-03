@@ -21,10 +21,11 @@ FLAGS=-D__lilac__ -D__KERNEL__ -DLOG_CPUID -Werror -Iinclude -ffreestanding \
 	-Wall -Wextra -Wno-sign-compare -Wundef -Wframe-larger-than=600 \
 	-Wno-unused-parameter
 CFLAGS:=$(CFLAGS) $(FLAGS) -std=gnu23 -fanalyzer -fstack-protector-strong \
-	-fno-strict-aliasing -fno-PIE -fno-common -mno-red-zone \
+	-fno-strict-aliasing -fno-PIE -fno-common -fno-builtin -mno-red-zone \
 	-fno-strict-overflow -fno-delete-null-pointer-checks -fno-stack-check \
 	-fno-allow-store-data-races -fno-asynchronous-unwind-tables \
-	-ftrivial-auto-var-init=zero -fzero-init-padding-bits=all
+	-ftrivial-auto-var-init=zero -fzero-init-padding-bits=all \
+	-fno-omit-frame-pointer -fno-tree-vectorize
 # -DDEBUG_VFS -DDEBUG_FORK -DDEBUG_FAULT -DDEBUG_MM -DDEBUG_KMALLOC
 # -DDEBUG_PAGING -DDEBUG_FAT -DDEBUG_TMPFS -DDEBUG_ELF -DDEBUG_SIGNAL
 # -DDEBUG_APIC -DDEBUG_ENTRY -DDEBUG_TTY
@@ -109,8 +110,7 @@ drivers/tty/vt.o \
 lib/icxxabi.o \
 lib/operators.o \
 lib/multiboot.o \
-lib/rbtree.o \
-kernel/cplusplus_test.o
+lib/rbtree.o
 
 LIBK_OBJS=$(patsubst %.c,%.o,$(wildcard lib/*/*.c))
 

@@ -52,4 +52,5 @@ clean:
 	rm -rf sysroot
 
 distclean: clean
+	@$(MAKE) -C musl distclean
 	rm -f debug.txt dump.txt kbuild.config* log.txt
