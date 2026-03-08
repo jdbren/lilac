@@ -470,5 +470,5 @@ SYSCALL_DECL2(memfd_create, const char *, name, __unused unsigned int, flags)
         name++;
     snprintf(buf, 64, "/tmp/%s/%d", name, n);
     struct file *f = vfs_open(buf, O_CREAT, S_IREAD|S_IWRITE);
-    return get_next_fd(&current->fs.files, f);
+    return get_next_fd(current->files, f);
 }

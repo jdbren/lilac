@@ -17,7 +17,6 @@ struct task * find_child_by_pid(struct task *parent, int pid);
 
 #define current get_current_task()
 
-int do_fork(void);
 void idle(void);
 
 void sched_post_switch_unlock(void);

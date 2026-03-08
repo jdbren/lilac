@@ -65,6 +65,7 @@ static struct mm_info * make_32_bit_mmap()
     }
     info->pgd = phys;
     info->kstack = kstack;
+    info->ref_count = 1;
 
     return info;
 }
@@ -84,6 +85,7 @@ static struct mm_info * make_64_bit_mmap()
     }
     info->pgd = cr3;
     info->kstack = get_free_pages(__KERNEL_STACK_SZ / PAGE_SIZE, 0);
+    info->ref_count = 1;
 
     return info;
 }
@@ -264,6 +266,15 @@ void *arch_copy_regs(struct regs_state *src)
     }
     *regs = *src;
     return regs;
+}
+
+void arch_set_user_sp(struct task *p, void *sp)
+{
+    struct regs_state *regs = (struct regs_state*)p->regs;
+    if (!regs) {
+        kerror("Current task has no regs state\n");
+    }
+    regs->sp = (uintptr_t)sp;
 }
 
 void save_fp_regs(struct task *p)

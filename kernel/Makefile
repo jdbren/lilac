@@ -1,5 +1,4 @@
 ARCHNAME=$(shell ../scripts/target-triplet-to-arch.sh $(HOST))
-COMPILER_DIR?=$(shell dirname $(shell which $(CC)))/..
 UNAME=$(shell uname)
 ifeq ($(UNAME), Linux)
 GRUB_FILE=grub2-file

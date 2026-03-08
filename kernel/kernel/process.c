@@ -1,28 +1,26 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/process.h>
-#include <stdatomic.h>
-#include <lib/rbtree.h>
-#include <lib/hashtable.h>
 #include <lilac/libc.h>
 #include <lilac/lilac.h>
+#include <lilac/clone.h>
 #include <lilac/elf.h>
 #include <lilac/fs.h>
 #include <lilac/sched.h>
-#include <lilac/wait.h>
-#include <lilac/timer.h>
 #include <lilac/syscall.h>
+#include <lilac/timer.h>
+#include <lilac/uaccess.h>
+#include <lilac/wait.h>
 #include <mm/mm.h>
 #include <mm/kmm.h>
 #include <mm/kmalloc.h>
 #include <mm/page.h>
-#include <lilac/uaccess.h>
 
 #pragma GCC diagnostic ignored "-Warray-bounds"
 
 #define INIT_STACK(KSTACK) ((uintptr_t)KSTACK + __KERNEL_STACK_SZ - sizeof(size_t))
 
-static int num_tasks;
+static atomic_int num_tasks;
 DEFINE_HASHTABLE(pid_table, PID_HASH_BITS);
 DEFINE_HASHTABLE(pgid_table, PID_HASH_BITS);
 DEFINE_HASHTABLE(sid_table, PID_HASH_BITS);
@@ -85,7 +83,12 @@ inline int get_pid(void)
 
 SYSCALL_DECL0(getpid)
 {
-    return get_pid();
+    return current->tgid;
+}
+
+SYSCALL_DECL0(gettid)
+{
+    return current->pid;
 }
 
 SYSCALL_DECL0(getppid)
@@ -176,8 +179,15 @@ struct sighandlers * alloc_sighandlers(void)
     if (!sh)
         return NULL;
     sh->ref_count = 1;
-    sh->lock = (spinlock_t)SPINLOCK_INIT;
     return sh;
+}
+
+struct fs_info * alloc_fs_info()
+{
+    struct fs_info *fs = kzmalloc(sizeof(*fs));
+    if (!fs) return NULL;
+    fs->ref_count = 1;
+    return fs;
 }
 
 static void * load_executable(struct task *p)
@@ -372,20 +382,22 @@ struct task *init_process(void)
     this->ppid = 0;
     this->pgid = this->pid;
     this->sid = this->pid;
+    this->tgid = this->pid;
+    this->tg_leader = this;
+    this->exit_signal = SIGCHLD;
     this->mm = mem;
     this->pgd = mem->pgd;
     this->kstack = (void*)INIT_STACK(mem->kstack);
     this->pc = (uintptr_t)(start_process);
     this->state = TASK_RUNNING;
-    this->fs.files.fdarray = kcalloc(4, sizeof(struct file));
-    this->fs.files.max = 4;
-    this->fs.root_d = get_root_dentry();
-    this->fs.cwd_d = this->fs.root_d;
+    this->fs = alloc_fs_info();
+    this->files = alloc_fdtable(8);
+    this->fs->root_d = get_root_dentry();
+    this->fs->cwd_d = this->fs->root_d;
     this->info.path = strdup("/sbin/init");
     this->info.argv = kcalloc(2, sizeof(char*));
     this->info.argv[0] = strdup("init");
     this->info.envp = kcalloc(1, sizeof(char*));
-    memcpy(this->name, "init", 5);
     this->sighand = alloc_sighandlers();
     INIT_LIST_HEAD(&this->children);
     INIT_LIST_HEAD(&this->sibling);
@@ -397,18 +409,49 @@ struct task *init_process(void)
     return this;
 }
 
+
+static void mm_release(struct task *p, struct mm_info *mm)
+{
+    if (p->clear_child_tid) {
+        if (atomic_load(&mm->ref_count) > 1) {
+            put_user(0, p->clear_child_tid);
+            // do_futex(p->clear_child_tid, FUTEX_WAKE, 1, NULL, NULL, 0, 0);
+        }
+        p->clear_child_tid = NULL;
+    }
+
+    if (p->vfork_done)
+        wake_all(p->vfork_done);
+}
+
+void exit_mm_release(struct task *tsk, struct mm_info *mm)
+{
+    // futex_exit_release(tsk);
+    mm_release(tsk, mm);
+}
+
+void exec_mm_release(struct task *tsk, struct mm_info *mm)
+{
+    // futex_exec_release(tsk);
+    mm_release(tsk, mm);
+}
+
 static void copy_fs_info(struct fs_info *dst, struct fs_info *src)
 {
     dget(src->root_d);
     dget(src->cwd_d);
     dst->root_d = src->root_d;
     dst->cwd_d = src->cwd_d;
-    dst->files.fdarray = kcalloc(src->files.max, sizeof(struct file*));
-    dst->files.max = src->files.max;
-    for (size_t i = 0; i < src->files.max; i++) {
-        dst->files.fdarray[i] = src->files.fdarray[i];
-        if (dst->files.fdarray[i]) {
-            fget(dst->files.fdarray[i]);
+}
+
+static void copy_files(struct fdtable *dst, struct fdtable *src)
+{
+    dst->fdarray = kcalloc(src->max, sizeof(struct file*));
+    dst->max = src->max;
+    for (size_t i = 0; i < src->max; i++) {
+        dst->fdarray[i] = src->fdarray[i];
+        if (dst->fdarray[i]) {
+            fget(dst->fdarray[i]);
         }
     }
 }
@@ -428,77 +471,197 @@ static struct task *dup_task(struct task *p)
     return new_task;
 }
 
-static struct task * clone_process(struct task *parent)
+// TODO error handling
+static struct task * clone_process(struct clone_args *args)
 {
-    struct task *child = dup_task(parent);
-    if (!child)
-        return NULL;
+    unsigned long flags = args->flags;
+    struct task *cur = current, *parent = current;
+    struct task *child = dup_task(cur);
+    if (IS_ERR_OR_NULL(child))
+        return child;
+
     child->rq_node = (struct rb_node){0};
     INIT_LIST_HEAD(&child->children);
     child->on_rq = false;
     child->parent_wait = false;
 
     child->pid = ++num_tasks;
-    child->parent = parent;
-    child->ppid = parent->pid;
+    if (flags & CLONE_THREAD) {
+        child->tgid = cur->tgid;
+        child->tg_leader = cur->tg_leader;
+    } else {
+        child->tgid = child->pid;
+        child->tg_leader = child;
+    }
+
+    child->set_child_tid = (flags & CLONE_CHILD_SETTID) ? args->child_tid : NULL;
+    child->clear_child_tid = (flags & CLONE_CHILD_CLEARTID) ? args->child_tid : NULL;
+
+    if (flags & CLONE_SETTLS) {
+        child->tls = args->tls;
+    }
+
+    if (flags & (CLONE_PARENT|CLONE_THREAD)) {
+        parent = cur->parent;
+        child->parent = parent;
+        child->ppid = parent->pid;
+        if (flags & CLONE_THREAD)
+            child->exit_signal = -1;
+        else
+            child->exit_signal = cur->tg_leader->exit_signal;
+    } else {
+        child->parent = cur;
+        child->ppid = cur->pid;
+        child->exit_signal = args->exit_signal;
+    }
+
     list_add_tail(&child->sibling, &parent->children);
     hash_add(pid_table, &child->pid_hash, child->pid);
     hash_add(pgid_table, &child->pgid_hash, parent->pgid);
     hash_add(sid_table, &child->sid_hash, parent->sid);
 
-    child->mm = arch_copy_mmap(parent->mm);
+    if (flags & CLONE_VM) {
+        cur->mm->ref_count++;
+        child->mm->kstack = kmalloc(__KERNEL_STACK_SZ);
+    } else {
+        child->mm = arch_copy_mmap(cur->mm);
+    }
     child->pgd = child->mm->pgd;
     child->kstack = (void*)INIT_STACK(child->mm->kstack);
 
-    child->regs = arch_copy_regs(parent->regs);
-    copy_fp_regs(child, parent);
+    child->regs = arch_copy_regs(cur->regs);
+    if (args->stack) {
+        klog(LOG_DEBUG, "Setting user stack pointer to %p\n", args->stack);
+        arch_set_user_sp(child, args->stack);
+    }
+    copy_fp_regs(child, cur);
 
-    child->info.path = strdup(parent->info.path);
+    child->info.path = strdup(cur->info.path);
     child->info.argv = NULL;
     child->info.envp = NULL;
     fget(child->info.exec_file);
-    copy_fs_info(&child->fs, &parent->fs);
 
-    child->sighand = alloc_sighandlers();
-    copy_sighandlers(child->sighand, parent->sighand);
+    if (flags & CLONE_FS) {
+        child->fs->ref_count++;
+    } else {
+        child->fs = alloc_fs_info();
+        copy_fs_info(child->fs, cur->fs);
+    }
+
+    if (flags & CLONE_FILES) {
+        child->files->ref_count++;
+    } else {
+        child->files = alloc_fdtable(cur->files->max);
+        copy_files(child->files, cur->files);
+    }
+
+    if (flags & CLONE_SIGHAND) {
+        get_sighandlers(child->sighand);
+    } else {
+        child->sighand = alloc_sighandlers();
+        copy_sighandlers(child->sighand, cur->sighand);
+    }
     child->pending = 0;
 
     INIT_LIST_HEAD(&child->timer_ev_list);
 
-    strncat(child->name, " (fork)", 31);
     return child;
 }
 
 static void return_from_fork(void)
 {
+    struct task *p;
     sched_post_switch_unlock();
-    klog(LOG_DEBUG, "PID %d: Returning from fork\n", current->pid);
-    arch_return_from_fork(current->regs, current->kstack);
+    p = current;
+    if (p->set_child_tid) {
+        klog(LOG_DEBUG, "PID %d: Setting child TID at %p\n", p->pid, p->set_child_tid);
+        put_user(p->pid, p->set_child_tid);
+    }
+    klog(LOG_DEBUG, "PID %d: Returning from fork\n", p->pid);
+    arch_return_from_fork(p->regs, p->kstack);
 }
 
-int do_fork(void)
+static void wait_for_vfork_done(struct task *p, struct waitqueue *wq)
 {
-    struct task *parent = current;
-    struct task *child = clone_process(parent);
+    klog(LOG_DEBUG, "PID %d: Waiting for vfork child to complete\n", p->pid);
+    sleep_on(wq);
+    klog(LOG_DEBUG, "PID %d: vfork child completed, resuming\n", p->pid);
+}
+
+int do_clone(struct clone_args *args)
+{
+    struct waitqueue vfork_wait = WAITQUEUE_INIT(vfork_wait);
+    unsigned long flags = args->flags;
+
+    klog(LOG_DEBUG, "PID %d: Cloning process with flags 0x%lx\n", current->pid, flags);
+
+    struct task *child = clone_process(args);
     if (!child)
         return -ENOMEM;
+    if (IS_ERR(child))
+        return PTR_ERR(child);
+
+    if (flags & CLONE_PARENT_SETTID) {
+        put_user(child->pid, args->parent_tid);
+    }
 
     child->pc = (uintptr_t)return_from_fork;
     child->state = TASK_RUNNING;
     schedule_task(child);
+
+    if (flags & CLONE_VFORK) {
+        child->vfork_done = &vfork_wait;
+        wait_for_vfork_done(child, &vfork_wait);
+    }
 
     return child->pid;
 }
 
 SYSCALL_DECL0(fork)
 {
-    return do_fork();
+    struct clone_args args = {
+        .exit_signal = SIGCHLD,
+    };
+
+    return do_clone(&args);
+}
+
+SYSCALL_DECL0(vfork)
+{
+    struct clone_args args = {
+        .flags = CLONE_VFORK|CLONE_VM,
+        .exit_signal = SIGCHLD,
+    };
+
+    return do_clone(&args);
+}
+
+SYSCALL_DECL5(clone, unsigned long, flags, void*, stack, void*, ptid, void*, ctid, unsigned long, tls)
+{
+    if (flags & CLONE_THREAD) {
+        if (!(flags & (CLONE_VM|CLONE_SIGHAND)))
+            return -EINVAL;
+    }
+
+    struct clone_args args = {
+        .flags = flags,
+        .stack = stack,
+        .parent_tid = ptid,
+        .child_tid = ctid,
+        .tls = (void*)tls,
+        .exit_signal = flags & 0xff ? flags & 0xff : SIGCHLD,
+    };
+
+    int pid = do_clone(&args);
+
+    return pid;
 }
 
 __noreturn
 static void exec_and_return(void)
 {
     klog(LOG_DEBUG, "Entering exec_and_return, pid = %d\n", current->pid);
+    struct mm_info *old_mm = current->mm;
     struct mm_info *mem = arch_process_remap(current->mm);
     struct task *task = current;
 
@@ -513,6 +676,8 @@ static void exec_and_return(void)
             task->sighand->actions[i].sa.sa_handler = SIG_DFL;
         }
     }
+
+    exec_mm_release(current, old_mm);
 
     jump_new_proc(task);
     panic("exec_and_return: Should never be reached\n");
@@ -623,20 +788,27 @@ SYSCALL_DECL3(execve, const char*, path, char* const*, argv, char* const*, envp)
     return err;
 }
 
-static void cleanup_files(struct fs_info *fs)
+static void cleanup_fs(struct fs_info *fs, struct fdtable *files)
 {
-    dput(fs->cwd_d);
-    for (size_t i = 0; i < fs->files.max; i++) {
-        if (fs->files.fdarray[i]) {
-            struct file *file = fs->files.fdarray[i];
-#ifdef DEBUG_VFS
-            klog(LOG_DEBUG, "Cleaning up file descriptor %d, file %p\n", i, file);
-#endif
-            vfs_close(file);
-            fs->files.fdarray[i] = NULL;
+    if (!--files->ref_count) {
+        for (size_t i = 0; i < files->max; i++) {
+            if (files->fdarray[i]) {
+                struct file *file = files->fdarray[i];
+    #ifdef DEBUG_VFS
+                klog(LOG_DEBUG, "Cleaning up file descriptor %d, file %p\n", i, file);
+    #endif
+                vfs_close(file);
+                files->fdarray[i] = NULL;
+            }
         }
+        kfree(files->fdarray);
+        kfree(files);
     }
-    kfree(fs->files.fdarray);
+
+    if (!--fs->ref_count) {
+        dput(fs->cwd_d);
+        kfree(fs);
+    }
 }
 
 static void cleanup_task_info(struct task_info *info)
@@ -661,7 +833,9 @@ static void cleanup_task_info(struct task_info *info)
 static void cleanup_memory(struct mm_info *mm)
 {
     klog(LOG_DEBUG, "Cleaning up memory\n");
-    arch_unmap_all_user_vm(mm);
+    if (!--mm->ref_count)
+        arch_unmap_all_user_vm(mm);
+    exit_mm_release(current, mm);
     // mm_struct is freed in reap_task() since we need original kstack
 }
 
@@ -669,7 +843,7 @@ void cleanup_task(struct task *p)
 {
     klog(LOG_DEBUG, "Cleaning up task %d\n", p->pid);
     cleanup_task_info(&p->info);
-    cleanup_files(&p->fs);
+    cleanup_fs(p->fs, p->files);
     cleanup_memory(p->mm);
     put_sighandlers(p->sighand);
 }
@@ -681,7 +855,6 @@ void reap_task(struct task *p)
         return;
     }
     klog(LOG_DEBUG, "Reaping task %d\n", p->pid);
-    arch_reclaim_mem(p);
     kfree(p->fp_regs);
     p->fp_regs = NULL;
     list_del(&p->sibling);
@@ -690,7 +863,10 @@ void reap_task(struct task *p)
     hash_del(&p->sid_hash);
     // kfree(p->regs); // ISSUE This is sometimes stack memory, so can't free currently
     free_pages(p->mm->kstack, __KERNEL_STACK_SZ / PAGE_SIZE);
-    kfree(p->mm);
+    if (p->mm->ref_count == 0) {
+        arch_reclaim_mem(p);
+        kfree(p->mm);
+    }
 }
 
 __noreturn void do_exit(void)
@@ -746,11 +922,11 @@ SYSCALL_DECL1(chdir, const char*, path)
         goto out;
     }
 
-    arch_disable_interrupts();
-    dput(task->fs.cwd_d);
+    acquire_lock(&task->fs->lock);
+    dput(task->fs->cwd_d);
     dget(d);
-    task->fs.cwd_d = d;
-    // arch_enable_interrupts();
+    task->fs->cwd_d = d;
+    release_lock(&task->fs->lock);
 out:
     kfree(path_buf);
     return err;

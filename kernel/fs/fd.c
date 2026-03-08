@@ -4,6 +4,22 @@
 #include <lilac/log.h>
 #include <lilac/sched.h>
 
+struct fdtable * alloc_fdtable(unsigned int size)
+{
+    struct fdtable *files = kmalloc(sizeof(*files));
+    if (!files)
+        return NULL;
+    files->fdarray = kcalloc(size, sizeof(struct file*));
+    if (!files->fdarray) {
+        kfree(files);
+        return NULL;
+    }
+    files->max = size;
+    spin_lock_init(&files->lock);
+    files->ref_count = 1;
+    return files;
+}
+
 static int __set_fdtsize(struct fdtable *files, unsigned int size)
 {
     if (size <= files->max)
@@ -115,7 +131,7 @@ unlock:
 struct file * get_file_handle(int fd)
 {
     struct file *file;
-    struct fdtable *files = &current->fs.files;
+    struct fdtable *files = current->files;
 
     acquire_lock(&files->lock);
     if (fd < 0 || (unsigned)fd >= files->max) {

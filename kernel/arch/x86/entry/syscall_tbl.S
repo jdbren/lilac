@@ -83,15 +83,16 @@ syscall_table:
 	sc_tbl_entry readv		# 60
 	sc_tbl_entry writev		# 61
 	sc_tbl_entry faccessat	# 62
+	sc_tbl_entry vfork		# 63
+	sc_tbl_entry clone		# 64
+	sc_tbl_entry gettid		# 65
 /*
 	sc_tbl_entry chmod		# 30
 	sc_tbl_entry chown		# 31
 	sc_tbl_entry lstat		# 32
-	sc_tbl_entry getuid		# 36
 	sc_tbl_entry setuid		# 37
 	sc_tbl_entry utime		# 40
 	sc_tbl_entry mknod		# 41
-	sc_tbl_entry access		# 42
 	sc_tbl_entry sync 		# 43
 	sc_tbl_entry rename		# 45
 */

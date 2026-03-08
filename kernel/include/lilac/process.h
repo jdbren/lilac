@@ -29,7 +29,8 @@ struct task_info {
 struct fs_info {
     struct dentry *root_d;
     struct dentry *cwd_d;
-    struct fdtable files;
+    atomic_uint ref_count;
+    spinlock_t lock;
 };
 
 struct sighandlers {
@@ -43,7 +44,6 @@ struct task_flags {
     u8 exiting      :1;
     u8 in_syscall   :1;
     u8 sig_pending  :1;
-    u8 ptrace_stop  :1;
     u8 signaled     :1;
     u8 interrupted  :1;
     u8 state_change :1;
@@ -82,6 +82,7 @@ struct task {
     struct task *parent;
     struct list_head children;
     struct list_head sibling;
+    struct task *tg_leader;
     struct hlist_node pid_hash;
 
     int pgid;
@@ -89,12 +90,18 @@ struct task {
     struct hlist_node pgid_hash;
     struct hlist_node sid_hash;
 
+    pid_t tgid;     // Thread group ID
+    int exit_signal;
+    pid_t *set_child_tid;
+    pid_t *clear_child_tid;
+    struct waitqueue *vfork_done;
+
     int exit_status;
     bool parent_wait;
     bool waiting_any;
 
-    struct fs_info fs;
-    struct task_info info;
+    struct fs_info *fs;
+    struct fdtable *files;
 
     struct sighandlers *sighand;
     sigset_t pending;
@@ -104,6 +111,7 @@ struct task {
 
     struct list_head timer_ev_list;
 
+    struct task_info info;
     char name[32];
 };
 
@@ -112,7 +120,7 @@ struct mm_info {
     // struct rb_root mmap_rb;
     uintptr_t pgd;
     void *kstack;
-    // atomic_uint ref_count;
+    atomic_uint ref_count;
     // u32 map_count;
     // struct semaphore mmap_sem;
     // spinlock_t page_table_lock;
@@ -144,6 +152,7 @@ void             arch_unmap_all_user_vm(struct mm_info *info);
 void             arch_reclaim_mem(struct task *p);
 void *           arch_user_stack(void);
 void *           arch_get_user_sp(void);
+void             arch_set_user_sp(struct task *p, void *sp);
 void *           arch_copy_regs(struct regs_state *src);
 void             save_fp_regs(struct task *p);
 void             restore_fp_regs(struct task *p);

@@ -91,4 +91,15 @@ int user_str_ok(const char *str, int max_size)
     return 0;
 }
 
+static __always_inline
+int __put_user(const void *src, __user void *ptr, size_t size)
+{
+    return arch_user_copy(ptr, src, size);
+}
+
+#define put_user(x, ptr) ({ \
+    __typeof__(*(ptr)) __put_user_val = (x); \
+    __put_user(&__put_user_val, (ptr), sizeof(__put_user_val)); \
+})
+
 #endif

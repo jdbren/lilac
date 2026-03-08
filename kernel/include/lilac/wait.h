@@ -27,6 +27,11 @@ struct waitqueue {
     struct list_head task_list;
 };
 
+#define WAITQUEUE_INIT(name) { \
+    .lock = SPINLOCK_INIT, \
+    .task_list = LIST_HEAD_INIT(name.task_list) \
+}
+
 typedef int (*wq_wake_func_t)();
 
 struct wq_entry {
