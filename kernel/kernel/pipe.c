@@ -223,8 +223,8 @@ SYSCALL_DECL1(pipe, int, pipefd[2])
     write_end->pipe = p;
     write_end->f_inode = p->p_inode;
 
-    int rfd = get_next_fd(&current->fs.files, read_end);
-    int wfd = get_next_fd(&current->fs.files, write_end);
+    int rfd = get_next_fd(current->files, read_end);
+    int wfd = get_next_fd(current->files, write_end);
     if (rfd < 0 || wfd < 0) {
         destroy_pipe(p);
         kfree(read_end);

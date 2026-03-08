@@ -170,7 +170,7 @@ char * build_absolute_path(struct dentry *d)
         klog(LOG_DEBUG, "build_absolute_path: cur = %p, name = %s, buf = %s\n",
             cur, cur->d_name, buf);
 #endif
-        if (cur == current->fs.root_d) {
+        if (cur == current->fs->root_d) {
             // Reached root
             snprintf(tmp, PATH_MAX, "%c%s", '/', buf);
             strcpy(buf, tmp);

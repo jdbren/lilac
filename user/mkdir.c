@@ -2,7 +2,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/stat.h>
-#include <sys/errno.h>
+#include <errno.h>
 
 int main(int argc, char *argv[])
 {

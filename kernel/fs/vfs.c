@@ -141,7 +141,7 @@ struct dentry * vfs_lookup(const char *path)
         return ERR_PTR(-ENOENT);
 
     if (path[0] != '/')
-        start = current->fs.cwd_d;
+        start = current->fs->cwd_d;
 
     if (!strcmp(path, "."))
         return start;
@@ -224,7 +224,7 @@ SYSCALL_DECL3(open, const char*, path, int, flags, int, mode)
         goto error;
     }
 
-    fd = get_next_fd(&current->fs.files, f);
+    fd = get_next_fd(current->files, f);
     if (fd < 0) {
         klog(LOG_DEBUG, "No available file descriptors for %s\n", path_buf);
         fput(f);
@@ -414,7 +414,7 @@ SYSCALL_DECL1(close, int, fd)
 #endif
     err = vfs_close(file);
 
-    current->fs.files.fdarray[fd] = NULL;
+    current->files->fdarray[fd] = NULL;
     return err;
 }
 
@@ -666,7 +666,7 @@ int vfs_dup(int oldfd, int newfd)
 #endif
 
     int ret;
-    if ((ret = get_fd_exact_replace(&current->fs.files, newfd, f)) < 0) {
+    if ((ret = get_fd_exact_replace(current->files, newfd, f)) < 0) {
         fput(f);
         klog(LOG_ERROR, "VFS: vfs_dup failed to set fd %d\n", newfd);
         return ret;
@@ -684,7 +684,7 @@ int vfs_dupf(int fd)
     if (IS_ERR(f))
         return PTR_ERR(f);
     fget(f);
-    int new_fd = get_next_fd(&current->fs.files, f);
+    int new_fd = get_next_fd(current->files, f);
     if (new_fd < 0) {
         klog(LOG_ERROR, "VFS: vfs_dupf failed to get new fd\n");
         fput(f);
@@ -707,7 +707,7 @@ SYSCALL_DECL2(getcwd, char*, buf, size_t, size)
     if (!buf || size == 0 || size > 4096)
         return -EINVAL;
 
-    struct dentry *cwd = current->fs.cwd_d;
+    struct dentry *cwd = current->fs->cwd_d;
     char *path = build_absolute_path(cwd);
     if (IS_ERR(path))
         return PTR_ERR(path);

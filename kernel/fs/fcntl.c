@@ -24,7 +24,7 @@ SYSCALL_DECL3(fcntl, int, fd, int, cmd, unsigned long, arg)
                 return vfs_dupf(fd);
 
             fget(f);
-            new_fd = get_fd_start_at(&current->fs.files, arg, f);
+            new_fd = get_fd_start_at(current->files, arg, f);
             if (new_fd < 0) {
                 fput(f);
                 return new_fd;
