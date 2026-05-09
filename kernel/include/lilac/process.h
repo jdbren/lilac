@@ -166,6 +166,8 @@ void             jump_new_proc(struct task *next);
 extern void      jump_usermode(void *addr, void *ustack, void *kstack);
 extern int       arch_return_from_fork(void *regs, void *kstack);
 
+#define INIT_STACK(KSTACK) ((uintptr_t)KSTACK + __KERNEL_STACK_SZ - sizeof(size_t))
+
 #define PID_HASH_BITS 12
 
 extern DECLARE_HASHTABLE(pid_table, PID_HASH_BITS);

@@ -1,6 +1,8 @@
 #ifndef _LILAC_CLONE_H
 #define _LILAC_CLONE_H
 
+#include <lilac/types.h>
+
 #define CLONE_VM        0x00000100  /* VM shared between processes */
 #define CLONE_FS        0x00000200  /* fs info shared between processes */
 #define CLONE_FILES     0x00000400  /* file descriptors shared between processes */

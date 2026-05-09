@@ -305,5 +305,5 @@ void notify_parent(struct task *parent, struct task *child)
         parent->waiting_any = false;
         wakeup_by_pid_on(parent->pid, &wait_q);
     }
-    do_raise(parent, SIGCHLD);
+    do_raise(parent, child->exit_signal);
 }

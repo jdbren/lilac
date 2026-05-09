@@ -5,6 +5,8 @@
 #include <lilac/config.h>
 #include <lilac/errno.h>
 
+#define ERESTARTSYS    512
+
 #define MAX_ERRNO       4095
 #define IS_ERR_VALUE(x) unlikely((unsigned long)(void *)(x) >= (unsigned long)-MAX_ERRNO)
 

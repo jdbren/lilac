@@ -57,6 +57,7 @@ $(KERNEL_ARCH_OBJS) \
 kernel/kmain.o \
 kernel/device.o \
 kernel/elf.o \
+kernel/fork.o \
 kernel/ioctl.o \
 kernel/log.o \
 kernel/pipe.o \

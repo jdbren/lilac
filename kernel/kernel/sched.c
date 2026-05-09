@@ -244,6 +244,11 @@ void set_current_state(u8 state)
             if (current->on_rq)
                 rq_del(current);
             break;
+        case TASK_STOPPED:
+            set_task_stopped(current);
+            break;
+        default:
+            panic("Invalid task state %d\n", state);
     }
 }
 
