@@ -12,7 +12,7 @@ static void nop(__unused unsigned long x) {}
 void (*handle_tick)(unsigned long ms) = nop;
 s64 boot_unix_time = 0;
 atomic_uint time_seq = 0;
-u64 system_time_base_ns = 0;
+ktime_t system_time_base_ns = 0;
 static spinlock_t clock_write_lock = SPINLOCK_INIT;
 
 DEFINE_PER_CPU(struct rb_root_cached, timer_event_tree) = RB_ROOT_CACHED;
@@ -34,7 +34,7 @@ void set_clock_source(struct clock_source *clock)
     // write barrier
     atomic_thread_fence(memory_order_acq_rel);
 
-    system_time_base_ns = current_ns;
+    system_time_base_ns = (ktime_t)current_ns;
     clock->start_tick = clock->read();
 
     WRITE_ONCE(ticks_per_ms, clock->freq_hz / 1000);
@@ -67,21 +67,21 @@ s64 get_unix_time(void)
 }
 
 // Get system timer in 1 ns intervals
-u64 get_sys_time_ns(void)
+ktime_t get_sys_time_ns(void)
 {
     unsigned int seq;
-    u64 ns = 0;
+    u64 ns;
+    ktime_t base;
 
     do {
         seq = atomic_load_explicit(&time_seq, memory_order_acquire);
         struct clock_source *cs = READ_ONCE(__system_clock);
-
-        u64 delta = cs->read() - cs->start_tick;
-        ns = system_time_base_ns + clock_ticks_to_ns(cs, delta);
+        base = system_time_base_ns;
+        ns = clock_ticks_to_ns(cs, cs->read() - cs->start_tick);
 
     } while (seq & 1 || seq != atomic_load_explicit(&time_seq, memory_order_acquire));
 
-    return ns;
+    return ktime_add_ns(base, ns);
 }
 
 SYSCALL_DECL1(time, time_t *, t)

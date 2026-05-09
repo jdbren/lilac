@@ -51,6 +51,9 @@
 #ifndef unreachable
 # define unreachable() __builtin_unreachable()
 #endif
+#ifndef __always_inline
+# define __always_inline inline __attribute__((always_inline))
+#endif
 
 #define __cacheline_align __align(64)
 

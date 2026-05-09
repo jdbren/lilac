@@ -1,8 +1,13 @@
 #ifndef _LILAC_TIMER_H
 #define _LILAC_TIMER_H
 
-#include <lilac/types.h>
 #include <stdatomic.h>
+#include <lilac/types.h>
+#include <lilac/math.h>
+#include <lilac/time.h>
+
+#define CLOCK_REALTIME  0
+#define CLOCK_MONOTONIC 1
 
 struct timestamp {
     u16 year;
@@ -26,7 +31,7 @@ struct clock_source {
 
 extern struct clock_source *__system_clock;
 extern u64 ticks_per_ms;
-extern u64 system_time_base_ns;
+extern ktime_t system_time_base_ns;
 
 void timer_init(void);
 void timer_tick_init(void); // arch
@@ -34,16 +39,13 @@ void timer_tick(void);
 
 void busy_wait_usec(u32 micros);
 void usleep(u32 micros);
-u64 get_sys_time_ns(void);
-s64 get_unix_time(void);
+ktime_t get_sys_time_ns(void);
+time_t get_unix_time(void);
 struct timestamp get_timestamp(void);
 
-#define NS_PER_SEC 1'000'000'000ull
-#define NS_PER_MS 1'000'000ull
-#define NS_PER_US 1000ull
-#define TIME_FORMAT "%04u/%02u/%02u %02u:%02u:%02u"
+#define ktime_get() get_sys_time_ns()
 
-extern s64 boot_unix_time;
+extern time_t boot_unix_time;
 extern void (*handle_tick)(unsigned long ms);
 
 void set_clock_source(struct clock_source *clock);
@@ -68,22 +70,6 @@ static inline u64 ticks_to_ms(u64 t)
 {
     u64 tpm = READ_ONCE(ticks_per_ms);
     return t / tpm;
-}
-
-static inline
-u64 mul_u64_u32_shr(u64 a, u32 mul, unsigned int shift)
-{
-    u32 ah, al;
-    u64 ret;
-
-    al = a;
-    ah = a >> 32;
-
-    ret = ((u64)al * mul) >> shift;
-    if (ah)
-        ret += ((u64)ah * mul) << (32 - shift);
-
-    return ret;
 }
 
 static inline u64 clock_ticks_to_ns(struct clock_source *cs, u64 t)
@@ -114,6 +100,79 @@ static inline u64 ticks_to_ns(u64 t)
 {
     struct clock_source *cs = READ_ONCE(__system_clock);
     return clock_ticks_to_ns(cs, t);
+}
+
+
+
+/**
+ * ktime_set - Set a ktime_t variable from a seconds/nanoseconds value
+ * @secs:    seconds to set
+ * @nsecs:    nanoseconds to set
+ *
+ * Return: The ktime_t representation of the value.
+ */
+static inline ktime_t ktime_set(const s64 secs, const unsigned long nsecs)
+{
+    if (unlikely(secs >= KTIME_SEC_MAX))
+        return KTIME_MAX;
+
+    return secs * NSEC_PER_SEC + (s64)nsecs;
+}
+
+/* Subtract two ktime_t variables. rem = lhs -rhs: */
+#define ktime_sub(lhs, rhs) ((lhs) - (rhs))
+
+/* Add two ktime_t variables. res = lhs + rhs: */
+#define ktime_add(lhs, rhs) ((lhs) + (rhs))
+
+/*
+ * Same as ktime_add(), but avoids undefined behaviour on overflow; however,
+ * this means that you must check the result for overflow yourself.
+ */
+#define ktime_add_unsafe(lhs, rhs) ((u64) (lhs) + (rhs))
+
+/*
+ * Add a ktime_t variable and a scalar nanosecond value.
+ * res = kt + nsval:
+ */
+#define ktime_add_ns(kt, nsval) ((kt) + (nsval))
+
+/*
+ * Subtract a scalar nanosecod from a ktime_t variable
+ * res = kt - nsval:
+ */
+#define ktime_sub_ns(kt, nsval) ((kt) - (nsval))
+
+/* convert a timespec64 to ktime_t format: */
+static inline ktime_t timespec_to_ktime(struct timespec ts)
+{
+    return ktime_set(ts.tv_sec, ts.tv_nsec);
+}
+
+/* Map the ktime_t to timespec conversion to ns_to_timespec function */
+#define ktime_to_timespec64(kt) ns_to_timespec((kt))
+
+/* Convert ktime_t to nanoseconds */
+static inline s64 ktime_to_ns(const ktime_t kt)
+{
+    return kt;
+}
+
+/*
+ * Add two ktime values and do a safety check for overflow:
+ */
+static inline ktime_t ktime_add_safe(const ktime_t lhs, const ktime_t rhs)
+{
+	ktime_t res = ktime_add_unsafe(lhs, rhs);
+
+	/*
+	 * We use KTIME_SEC_MAX here, the maximum timeout which we can
+	 * return to user space in a timespec:
+	 */
+	if (res < 0 || res < lhs || res < rhs)
+		res = ktime_set(KTIME_SEC_MAX, 0);
+
+	return res;
 }
 
 #endif
