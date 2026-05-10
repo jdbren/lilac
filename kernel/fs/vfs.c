@@ -48,6 +48,7 @@ static void root_init(struct block_device *bdev)
     root_disk->mnt_root = root_dentry;
 
     root_dentry->d_parent = NULL;
+    root_dentry->d_count = 1;
     root_dentry->d_name = kmalloc(2);
     strcpy(root_dentry->d_name, "/");
     root_dentry->d_mount = root_disk;
@@ -387,9 +388,9 @@ int vfs_close(struct file *file)
     klog(LOG_DEBUG, "vfs_close: file = %p, dentry = %p\n", file, file->f_dentry);
 #ifdef DEBUG_VFS_FULL
     klog(LOG_DEBUG, "vfs_close: fdtable = %p, max = %d\n",
-        current->fs.files.fdarray, current->fs.files.max);
-    for (size_t i = 0; i < current->fs.files.max; i++) {
-        klog(LOG_DEBUG, "table[%u] = %p\n", i, current->fs.files.fdarray[i]);
+        current->files->fdarray, current->files->max);
+    for (size_t i = 0; i < current->files->max; i++) {
+        klog(LOG_DEBUG, "table[%u] = %p\n", i, current->files->fdarray[i]);
     }
 #endif
     if (file->f_op->flush)
@@ -413,8 +414,9 @@ SYSCALL_DECL1(close, int, fd)
         fd, file, file->f_dentry);
 #endif
     err = vfs_close(file);
-
+    acquire_lock(&current->files->lock);
     current->files->fdarray[fd] = NULL;
+    release_lock(&current->files->lock);
     return err;
 }
 

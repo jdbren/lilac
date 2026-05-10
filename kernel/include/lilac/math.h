@@ -20,20 +20,10 @@ static inline bool is_pow_2(u64 x)
 static __always_inline u32
 __iter_div_u64_rem(u64 dividend, u32 divisor, u64 *remainder)
 {
-	u32 ret = 0;
-
-	while (dividend >= divisor) {
-		/* The following asm() prevents the compiler from
-		   optimising this loop into a modulo operation.  */
-		asm("" : "+rm"(dividend));
-
-		dividend -= divisor;
-		ret++;
-	}
-
-	*remainder = dividend;
-
-	return ret;
+    u32 ret = 0;
+    ret = dividend / divisor;
+    *remainder = dividend - (u64)ret * divisor;
+    return ret;
 }
 
 static inline u64 mul_u64_u32_shr(u64 a, u32 mul, unsigned int shift)

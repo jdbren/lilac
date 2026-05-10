@@ -4,7 +4,7 @@ https://github.com/user-attachments/assets/acd1639e-30f1-4e09-84ad-2e75e0c77be9
 
 Updated 3/31/25 -
 Running in long mode (x86_64) is now supported. I have ported the musl
-C library (somewhat complete), and modified binutils and gcc sources to 
+C library (somewhat complete), and modified binutils and gcc sources to
 customize the compiler. musl is included as a submodule.
 
 https://github.com/jdbren/gcc/tree/gcc-15-lilac \

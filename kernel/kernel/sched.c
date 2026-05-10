@@ -14,9 +14,7 @@
 
 extern uintptr_t stack_top;
 
-static struct mm_info root_mm = {
-    .kstack = (void*)((uintptr_t)&stack_top - __KERNEL_STACK_SZ),
-};
+static struct mm_info root_mm = {};
 
 static struct sighandlers root_sighand = {
     .ref_count = CONFIG_MAX_CPUS,
@@ -37,6 +35,7 @@ struct task __rootp = {
     .pid = 0,
     .ppid = 0,
     .lock = SPINLOCK_INIT,
+    .kstack_base = (void*)((uintptr_t)&stack_top - __KERNEL_STACK_SZ),
     .mm = &root_mm,
     .sighand = &root_sighand,
 };
@@ -442,7 +441,7 @@ void sched_ap_rq_init(int cpu)
 
     idle->pgd = arch_get_pgd();
     idle->mm = mm;
-    mm->kstack = (void*)((uintptr_t)&ap_stack[__KERNEL_STACK_SZ * (cpu + 1)]);
+    idle->kstack_base = (void*)((uintptr_t)&ap_stack[__KERNEL_STACK_SZ * (cpu + 1)]);
 
     klog(LOG_INFO, "Initialized run queue for CPU %d\n", cpu);
 }

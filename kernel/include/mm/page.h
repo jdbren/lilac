@@ -121,4 +121,9 @@ void put_page(struct page *pg)
     }
 }
 
+static inline void * alloc_kstack(void)
+{
+    return get_free_pages(__KERNEL_STACK_SZ / PAGE_SIZE, 0);
+}
+
 #endif

@@ -30,7 +30,7 @@
 #define __USER_MMAP_START   0x40000000
 #endif
 
-#define __KERNEL_STACK_SZ   0x2000
+#define __KERNEL_STACK_SZ   0x4000
 #define __USER_STACK_SZ     (PAGE_SIZE * 32)
 #define __pa(X) ((X) - __KERNEL_BASE)
 

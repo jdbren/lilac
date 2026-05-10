@@ -12,14 +12,14 @@ startup_64:
 .code32
 	# Identity map the kernel.
 	leal __pa(boot_pt0), %edi		# page table entry
-	xorl %eax, %eax				# start addr = 0
+	xorl %eax, %eax					# start addr = 0
 
 1:	movl %eax, %esi
 	orl	 $3, %esi					# set present and r/w
 	movl %esi, (%edi)				# set page table entry, 32 bit is enough
 	addl $8, %edi					# 8 bytes per entry
 	addl $4096, %eax				# next page address
-	cmpl $__pa(_kernel_end), %eax		# check if we are done
+	cmpl $__pa(_kernel_end), %eax	# check if we are done
 	jne  1b
 
 	# Set up the kernel page mapping (higher half).
@@ -50,11 +50,17 @@ startup_64:
 	leal __pa(boot_pt0), %esi
 	orl  $3, %esi
 	movl %esi, (%edi)
+	leal __pa(boot_pt1), %esi
+	orl  $3, %esi
+	movl %esi, 8(%edi)
 
 	leal __pa(boot_pd510_high), %edi
 	leal __pa(boot_pt0_high), %esi
 	orl  $3, %esi
 	movl %esi, (%edi)
+	leal __pa(boot_pt1_high), %esi
+	orl  $3, %esi
+	movl %esi, 8(%edi)
 
 	# Set up the page directory pointer table.
 	leal __pa(boot_pdtp), %edi
@@ -238,14 +244,16 @@ boot_pd:
 	.skip 4096
 boot_pt0:
 	.skip 4096
-// boot_pt1:
-// 	.skip 4096
+boot_pt1:
+	.skip 4096
 
 boot_pdtp511_high:
 	.skip 4096
 boot_pd510_high:
 	.skip 4096
 boot_pt0_high:
+	.skip 4096
+boot_pt1_high:
 	.skip 4096
 
 .align 16

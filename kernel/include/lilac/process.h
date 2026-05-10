@@ -62,6 +62,7 @@ struct task {
     void *regs;     // CPU registers
     void *fp_regs;  // Floating point / SIMD registers
     void *tls;      // Thread-local storage
+    void *kstack_base;
 
     spinlock_t lock;
 
@@ -119,7 +120,6 @@ struct mm_info {
     struct vm_desc *mmap;
     // struct rb_root mmap_rb;
     uintptr_t pgd;
-    void *kstack;
     atomic_uint ref_count;
     // u32 map_count;
     // struct semaphore mmap_sem;
