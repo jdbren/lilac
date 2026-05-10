@@ -27,14 +27,16 @@ struct sighandlers * alloc_sighandlers(void)
     if (!sh)
         return NULL;
     sh->ref_count = 1;
+    spin_lock_init(&sh->lock);
     return sh;
 }
 
-struct fs_info * alloc_fs_info()
+struct fs_info * alloc_fs_info(void)
 {
     struct fs_info *fs = kzmalloc(sizeof(*fs));
     if (!fs) return NULL;
     fs->ref_count = 1;
+    spin_lock_init(&fs->lock);
     return fs;
 }
 
@@ -49,6 +51,8 @@ static void copy_fs_info(struct fs_info *dst, struct fs_info *src)
 
 static void copy_files(struct fdtable *dst, struct fdtable *src)
 {
+    if (dst->fdarray)
+        kfree(dst->fdarray);
     dst->fdarray = kcalloc(src->max, sizeof(struct file*));
     dst->max = src->max;
     for (size_t i = 0; i < src->max; i++) {
@@ -90,13 +94,16 @@ struct task *init_process(void)
     this->exit_signal = SIGCHLD;
     this->mm = mem;
     this->pgd = mem->pgd;
-    this->kstack = (void*)INIT_STACK(mem->kstack);
+    this->kstack_base = alloc_kstack();
+    this->kstack = (void*)INIT_STACK(this->kstack_base);
     this->pc = (uintptr_t)(start_process);
     this->state = TASK_RUNNING;
     this->fs = alloc_fs_info();
     this->files = alloc_fdtable(8);
     this->fs->root_d = get_root_dentry();
     this->fs->cwd_d = this->fs->root_d;
+    dget(this->fs->root_d);
+    dget(this->fs->cwd_d);
     this->info.path = strdup("/sbin/init");
     this->info.argv = kcalloc(2, sizeof(char*));
     this->info.argv[0] = strdup("init");
@@ -161,14 +168,14 @@ static struct task * clone_process(struct clone_args *args)
     hash_add(pgid_table, &child->pgid_hash, parent->pgid);
     hash_add(sid_table, &child->sid_hash, parent->sid);
 
+    child->kstack_base = alloc_kstack();
     if (flags & CLONE_VM) {
         cur->mm->ref_count++;
-        child->mm->kstack = kmalloc(__KERNEL_STACK_SZ);
     } else {
         child->mm = arch_copy_mmap(cur->mm);
     }
     child->pgd = child->mm->pgd;
-    child->kstack = (void*)INIT_STACK(child->mm->kstack);
+    child->kstack = (void*)INIT_STACK(child->kstack_base);
 
     child->regs = arch_copy_regs(cur->regs);
     if (args->stack) {
@@ -224,9 +231,7 @@ static void return_from_fork(void)
 
 static void wait_for_vfork_done(struct task *p, struct waitqueue *wq)
 {
-    klog(LOG_DEBUG, "PID %d: Waiting for vfork child to complete\n", p->pid);
     sleep_on(wq);
-    klog(LOG_DEBUG, "PID %d: vfork child completed, resuming\n", p->pid);
 }
 
 int do_clone(struct clone_args *args)
@@ -234,7 +239,15 @@ int do_clone(struct clone_args *args)
     struct waitqueue vfork_wait = WAITQUEUE_INIT(vfork_wait);
     unsigned long flags = args->flags;
 
-    klog(LOG_DEBUG, "PID %d: Cloning process with flags 0x%lx\n", current->pid, flags);
+    klog(LOG_DEBUG, "PID %d: Cloning process with flags 0x%lx\n",
+        current->pid, flags);
+
+    if ((flags & CLONE_PARENT_SETTID) &&
+            !access_ok(args->parent_tid, sizeof(pid_t))) {
+        klog(LOG_DEBUG, "PID %d: Invalid parent_tid pointer %p\n",
+            current->pid, args->parent_tid);
+        return -EFAULT;
+    }
 
     struct task *child = clone_process(args);
     if (!child)
@@ -248,10 +261,13 @@ int do_clone(struct clone_args *args)
 
     child->pc = (uintptr_t)return_from_fork;
     child->state = TASK_RUNNING;
+    if (flags & CLONE_VFORK) {
+        child->vfork_done = &vfork_wait;
+    }
+
     schedule_task(child);
 
     if (flags & CLONE_VFORK) {
-        child->vfork_done = &vfork_wait;
         wait_for_vfork_done(child, &vfork_wait);
     }
 
@@ -277,7 +293,8 @@ SYSCALL_DECL0(vfork)
     return do_clone(&args);
 }
 
-SYSCALL_DECL5(clone, unsigned long, flags, void*, stack, void*, ptid, void*, ctid, unsigned long, tls)
+SYSCALL_DECL5(clone, unsigned long, flags, void*, stack, void*, ptid,
+    void*, ctid, unsigned long, tls)
 {
     if (flags & CLONE_THREAD) {
         if (!(flags & (CLONE_VM|CLONE_SIGHAND)))
@@ -309,8 +326,10 @@ static void mm_release(struct task *p, struct mm_info *mm)
         p->clear_child_tid = NULL;
     }
 
-    if (p->vfork_done)
+    if (p->vfork_done) {
         wake_all(p->vfork_done);
+        p->vfork_done = NULL;
+    }
 }
 
 void exit_mm_release(struct task *tsk, struct mm_info *mm)
@@ -344,6 +363,7 @@ static void cleanup_fs(struct fs_info *fs, struct fdtable *files)
 
     if (!--fs->ref_count) {
         dput(fs->cwd_d);
+        dput(fs->root_d);
         kfree(fs);
     }
 }
@@ -399,7 +419,7 @@ void reap_task(struct task *p)
     hash_del(&p->pgid_hash);
     hash_del(&p->sid_hash);
     // kfree(p->regs); // ISSUE This is sometimes stack memory, so can't free currently
-    free_pages(p->mm->kstack, __KERNEL_STACK_SZ / PAGE_SIZE);
+    free_pages(p->kstack_base, __KERNEL_STACK_SZ / PAGE_SIZE);
     if (p->mm->ref_count == 0) {
         arch_reclaim_mem(p);
         kfree(p->mm);

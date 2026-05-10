@@ -57,6 +57,5 @@ SECTIONS {
 
 	_kernel_end = .;
 
-	. = ASSERT(_kernel_end < KERNEL_VM_BASE + 0x200000, "Kernel too large");
-
+	. = ASSERT(_kernel_end < KERNEL_VM_BASE + 0x400000, "Kernel too large");
 }

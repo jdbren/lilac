@@ -94,7 +94,7 @@ int user_str_ok(const char *str, int max_size)
 static __always_inline
 int __put_user(const void *src, __user void *ptr, size_t size)
 {
-    return arch_user_copy(ptr, src, size);
+    return copy_to_user(ptr, src, size);
 }
 
 #define put_user(x, ptr) ({ \

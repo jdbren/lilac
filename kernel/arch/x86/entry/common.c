@@ -64,8 +64,8 @@ int x86_kernel_exit(void)
 
 void arch_pre_context_switch(struct task *prev, struct task *next)
 {
-    set_tss_esp0((uintptr_t)next->mm->kstack + __KERNEL_STACK_SZ);
-    prev->tls = (void*)rdmsr(IA32_FS_BASE);
+    set_tss_esp0((uintptr_t)next->kstack_base + __KERNEL_STACK_SZ);
+    prev->tls = (void*)(uintptr_t)rdmsr(IA32_FS_BASE);
 }
 
 void arch_post_context_switch(struct task *p)

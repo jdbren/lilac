@@ -23,7 +23,8 @@ static void load_cr3(uintptr_t cr3)
     asm volatile ("mov %0, %%cr3" : : "r"(cr3));
 }
 
-#ifndef __x86_64__
+#ifdef __i386__
+__maybe_unused
 static void print_page_structs(u32 *cr3)
 {
     for (int i = 0; i < 1024; i++) {
@@ -52,9 +53,6 @@ static struct mm_info * make_32_bit_mmap()
     // Do recursive mapping
     cr3[1023] = phys | PG_WRITE | PG_SUPER | 1;
 
-    // Allocate kernel stack
-    void *kstack = get_free_pages(__KERNEL_STACK_SZ / PAGE_SIZE, 0);
-
     // Map kernel space
     for (int i = PG_DIR_INDEX(0xc0000000); i < 1023; i++)
         cr3[i] = pd[i];
@@ -64,7 +62,6 @@ static struct mm_info * make_32_bit_mmap()
         kerror("Out of memory allocating mm_info\n");
     }
     info->pgd = phys;
-    info->kstack = kstack;
     info->ref_count = 1;
 
     return info;
@@ -84,13 +81,10 @@ static struct mm_info * make_64_bit_mmap()
         kerror("Out of memory allocating mm_info\n");
     }
     info->pgd = cr3;
-    info->kstack = get_free_pages(__KERNEL_STACK_SZ / PAGE_SIZE, 0);
     info->ref_count = 1;
 
     return info;
 }
-#else
-static struct mm_info * make_64_bit_mmap() {return NULL;}
 #endif
 
 struct mm_info * arch_process_mmap(__maybe_unused bool is_64_bit)

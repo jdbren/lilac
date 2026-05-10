@@ -353,7 +353,7 @@ static void exec_and_return(void)
 
     task->mm = mem;
     task->pgd = mem->pgd;
-    task->kstack = (void*)INIT_STACK(mem->kstack);
+    task->kstack = (void*)INIT_STACK(task->kstack_base);
     task->pc = (uintptr_t)start_process;
     task->state = TASK_RUNNING;
     // Reset custom signal handlers to default

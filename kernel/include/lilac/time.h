@@ -30,11 +30,6 @@ struct timezone {
     int tz_dsttime;     /* type of dst correction to apply */
 };
 
-struct timespec {
-    time_t tv_sec;
-    s64 tv_nsec;
-};
-
 #define NSEC_PER_SEC 1'000'000'000L
 #define NS_PER_SEC NSEC_PER_SEC
 #define NS_PER_MS 1000000L

@@ -27,14 +27,14 @@ bool timer_ev_less(struct rb_node *a, const struct rb_node *b)
 void set_clock_source(struct clock_source *clock)
 {
     acquire_lock(&clock_write_lock);
-    u64 current_ns = get_sys_time_ns();
+    ktime_t current_ns = ktime_get();
 
     unsigned int seq = atomic_load_explicit(&time_seq, memory_order_relaxed);
     atomic_store_explicit(&time_seq, seq + 1, memory_order_relaxed);
     // write barrier
     atomic_thread_fence(memory_order_acq_rel);
 
-    system_time_base_ns = (ktime_t)current_ns;
+    system_time_base_ns = current_ns;
     clock->start_tick = clock->read();
 
     WRITE_ONCE(ticks_per_ms, clock->freq_hz / 1000);
@@ -76,7 +76,7 @@ ktime_t get_sys_time_ns(void)
     do {
         seq = atomic_load_explicit(&time_seq, memory_order_acquire);
         struct clock_source *cs = READ_ONCE(__system_clock);
-        base = system_time_base_ns;
+        base = READ_ONCE(system_time_base_ns);
         ns = clock_ticks_to_ns(cs, cs->read() - cs->start_tick);
 
     } while (seq & 1 || seq != atomic_load_explicit(&time_seq, memory_order_acquire));
