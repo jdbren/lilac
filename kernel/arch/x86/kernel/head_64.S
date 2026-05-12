@@ -4,6 +4,7 @@
 #include <lilac/config.h>
 #include <asm/segments.h>
 #include <asm/msr.h>
+#include <asm/cpuid-bits.h>
 #include <asm/cpu-flags.h>
 
 .text
@@ -92,13 +93,13 @@ startup_64:
 
 	# Set long mode, syscall, and no-exec
 	movl $IA32_EFER, %ecx
-	movl $(EFER_LME | EFER_SCE | EFER_NXE), %eax
+	movl $(EFER_LME|EFER_SCE|EFER_NXE), %eax
 	xorl %edx, %edx
 	wrmsr
 
 	# Enable paging
 	movl %cr0, %eax
-	orl  $(X86_CR0_PG | X86_CR0_WP), %eax # pg enable, wp enable
+	orl  $(X86_CR0_PG|X86_CR0_WP), %eax # pg enable, wp enable
 	movl %eax, %cr0
 
 	lea  __pa(gdt_descr), %eax
@@ -129,11 +130,32 @@ startup_64:
 	xor %rcx, %rcx
 	xsetbv
 */
+	call smap_init
+
 	call x86_64_kernel_early
 
 	cli
 4:	hlt
 	jmp 4b
+
+smap_init:
+	mov $7, %eax
+	xor %ecx, %ecx
+	cpuid
+	mov %cr4, %rax
+
+	test $bit_SMEP, %ebx
+	jz 1f
+	or $X86_CR4_SMEP, %eax
+1:
+	test $bit_SMAP, %ebx
+	jz 2f
+	or $X86_CR4_SMAP, %eax
+2:
+	mov %rax, %cr4
+	clac
+	# TODO: system to avoid using AC if SMAP is not supported
+	ret
 
 .global gdt_init
 .type gdt_init, @function

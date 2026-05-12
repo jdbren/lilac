@@ -214,13 +214,16 @@ static unsigned int prepare_task_args(struct task *p, char **argv, char *argv_lo
     p->mm->arg_start = (uintptr_t)argv_loc;
     for (; p->info.argv[argc] && argc < 31; argc++) {
         u32 len = strlen(p->info.argv[argc]) + 1;
-        strcpy(argv_loc, p->info.argv[argc]);
-        argv[argc] = argv_loc;
+        // strcpy(argv_loc, p->info.argv[argc]);
+        strncpy_to_user(argv_loc, p->info.argv[argc], len);
+        // argv[argc] = argv_loc;
+        put_user(argv_loc, &argv[argc]);
         argv_loc += len;
         assert(argv_loc < argv_max);
     }
     p->mm->arg_end = (uintptr_t)argv_loc;
-    argv[argc] = NULL;
+    // argv[argc] = NULL;
+    put_user(NULL, &argv[argc]);
 
     // Print the arguments
 #ifdef DEBUG_FORK
@@ -239,13 +242,16 @@ static int prepare_task_env(struct task *p, char **envp, char *env_loc, char *en
     p->mm->env_start = (uintptr_t)env_loc;
     for (; p->info.envp[envc] && envc < 31; envc++) {
         u32 len = strlen(p->info.envp[envc]) + 1;
-        strcpy(env_loc, p->info.envp[envc]);
-        envp[envc] = env_loc;
+        // strcpy(env_loc, p->info.envp[envc]);
+        strncpy_to_user(env_loc, p->info.envp[envc], len);
+        // envp[envc] = env_loc;
+        put_user(env_loc, &envp[envc]);
         env_loc = env_loc + len;
         assert(env_loc < env_max);
     }
     p->mm->env_end = (uintptr_t)env_loc;
-    envp[envc] = NULL;
+    // envp[envc] = NULL;
+    put_user(NULL, &envp[envc]);
 
     // Print the environment variables
 #ifdef DEBUG_FORK
@@ -288,8 +294,8 @@ void start_process(void)
     mem->start_stack = (uintptr_t)(__USER_STACK - __USER_STACK_SZ);
     set_vm_areas(mem);
 
-    unsigned int argc = count_task_vec(current->info.argv);
-    unsigned int envc = count_task_vec(current->info.envp);
+    unsigned long argc = count_task_vec(current->info.argv);
+    unsigned long envc = count_task_vec(current->info.envp);
 
     // Copy argument and environment strings into brk area
     char *env_loc = (char*)mem->brk;
@@ -315,27 +321,32 @@ void start_process(void)
     uintptr_t *sp = (uintptr_t *)__USER_STACK - nslots;
     sp = (uintptr_t *)((uintptr_t)sp & ~(uintptr_t)0xf);
 
-    sp[0] = (uintptr_t)argc;
+    // sp[0] = (uintptr_t)argc;
+    put_user(argc, sp);
 
     char **argv_ptr = (char **)(sp + 1);
     char **envp_ptr = argv_ptr + argc + 1;
 
     if (!current->info.argv) {
-        argv_ptr[0] = NULL;
+        // argv_ptr[0] = NULL;
+        put_user(NULL, &argv_ptr[0]);
     } else {
         prepare_task_args(current, argv_ptr, arg_loc, arg_loc + 0xc00);
     }
 
     if (!current->info.envp) {
-        envp_ptr[0] = NULL;
+        // envp_ptr[0] = NULL;
+        put_user(NULL, &envp_ptr[0]);
     } else {
         prepare_task_env(current, envp_ptr, env_loc, arg_loc);
     }
 
     // Empty auxiliary vector (AT_NULL = 0)
     uintptr_t *auxv = (uintptr_t *)(envp_ptr + envc + 1);
-    auxv[0] = 0;
-    auxv[1] = 0;
+    // auxv[0] = 0;
+    put_user(0, &auxv[0]);
+    // auxv[1] = 0;
+    put_user(0, &auxv[1]);
 
     klog(LOG_DEBUG, "Going to user mode, jmp = %p, sp = %p, argc = %d, argv = %p, envp = %p\n",
         jmp, sp, argc, argv_ptr, envp_ptr);
@@ -348,8 +359,13 @@ static void exec_and_return(void)
 {
     klog(LOG_DEBUG, "Entering exec_and_return, pid = %d\n", current->pid);
     struct mm_info *old_mm = current->mm;
-    struct mm_info *mem = arch_process_remap(current->mm);
+    struct mm_info *mem = kzmalloc(sizeof(*mem));
+    if (!mem) {
+        panic("Failed to allocate memory for new mm_info\n");
+    }
     struct task *task = current;
+    mem->ref_count = 1;
+    mem->pgd = old_mm->pgd;
 
     task->mm = mem;
     task->pgd = mem->pgd;
@@ -379,7 +395,7 @@ static int set_task_args(struct task_info *info, char *const argv[])
         kfree(info->argv);
         info->argv = NULL;
     }
-    for (i = 0; argv[i]; i++) {
+    for (i = 0; argv[i] != NULL; i++) {
         ssize_t len = strnlen_user(argv[i], 127) + 1;
         if (len < 0)
             return -EFAULT;
@@ -403,7 +419,7 @@ static int set_task_env(struct task_info *info, char *const envp[])
         kfree(info->envp);
         info->envp = NULL;
     }
-    for (i = 0; envp[i]; i++) {
+    for (i = 0; envp[i] != NULL; i++) {
         ssize_t len = strnlen_user(envp[i], 127) + 1;
         if (len < 0)
             return -EFAULT;
@@ -460,7 +476,6 @@ static int do_execve(const char *path, char *const argv[], char *const envp[])
 SYSCALL_DECL3(execve, const char*, path, char* const*, argv, char* const*, envp)
 {
     int err = 0;
-    klog(LOG_DEBUG, "execve called with path = %s, argv = %p, envp = %p\n", path, argv, envp);
     if (!access_ok(path, 1) || !access_ok(argv, 1) || !access_ok(envp, 1))
         return -EFAULT;
 
@@ -468,9 +483,54 @@ SYSCALL_DECL3(execve, const char*, path, char* const*, argv, char* const*, envp)
     if (IS_ERR(path_buf))
         return PTR_ERR(path_buf);
 
-    err = do_execve(path_buf, argv, envp);
+    klog(LOG_DEBUG, "execve called with path = %s, argv = %p, envp = %p\n", path_buf, argv, envp);
+
+    char **argv_buf = kmalloc(sizeof(char*) * 32);
+    char **envp_buf = kmalloc(sizeof(char*) * 32);
+    if (!argv_buf || !envp_buf) {
+        panic("Failed to allocate memory for argv/envp buffers\n");
+    }
+
+    int i = 0;
+    while (1) {
+        char *argp = NULL;
+        if (get_user(argp, &argv[i]) < 0) {
+            err = -EFAULT;
+            goto out;
+        }
+        argv_buf[i] = argp;
+        if (!argp)
+            break;
+        i++;
+        if (i >= 31) {
+            err = -EINVAL;
+            goto out;
+        }
+    }
+
+    i = 0;
+    while (1) {
+        char *env = NULL;
+        if (get_user(env, &envp[i]) < 0) {
+            err = -EFAULT;
+            goto out;
+        }
+        envp_buf[i] = env;
+        if (!env)
+            break;
+        i++;
+        if (i >= 31) {
+            err = -EINVAL;
+            goto out;
+        }
+    }
+
+    err = do_execve(path_buf, argv_buf, envp_buf);
+out:
     if (err < 0)
         kfree(path_buf);
+    kfree(argv_buf);
+    kfree(envp_buf);
     return err;
 }
 

@@ -45,6 +45,7 @@ int vfs_stat(const struct file *f, struct stat *st)
 
 SYSCALL_DECL2(stat, const char*, path, struct stat*, buf)
 {
+    struct stat st;
     struct file *file;
     char *path_buf;
     long err;
@@ -60,7 +61,7 @@ SYSCALL_DECL2(stat, const char*, path, struct stat*, buf)
     if (IS_ERR(file))
         return PTR_ERR(file);
 
-    err = vfs_stat(file, buf);
+    err = vfs_stat(file, &st);
     if (err < 0) {
         vfs_close(file);
         return err;
@@ -68,15 +69,20 @@ SYSCALL_DECL2(stat, const char*, path, struct stat*, buf)
 
     vfs_close(file);
     kfree(path_buf);
-    return 0;
+
+    return copy_to_user(buf, &st, sizeof(st));
 }
 
 SYSCALL_DECL2(fstat, int, fd, struct stat*, buf)
 {
+    struct stat st;
     struct file *f = get_file_handle(fd);
     if (IS_ERR_OR_NULL(f))
         return -EBADF;
     if (!access_ok(buf, sizeof(struct stat)))
         return -EFAULT;
-    return vfs_stat(f, buf);
+    int err = vfs_stat(f, &st);
+    if (err < 0)
+        return err;
+    return copy_to_user(buf, &st, sizeof(st));
 }

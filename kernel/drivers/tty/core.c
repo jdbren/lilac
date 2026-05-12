@@ -419,8 +419,8 @@ int tty_ioctl(struct file *f, int op, void *argp)
         return tcsetattr(tty, argp);
     case TIOCGPGRP:
         if (access_ok(argp, sizeof(pid_t))) {
-            *(pid_t*)argp = tcgetpgrp(tty);
-            return 0;
+            pid_t pgrp = tcgetpgrp(tty);
+            return put_user(pgrp, (pid_t*)argp);
         } else {
             return -EFAULT;
         }
@@ -429,7 +429,10 @@ int tty_ioctl(struct file *f, int op, void *argp)
             return -EFAULT;
         if (current->sid != tty->ctrl.session)
             return -ENOTTY;
-        return tcsetpgrp(tty, *(pid_t*)argp);
+        pid_t pgrp;
+        if (get_user(pgrp, (pid_t*)argp))
+            return -EFAULT;
+        return tcsetpgrp(tty, pgrp);
     default:
         return -EINVAL;
     }

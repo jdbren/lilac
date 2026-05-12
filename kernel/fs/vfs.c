@@ -378,7 +378,7 @@ SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
         return err;
     }
 
-    bytes = vfs_write(file, buf, count);
+    bytes = vfs_write(file, kbuf, count);
     kfree(kbuf);
     return bytes;
 }

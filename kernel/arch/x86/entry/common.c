@@ -70,5 +70,5 @@ void arch_pre_context_switch(struct task *prev, struct task *next)
 
 void arch_post_context_switch(struct task *p)
 {
-     wrmsr(IA32_FS_BASE, (uintptr_t)p->tls);
+    wrmsr(IA32_FS_BASE, (uintptr_t)p->tls);
 }

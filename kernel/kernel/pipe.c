@@ -232,8 +232,12 @@ SYSCALL_DECL1(pipe, int, pipefd[2])
         return -EMFILE;
     }
 
-    pipefd[0] = rfd;
-    pipefd[1] = wfd;
+    if (put_user(rfd, &pipefd[0]) || put_user(wfd, &pipefd[1])) {
+        destroy_pipe(p);
+        kfree(read_end);
+        kfree(write_end);
+        return -EFAULT;
+    }
 
     klog(LOG_DEBUG, "pipe: Created pipe with fds %d (read) and %d (write)\n", rfd, wfd);
     return 0;

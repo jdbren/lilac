@@ -14,7 +14,9 @@ x86_user_copy_asm:
 	push %rbp
 	mov  %rsp, %rbp
 	cld
+	stac
 1:	rep movsb
+	clac
 	mov %ecx, %eax
 	pop %rbp
 	retq
@@ -48,10 +50,12 @@ x86_strncpy_from_user_asm:
 	push %rbp
 	mov  %rsp, %rbp
 	cld
+	stac
 	mov %rcx, %r8
 2:	cmpb $0, (%rsi)
 	movsb
 	loopnz 2b
+	clac
     mov %r8d, %eax
     sub %ecx, %eax
 	pop %rbp
@@ -87,9 +91,11 @@ x86_strnlen_user_asm:
     push    %rbp
     mov     %rsp, %rbp
     mov     %esi, %ecx        # ECX = max length
+	stac
 1:  cmpb    $0, (%rdi)
     inc     %rdi
     loopnz  1b
+	clac
     cmpl    $0, %ecx
     je      2f                # if ECX==0, no null was found; length = max
     inc     %ecx              # otherwise, adjust ECX since we advanced one extra byte

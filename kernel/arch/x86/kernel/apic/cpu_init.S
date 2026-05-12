@@ -55,15 +55,16 @@ _L8060:
 #ifdef __x86_64__
 init_cpu:
 	# prepare jump into C code (should never return)
-	mov  $(X86_CR4_PAE|X86_CR4_PGE|X86_CR4_MCE|X86_CR4_OSFXSR|X86_CR4_FSGSBASE), %eax
-	mov  %eax, %cr4
+	mov $(X86_CR4_PAE|X86_CR4_PGE|X86_CR4_MCE|X86_CR4_OSFXSR \
+		|X86_CR4_FSGSBASE|X86_CR4_SMAP|X86_CR4_SMEP), %eax
+	mov %eax, %cr4
 
-	mov  $__pa(boot_pml4), %eax
-	mov  %eax, %cr3
+	mov $__pa(boot_pml4), %eax
+	mov %eax, %cr3
 
 	# Set EFER
 	movl $IA32_EFER, %ecx
-	movl $(EFER_LME | EFER_SCE | EFER_NXE), %eax
+	movl $(EFER_LME|EFER_SCE|EFER_NXE), %eax
 	xorl %edx, %edx
 	wrmsr
 

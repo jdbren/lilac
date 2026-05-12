@@ -169,6 +169,9 @@ static struct task * clone_process(struct clone_args *args)
     hash_add(sid_table, &child->sid_hash, parent->sid);
 
     child->kstack_base = alloc_kstack();
+    if (!child->kstack_base) {
+        panic("Failed to allocate kernel stack for child process\n");
+    }
     if (flags & CLONE_VM) {
         cur->mm->ref_count++;
     } else {
@@ -223,7 +226,10 @@ static void return_from_fork(void)
     p = current;
     if (p->set_child_tid) {
         klog(LOG_DEBUG, "PID %d: Setting child TID at %p\n", p->pid, p->set_child_tid);
-        put_user(p->pid, p->set_child_tid);
+        if (put_user(p->pid, p->set_child_tid)) {
+            klog(LOG_DEBUG, "PID %d: Failed to set child TID\n", p->pid);
+            do_raise(p, SIGSEGV);
+        }
     }
     klog(LOG_DEBUG, "PID %d: Returning from fork\n", p->pid);
     arch_return_from_fork(p->regs, p->kstack);
@@ -297,7 +303,7 @@ SYSCALL_DECL5(clone, unsigned long, flags, void*, stack, void*, ptid,
     void*, ctid, unsigned long, tls)
 {
     if (flags & CLONE_THREAD) {
-        if (!(flags & (CLONE_VM|CLONE_SIGHAND)))
+        if ((flags & (CLONE_VM|CLONE_SIGHAND)) != (CLONE_VM|CLONE_SIGHAND))
             return -EINVAL;
     }
 
@@ -330,6 +336,9 @@ static void mm_release(struct task *p, struct mm_info *mm)
         wake_all(p->vfork_done);
         p->vfork_done = NULL;
     }
+
+    if (!--mm->ref_count)
+        arch_unmap_all_user_vm(mm);
 }
 
 void exit_mm_release(struct task *tsk, struct mm_info *mm)
@@ -390,8 +399,6 @@ static void cleanup_task_info(struct task_info *info)
 static void cleanup_memory(struct mm_info *mm)
 {
     klog(LOG_DEBUG, "Cleaning up memory\n");
-    if (!--mm->ref_count)
-        arch_unmap_all_user_vm(mm);
     exit_mm_release(current, mm);
     // mm_struct is freed in reap_task() since we need original kstack
 }

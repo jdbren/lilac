@@ -13,6 +13,7 @@
 .extern \name\()_handler
 .global \name
 \name:
+	clac
 	cld
 	testb $3, 16(%rsp)
 	jz 1f # if in kernel mode, skip
@@ -40,6 +41,7 @@
 .extern \name\()_handler
 .global \name
 \name:
+	clac
 	cld
 	testb $3, 8(%rsp)
 	jz 1f # if in kernel mode, skip
@@ -154,6 +156,7 @@ isr_no_err simd
 .macro isr_device name func
 .global \name
 \name:
+	clac
 	cld
 	PUSH_REGS
 	xor %rbp, %rbp
