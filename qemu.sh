@@ -18,7 +18,7 @@ sudo ./scripts/image.sh
 qemu-system-x86_64 \
     -s -enable-kvm -no-reboot -smp 4 -m 256M \
     -machine q35,firmware=./resources/OVMF-pure-efi.fd \
-    -cpu host,+tsc-deadline,+invtsc,+rdtscp,+vmware-cpuid-freq,+fsgsbase \
+    -cpu host,+tsc-deadline,+invtsc,+rdtscp,+vmware-cpuid-freq,+fsgsbase,+smap,+smep \
     -drive file=./uefi.img,format=raw -snapshot \
     -net none \
     -monitor stdio -debugcon file:debug.txt

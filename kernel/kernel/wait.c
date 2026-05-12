@@ -235,8 +235,14 @@ SYSCALL_DECL3(waitpid, int, pid, int*, status, int, options)
 {
     if (status && !access_ok(status, sizeof(int)))
         return -EFAULT;
+
+    int ret = 0;
+    int status_val = 0;
     if (pid == -1) {
-        return wait_any(status, options & WNOHANG, options & WUNTRACED);
+        ret = wait_any(&status_val, options & WNOHANG, options & WUNTRACED);
+        if (ret > 0 && status)
+            return put_user(status_val, status) ? -EFAULT : ret;
+        return ret;
     } else if (pid < -1 || pid == 0) {
         // pid_t pgid = (pid < -1) ? -pid : current->pgid;
         return -EINVAL; // TODO: implement process group waiting
@@ -247,7 +253,10 @@ SYSCALL_DECL3(waitpid, int, pid, int*, status, int, options)
         return -ECHILD;
     if (p->ppid != current->pid)
         return -ECHILD;
-    return wait_for(p, status, options & WNOHANG, options & WUNTRACED);
+    ret = wait_for(p, &status_val, options & WNOHANG, options & WUNTRACED);
+    if (ret > 0 && status)
+        return put_user(status_val, status) ? -EFAULT : ret;
+    return ret;
 }
 
 int sleep_on(struct waitqueue *wq)

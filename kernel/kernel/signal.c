@@ -188,6 +188,8 @@ SYSCALL_DECL2(signal, int, sig, __sighandler_t, handler)
     struct ksigaction *ka = &current->sighand->actions[sig];
     __sighandler_t old_handler = ka->sa.sa_handler;
     ka->sa.sa_handler = handler;
+    ka->sa.sa_flags = 0;
+    ka->sa.sa_mask = 0;
 
     klog(LOG_DEBUG, "Signal %d handler set to %p\n", sig, handler);
     return (long)old_handler;
@@ -210,15 +212,15 @@ SYSCALL_DECL3(sigaction, int, signum, const struct sigaction *, act, struct siga
     struct ksigaction *ka = &current->sighand->actions[signum];
 
     if (oldact) {
-        oldact->sa_handler = ka->sa.sa_handler;
-        oldact->sa_flags = ka->sa.sa_flags;
-        oldact->sa_mask = ka->sa.sa_mask;
+        put_user(ka->sa.sa_handler, &oldact->sa_handler);
+        put_user(ka->sa.sa_flags, &oldact->sa_flags);
+        put_user(ka->sa.sa_mask, &oldact->sa_mask);
     }
 
     if (act) {
-        ka->sa.sa_handler = act->sa_handler;
-        ka->sa.sa_flags = act->sa_flags;
-        ka->sa.sa_mask = act->sa_mask;
+        get_user(ka->sa.sa_handler, &act->sa_handler);
+        get_user(ka->sa.sa_flags, &act->sa_flags);
+        get_user(ka->sa.sa_mask, &act->sa_mask);
     }
 #ifdef DEBUG_SIGNAL
     klog(LOG_DEBUG, "sigaction: Signal %d action updated to %p\n", signum, ka->sa.sa_handler);
@@ -238,11 +240,14 @@ SYSCALL_DECL3(sigprocmask, int, how, const sigset_t *, set, sigset_t *, oldset)
     }
 
     if (oldset) {
-        *oldset = current->blocked;
+        // *oldset = current->blocked;
+        put_user(current->blocked, oldset);
     }
 
     if (set) {
-        sigset_t new_mask = SIG_APPLY_MASK(*set, unblockable);
+        sigset_t sigset;
+        if (get_user(sigset, set)) return -EFAULT;
+        sigset_t new_mask = SIG_APPLY_MASK(sigset, unblockable);
         switch (how) {
             case SIG_BLOCK:
                 current->blocked |= new_mask;
@@ -269,7 +274,9 @@ SYSCALL_DECL1(sigpending, sigset_t *, set)
         return -EFAULT;
     }
 
-    *set = current->pending;
+    // *set = current->pending;
+    sigset_t pending = current->pending;
+    if (put_user(pending, set)) return -EFAULT;
     klog(LOG_DEBUG, "sigpending: Pending signals for process %d: 0x%lx\n", current->pid, *set);
     return 0;
 }
@@ -280,7 +287,11 @@ SYSCALL_DECL1(sigsuspend, sigset_t*, set)
         klog(LOG_WARN, "sigsuspend: Invalid user memory for pending signals\n");
         return -EFAULT;
     }
-    sigset_t newmask = SIG_APPLY_MASK(*set, unblockable);
+
+    sigset_t mask;
+    if (get_user(mask, set)) return -EFAULT;
+
+    sigset_t newmask = SIG_APPLY_MASK(mask, unblockable);
 
     sigset_t oldmask = current->blocked;
     klog(LOG_DEBUG, "sigsuspend: changing mask from %lx to %lx", oldmask, newmask);

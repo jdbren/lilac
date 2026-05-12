@@ -94,18 +94,23 @@ _start:
 	movl __pa(_mbd_size), %ecx
 	rep ;movsb
 
+	# Basic CPU Initialization
 	mov $0x1, %eax
 	cpuid
+
 	test $bit_SSE, %edx
 	jz .noSSE
-	# enable SSE and the like
 	mov %cr0, %eax
-	and $(~X86_CR0_EM), %ax	# clear coprocessor emulation CR0.EM
-	or  $X86_CR0_MP, %ax	# set coprocessor monitoring  CR0.MP
+	and $(~X86_CR0_EM), %eax	# clear coprocessor emulation CR0.EM
+	or  $(X86_CR0_MP|X86_CR0_AM), %eax	# set coprocessor monitoring  CR0.MP
 	mov %eax, %cr0
+
+	test $bit_FXSAVE, %edx
+	jz .noSSE
 	mov %cr4, %eax
 	or  $(X86_CR4_OSFXSR), %eax	# set CR4.OSFXSR
 	mov %eax, %cr4
+
 .noSSE:
 #ifdef __x86_64__
 	movl 	$0x80000000, %eax

@@ -441,7 +441,7 @@ void sched_ap_rq_init(int cpu)
 
     idle->pgd = arch_get_pgd();
     idle->mm = mm;
-    idle->kstack_base = (void*)((uintptr_t)&ap_stack[__KERNEL_STACK_SZ * (cpu + 1)]);
+    idle->kstack_base = (void*)((uintptr_t)&ap_stack[__KERNEL_STACK_SZ * cpu]);
 
     klog(LOG_INFO, "Initialized run queue for CPU %d\n", cpu);
 }

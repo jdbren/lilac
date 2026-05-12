@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <sched.h>
 #include <sys/mman.h>
+#include <sys/syscall.h>
 
 pid_t child_set_tid;
 
@@ -23,7 +24,7 @@ int main()
         return 1;
     }
     char *str = "hello world";
-    pid_t tid = gettid();
+    pid_t tid = syscall(SYS_gettid);
     printf("Main thread TID: %d\n", tid);
 
     pid_t new_tid = clone(thread_func, tstack + stack_size,

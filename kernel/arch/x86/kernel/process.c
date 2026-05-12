@@ -6,6 +6,8 @@
 #include <lilac/types.h>
 #include <lilac/panic.h>
 #include <lilac/config.h>
+#include <lilac/uaccess.h>
+#include <lilac/wait.h>
 #include <mm/mm.h>
 #include <mm/kmm.h>
 #include <mm/page.h>
@@ -78,7 +80,7 @@ static struct mm_info * make_64_bit_mmap()
     struct mm_info *info = kzmalloc(sizeof *info);
     if (!info) {
         free_page(phys_to_virt(cr3));
-        kerror("Out of memory allocating mm_info\n");
+        panic("Out of memory allocating mm_info\n");
     }
     info->pgd = cr3;
     info->ref_count = 1;
@@ -135,7 +137,9 @@ static void copy_vm_area(void *cr3, struct vm_desc *new_desc)
     uintptr_t phys = virt_to_phys(get_zeroed_pages(num_pages, ALLOC_NORMAL));
 
     // Copy data
+    asm ("stac\n\t");
     memcpy((unsigned char*)phys_mem_mapping + phys, (void*)new_desc->start, num_pages * PAGE_SIZE);
+    asm ("clac\n\t");
 
     int flags = PG_USER | PG_PRESENT;
 
@@ -170,7 +174,7 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
     while (desc) {
         struct vm_desc *new_desc = kzmalloc(sizeof *new_desc);
         if (!new_desc) {
-            kerror("Out of memory allocating vm_desc for fork\n");
+            panic("Out of memory allocating vm_desc for fork\n");
         }
 #ifdef DEBUG_FORK
         klog(LOG_DEBUG, "Copying VMA %lx-%lx\n", desc->start, desc->end);
@@ -204,7 +208,7 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
     while (desc) {
         struct vm_desc *new_desc = kzmalloc(sizeof *new_desc);
         if (!new_desc) {
-            kerror("Out of memory allocating vm_desc for fork\n");
+            panic("Out of memory allocating vm_desc for fork\n");
         }
 
         *new_desc = *desc;
@@ -247,7 +251,7 @@ void *arch_get_user_sp(void)
 {
     struct regs_state *regs = (struct regs_state*)current->regs;
     if (!regs) {
-        kerror("Current task has no regs state\n");
+        panic("Current task has no regs state\n");
     }
     return (void*)regs->sp;
 }
@@ -256,7 +260,7 @@ void *arch_copy_regs(struct regs_state *src)
 {
     struct regs_state *regs = kzmalloc(sizeof *regs);
     if (!regs) {
-        kerror("Out of memory allocating regs_state\n");
+        panic("Out of memory allocating regs_state\n");
     }
     *regs = *src;
     return regs;
@@ -266,7 +270,7 @@ void arch_set_user_sp(struct task *p, void *sp)
 {
     struct regs_state *regs = (struct regs_state*)p->regs;
     if (!regs) {
-        kerror("Current task has no regs state\n");
+        panic("Current task has no regs state\n");
     }
     regs->sp = (uintptr_t)sp;
 }
@@ -276,7 +280,7 @@ void save_fp_regs(struct task *p)
     if (!p->fp_regs)
         p->fp_regs = kzmalloc(512);
     if (!p->fp_regs)
-        kerror("Out of memory allocating FP regs\n");
+        panic("Out of memory allocating FP regs\n");
 #ifdef __x86_64__
     __builtin_ia32_fxsave64(p->fp_regs);
 #else
@@ -292,7 +296,7 @@ void copy_fp_regs(struct task *dst, struct task *src)
     if (!src->fp_regs)
         save_fp_regs(src);
     if (!dst->fp_regs || !src->fp_regs)
-        kerror("FP regs not allocated for copy\n");
+        panic("FP regs not allocated for copy\n");
     memcpy(dst->fp_regs, src->fp_regs, 512);
 }
 
@@ -334,17 +338,25 @@ void arch_prepare_signal(void *pc, int signo)
     klog(LOG_DEBUG, "Pre signal orginal regs: ip=%lx sp=%lx\n", regs->ip, regs->sp);
     uintptr_t *ustack = (uintptr_t*)regs->sp;
     uintptr_t return_addr;
+    ucontext_t uc;
 
     // copy bytecode of sigtramp to user stack
     ustack = (uintptr_t*)((uintptr_t)ustack - 8);
-    memcpy(ustack, sigtramp, 8);
+    if (copy_to_user(ustack, sigtramp, 8))
+        goto fail;
+
     return_addr = (uintptr_t)(ustack);
+
     // create ucontext struct
     ustack -= sizeof(ucontext_t) / sizeof(uintptr_t);
-    create_ucontext((ucontext_t*)ustack);
+    create_ucontext(&uc);
+    if (copy_to_user(ustack, &uc, sizeof(ucontext_t)))
+        goto fail;
+
     // save registers onto user stack
     ustack -= sizeof(struct regs_state) / sizeof(uintptr_t);
-    memcpy(ustack, regs, sizeof(struct regs_state));
+    if (copy_to_user(ustack, regs, sizeof(struct regs_state)))
+        goto fail;
 
     regs->ip = (uintptr_t)pc;
 #ifdef __x86_64__
@@ -356,10 +368,18 @@ void arch_prepare_signal(void *pc, int signo)
     *--ustack = 0; // siginfo
     *--ustack = (u32)signo; // First argument: signo
 #endif
-    *--ustack = return_addr;
+    // *--ustack = return_addr;
+    if (put_user(return_addr, --ustack))
+        goto fail;
     regs->sp = (uintptr_t)ustack;
+    return;
+fail:
+    klog(LOG_WARN, "Failed to prepare signal frame for signal %d\n", signo);
+    current->exit_status = WSIGNALED(SIGSEGV);
+    do_exit();
 }
 
+// TODO: this state of registers must be validated
 long arch_restore_post_signal(void)
 {
     struct regs_state *regs = (struct regs_state*)current->regs;
@@ -371,9 +391,16 @@ long arch_restore_post_signal(void)
     stack += 3; // skip args
 #endif
     uc = (ucontext_t*)(stack + sizeof(struct regs_state) / sizeof(uintptr_t));
-    current->blocked = uc->uc_sigmask;
+    // current->blocked = uc->uc_sigmask;
+    if (get_user(current->blocked, &uc->uc_sigmask)) {
+        klog(LOG_WARN, "Failed to get signal mask from user context in signal return, SIGSEGV raised\n");
+        do_raise(current, SIGSEGV);
+    }
     // Restore registers from user stack
-    memcpy(regs, stack, sizeof(struct regs_state));
+    if (copy_from_user(regs, stack, sizeof(struct regs_state))) {
+        klog(LOG_WARN, "Failed to copy regs from user stack in signal return, SIGSEGV raised\n");
+        do_raise(current, SIGSEGV);
+    }
     klog(LOG_DEBUG, "Post signal restored regs: ip=%lx sp=%lx\n", regs->ip, regs->sp);
     return regs->ax; // original return value
 }

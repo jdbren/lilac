@@ -88,12 +88,8 @@ SYSCALL_DECL1(time, time_t *, t)
 {
     long long ret = get_unix_time();
 
-    if (t) {
-        if (access_ok(t, sizeof(time_t)))
-            *t = ret;
-        else
-            ret = -EFAULT;
-    }
+    if (t && put_user((time_t)ret, t))
+        return -EFAULT;
 
     return ret;
 }
@@ -102,13 +98,14 @@ SYSCALL_DECL2(gettimeofday, struct timeval*, tv, struct timezone*, tz)
 {
     if (tv) {
         u64 sys_time = get_sys_time_ns();
-        tv->tv_sec = boot_unix_time + sys_time / 1000000000;
-        tv->tv_usec = sys_time / 1000 % 1000000;
+        if (put_user((time_t)(boot_unix_time + sys_time / NS_PER_SEC), &tv->tv_sec) ||
+            put_user((suseconds_t)(sys_time / 1000 % 1000000), &tv->tv_usec))
+            return -EFAULT;
     }
     if (tz) {
         // Timezone not supported
-        tz->tz_minuteswest = 0;
-        tz->tz_dsttime = 0;
+        if (put_user(0, &tz->tz_minuteswest) || put_user(0, &tz->tz_dsttime))
+            return -EFAULT;
     }
     return 0;
 }
@@ -179,11 +176,14 @@ void usleep(u32 micros)
 
 SYSCALL_DECL2(nanosleep, const struct timespec*, duration, struct timespec*, rem)
 {
-    if (!access_ok(duration, sizeof(struct timespec))) return -EFAULT;
-    if (rem && !access_ok(rem, sizeof(struct timespec))) return -EFAULT;
+    struct timespec kduration, krem;
+    if (copy_from_user(&kduration, duration, sizeof(struct timespec)))
+        return -EFAULT;
+    if (kduration.tv_sec < 0 || kduration.tv_nsec < 0 || kduration.tv_nsec >= NS_PER_SEC)
+        return -EINVAL;
 
     u64 start_ns = get_sys_time_ns();
-    u64 total_ns = duration->tv_sec * NS_PER_SEC + duration->tv_nsec;
+    u64 total_ns = kduration.tv_sec * NS_PER_SEC + kduration.tv_nsec;
 
     usleep(total_ns / 1000);
 
@@ -193,12 +193,14 @@ SYSCALL_DECL2(nanosleep, const struct timespec*, duration, struct timespec*, rem
             u64 elapsed_ns = end_ns - start_ns;
             if (elapsed_ns < total_ns) {
                 u64 remaining_ns = total_ns - elapsed_ns;
-                rem->tv_sec = remaining_ns / NS_PER_SEC;
-                rem->tv_nsec = remaining_ns % NS_PER_SEC;
+                krem.tv_sec = remaining_ns / NS_PER_SEC;
+                krem.tv_nsec = remaining_ns % NS_PER_SEC;
             } else {
-                rem->tv_sec = 0;
-                rem->tv_nsec = 0;
+                krem.tv_sec = 0;
+                krem.tv_nsec = 0;
             }
+            if (copy_to_user(rem, &krem, sizeof(struct timespec)))
+                return -EFAULT;
         }
         return -EINTR;
     }
