@@ -486,9 +486,15 @@ SYSCALL_DECL3(execve, const char*, path, char* const*, argv, char* const*, envp)
     klog(LOG_DEBUG, "execve called with path = %s, argv = %p, envp = %p\n", path_buf, argv, envp);
 
     char **argv_buf = kmalloc(sizeof(char*) * 32);
+    if (!argv_buf) {
+        kfree(path_buf);
+        return -ENOMEM;
+    }
     char **envp_buf = kmalloc(sizeof(char*) * 32);
-    if (!argv_buf || !envp_buf) {
-        panic("Failed to allocate memory for argv/envp buffers\n");
+    if (!envp_buf) {
+        kfree(path_buf);
+        kfree(argv_buf);
+        return -ENOMEM;
     }
 
     int i = 0;

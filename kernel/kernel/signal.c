@@ -200,30 +200,19 @@ SYSCALL_DECL3(sigaction, int, signum, const struct sigaction *, act, struct siga
     if (signum <= 0 || signum >= _NSIG || signum == SIGKILL || signum == SIGSTOP)
         return -EINVAL;
 
-    if (act && !access_ok(act, sizeof(struct sigaction))) {
-        klog(LOG_WARN, "sigaction: Invalid user memory for new action\n");
-        return -EFAULT;
-    }
-    if (oldact && !access_ok(oldact, sizeof(struct sigaction))) {
-        klog(LOG_WARN, "sigaction: Invalid user memory for old action\n");
-        return -EFAULT;
-    }
-
     struct ksigaction *ka = &current->sighand->actions[signum];
 
-    if (oldact) {
-        put_user(ka->sa.sa_handler, &oldact->sa_handler);
-        put_user(ka->sa.sa_flags, &oldact->sa_flags);
-        put_user(ka->sa.sa_mask, &oldact->sa_mask);
+    if (oldact && copy_to_user(oldact, ka, sizeof(struct sigaction))) {
+        klog(LOG_WARN, "sigaction: Failed to copy old action to user memory\n");
+        return -EFAULT;
     }
 
-    if (act) {
-        get_user(ka->sa.sa_handler, &act->sa_handler);
-        get_user(ka->sa.sa_flags, &act->sa_flags);
-        get_user(ka->sa.sa_mask, &act->sa_mask);
+    if (act && copy_from_user(ka, act, sizeof(struct sigaction))) {
+        klog(LOG_WARN, "sigaction: Failed to copy new action from user memory\n");
+        return -EFAULT;
     }
 #ifdef DEBUG_SIGNAL
-    klog(LOG_DEBUG, "sigaction: Signal %d action updated to %p\n", signum, ka->sa.sa_handler);
+    klog(LOG_DEBUG, "sigaction: Signal %d action is set to %p\n", signum, ka->sa.sa_handler);
 #endif
     return 0;
 }
@@ -234,14 +223,10 @@ SYSCALL_DECL3(sigprocmask, int, how, const sigset_t *, set, sigset_t *, oldset)
         klog(LOG_WARN, "sigprocmask: Invalid user memory for new mask\n");
         return -EFAULT;
     }
-    if (oldset && !access_ok(oldset, sizeof(sigset_t))) {
-        klog(LOG_WARN, "sigprocmask: Invalid user memory for old mask\n");
-        return -EFAULT;
-    }
 
-    if (oldset) {
-        // *oldset = current->blocked;
-        put_user(current->blocked, oldset);
+    if (oldset && put_user(current->blocked, oldset)) {
+        klog(LOG_WARN, "sigprocmask: Failed to copy old mask to user memory\n");
+        return -EFAULT;
     }
 
     if (set) {
@@ -277,7 +262,7 @@ SYSCALL_DECL1(sigpending, sigset_t *, set)
     // *set = current->pending;
     sigset_t pending = current->pending;
     if (put_user(pending, set)) return -EFAULT;
-    klog(LOG_DEBUG, "sigpending: Pending signals for process %d: 0x%lx\n", current->pid, *set);
+    klog(LOG_DEBUG, "sigpending: Pending signals for process %d: 0x%lx\n", current->pid, pending);
     return 0;
 }
 

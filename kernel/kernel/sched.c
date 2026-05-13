@@ -14,7 +14,9 @@
 
 extern uintptr_t stack_top;
 
-static struct mm_info root_mm = {};
+static struct mm_info root_mm = {
+    .ref_count = 1,
+};
 
 static struct sighandlers root_sighand = {
     .ref_count = CONFIG_MAX_CPUS,

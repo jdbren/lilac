@@ -49,11 +49,13 @@ static void copy_fs_info(struct fs_info *dst, struct fs_info *src)
     dst->cwd_d = src->cwd_d;
 }
 
-static void copy_files(struct fdtable *dst, struct fdtable *src)
+static int copy_files(struct fdtable *dst, struct fdtable *src)
 {
     if (dst->fdarray)
         kfree(dst->fdarray);
     dst->fdarray = kcalloc(src->max, sizeof(struct file*));
+    if (dst->fdarray == NULL)
+        return -ENOMEM;
     dst->max = src->max;
     for (size_t i = 0; i < src->max; i++) {
         dst->fdarray[i] = src->fdarray[i];
@@ -61,6 +63,7 @@ static void copy_files(struct fdtable *dst, struct fdtable *src)
             fget(dst->fdarray[i]);
         }
     }
+    return 0;
 }
 
 static void copy_sighandlers(struct sighandlers *dst, struct sighandlers *src)
@@ -325,10 +328,8 @@ SYSCALL_DECL5(clone, unsigned long, flags, void*, stack, void*, ptid,
 static void mm_release(struct task *p, struct mm_info *mm)
 {
     if (p->clear_child_tid) {
-        if (atomic_load(&mm->ref_count) > 1) {
-            put_user(0, p->clear_child_tid);
-            // do_futex(p->clear_child_tid, FUTEX_WAKE, 1, NULL, NULL, 0, 0);
-        }
+        put_user(0, p->clear_child_tid);
+        // do_futex(p->clear_child_tid, FUTEX_WAKE, 1, NULL, NULL, 0, 0);
         p->clear_child_tid = NULL;
     }
 
@@ -394,6 +395,12 @@ static void cleanup_task_info(struct task_info *info)
         kfree(info->argv);
         info->argv = NULL;
     }
+    if (info->envp) {
+        for (int i = 0; info->envp[i]; i++)
+            kfree(info->envp[i]);
+        kfree(info->envp);
+        info->envp = NULL;
+    }
 }
 
 static void cleanup_memory(struct mm_info *mm)
@@ -412,6 +419,7 @@ void cleanup_task(struct task *p)
     put_sighandlers(p->sighand);
 }
 
+// TODO: race conditions related to reaping and tasks
 void reap_task(struct task *p)
 {
     if (p->state != TASK_ZOMBIE) {
