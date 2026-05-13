@@ -62,7 +62,7 @@ static __must_check inline
 int strncpy_from_user(char *dst, const char *src, size_t max_size)
 {
     if (!access_ok(src, 1)) {
-        klog(LOG_WARN, "strncpy_from_user: src (%x) not accessible\n", src);
+        klog(LOG_WARN, "strncpy_from_user: src (%p) not accessible\n", src);
         return -EFAULT;
     }
     return arch_strncpy_from_user(dst, src, max_size);
@@ -72,7 +72,7 @@ static inline
 int strncpy_to_user(char *dst, const char *src, size_t max_size)
 {
     if (!access_ok(dst, 1)) {
-        klog(LOG_WARN, "strncpy_to_user: dst (%x) not accessible\n", dst);
+        klog(LOG_WARN, "strncpy_to_user: dst (%p) not accessible\n", dst);
         return -EFAULT;
     }
     size_t len = strnlen(src, max_size);

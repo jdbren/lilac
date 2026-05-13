@@ -877,11 +877,16 @@ SYSCALL_DECL2(symlink, const char*, target, const char*, linkpath)
 SYSCALL_DECL3(readlink, const char*, path, char *, buf, int, bufsize)
 {
     struct dentry *dentry;
+    char *path_buf;
 
     if (!access_ok(buf, bufsize))
         return -EFAULT;
 
-    dentry = vfs_lookup(path);
+    path_buf = get_user_path(path);
+    if (IS_ERR(path_buf))
+        return PTR_ERR(path_buf);
+
+    dentry = vfs_lookup(path_buf);
     if (IS_ERR(dentry))
         return PTR_ERR(dentry);
     if (!dentry->d_inode)
