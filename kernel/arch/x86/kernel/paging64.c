@@ -224,8 +224,11 @@ static void drop_user_pt_range(pde_t *pde, uintptr_t start, uintptr_t end)
     pte_t *pte = pt + get_pt_index(start);
 
     for (; start < end; start += PAGE_SIZE, pte++) {
+        pte_t pte_val = *pte;
+        if (ENTRY_PRESENT(pte_val)) {
+            put_page(phys_to_page(pte_val & ~0xFFFUL));
+        }
         *pte = 0;
-        put_page(phys_to_page(*pte & ~0xFFFUL));
     }
 
     if (table_is_empty((u64*)pt)) {

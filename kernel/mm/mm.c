@@ -308,20 +308,13 @@ static int mmap_unmap_range(struct mm_info *mm, uintptr_t start, uintptr_t end)
     struct tlb_inval tlb = {
         .mm = mm,
         .start = start,
-        .end = PAGE_ROUND_DOWN(end),
+        .end = end,
         .full = false,
     };
 
     klog(LOG_DEBUG, "mmap_unmap_range: unmapping range %p - %p\n", (void*)start, (void*)end);
 
-    struct vm_desc *vma = find_vma(mm, start);
-    if (!vma) {
-        klog(LOG_DEBUG, "mmap_unmap_range: no VMA found containing start address %p\n", (void*)start);
-        err = -EINVAL;
-        goto error;
-    }
-
-    err = vma_unmap_range(vma, start, end);
+    err = vma_unmap_range(mm->mmap, start, end);
     if (err <= 0)
         goto error;
 
@@ -445,7 +438,7 @@ SYSCALL_DECL2(munmap, void*, addr, size_t, length)
         return -EINVAL;
     }
 
-    uintptr_t end = pgaddr + length;
+    uintptr_t end = PAGE_ROUND_DOWN(pgaddr + length);
     if (end < pgaddr || end > __USER_MAX_ADDR) {
         return -EINVAL;
     }

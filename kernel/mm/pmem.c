@@ -81,7 +81,9 @@ struct page * alloc_pages(u32 pgcnt, u32 flags)
 
     struct page *pg = phys_to_page(phys);
     while (pgcnt--) {
-        get_page(pg++);
+        pg->flags = flags;
+        pg->refcount = 1;
+        pg++;
     }
 
     return phys_to_page(base);

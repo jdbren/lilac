@@ -65,7 +65,7 @@ void up_read(struct rw_semaphore *sem)
 
 void up_write(struct rw_semaphore *sem)
 {
-    int count = atomic_fetch_add(&sem->count, 1);
+    long count = atomic_fetch_add(&sem->count, 1);
     if (count == -1) {
         wake_all(&sem->wait_list);
     }

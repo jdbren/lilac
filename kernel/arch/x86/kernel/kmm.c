@@ -48,7 +48,7 @@ int arch_tlb_flush_mmu(struct tlb_inval *tlb)
         return 0;
     }
 
-    unsigned long count = tlb->end - tlb->start;
+    unsigned long count = (tlb->end - tlb->start) / PAGE_SIZE;
     if (count < 32) {
         for (uintptr_t addr = tlb->start; addr < tlb->end; addr += PAGE_SIZE) {
             __native_flush_tlb_single((void*)addr);
