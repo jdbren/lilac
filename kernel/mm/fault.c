@@ -3,6 +3,7 @@
 #include <mm/page.h>
 #include <lilac/panic.h>
 #include <lilac/fs.h>
+#include <lilac/sync.h>
 
 static bool check_access(struct vm_desc *vma, unsigned int flags)
 {
@@ -85,7 +86,9 @@ map_page_out:
         if (vma->vm_flags & VM_WRITE)
             mem_pflags |= MEM_PF_WRITE;
 
+        acquire_lock(&vma->mm->page_table_lock);
         map_page((void *)virt_to_phys(buf), (void *)pgaddr, mem_pflags);
+        release_lock(&vma->mm->page_table_lock);
     }
 
     return FAULT_SUCCESS;
@@ -98,7 +101,9 @@ static int do_anon_fault(struct vm_desc *vma, uintptr_t pgaddr, unsigned long fl
     int mem_pflags = MEM_PF_USER;
     if (vma->vm_flags & VM_WRITE)
         mem_pflags |= MEM_PF_WRITE;
+    acquire_lock(&vma->mm->page_table_lock);
     map_page((void*)virt_to_phys(page), (void*)pgaddr, mem_pflags);
+    release_lock(&vma->mm->page_table_lock);
     return FAULT_SUCCESS;
 }
 

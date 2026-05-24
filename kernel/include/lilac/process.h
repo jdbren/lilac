@@ -12,6 +12,7 @@
 
 struct regs_state;
 struct file;
+struct mm_info;
 
 #define TASK_RUNNING 0
 #define TASK_SLEEPING 1
@@ -116,24 +117,6 @@ struct task {
     char name[32];
 };
 
-struct mm_info {
-    struct vm_desc *mmap;
-    // struct rb_root mmap_rb;
-    uintptr_t pgd;
-    atomic_uint ref_count;
-    // u32 map_count;
-    // struct semaphore mmap_sem;
-    // spinlock_t page_table_lock;
-    // struct list_head mmlist;
-    uintptr_t start_code, end_code;
-    uintptr_t start_data, end_data;
-    uintptr_t start_brk, brk;
-    uintptr_t start_stack;
-    uintptr_t arg_start, arg_end;
-    uintptr_t env_start, env_end;
-    size_t total_vm;
-};
-
 struct task *init_process(void);
 int get_pid(void);
 void reap_task(struct task *p);
@@ -146,7 +129,6 @@ struct task * get_any_pgrp_member(pid_t pgid);
 void             arch_pre_context_switch(struct task *prev, struct task *next);
 void             arch_post_context_switch(struct task *p);
 struct mm_info * arch_process_mmap(bool is_64_bit);
-struct mm_info * arch_process_remap(struct mm_info *existing);
 struct mm_info * arch_copy_mmap(struct mm_info *parent);
 void             arch_unmap_all_user_vm(struct mm_info *info);
 void             arch_reclaim_mem(struct task *p);

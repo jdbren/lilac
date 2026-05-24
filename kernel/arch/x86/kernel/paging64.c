@@ -4,6 +4,7 @@
 #include <lilac/boot.h>
 #include <mm/kmm.h>
 #include <mm/page.h>
+#include <mm/mm.h>
 
 #include "paging.h"
 
@@ -18,6 +19,25 @@
 #define ENTRY_PRESENT(x) ((x) & 1)
 
 #define phys_to_mapping(x) (phys_mem_mapping + (x))
+
+#define PDE_SIZE    0x200000UL       /* range of one PD entry (2MB) */
+#define PDPTE_SIZE  0x40000000UL     /* range of one PDPT entry (1GB) */
+#define PML4E_SIZE  0x8000000000UL   /* range of one PML4 entry (512GB) */
+
+#define PDE_MASK    (~(PDE_SIZE   - 1))
+#define PDPTE_MASK  (~(PDPTE_SIZE - 1))
+#define PML4E_MASK  (~(PML4E_SIZE - 1))
+
+/* Overflow-safe "next boundary" */
+#define pde_addr_end(addr, end) \
+    ({ uintptr_t __b = ((addr) + PDE_SIZE) & PDE_MASK;   \
+       (__b - 1 < (end) - 1) ? __b : (end); })
+#define pdpte_addr_end(addr, end) \
+    ({ uintptr_t __b = ((addr) + PDPTE_SIZE) & PDPTE_MASK; \
+       (__b - 1 < (end) - 1) ? __b : (end); })
+#define pml4e_addr_end(addr, end) \
+    ({ uintptr_t __b = ((addr) + PML4E_SIZE) & PML4E_MASK; \
+       (__b - 1 < (end) - 1) ? __b : (end); })
 
 // Maps all of physical memory
 u8 *const phys_mem_mapping = (void*)__PHYS_MAP_ADDR;
@@ -63,13 +83,10 @@ pte_t * get_or_alloc_pt(pde_t *pd, void *virt, u16 flags)
 
 int map_pages(void *phys, void *virt, int flags, int num_pages)
 {
+    pml4e_t *pml4 = (pml4e_t*)ENTRY_ADDR(arch_get_pgd());
     flags |= x86_to_page_flags(flags) | PG_PRESENT;
     for (int i = 0; i < num_pages; i++, phys = (u8*)phys + PAGE_SIZE,
-    virt = (u8*)virt + PAGE_SIZE) {
-#ifdef DEBUG_PAGING
-        printf("Mapping %p to %p with flags %x\n", virt, phys, flags);
-#endif
-        pml4e_t *pml4 = (pml4e_t*)ENTRY_ADDR(arch_get_pgd());
+            virt = (u8*)virt + PAGE_SIZE) {
         pdpte_t *pdpt = get_or_alloc_pdpt(pml4, virt, flags);
         pde_t *pd = get_or_alloc_pd(pdpt, virt, flags);
         pte_t *pt = get_or_alloc_pt(pd, virt, flags);
@@ -86,37 +103,224 @@ int map_pages(void *phys, void *virt, int flags, int num_pages)
     return 0;
 }
 
+static bool table_is_empty(u64 *table)
+{
+    for (int i = 0; i < ENTRIES_PER_TABLE; i++)
+        if (ENTRY_PRESENT(table[i]))
+            return false;
+    return true;
+}
+
+static void unmap_pte_range(pde_t *pde, uintptr_t start, uintptr_t end)
+{
+    pte_t *pt = (pte_t*)ENTRY_ADDR(*pde);
+    pte_t *pte = pt + get_pt_index(start);
+
+    for (; start < end; start += PAGE_SIZE, pte++) {
+        *pte = 0;
+        __native_flush_tlb_single((void*)start);
+    }
+
+    if (table_is_empty((u64*)pt)) {
+        *pde = 0;
+        free_page(pt);
+    }
+}
+
+static void unmap_pde_range(pdpte_t *pdpte, uintptr_t start, uintptr_t end)
+{
+    pde_t *pd = (pde_t*)ENTRY_ADDR(*pdpte);
+    pde_t *pde = pd + get_pd_index(start);
+    uintptr_t next;
+
+    /* Not on a 2MB boundary? */
+    if (start & (PDE_SIZE - 1)) {
+        next = pde_addr_end(start, end);
+        unmap_pte_range(pde, start, next);
+        start = next;
+        pde++;
+    }
+
+    /* Full 2MB chunks */
+    for (; end - start >= PDE_SIZE; start += PDE_SIZE, pde++) {
+        unmap_pte_range(pde, start, start + PDE_SIZE);
+    }
+
+    /* Remaining pages */
+    if (start < end)
+        unmap_pte_range(pde, start, end);
+
+    if (table_is_empty((u64*)pd)) {
+        *pdpte = 0;
+        free_page(pd);
+    }
+}
+
+static void unmap_pdpt_range(pml4e_t *pml4e, uintptr_t start, uintptr_t end, bool kernel_addr)
+{
+    pdpte_t *pdpt = (pdpte_t*)ENTRY_ADDR(*pml4e);
+    pdpte_t *pdpte = pdpt + get_pdpt_index(start);
+    uintptr_t next;
+
+    /* Not on a 1GB boundary? */
+    if (start & (PDPTE_SIZE - 1)) {
+        next = pdpte_addr_end(start, end);
+        unmap_pde_range(pdpte, start, next);
+        start = next;
+        pdpte++;
+    }
+
+    /* Full 1GB chunks */
+    for (; end - start >= PDPTE_SIZE; start += PDPTE_SIZE, pdpte++) {
+        unmap_pde_range(pdpte, start, start + PDPTE_SIZE);
+    }
+
+    /* Remaining */
+    if (start < end)
+        unmap_pde_range(pdpte, start, end);
+
+    if (!kernel_addr && table_is_empty((u64*)pdpt)) {
+        *pml4e = 0;
+        free_page(pdpt);
+    }
+}
+
 int unmap_pages(void *virt, int num_pages)
 {
-    for (int i = 0; i < num_pages; i++, virt = (u8*)virt + PAGE_SIZE) {
-        pml4e_t *pml4 = (pml4e_t*)ENTRY_ADDR(arch_get_pgd());
+    uintptr_t start = (uintptr_t)virt;
+    uintptr_t end = start + (uintptr_t)num_pages * PAGE_SIZE;
+    pml4e_t *pml4 = (pml4e_t*)ENTRY_ADDR(arch_get_pgd());
+    pml4e_t *pml4e = pml4 + get_pml4_index(start);
+    bool kernel_addr = start > __USER_MAX_ADDR;
 
-        u32 pml4_ndx = get_pml4_index(virt);
-        u32 pdpt_ndx = get_pdpt_index(virt);
-        u32 pd_ndx = get_pd_index(virt);
-        u32 pt_ndx = get_pt_index(virt);
-
-        if (!ENTRY_PRESENT(pml4[pml4_ndx]))
-            return -1;
-        pdpte_t *pdpt = (pdpte_t*)ENTRY_ADDR(pml4[pml4_ndx]);
-
-        if (!ENTRY_PRESENT(pdpt[pdpt_ndx]))
-            return -1;
-        pde_t *pd = (pde_t*)ENTRY_ADDR(pdpt[pdpt_ndx]);
-
-        if (!ENTRY_PRESENT(pd[pd_ndx]))
-            return -1;
-        pte_t *pt = (pte_t*)ENTRY_ADDR(pd[pd_ndx]);
-
-        if (!ENTRY_PRESENT(pt[pt_ndx]))
-            return -1;
 #ifdef DEBUG_PAGING
-        printf("Unmapping %p from %p\n", virt, (void*)((uintptr_t)pt[pt_ndx] & ~0xFFF));
+    if (kernel_addr)
+        klog(LOG_DEBUG, "Kernel addr unmap: %p - %p\n", (void*)start, (void*)end);
 #endif
-        pt[pt_ndx] = 0;
+
+    /* Not on a 512GB boundary? */
+    if (start & (PML4E_SIZE - 1)) {
+        uintptr_t next = pml4e_addr_end(start, end);
+        unmap_pdpt_range(pml4e, start, next, kernel_addr);
+        start = next;
+        pml4e++;
     }
-    __native_flush_tlb_single(virt);
+
+    /* Full 512GB chunks */
+    for (; end - start >= PML4E_SIZE; start += PML4E_SIZE, pml4e++) {
+        unmap_pdpt_range(pml4e, start, start + PML4E_SIZE, kernel_addr);
+    }
+
+    /* Remaining */
+    if (start < end)
+        unmap_pdpt_range(pml4e, start, end, kernel_addr);
+
     return 0;
+}
+
+static void drop_user_pt_range(pde_t *pde, uintptr_t start, uintptr_t end)
+{
+    pte_t *pt = (pte_t*)ENTRY_ADDR(*pde);
+    pte_t *pte = pt + get_pt_index(start);
+
+    for (; start < end; start += PAGE_SIZE, pte++) {
+        *pte = 0;
+        put_page(phys_to_page(*pte & ~0xFFFUL));
+    }
+
+    if (table_is_empty((u64*)pt)) {
+        *pde = 0;
+        free_page(pt);
+    }
+}
+
+static void drop_user_pd_range(pdpte_t *pdpte, uintptr_t start, uintptr_t end)
+{
+    pde_t *pd = (pde_t*)ENTRY_ADDR(*pdpte);
+    pde_t *pde = pd + get_pd_index(start);
+    uintptr_t next;
+
+    /* Not on a 2MB boundary? */
+    if (start & (PDE_SIZE - 1)) {
+        next = pde_addr_end(start, end);
+        drop_user_pt_range(pde, start, next);
+        start = next;
+        pde++;
+    }
+
+    /* Full 2MB chunks */
+    for (; end - start >= PDE_SIZE; start += PDE_SIZE, pde++) {
+        drop_user_pt_range(pde, start, start + PDE_SIZE);
+    }
+
+    /* Remaining pages */
+    if (start < end)
+        drop_user_pt_range(pde, start, end);
+
+    if (table_is_empty((u64*)pd)) {
+        *pdpte = 0;
+        free_page(pd);
+    }
+}
+
+static void drop_user_pdpt_range(pml4e_t *pml4e, uintptr_t start, uintptr_t end)
+{
+    pdpte_t *pdpt = (pdpte_t*)ENTRY_ADDR(*pml4e);
+    pdpte_t *pdpte = pdpt + get_pdpt_index(start);
+    uintptr_t next;
+
+    /* Not on a 1GB boundary? */
+    if (start & (PDPTE_SIZE - 1)) {
+        next = pdpte_addr_end(start, end);
+        drop_user_pd_range(pdpte, start, next);
+        start = next;
+        pdpte++;
+    }
+
+    /* Full 1GB chunks */
+    for (; end - start >= PDPTE_SIZE; start += PDPTE_SIZE, pdpte++) {
+        drop_user_pd_range(pdpte, start, start + PDPTE_SIZE);
+    }
+
+    /* Remaining */
+    if (start < end)
+        drop_user_pd_range(pdpte, start, end);
+
+    if (table_is_empty((u64*)pdpt)) {
+        *pml4e = 0;
+        free_page(pdpt);
+    }
+}
+
+void drop_user_page_range(uintptr_t start, size_t size)
+{
+    uintptr_t end = PAGE_ROUND_UP(start + size);
+    pml4e_t *pml4 = (pml4e_t*)ENTRY_ADDR(arch_get_pgd());
+    pml4e_t *pml4e = pml4 + get_pml4_index(start);
+
+#ifdef DEBUG_PAGING
+    klog(LOG_DEBUG, "Dropping user page range %p - %p\n", (void*)start, (void*)end);
+#endif
+
+    if (end > __USER_MAX_ADDR + 1)
+        panic("Tried to drop kernel addr range: %p - %p\n", (void*)start, (void*)end);
+
+    /* Not on a 512GB boundary? */
+    if (start & (PML4E_SIZE - 1)) {
+        uintptr_t next = pml4e_addr_end(start, end);
+        drop_user_pdpt_range(pml4e, start, next);
+        start = next;
+        pml4e++;
+    }
+
+    /* Full 512GB chunks */
+    for (; end - start >= PML4E_SIZE; start += PML4E_SIZE, pml4e++) {
+        drop_user_pdpt_range(pml4e, start, start + PML4E_SIZE);
+    }
+
+    /* Remaining */
+    if (start < end)
+        drop_user_pdpt_range(pml4e, start, end);
 }
 
 

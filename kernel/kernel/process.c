@@ -175,7 +175,9 @@ static void * load_executable(struct task *p)
         p->info.exec_file = file;
     }
 
+    mmap_write_lock(p->mm);
     jmp = elf_load(file, p->mm);
+    mmap_write_unlock(p->mm);
     if (!jmp) {
         klog(LOG_ERROR, "Failed to load ELF file\n");
         goto out;
@@ -186,6 +188,7 @@ out:
     return jmp;
 }
 
+// Must be called with mm->mmap_lock held
 static void set_vm_areas(struct mm_info *mem)
 {
     struct vm_desc *stack_desc = kzmalloc(sizeof(*stack_desc));
@@ -284,6 +287,7 @@ void start_process(void)
         exit(1);
     }
 
+    mmap_write_lock(mem);
     struct vm_desc *desc = mem->mmap;
     while (desc) { // after the data segment, this seems imprecise?
         if ((desc->vm_flags & (VM_READ|VM_WRITE)) == (VM_READ|VM_WRITE))
@@ -293,6 +297,7 @@ void start_process(void)
     mem->start_brk = mem->brk = desc ? desc->end : 0;
     mem->start_stack = (uintptr_t)(__USER_STACK - __USER_STACK_SZ);
     set_vm_areas(mem);
+    mmap_write_unlock(mem);
 
     unsigned long argc = count_task_vec(current->info.argv);
     unsigned long envc = count_task_vec(current->info.envp);
@@ -359,12 +364,11 @@ static void exec_and_return(void)
 {
     klog(LOG_DEBUG, "Entering exec_and_return, pid = %d\n", current->pid);
     struct mm_info *old_mm = current->mm;
-    struct mm_info *mem = kzmalloc(sizeof(*mem));
+    struct mm_info *mem = alloc_mm_info();
     if (!mem) {
         panic("Failed to allocate memory for new mm_info\n");
     }
     struct task *task = current;
-    mem->ref_count = 1;
     mem->pgd = old_mm->pgd;
 
     task->mm = mem;

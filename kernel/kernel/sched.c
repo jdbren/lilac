@@ -8,6 +8,7 @@
 #include <lilac/syscall.h>
 #include <lilac/percpu.h>
 #include <lilac/timer.h>
+#include <mm/mm.h>
 #include <mm/kmm.h>
 
 #define MIN_GRANULARITY 2
@@ -16,6 +17,8 @@ extern uintptr_t stack_top;
 
 static struct mm_info root_mm = {
     .ref_count = 1,
+    .page_table_lock = SPINLOCK_INIT,
+    .mmap_lock = __RWSEM_INITIALIZER(root_mm.mmap_lock),
 };
 
 static struct sighandlers root_sighand = {

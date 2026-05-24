@@ -1,6 +1,7 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <mm/kmm.h>
+#include <mm/tlb.h>
 #include <lilac/math.h>
 #include <lilac/panic.h>
 #include <asm/regs.h>
@@ -38,6 +39,25 @@ uintptr_t arch_get_pgd(void)
     uintptr_t cr3;
     asm volatile("mov %%cr3, %0" : "=r"(cr3));
     return cr3;
+}
+
+int arch_tlb_flush_mmu(struct tlb_inval *tlb)
+{
+    if (tlb->full) {
+        __native_flush_tlb();
+        return 0;
+    }
+
+    unsigned long count = tlb->end - tlb->start;
+    if (count < 32) {
+        for (uintptr_t addr = tlb->start; addr < tlb->end; addr += PAGE_SIZE) {
+            __native_flush_tlb_single((void*)addr);
+        }
+    } else {
+        __native_flush_tlb();
+    }
+
+    return 0;
 }
 
 

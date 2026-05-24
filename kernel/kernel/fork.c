@@ -444,8 +444,8 @@ void reap_task(struct task *p)
 __noreturn void do_exit(void)
 {
     struct task *parent = NULL;
-    if (unlikely(current->pid == 1))
-        panic("Init tried to exit!\n");
+    if (unlikely(current->pid <= 1))
+        panic("Init or kernel tried to exit!\n");
     parent = current->parent;
     cleanup_task(current);
     current->state = TASK_ZOMBIE;

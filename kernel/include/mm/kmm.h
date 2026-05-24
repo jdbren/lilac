@@ -17,7 +17,8 @@
 #define MEM_PF_UC           0100
 
 #define PAGE_ROUND_DOWN(x)  ((uintptr_t)(x) & ~((uintptr_t)(PAGE_SIZE - 1)))
-#define PAGE_ROUND_UP(x)    ((((uintptr_t)(x)) + ((uintptr_t)PAGE_SIZE - 1)) & ~((uintptr_t)(PAGE_SIZE - 1)))
+#define PAGE_ROUND_UP(x)    ((((uintptr_t)(x)) + ((uintptr_t)PAGE_SIZE - 1)) \
+                                & ~((uintptr_t)(PAGE_SIZE - 1)))
 
 #define PAGE_UP_COUNT(x)    (PAGE_ROUND_UP(x) >> PAGE_SHIFT)
 #define PAGE_DOWN_COUNT(x)  (PAGE_ROUND_DOWN(x) >> PAGE_SHIFT)

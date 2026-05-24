@@ -62,10 +62,16 @@ static unsigned long get_fault_flags(long err_code)
 
 static int user_page_fault(long error, struct interrupt_frame *frame, uintptr_t addr)
 {
-    struct vm_desc *vma = find_vma(current->mm, addr);
+    struct vm_desc *vma;
+    int err = 0;
+
+    mmap_read_lock(current->mm);
+
+    vma = find_vma(current->mm, addr);
     if (!vma) {
         do_raise(current, SIGSEGV);
-        return -1;
+        err = -1;
+        goto out;
     }
 #if defined DEBUG_VMA || defined DEBUG_MM
     klog(LOG_DEBUG, "Found VMA %lx-%lx for faulting address %lx\n", vma->start, vma->end, addr);
@@ -75,13 +81,15 @@ static int user_page_fault(long error, struct interrupt_frame *frame, uintptr_t 
 
     if (fault_ret == FAULT_PROT_VIOLATION) {
         do_raise(current, SIGSEGV);
-        return -1;
+        err = -1;
     } else if (fault_ret == FAULT_FILE_ERROR) {
         do_raise(current, SIGBUS);
-        return -1;
+        err = -1;
     }
 
-    return 0;
+out:
+    mmap_read_unlock(current->mm);
+    return err;
 }
 
 void pgflt_handler(long error_code, struct interrupt_frame *frame)

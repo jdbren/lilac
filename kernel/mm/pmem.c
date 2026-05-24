@@ -15,10 +15,10 @@ static u32 BITMAP_SIZE;
 static volatile size_t *pg_frame_bitmap;
 static volatile spinlock_t pg_frame_bm_lock = SPINLOCK_INIT;
 
-static void *__check_bitmap(int i, int num_pages, int *count, int *start);
-static void *__do_frame_alloc(int, int);
-static void __free_frame(page_t *frame);
-static void __mark_frames(size_t index, size_t offset, size_t pg_cnt);
+static void* __check_bitmap(int i, int num_pages, int *count, int *start);
+static void* __do_frame_alloc(int, int);
+static void  __free_frame(page_t *frame);
+static void  __mark_frames(size_t index, size_t offset, size_t pg_cnt);
 
 struct page *phys_frames;
 
@@ -74,13 +74,17 @@ void pmem_init(void)
 
 struct page * alloc_pages(u32 pgcnt, u32 flags)
 {
-    uintptr_t phys = (uintptr_t)alloc_frames(pgcnt);
-    if (!phys)
+    uintptr_t phys, base;
+    base = phys = (uintptr_t)alloc_frames(pgcnt);
+    if (!base)
         return NULL;
 
     struct page *pg = phys_to_page(phys);
-    pg->refcount = 1;
-    return pg;
+    while (pgcnt--) {
+        get_page(pg++);
+    }
+
+    return phys_to_page(base);
 }
 
 void __free_pages(struct page *frame, u32 pgcnt)
@@ -150,7 +154,7 @@ void free_frames(void *frame, u32 num_pages)
     acquire_lock(&pg_frame_bm_lock);
 
     for (page_t *pg = (page_t*)frame, *end = (page_t*)frame + num_pages;
-    pg < end; pg++) {
+            pg < end; pg++) {
         __free_frame(pg);
     }
 #ifdef DEBUG_PAGING

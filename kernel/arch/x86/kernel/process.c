@@ -1,17 +1,16 @@
 // Copyright (C) 2024 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
+#include <lilac/lilac.h>
 #include <lilac/process.h>
 #include <lilac/libc.h>
+#include <lilac/rwsem.h>
 #include <lilac/sched.h>
-#include <lilac/types.h>
-#include <lilac/panic.h>
-#include <lilac/config.h>
 #include <lilac/uaccess.h>
 #include <lilac/wait.h>
 #include <mm/mm.h>
 #include <mm/kmm.h>
 #include <mm/page.h>
-#include <mm/kmalloc.h>
+#include <mm/tlb.h>
 #include <asm/regs.h>
 #include <asm/cpu.h>
 
@@ -59,12 +58,11 @@ static struct mm_info * make_32_bit_mmap()
     for (int i = PG_DIR_INDEX(0xc0000000); i < 1023; i++)
         cr3[i] = pd[i];
 
-    struct mm_info *info = kzmalloc(sizeof *info);
+    struct mm_info *info = alloc_mm_info();
     if (!info) {
         kerror("Out of memory allocating mm_info\n");
     }
     info->pgd = phys;
-    info->ref_count = 1;
 
     return info;
 }
@@ -77,13 +75,12 @@ static struct mm_info * make_64_bit_mmap()
 
     copy_kernel_mappings(cr3);
 
-    struct mm_info *info = kzmalloc(sizeof *info);
+    struct mm_info *info = alloc_mm_info();
     if (!info) {
         free_page(phys_to_virt(cr3));
         panic("Out of memory allocating mm_info\n");
     }
     info->pgd = cr3;
-    info->ref_count = 1;
 
     return info;
 }
@@ -100,33 +97,35 @@ struct mm_info * arch_process_mmap(__maybe_unused bool is_64_bit)
 
 void arch_unmap_all_user_vm(struct mm_info *info)
 {
+    struct tlb_inval tlb = {
+        .mm = info,
+        .start = 0,
+        .end = __USER_MAX_ADDR + 1,
+        .full = true,
+    };
+
+    klog(LOG_DEBUG, "Unmapping all user VM for mm %p\n", info);
+    mmap_write_lock(info);
+    acquire_lock(&info->page_table_lock);
     struct vm_desc *desc = info->mmap;
     while (desc) {
         struct vm_desc *next = desc->vm_next;
 #ifdef DEBUG_MM
         klog(LOG_DEBUG, "Unmapping %x-%x\n", desc->start, desc->end);
 #endif
-        for (uintptr_t addr = desc->start; addr < desc->end; addr += PAGE_SIZE) {
-            uintptr_t phys = __walk_pages((void*)addr);
-            unmap_page((void*)addr);
-            if (!(desc->vm_flags & VM_IO))
-                put_page(phys_to_page(phys));
-        }
+        drop_user_page_range(desc->start, desc->end - desc->start);
         kfree(desc);
         desc = next;
     }
+    arch_tlb_flush_mmu(&tlb);
     info->mmap = NULL;
+    release_lock(&info->page_table_lock);
+    mmap_write_unlock(info);
 }
 
 void arch_reclaim_mem(struct task *p)
 {
     free_page(phys_to_virt(p->pgd));
-}
-
-struct mm_info * arch_process_remap(struct mm_info *existing)
-{
-    arch_unmap_all_user_vm(existing);
-    return existing;
 }
 
 
