@@ -65,6 +65,12 @@ struct remote_free {
 
 static_assert(sizeof(struct sb_header) <= 32, "Superblock header too large");
 
+#ifdef CONFIG_KMALLOC_STATS
+static atomic_ulong kmalloc_small_pages = 0;
+static atomic_ulong kmalloc_cached_small_pages = 0;
+static atomic_ulong kmalloc_large_pages = 0;
+#endif
+
 #ifdef DEBUG
 #define DEBUG_CHECK_KMALLOC
 #endif
@@ -94,6 +100,13 @@ static struct sb_header* manage_empty_sb(struct sb_header*, struct sb_list*);
 static void sb_mtf(struct sb_header*, struct sb_list*);
 static void sb_atf(struct sb_header*, struct sb_list*);
 static size_t next_pow_2(size_t);
+
+#ifdef CONFIG_KMALLOC_STATS
+static inline u16 sb_capacity(const struct sb_header *header)
+{
+    return (SUPERBLOCKSIZE - sizeof(struct sb_header)) / header->alloc_size;
+}
+#endif
 
 #ifdef DEBUG_CHECK_KMALLOC
 static void verify_bucket_counts(void) {
@@ -229,6 +242,9 @@ void kfree(const void *ptr)
 
     // check if large allocation
     if (header->is_large) {
+#ifdef CONFIG_KMALLOC_STATS
+        atomic_fetch_sub(&kmalloc_large_pages, header->num_pages);
+#endif
         free_pages(header, header->num_pages);
         return;
     }
@@ -313,6 +329,9 @@ static void* malloc_small(size_t size)
         if (block == NULL) {
             return NULL;
         }
+#ifdef CONFIG_KMALLOC_STATS
+        atomic_fetch_add(&kmalloc_small_pages, SUPERBLOCKPAGES);
+#endif
 
         header = (struct sb_header*)block;
         // initialize superblock stats and free list
@@ -331,6 +350,10 @@ static void* malloc_small(size_t size)
                 header = header->next;
             }
         }
+#ifdef CONFIG_KMALLOC_STATS
+        if (header->free_count == sb_capacity(header))
+            atomic_fetch_sub(&kmalloc_cached_small_pages, SUPERBLOCKPAGES);
+#endif
         // move superblock to front of list if it has room
         if (header->free_count > 1 && header != bucket->head)
             sb_mtf(header, bucket);
@@ -360,6 +383,9 @@ static void* malloc_large(size_t size)
 
     void *block = get_free_pages(pages, 0);
     assert(block != NULL);
+#ifdef CONFIG_KMALLOC_STATS
+    atomic_fetch_add(&kmalloc_large_pages, pages);
+#endif
 
     // set up superblock header
     struct sb_header *header = (struct sb_header*)block;
@@ -444,14 +470,59 @@ static struct sb_header* manage_empty_sb(struct sb_header *header, struct sb_lis
                 header->next->prev = header->prev;
         }
         bucket->num_sb--;
+#ifdef CONFIG_KMALLOC_STATS
+        assert(header->free_count == sb_capacity(header));
+#else
         assert(header->free_count == (SUPERBLOCKSIZE - sizeof(struct sb_header)) / header->alloc_size);
+#endif
         bucket->free_count -= header->free_count;
         // free superblock
+#ifdef CONFIG_KMALLOC_STATS
+        atomic_fetch_sub(&kmalloc_small_pages, SUPERBLOCKPAGES);
+#endif
         free_pages(header, SUPERBLOCKPAGES);
 
         header = NULL;
+#ifdef CONFIG_KMALLOC_STATS
+    } else {
+        atomic_fetch_add(&kmalloc_cached_small_pages, SUPERBLOCKPAGES);
+#endif
     }
     return header;
+}
+
+void kmalloc_get_stats(struct kmalloc_stats *stats)
+{
+    if (stats == NULL)
+        return;
+
+#ifdef CONFIG_KMALLOC_STATS
+    stats->small_pages = atomic_load(&kmalloc_small_pages);
+    stats->cached_small_pages = atomic_load(&kmalloc_cached_small_pages);
+    stats->large_pages = atomic_load(&kmalloc_large_pages);
+#else
+    stats->small_pages = 0;
+    stats->cached_small_pages = 0;
+    stats->large_pages = 0;
+#endif
+    stats->total_pages = stats->small_pages + stats->large_pages;
+}
+
+void print_kmalloc_stats(void)
+{
+    struct kmalloc_stats stats;
+
+    kmalloc_get_stats(&stats);
+#ifdef CONFIG_KMALLOC_STATS
+    klog(LOG_INFO,
+        "kmalloc: pages total=%lu small=%lu cached_small=%lu large=%lu\n",
+        stats.total_pages,
+        stats.small_pages,
+        stats.cached_small_pages,
+        stats.large_pages);
+#else
+    klog(LOG_INFO, "kmalloc: stats disabled (enable CONFIG_KMALLOC_STATS)\n");
+#endif
 }
 
 static size_t next_pow_2(size_t nextPow2)

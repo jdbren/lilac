@@ -30,14 +30,12 @@ struct mm_info * alloc_mm_info(void)
 #if defined(DEBUG_MM) || defined(DEBUG_VMA)
 static void print_vma_list(struct mm_info *mm)
 {
-    mmap_read_lock(mm);
     struct vm_desc *vma = mm->mmap;
     klog(LOG_DEBUG, "VMA list for process %d:\n", current->pid);
     while (vma) {
         klog(LOG_DEBUG, "  VMA: %p-%p, flags: %x\n", (void*)vma->start, (void*)vma->end, vma->vm_flags);
         vma = vma->vm_next;
     }
-    mmap_read_unlock(mm);
 }
 #endif
 
@@ -360,8 +358,6 @@ SYSCALL_DECL6(mmap, void*, addr, size_t, length, int, prot,
         if (map_end < pgaddr || map_end >= __USER_MAX_ADDR)
             return -EINVAL;
 
-        mmap_write_lock(current->mm);
-        mmap_unmap_range(current->mm, pgaddr, map_end);
         vma = kzmalloc(sizeof(*vma));
         if (!vma)
             return -ENOMEM;
@@ -369,6 +365,9 @@ SYSCALL_DECL6(mmap, void*, addr, size_t, length, int, prot,
         vma->start = pgaddr;
         vma->end = map_end;
         vma->vm_flags = mflags;
+
+        mmap_write_lock(current->mm);
+        mmap_unmap_range(current->mm, pgaddr, map_end);
     } else {
         if (pgaddr == 0)
             pgaddr = __USER_MMAP_START; // arbitrary high address
@@ -438,7 +437,7 @@ SYSCALL_DECL2(munmap, void*, addr, size_t, length)
         return -EINVAL;
     }
 
-    uintptr_t end = PAGE_ROUND_DOWN(pgaddr + length);
+    uintptr_t end = PAGE_ROUND_UP(pgaddr + length);
     if (end < pgaddr || end > __USER_MAX_ADDR) {
         return -EINVAL;
     }

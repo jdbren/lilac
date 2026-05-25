@@ -5,6 +5,18 @@
 #include <lilac/fs.h>
 #include <lilac/sync.h>
 
+#ifdef DEBUG_MM
+unsigned long mm_dbg_fault_file_pages_alloc = 0;
+unsigned long mm_dbg_fault_anon_pages_alloc = 0;
+unsigned long mm_dbg_fork_copy_pages_alloc = 0;
+unsigned long mm_dbg_unmap_requested_pages = 0;
+unsigned long mm_dbg_unmap_data_pages_freed = 0;
+unsigned long mm_dbg_page_table_pages_alloc = 0;
+unsigned long mm_dbg_page_table_pages_freed = 0;
+unsigned long mm_dbg_pgd_pages_alloc = 0;
+unsigned long mm_dbg_reclaim_pgd_pages_freed = 0;
+#endif
+
 static bool check_access(struct vm_desc *vma, unsigned int flags)
 {
     if (flags & FAULT_WRITE && !(vma->vm_flags & VM_WRITE)) {
@@ -35,6 +47,9 @@ static int do_file_fault(struct vm_desc *vma, uintptr_t pgaddr, unsigned long fl
     u8 *buf = fault_page_alloc();
     if (!buf)
         return FAULT_OOM;
+#ifdef DEBUG_MM
+    mm_dbg_fault_file_pages_alloc++;
+#endif
 
     // Determine where the segment's file-backed region intersects this page.
     size_t start_in_page = 0;
@@ -98,6 +113,9 @@ map_page_out:
 static int do_anon_fault(struct vm_desc *vma, uintptr_t pgaddr, unsigned long flags)
 {
     void *page = get_zeroed_pages(1, ALLOC_NORMAL);
+#ifdef DEBUG_MM
+    mm_dbg_fault_anon_pages_alloc++;
+#endif
     int mem_pflags = MEM_PF_USER;
     if (vma->vm_flags & VM_WRITE)
         mem_pflags |= MEM_PF_WRITE;

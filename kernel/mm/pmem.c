@@ -15,10 +15,16 @@ static u32 BITMAP_SIZE;
 static volatile size_t *pg_frame_bitmap;
 static volatile spinlock_t pg_frame_bm_lock = SPINLOCK_INIT;
 
+static atomic_ulong allocated_frames = 0;
+static unsigned long reserved_frames = 0;
+static unsigned long total_frames = 0;
+
 static void* __check_bitmap(int i, int num_pages, int *count, int *start);
 static void* __do_frame_alloc(int, int);
 static void  __free_frame(page_t *frame);
 static void  __mark_frames(size_t index, size_t offset, size_t pg_cnt);
+
+int num_used_frames(void);
 
 struct page *phys_frames;
 
@@ -69,6 +75,10 @@ void pmem_init(void)
 
     void *phys = alloc_frames(PAGE_UP_COUNT(total_pages * sizeof(struct page)));
     phys_frames = (struct page *)(phys_mem_mapping + (uintptr_t)phys);
+
+    total_frames = total_pages;
+    reserved_frames = num_used_frames();
+    allocated_frames = reserved_frames;
 }
 
 
@@ -145,6 +155,7 @@ void* alloc_frames(u32 num_pages)
         panic("Out of memory");
 
     release_lock(&pg_frame_bm_lock);
+    allocated_frames += num_pages;
     return ptr;
 }
 
@@ -163,6 +174,7 @@ void free_frames(void *frame, u32 num_pages)
     klog(LOG_DEBUG, "Freed %d physical frames at %p\n", num_pages, frame);
 #endif
     release_lock(&pg_frame_bm_lock);
+    allocated_frames -= num_pages;
 }
 
 static void __mark_frames(size_t index, size_t offset, size_t pg_cnt)

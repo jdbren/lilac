@@ -46,6 +46,9 @@ pdpte_t * get_or_alloc_pdpt(pml4e_t *pml4, void *virt, u16 flags)
 {
     u32 pml4_ndx = get_pml4_index(virt);
     if (!ENTRY_PRESENT(pml4[pml4_ndx])) {
+#ifdef DEBUG_MM
+    mm_dbg_page_table_pages_alloc++;
+#endif
         pml4[pml4_ndx] = virt_to_phys(get_zeroed_page()) | flags | PG_WRITE;
 #ifdef DEBUG_PAGING
         klog(LOG_DEBUG, "Allocated PDPT at %p for %p\n",
@@ -59,6 +62,9 @@ pde_t * get_or_alloc_pd(pdpte_t *pdpt, void *virt, u16 flags)
 {
     u32 pdpt_ndx = get_pdpt_index(virt);
     if (!ENTRY_PRESENT(pdpt[pdpt_ndx])) {
+#ifdef DEBUG_MM
+    mm_dbg_page_table_pages_alloc++;
+#endif
         pdpt[pdpt_ndx] = virt_to_phys(get_zeroed_page()) | flags | PG_WRITE;
 #ifdef DEBUG_PAGING
         klog(LOG_DEBUG, "Allocated PD at %p for %p\n",
@@ -72,6 +78,9 @@ pte_t * get_or_alloc_pt(pde_t *pd, void *virt, u16 flags)
 {
     u32 pd_ndx = get_pd_index(virt);
     if (!ENTRY_PRESENT(pd[pd_ndx])) {
+#ifdef DEBUG_MM
+    mm_dbg_page_table_pages_alloc++;
+#endif
         pd[pd_ndx] = virt_to_phys(get_zeroed_page()) | flags;
 #ifdef DEBUG_PAGING
         klog(LOG_DEBUG, "Allocated PT at %p for %p\n",
@@ -111,8 +120,11 @@ static bool table_is_empty(u64 *table)
     return true;
 }
 
-static void unmap_pte_range(pde_t *pde, uintptr_t start, uintptr_t end)
+static void unmap_pt_range(pde_t *pde, uintptr_t start, uintptr_t end)
 {
+    if (!ENTRY_PRESENT(*pde))
+        return;
+
     pte_t *pt = (pte_t*)ENTRY_ADDR(*pde);
     pte_t *pte = pt + get_pt_index(start);
 
@@ -127,8 +139,11 @@ static void unmap_pte_range(pde_t *pde, uintptr_t start, uintptr_t end)
     }
 }
 
-static void unmap_pde_range(pdpte_t *pdpte, uintptr_t start, uintptr_t end)
+static void unmap_pd_range(pdpte_t *pdpte, uintptr_t start, uintptr_t end)
 {
+    if (!ENTRY_PRESENT(*pdpte))
+        return;
+
     pde_t *pd = (pde_t*)ENTRY_ADDR(*pdpte);
     pde_t *pde = pd + get_pd_index(start);
     uintptr_t next;
@@ -136,19 +151,19 @@ static void unmap_pde_range(pdpte_t *pdpte, uintptr_t start, uintptr_t end)
     /* Not on a 2MB boundary? */
     if (start & (PDE_SIZE - 1)) {
         next = pde_addr_end(start, end);
-        unmap_pte_range(pde, start, next);
+        unmap_pt_range(pde, start, next);
         start = next;
         pde++;
     }
 
     /* Full 2MB chunks */
     for (; end - start >= PDE_SIZE; start += PDE_SIZE, pde++) {
-        unmap_pte_range(pde, start, start + PDE_SIZE);
+        unmap_pt_range(pde, start, start + PDE_SIZE);
     }
 
     /* Remaining pages */
     if (start < end)
-        unmap_pte_range(pde, start, end);
+        unmap_pt_range(pde, start, end);
 
     if (table_is_empty((u64*)pd)) {
         *pdpte = 0;
@@ -158,6 +173,9 @@ static void unmap_pde_range(pdpte_t *pdpte, uintptr_t start, uintptr_t end)
 
 static void unmap_pdpt_range(pml4e_t *pml4e, uintptr_t start, uintptr_t end, bool kernel_addr)
 {
+    if (!ENTRY_PRESENT(*pml4e))
+        return;
+
     pdpte_t *pdpt = (pdpte_t*)ENTRY_ADDR(*pml4e);
     pdpte_t *pdpte = pdpt + get_pdpt_index(start);
     uintptr_t next;
@@ -165,19 +183,19 @@ static void unmap_pdpt_range(pml4e_t *pml4e, uintptr_t start, uintptr_t end, boo
     /* Not on a 1GB boundary? */
     if (start & (PDPTE_SIZE - 1)) {
         next = pdpte_addr_end(start, end);
-        unmap_pde_range(pdpte, start, next);
+        unmap_pd_range(pdpte, start, next);
         start = next;
         pdpte++;
     }
 
     /* Full 1GB chunks */
     for (; end - start >= PDPTE_SIZE; start += PDPTE_SIZE, pdpte++) {
-        unmap_pde_range(pdpte, start, start + PDPTE_SIZE);
+        unmap_pd_range(pdpte, start, start + PDPTE_SIZE);
     }
 
     /* Remaining */
     if (start < end)
-        unmap_pde_range(pdpte, start, end);
+        unmap_pd_range(pdpte, start, end);
 
     if (!kernel_addr && table_is_empty((u64*)pdpt)) {
         *pml4e = 0;
@@ -220,12 +238,18 @@ int unmap_pages(void *virt, int num_pages)
 
 static void drop_user_pt_range(pde_t *pde, uintptr_t start, uintptr_t end)
 {
+    if (!ENTRY_PRESENT(*pde))
+        return;
+
     pte_t *pt = (pte_t*)ENTRY_ADDR(*pde);
     pte_t *pte = pt + get_pt_index(start);
 
     for (; start < end; start += PAGE_SIZE, pte++) {
         pte_t pte_val = *pte;
         if (ENTRY_PRESENT(pte_val)) {
+#ifdef DEBUG_MM
+            mm_dbg_unmap_data_pages_freed++;
+#endif
             put_page(phys_to_page(pte_val & ~0xFFFUL));
         }
         *pte = 0;
@@ -233,12 +257,18 @@ static void drop_user_pt_range(pde_t *pde, uintptr_t start, uintptr_t end)
 
     if (table_is_empty((u64*)pt)) {
         *pde = 0;
+#ifdef DEBUG_MM
+        mm_dbg_page_table_pages_freed++;
+#endif
         free_page(pt);
     }
 }
 
 static void drop_user_pd_range(pdpte_t *pdpte, uintptr_t start, uintptr_t end)
 {
+    if (!ENTRY_PRESENT(*pdpte))
+        return;
+
     pde_t *pd = (pde_t*)ENTRY_ADDR(*pdpte);
     pde_t *pde = pd + get_pd_index(start);
     uintptr_t next;
@@ -262,12 +292,18 @@ static void drop_user_pd_range(pdpte_t *pdpte, uintptr_t start, uintptr_t end)
 
     if (table_is_empty((u64*)pd)) {
         *pdpte = 0;
+#ifdef DEBUG_MM
+        mm_dbg_page_table_pages_freed++;
+#endif
         free_page(pd);
     }
 }
 
 static void drop_user_pdpt_range(pml4e_t *pml4e, uintptr_t start, uintptr_t end)
 {
+    if (!ENTRY_PRESENT(*pml4e))
+        return;
+
     pdpte_t *pdpt = (pdpte_t*)ENTRY_ADDR(*pml4e);
     pdpte_t *pdpte = pdpt + get_pdpt_index(start);
     uintptr_t next;
@@ -291,6 +327,9 @@ static void drop_user_pdpt_range(pml4e_t *pml4e, uintptr_t start, uintptr_t end)
 
     if (table_is_empty((u64*)pdpt)) {
         *pml4e = 0;
+#ifdef DEBUG_MM
+        mm_dbg_page_table_pages_freed++;
+#endif
         free_page(pdpt);
     }
 }

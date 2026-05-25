@@ -293,7 +293,6 @@ struct task * wake_first(struct waitqueue *wq)
 void wake_all(struct waitqueue *wq)
 {
     struct wq_entry *wait, *tmp;
-    klog(LOG_DEBUG, "Waking all tasks in waitqueue %p\n", wq);
 
     acquire_lock(&wq->lock);
     list_for_each_entry_safe(wait, tmp, &wq->task_list, entry) {

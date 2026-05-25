@@ -93,8 +93,8 @@ void mutex_lock(mutex_t *mutex)
 
 void mutex_unlock(mutex_t *mutex)
 {
-    long id = get_pid();
 #ifdef DEBUG
+    long id = get_pid();
     if (atomic_load(&mutex->owner) != id)
         panic("unlock by non-owner");
 #endif

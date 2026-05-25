@@ -87,4 +87,16 @@ int mm_fault(struct vm_desc *vma, uintptr_t addr, unsigned long flags);
 
 void drop_user_page_range(uintptr_t start, size_t size);
 
+#ifdef DEBUG_MM
+extern unsigned long mm_dbg_fault_file_pages_alloc;
+extern unsigned long mm_dbg_fault_anon_pages_alloc;
+extern unsigned long mm_dbg_fork_copy_pages_alloc;
+extern unsigned long mm_dbg_unmap_requested_pages;
+extern unsigned long mm_dbg_unmap_data_pages_freed;
+extern unsigned long mm_dbg_page_table_pages_alloc;
+extern unsigned long mm_dbg_page_table_pages_freed;
+extern unsigned long mm_dbg_pgd_pages_alloc;
+extern unsigned long mm_dbg_reclaim_pgd_pages_freed;
+#endif
+
 #endif // _LILAC_MM_H_

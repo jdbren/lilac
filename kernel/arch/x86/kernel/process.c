@@ -50,6 +50,9 @@ static struct mm_info * make_32_bit_mmap()
 {
     size_t *cr3 = get_zeroed_page();
     uintptr_t phys = virt_to_phys(cr3);
+#ifdef DEBUG_MM
+    mm_dbg_pgd_pages_alloc++;
+#endif
 
     // Do recursive mapping
     cr3[1023] = phys | PG_WRITE | PG_SUPER | 1;
@@ -72,6 +75,9 @@ static struct mm_info * make_32_bit_mmap()
 static struct mm_info * make_64_bit_mmap()
 {
     uintptr_t cr3 = virt_to_phys(get_zeroed_page());
+#ifdef DEBUG_MM
+    mm_dbg_pgd_pages_alloc++;
+#endif
 
     copy_kernel_mappings(cr3);
 
@@ -110,10 +116,17 @@ void arch_unmap_all_user_vm(struct mm_info *info)
     struct vm_desc *desc = info->mmap;
     while (desc) {
         struct vm_desc *next = desc->vm_next;
+    #ifdef DEBUG_MM
+        mm_dbg_unmap_requested_pages += (desc->end - desc->start) / PAGE_SIZE;
+    #endif
 #ifdef DEBUG_MM
         klog(LOG_DEBUG, "Unmapping %x-%x\n", desc->start, desc->end);
 #endif
-        drop_user_page_range(desc->start, desc->end - desc->start);
+        if (desc->vm_flags & VM_IO) {
+            unmap_pages((void*)desc->start, (desc->end - desc->start) / PAGE_SIZE);
+        } else {
+            drop_user_page_range(desc->start, desc->end - desc->start);
+        }
         kfree(desc);
         desc = next;
     }
@@ -125,6 +138,9 @@ void arch_unmap_all_user_vm(struct mm_info *info)
 
 void arch_reclaim_mem(struct task *p)
 {
+#ifdef DEBUG_MM
+    mm_dbg_reclaim_pgd_pages_freed++;
+#endif
     free_page(phys_to_virt(p->pgd));
 }
 
@@ -134,6 +150,9 @@ static void copy_vm_area(void *cr3, struct vm_desc *new_desc)
 {
     int num_pages = PAGE_ROUND_UP(new_desc->end - new_desc->start) / PAGE_SIZE;
     uintptr_t phys = virt_to_phys(get_zeroed_pages(num_pages, ALLOC_NORMAL));
+#ifdef DEBUG_MM
+    mm_dbg_fork_copy_pages_alloc += num_pages;
+#endif
 
     // Copy data
     asm ("stac\n\t");
@@ -219,6 +238,9 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
 
         int num_pages = PAGE_ROUND_UP(new_desc->end - new_desc->start) / PAGE_SIZE;
         uintptr_t phys = virt_to_phys(get_zeroed_pages(num_pages, ALLOC_NORMAL));
+    #ifdef DEBUG_MM
+        mm_dbg_fork_copy_pages_alloc += num_pages;
+    #endif
 
         // Copy data
         memcpy(phys_to_virt(phys), (void*)new_desc->start, num_pages * PAGE_SIZE);
@@ -289,6 +311,7 @@ void save_fp_regs(struct task *p)
     // write_cr0(read_cr0() | X86_CR0_TS);
 }
 
+// TODO mem leaks
 void copy_fp_regs(struct task *dst, struct task *src)
 {
     dst->fp_regs = kmalloc(512);
