@@ -569,7 +569,7 @@ static void state2(struct vc_state *vt, int c)
     /* Separation between numbers ? */
     if (c == ';') {
         if (vt->ptr < (int)ARRAY_SIZE(vt->escparms) - 1)
-        vt->ptr++;
+            vt->ptr++;
         return;
     }
     /* ESC [ ? sequence */
@@ -718,7 +718,7 @@ static void state2(struct vc_state *vt, int c)
         if (vt->escparms[0] == 0) {
             x = vt->curx;
             if (x > 159)
-            x = 159;
+                x = 159;
             vt->vt_tabs[x / 32] &= ~(1 << x % 32);
         }
         if (vt->escparms[0] == 3)

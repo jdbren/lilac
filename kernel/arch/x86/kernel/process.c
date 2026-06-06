@@ -413,7 +413,6 @@ long arch_restore_post_signal(void)
     stack += 3; // skip args
 #endif
     uc = (ucontext_t*)(stack + sizeof(struct regs_state) / sizeof(uintptr_t));
-    // current->blocked = uc->uc_sigmask;
     if (get_user(current->blocked, &uc->uc_sigmask)) {
         klog(LOG_WARN, "Failed to get signal mask from user context in signal return, SIGSEGV raised\n");
         do_raise(current, SIGSEGV);

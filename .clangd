@@ -1,0 +1,9 @@
+CompileFlags:
+  Remove:
+    - "-fno-allow-store-data-races"
+    - "-fzero-init-padding-bits=all"
+    - "-fanalyzer"
+    - "-fno-analyzer"
+  Add:
+    - "-Wno-unknown-warning-option"
+  Compiler: x86_64-lilac-gcc

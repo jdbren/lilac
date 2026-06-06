@@ -5,6 +5,7 @@
 #define PROT_WRITE 0x2
 #define PROT_EXEC  0x4
 #define PROT_NONE  0x0
+#define PROT_MASK (PROT_READ | PROT_WRITE | PROT_EXEC)
 
 #define MAP_FAILED ((void *) -1)
 

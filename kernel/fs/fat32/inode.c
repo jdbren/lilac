@@ -173,5 +173,3 @@ struct dentry *fat32_lookup(struct inode *parent, struct dentry *find,
 
     return NULL;
 }
-
-#pragma GCC diagnostic pop

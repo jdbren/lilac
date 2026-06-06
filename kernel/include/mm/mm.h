@@ -42,6 +42,8 @@ struct mm_info * alloc_mm_info(void);
 #define VM_IO           0x0010
 #define VM_PFNMAP       0x0020
 
+#define VM_PROT_MASK    (VM_READ | VM_WRITE | VM_EXEC)
+
 struct vm_desc {
     uintptr_t start;
     uintptr_t end;

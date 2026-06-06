@@ -229,10 +229,12 @@ int __tty_check_change(struct tty *tty, int sig)
         if (is_ignored(sig)) {
             if (sig == SIGTTIN)
                 ret = -EIO;
-        } // TODO
+        }
+        // TODO
         /*else if (is_current_pgrp_orphaned()) {
             ret = -EIO;
-        }*/ else {
+        }*/
+        else {
             kill_pgrp(pgrp, sig);
             // set_thread_flag(TIF_SIGPENDING);
             ret = -ERESTART;

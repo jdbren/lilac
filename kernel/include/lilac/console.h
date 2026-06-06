@@ -55,19 +55,19 @@ struct vc_state {
     int vt_bs;                  /* Code that backspace key sends. */
     int vt_nl_delay;
 
-    int vt_echo         : 1;    /* Local echo on/off. */
-    int vt_wrap         : 1;    /* Line wrap on/off */
-    int vt_addlf        : 1;    /* Add linefeed on/off */
-    int vt_addcr        : 1;    /* Add carriagereturn on/off */
-    int vt_keypad       : 2;    /* Keypad mode. */
-    int vt_cursor_mode  : 2;    /* cursor key mode. */
-    int vt_cursor_on    : 1;    /* cursor on/off */
-    int vt_asis         : 1;    /* 8bit clean mode. */
-    int vt_insert       : 1;    /* Insert mode */
-    int vt_crlf         : 1;    /* Return sends CR/LF */
-    int vt_om           : 1;    /* Origin mode. */
-    int vt_doscroll     : 1;
-    int vt_kbd_mode     : 2;    /* Keyboard mode. */
+    unsigned int vt_echo         : 1;    /* Local echo on/off. */
+    unsigned int vt_wrap         : 1;    /* Line wrap on/off */
+    unsigned int vt_addlf        : 1;    /* Add linefeed on/off */
+    unsigned int vt_addcr        : 1;    /* Add carriagereturn on/off */
+    unsigned int vt_keypad       : 2;    /* Keypad mode. */
+    unsigned int vt_cursor_mode  : 2;    /* cursor key mode. */
+    unsigned int vt_cursor_on    : 1;    /* cursor on/off */
+    unsigned int vt_asis         : 1;    /* 8bit clean mode. */
+    unsigned int vt_insert       : 1;    /* Insert mode */
+    unsigned int vt_crlf         : 1;    /* Return sends CR/LF */
+    unsigned int vt_om           : 1;    /* Origin mode. */
+    unsigned int vt_doscroll     : 1;
+    unsigned int vt_kbd_mode     : 2;    /* Keyboard mode. */
 
     int escparms[8];        /* Accumulated escape sequence. */
     int ptr;                /* Index into escparms array. */

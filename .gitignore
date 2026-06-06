@@ -29,3 +29,4 @@ libc/libc.a
 init/init
 kernel/drivers/acpi/acpi.lib
 kernel/arch/*/include/generated
+compile_commands.json

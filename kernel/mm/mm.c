@@ -74,6 +74,22 @@ struct vm_desc * vma_find_prev(struct mm_info *mm, uintptr_t addr)
     return prev;
 }
 
+// Check if the entire range [start, end) is covered by VMAs in mm
+static bool mm_range_is_mapped(struct mm_info *mm, uintptr_t start,
+    uintptr_t end)
+{
+    struct vm_desc *vma = find_vma(mm, start);
+    if (!vma || vma->start > start)
+        return false;
+
+    while (vma && vma->start < end) {
+        if (vma->end >= end)
+            return true;
+        vma = vma->vm_next;
+    }
+    return false;
+}
+
 void vma_list_insert(struct vm_desc *vma, struct vm_desc **list)
 {
     struct vm_desc *vma_list = *list;

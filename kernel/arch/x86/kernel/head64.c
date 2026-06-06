@@ -13,7 +13,6 @@
 #include <asm/apic.h>
 
 #include "paging.h"
-#include "timer.h"
 
 #define STACK_CHK_GUARD 0x595e9fbd94fda766
 

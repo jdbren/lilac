@@ -53,4 +53,7 @@ clean:
 
 distclean: clean
 	@$(MAKE) -C musl distclean
-	rm -f debug.txt dump.txt kbuild.config* log.txt
+	rm -f debug.txt dump.txt kbuild.config* log.txt compile_commands.json
+
+compile-commands: clean
+	bear -- $(MAKE) kernel init user

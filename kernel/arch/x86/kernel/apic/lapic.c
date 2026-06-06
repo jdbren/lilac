@@ -10,7 +10,6 @@
 #include <asm/msr.h>
 #include <asm/cpu.h>
 #include <asm/idt.h>
-#include "timer.h"
 
 #define IA32_APIC_BASE_MSR_ENABLE 0x800
 
@@ -153,7 +152,7 @@ void ap_lapic_enable(void)
 }
 
 
-volatile int aprunning = 0;
+volatile atomic_int aprunning = 0;
 volatile int bspdone = 0;
 
 int ap_init(void)

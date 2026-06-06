@@ -11,7 +11,7 @@
  * Undefined if no set bit exists, so code should check against 0 first.
  */
 __always_inline
-static inline unsigned int __fls(unsigned long word)
+static unsigned int __fls(unsigned long word)
 {
 	return (sizeof(word) * 8) - 1 - __builtin_clzl(word);
 }
@@ -25,7 +25,7 @@ static inline unsigned int __fls(unsigned long word)
  * Note fls(0) = 0, fls(1) = 1, fls(0x80000000) = 32.
  */
 __always_inline
-static inline int fls(unsigned int x)
+static int fls(unsigned int x)
 {
 	return x ? sizeof(x) * 8 - __builtin_clz(x) : 0;
 }
@@ -52,7 +52,7 @@ static inline int fls64(u64 x)
 }
 #elif BITS_PER_LONG == 64
 __always_inline
-static inline int fls64(u64 x)
+static int fls64(u64 x)
 {
 	if (x == 0)
 		return 0;
@@ -70,7 +70,7 @@ static inline int fls64(u64 x)
  */
 #ifndef CONFIG_ARCH_HAS_ILOG2_U32
 __always_inline __attribute__((const))
-static inline int __ilog2_u32(u32 n)
+static int __ilog2_u32(u32 n)
 {
 	return fls(n) - 1;
 }
@@ -78,7 +78,7 @@ static inline int __ilog2_u32(u32 n)
 
 #ifndef CONFIG_ARCH_HAS_ILOG2_U64
 __always_inline __attribute__((const))
-static inline int __ilog2_u64(u64 n)
+static int __ilog2_u64(u64 n)
 {
 	return fls64(n) - 1;
 }
