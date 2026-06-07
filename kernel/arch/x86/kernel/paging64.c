@@ -255,7 +255,8 @@ static void drop_user_pt_range(pde_t *pde, uintptr_t start, uintptr_t end)
 #ifdef DEBUG_MM
             mm_dbg_unmap_data_pages_freed++;
 #endif
-            put_page(phys_to_page(pte_val & ~0xFFFUL));
+            struct page *pg = phys_to_page(PT_ADDR(pte_val));
+            put_page(pg);
         }
         *pte = 0;
     }

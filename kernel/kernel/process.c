@@ -195,7 +195,8 @@ static void set_vm_areas(struct mm_info *mem)
     stack_desc->mm = mem;
     stack_desc->start = mem->start_stack;
     stack_desc->end = __USER_STACK;
-    stack_desc->vm_flags = VM_READ | VM_WRITE;
+    // TODO set this correctly
+    stack_desc->vm_flags = VM_READ | VM_WRITE | VM_EXEC;
     vma_list_insert(stack_desc, &mem->mmap);
 #ifdef DEBUG_VMA
     struct vm_desc *desc = mem->mmap;
