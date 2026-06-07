@@ -93,7 +93,8 @@ void ahci_init(hba_mem_t *abar_phys)
 
     initialized = true;
 
-    abar = map_phys((void*)abar_phys, PAGE_SIZE, MEM_PF_WRITE | MEM_PF_UC);
+    abar = map_phys((void*)abar_phys, PAGE_SIZE,
+        MEM_PF_WRITE | MEM_PF_UC | MEM_PF_READ | MEM_PF_NO_EXEC);
 
     pi = abar->pi;
     while (i < 32) {
@@ -127,7 +128,8 @@ void ahci_init(hba_mem_t *abar_phys)
     size = num_ports * sizeof(hba_port_t) + sizeof(*abar);
     if (size > PAGE_SIZE) {
         unmap_phys((void*)abar, PAGE_SIZE);
-        abar = map_phys((void*)abar_phys, size, MEM_PF_WRITE | MEM_PF_UC);
+        abar = map_phys((void*)abar_phys, size,
+            MEM_PF_WRITE | MEM_PF_UC | MEM_PF_READ | MEM_PF_NO_EXEC);
     }
 
     port_mem_init(num_ports);
@@ -176,7 +178,8 @@ static void port_mem_init(int num_ports)
     struct page *pg = alloc_pages(npages, 0);
     ahci_base = (uintptr_t)get_free_vaddr(npages);
     ahci_phys_base = page_to_phys(pg);
-    map_pages((void*)ahci_phys_base, (void*)ahci_base, MEM_PF_WRITE | MEM_PF_UC, npages);
+    map_pages((void*)ahci_phys_base, (void*)ahci_base,
+        MEM_PF_WRITE | MEM_PF_UC | MEM_PF_READ | MEM_PF_NO_EXEC, npages);
     pg->refcount++;
     pg->virt = (void*)ahci_base;
     memset((void*)ahci_base, 0, npages * PAGE_SIZE);

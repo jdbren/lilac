@@ -49,7 +49,8 @@ struct regs_state {
 };
 #endif /* __x86_64__ */
 
-void dump_regs(struct regs_state *regs);
+void x86_dump_regs(struct regs_state *regs);
+void x86_print_stack_trace(struct regs_state *regs);
 
 static inline unsigned long read_cr0(void)
 {
@@ -61,6 +62,27 @@ static inline unsigned long read_cr0(void)
 static inline void write_cr0(unsigned long val)
 {
     asm ("mov %0, %%cr0" :: "r"(val));
+}
+
+static inline unsigned long read_cr2(void)
+{
+    unsigned long val;
+    asm ("mov %%cr2, %0" : "=r"(val));
+    return val;
+}
+
+static inline unsigned long read_cr3(void)
+{
+    unsigned long val;
+    asm ("mov %%cr3, %0" : "=r"(val));
+    return val;
+}
+
+static inline unsigned long read_cr4(void)
+{
+    unsigned long val;
+    asm ("mov %%cr4, %0" : "=r"(val));
+    return val;
 }
 
 static inline void wbinvd(void)

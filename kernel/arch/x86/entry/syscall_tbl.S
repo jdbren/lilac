@@ -86,6 +86,9 @@ syscall_table:
 	sc_tbl_entry vfork		# 63
 	sc_tbl_entry clone		# 64
 	sc_tbl_entry gettid		# 65
+	sc_tbl_entry tgkill		# 66
+	sc_tbl_entry mprotect	# 67
+	sc_tbl_entry mremap		# 68
 /*
 	sc_tbl_entry chmod		# 30
 	sc_tbl_entry chown		# 31

@@ -134,7 +134,8 @@ void lapic_enable(uintptr_t addr) {
     cpu_set_apic_base(addr);
     lapic_addr_orig = addr;
 
-    lapic_base = (uintptr_t)map_phys((void*)addr, 0x1000, MEM_PF_UC | MEM_PF_WRITE);
+    lapic_base = (uintptr_t)map_phys((void*)addr, 0x1000,
+        MEM_PF_UC | MEM_PF_WRITE | MEM_PF_READ | MEM_PF_NO_EXEC);
 
     klog(LOG_DEBUG, "Local APIC mapped at %p\n", (void*)lapic_base);
 
@@ -169,7 +170,7 @@ int ap_init(void)
     klog(LOG_INFO, "AP init: BSP ID %d, waking %d APs\n", bspid, ncpus - 1);
     // copy the AP trampoline code to a fixed address in low memory
 
-    map_to_self((void*)0x8000, PAGE_SIZE, MEM_PF_WRITE);
+    map_to_self((void*)0x8000, PAGE_SIZE, MEM_PF_WRITE | MEM_PF_READ);
     memcpy((void*)0x8000, (void*)ap_tramp, PAGE_SIZE);
 
     const uintptr_t base = lapic_base;

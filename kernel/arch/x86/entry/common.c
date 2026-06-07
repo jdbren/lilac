@@ -7,17 +7,30 @@
 #ifdef __x86_64__
 void x86_dump_regs(struct regs_state *regs)
 {
-    klog(LOG_DEBUG, "Register state:\n");
-    klog(LOG_DEBUG, "  RAX: %016lx  RBX: %016lx  RCX: %016lx  RDX: %016lx\n",
-         regs->ax, regs->bx, regs->cx, regs->dx);
-    klog(LOG_DEBUG, "  RSI: %016lx  RDI: %016lx  RBP: %016lx  RSP: %016lx\n",
-         regs->si, regs->di, regs->bp, regs->sp);
-    klog(LOG_DEBUG, "  R8:  %016lx  R9:  %016lx  R10: %016lx  R11: %016lx\n",
-         regs->r8, regs->r9, regs->r10, regs->r11);
-    klog(LOG_DEBUG, "  R12: %016lx  R13: %016lx  R14: %016lx  R15: %016lx\n",
-         regs->r12, regs->r13, regs->r14, regs->r15);
-    klog(LOG_DEBUG, "  RIP: %016lx  CS:  %04lx   RFLAGS: %016lx\n",
-         regs->ip, regs->cs, regs->flags);
+    klog(LOG_DEBUG, "================== Register state ==================\n");
+    klog(LOG_DEBUG, "task: %p\n", current);
+    klog(LOG_DEBUG, "RIP: %04lx:%016lx RSP: %04lx:%016lx EFLAGS: %08lx\n",
+        regs->cs, regs->ip, regs->ss, regs->sp, regs->flags);
+    klog(LOG_DEBUG, "RAX: %016lx RBX: %016lx RCX: %016lx\n", regs->ax, regs->bx, regs->cx);
+    klog(LOG_DEBUG, "RDX: %016lx RSI: %016lx RDI: %016lx\n", regs->dx, regs->si, regs->di);
+    klog(LOG_DEBUG, "RBP: %016lx  R8: %016lx  R9: %016lx\n", regs->bp, regs->r8, regs->r9);
+    klog(LOG_DEBUG, "R10: %016lx R11: %016lx R12: %016lx\n", regs->r10, regs->r11, regs->r12);
+    klog(LOG_DEBUG, "R13: %016lx R14: %016lx R15: %016lx\n", regs->r13, regs->r14, regs->r15);
+    klog(LOG_DEBUG, "FS:  %016lx GS:  %016lx KGS: %016lx\n",
+        rdmsr(IA32_FS_BASE), rdmsr(IA32_GS_BASE), rdmsr(IA32_KERNEL_GS_BASE));
+    klog(LOG_DEBUG, "CR0: %016lx CR2: %016lx CR3: %016lx CR4: %016lx\n",
+        read_cr0(), read_cr2(), read_cr3(), read_cr4());
+    klog(LOG_DEBUG, "====================================================\n");
+}
+
+void x86_print_stack_trace(struct regs_state *regs)
+{
+    klog(LOG_DEBUG, "Call trace:\n");
+    uintptr_t *stack = (uintptr_t*)regs->bp;
+    for (int i = 0; i < 16 && stack && stack[1]; i++) {
+        klog(LOG_DEBUG, "  %p\n", (void*)stack[1]);
+        stack = (uintptr_t*)stack[0];
+    }
 }
 #else
 void x86_dump_regs(struct regs_state *regs)

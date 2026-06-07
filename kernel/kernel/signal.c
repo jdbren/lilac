@@ -290,3 +290,9 @@ SYSCALL_DECL1(sigsuspend, sigset_t*, set)
     current->blocked = oldmask;
     return -EINTR;
 }
+
+// TODO
+SYSCALL_DECL3(tgkill, int, tgid, int, tid, int, sig)
+{
+    return -ENOSYS;
+}

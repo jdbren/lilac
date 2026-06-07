@@ -23,7 +23,7 @@
 	PUSH_REGS
 	xor  %rbp,%rbp
 
-	lea  RIP(%rsp),%rsi  	# interrupt stack frame
+	mov  %rsp,%rsi  	# reg stack frame
 	mov  %gs:CPU_LOCAL_SCRATCH,%rdi 	# error code
 	call \name\()_handler
 
@@ -50,7 +50,7 @@
 	PUSH_REGS
 	xor  %rbp,%rbp
 
-	lea  RIP(%rsp), %rdi   # interrupt stack frame
+	mov  %rsp, %rdi   # reg stack frame
 	call \name\()_handler
 
 	call x86_kernel_exit
@@ -83,7 +83,7 @@
 	movw %ax, %gs
 	xor  %ebp,%ebp
 
-	lea  EIP(%esp), %eax  # interrupt stack frame
+	mov  %esp, %eax  # reg stack frame
 	push %eax
 	mov  %gs:CPU_LOCAL_SCRATCH, %eax 	# error code
 	push %eax
@@ -107,7 +107,7 @@
 	mov $__KERNEL_GS, %ax
 	mov %ax, %gs
 
-	lea  EIP(%esp), %eax
+	mov  %esp, %eax
 	push %eax
 	call \name\()_handler
 	add  $4, %esp

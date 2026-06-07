@@ -98,8 +98,12 @@ static int do_file_fault(struct vm_desc *vma, uintptr_t pgaddr, unsigned long fl
 map_page_out:
     {
         int mem_pflags = MEM_PF_USER;
+        if (vma->vm_flags & VM_READ)
+            mem_pflags |= MEM_PF_READ;
         if (vma->vm_flags & VM_WRITE)
             mem_pflags |= MEM_PF_WRITE;
+        if (!(vma->vm_flags & VM_EXEC))
+            mem_pflags |= MEM_PF_NO_EXEC;
 
         acquire_lock(&vma->mm->page_table_lock);
         map_page((void *)virt_to_phys(buf), (void *)pgaddr, mem_pflags);
@@ -117,8 +121,12 @@ static int do_anon_fault(struct vm_desc *vma, uintptr_t pgaddr, unsigned long fl
     mm_dbg_fault_anon_pages_alloc++;
 #endif
     int mem_pflags = MEM_PF_USER;
+    if (vma->vm_flags & VM_READ)
+        mem_pflags |= MEM_PF_READ;
     if (vma->vm_flags & VM_WRITE)
         mem_pflags |= MEM_PF_WRITE;
+    if (!(vma->vm_flags & VM_EXEC))
+        mem_pflags |= MEM_PF_NO_EXEC;
     acquire_lock(&vma->mm->page_table_lock);
     map_page((void*)virt_to_phys(page), (void*)pgaddr, mem_pflags);
     release_lock(&vma->mm->page_table_lock);

@@ -8,6 +8,7 @@
 #include <lilac/syscall.h>
 #include <lilac/fs.h>
 #include <lilac/libc.h>
+#include <lilac/sync.h>
 #include <mm/kmm.h>
 #include <mm/page.h>
 #include <mm/tlb.h>
@@ -33,7 +34,8 @@ static void print_vma_list(struct mm_info *mm)
     struct vm_desc *vma = mm->mmap;
     klog(LOG_DEBUG, "VMA list for process %d:\n", current->pid);
     while (vma) {
-        klog(LOG_DEBUG, "  VMA: %p-%p, flags: %x\n", (void*)vma->start, (void*)vma->end, vma->vm_flags);
+        klog(LOG_DEBUG, "  VMA: %p-%p, flags: %x\n", (void*)vma->start,
+            (void*)vma->end, vma->vm_flags);
         vma = vma->vm_next;
     }
 }
@@ -47,6 +49,15 @@ static int convert_mmap_flags(int prot, int flags)
     if (prot & PROT_EXEC) mflags |= VM_EXEC;
     if (flags & MAP_SHARED) mflags |= VM_SHARED;
     return mflags;
+}
+
+static int vma_flags_to_user_mem_flags(int flags)
+{
+    int pt_flags = MEM_PF_USER;
+    if (flags & VM_READ) pt_flags |= MEM_PF_READ;
+    if (flags & VM_WRITE) pt_flags |= MEM_PF_WRITE;
+    if (!(flags & VM_EXEC)) pt_flags |= MEM_PF_NO_EXEC;
+    return pt_flags;
 }
 
 struct vm_desc * find_vma(struct mm_info *mm, uintptr_t addr)
@@ -82,9 +93,13 @@ static bool mm_range_is_mapped(struct mm_info *mm, uintptr_t start,
     if (!vma || vma->start > start)
         return false;
 
+    uintptr_t cursor = start;
     while (vma && vma->start < end) {
+        if (vma->start > cursor)
+            return false; // gap
         if (vma->end >= end)
             return true;
+        cursor = vma->end;
         vma = vma->vm_next;
     }
     return false;
@@ -110,7 +125,8 @@ void vma_list_insert(struct vm_desc *vma, struct vm_desc **list)
         return;
     }
 
-    while (vma_list->vm_next != NULL && vma_list->vm_next->start < vma->start) {
+    while (vma_list->vm_next != NULL &&
+           vma_list->vm_next->start < vma->start) {
         vma_list = vma_list->vm_next;
     }
 
@@ -145,7 +161,8 @@ static void vma_list_remove(struct vm_desc *vma, struct vm_desc **list)
 
 static struct vm_desc * create_brk_seg(struct mm_info *mm)
 {
-    klog(LOG_DEBUG, "sbrk: Creating new VMA for brk at %p\n", (void*)mm->start_brk);
+    klog(LOG_DEBUG, "sbrk: Creating new VMA for brk at %p\n",
+        (void*)mm->start_brk);
     struct vm_desc *vma_list = kzmalloc(sizeof(*vma_list));
     if (!vma_list) {
         return ERR_PTR(-ENOMEM);
@@ -263,7 +280,6 @@ static int vma_split(struct vm_desc *vma, uintptr_t start, uintptr_t end)
     *tail = *vma;
     tail->start = end;
     vma->end = start;
-    vma->mm->total_vm -= (end - start);
     // Insert the tail after the current vma
     tail->vm_prev = vma;
     tail->vm_next = vma->vm_next;
@@ -299,6 +315,7 @@ static int vma_unmap_range(struct vm_desc *vma, uintptr_t start, uintptr_t end)
                 do_raise(current, SIGKILL);
                 return err;
             }
+            vma->mm->total_vm -= (end - start);
             break; // no more overlaps possible
         } else if (vma->start < start) {
             // Overlaps at the end
@@ -326,7 +343,8 @@ static int mmap_unmap_range(struct mm_info *mm, uintptr_t start, uintptr_t end)
         .full = false,
     };
 
-    klog(LOG_DEBUG, "mmap_unmap_range: unmapping range %p - %p\n", (void*)start, (void*)end);
+    klog(LOG_DEBUG, "mmap_unmap_range: unmapping range %p - %p\n",
+        (void*)start, (void*)end);
 
     err = vma_unmap_range(mm->mmap, start, end);
     if (err <= 0)
@@ -362,8 +380,8 @@ SYSCALL_DECL6(mmap, void*, addr, size_t, length, int, prot,
     uintptr_t pgaddr = PAGE_ROUND_DOWN(addr);
     int num_pages = PAGE_ROUND_UP(length + (addr - pgaddr)) / PAGE_SIZE;
 
-    klog(LOG_DEBUG, "mmap (addr: %p, length: %lu, prot: %x, flags: %x, fd: %d, offset: %ld)\n",
-        addr, length, prot, flags, fd, offset);
+    klog(LOG_DEBUG, "mmap (addr: %p, length: %lu, prot: %x, flags: %x, fd: %d,"
+        " offset: %ld)\n", addr, length, prot, flags, fd, offset);
 
     int mflags = convert_mmap_flags(prot, flags);
 
@@ -389,12 +407,13 @@ SYSCALL_DECL6(mmap, void*, addr, size_t, length, int, prot,
             pgaddr = __USER_MMAP_START; // arbitrary high address
         klog(LOG_DEBUG, "mmap anonymous: num_pages = %d\n", num_pages);
         mmap_write_lock(current->mm);
-        vma = vma_create_new_after(current->mm, pgaddr, num_pages * PAGE_SIZE, mflags);
+        vma = vma_create_new_after(current->mm, pgaddr,
+            num_pages * PAGE_SIZE, mflags);
     }
 
     if (IS_ERR(vma)) {
-        klog(LOG_ERROR, "mmap: Failed to create VMA: %ld\n", PTR_ERR(vma));
         ret = PTR_ERR(vma);
+        klog(LOG_ERROR, "mmap: Failed to create VMA: %ld\n", ret);
         goto out;
     } else if (vma == NULL) {
         klog(LOG_ERROR, "mmap: Failed to create VMA: unknown error\n");
@@ -467,6 +486,13 @@ SYSCALL_DECL2(munmap, void*, addr, size_t, length)
     return ret;
 }
 
+SYSCALL_DECL5(mremap, void*, old_addr, size_t, old_length, size_t, new_length,
+    int, flags, void*, new_addr)
+{
+    // TODO
+    return -ENOSYS;
+}
+
 int brk(void *addr)
 {
     struct mm_info *mm = current->mm;
@@ -516,7 +542,8 @@ void * sbrk(intptr_t increment)
     struct mm_info *mm = current->mm;
     struct vm_desc *vma = mm->mmap;
     uintptr_t end_brk = (uintptr_t)mm->brk;
-    klog(LOG_DEBUG, "sbrk: Current break point: %p, Increment: %ld\n", (void*)end_brk, increment);
+    klog(LOG_DEBUG, "sbrk: Current break point: %p, Increment: %ld\n",
+        (void*)end_brk, increment);
 
     mmap_write_lock(mm);
 
@@ -573,7 +600,8 @@ SYSCALL_DECL1(sbrk, intptr_t, increment)
 // TODO: flimsy HACK, not POSIX
 SYSCALL_DECL2(memfd_create, const char *, name, __unused unsigned int, flags)
 {
-    klog(LOG_WARN, "memfd_create is not fully implemented, using a temporary file as a placeholder\n");
+    klog(LOG_WARN, "memfd_create is not fully implemented, using a temporary"
+        "file as a placeholder\n");
     static int n = 0;
     char buf[64];
     while (*name && *name == '/')
@@ -581,4 +609,77 @@ SYSCALL_DECL2(memfd_create, const char *, name, __unused unsigned int, flags)
     snprintf(buf, 64, "/tmp/%s/%d", name, n);
     struct file *f = vfs_open(buf, O_CREAT, S_IREAD|S_IWRITE);
     return get_next_fd(current->files, f);
+}
+
+static int mm_update_region(struct vm_desc *vma, uintptr_t pgaddr,
+    uintptr_t end, int prot_flags)
+{
+    if (!vma) return -EINVAL;
+    // If start address is not the beginning of the VMA
+    if (vma->start < pgaddr) {
+        int ret = vma_split(vma, pgaddr, vma->end);
+        if (ret < 0)
+            return ret;
+        vma = vma->vm_next;
+        assert(vma && vma->start == pgaddr);
+    }
+
+    while (vma && vma->end <= end) {
+        vma->vm_flags = (vma->vm_flags & ~VM_PROT_MASK) | prot_flags;
+        vma = vma->vm_next;
+    }
+
+    if (!vma)
+        panic("mm_update_region: reached end of VMA list before end address\n");
+
+    // If the end address is not the end of the VMA
+    if (vma->start < end) {
+        int ret = vma_split(vma, end, vma->end);
+        if (ret < 0)
+            return ret;
+        vma->vm_flags = (vma->vm_flags & ~VM_PROT_MASK) | prot_flags;
+    }
+
+    int mem_flags = vma_flags_to_user_mem_flags(vma->vm_flags);
+
+    acquire_lock(&vma->mm->page_table_lock);
+    update_user_page_range(pgaddr, end - pgaddr, mem_flags);
+    release_lock(&vma->mm->page_table_lock);
+
+    return 0;
+}
+
+static int do_mprotect_locked(struct mm_info *mm, uintptr_t pgaddr,
+    uintptr_t end, int prot_flags)
+{
+    if (!mm_range_is_mapped(mm, pgaddr, end))
+        return -ENOMEM;
+
+    struct vm_desc *vma = find_vma(mm, pgaddr);
+    if (!vma)
+        return -ENOMEM;
+
+    return mm_update_region(vma, pgaddr, end, prot_flags);
+}
+
+static int do_mprotect(struct mm_info *mm, uintptr_t pgaddr,
+    uintptr_t end, int prot_flags)
+{
+    mmap_write_lock(mm);
+    long ret = do_mprotect_locked(mm, pgaddr, end, prot_flags);
+    mmap_write_unlock(mm);
+    return ret;
+}
+
+SYSCALL_DECL3(mprotect, void *, addr, size_t, len, int, prot)
+{
+    uintptr_t pgaddr = (uintptr_t)addr;
+    if (pgaddr & (PAGE_SIZE-1) || pgaddr >= __USER_MAX_ADDR)
+        return -EINVAL;
+
+    uintptr_t end = PAGE_ROUND_UP(pgaddr + len);
+    if (end < pgaddr || end > __USER_MAX_ADDR)
+        return -EINVAL;
+
+    return do_mprotect(current->mm, pgaddr, end, convert_mmap_flags(prot, 0));
 }

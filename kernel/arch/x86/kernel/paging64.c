@@ -15,7 +15,11 @@
 
 #define MAX_PHYS_ADDR 0x0000ffffffffffffUL
 
-#define ENTRY_ADDR(x) (phys_mem_mapping + (((x) & ~0xffful) & MAX_PHYS_ADDR))
+#define PT_ADDR_MASK 0x000ffffffffff000UL
+#define PT_FLAGS_MASK 0xfffUL
+#define PT_ADDR(x) ((x) & PT_ADDR_MASK)
+
+#define ENTRY_ADDR(x) (phys_mem_mapping + PT_ADDR(x))
 #define ENTRY_PRESENT(x) ((x) & 1)
 
 #define phys_to_mapping(x) (phys_mem_mapping + (x))
@@ -93,12 +97,13 @@ pte_t * get_or_alloc_pt(pde_t *pd, void *virt, u16 flags)
 int map_pages(void *phys, void *virt, int flags, int num_pages)
 {
     pml4e_t *pml4 = (pml4e_t*)ENTRY_ADDR(arch_get_pgd());
-    flags |= x86_to_page_flags(flags) | PG_PRESENT;
+    unsigned long pflags = x86_to_page_flags(flags) | PG_PRESENT;
     for (int i = 0; i < num_pages; i++, phys = (u8*)phys + PAGE_SIZE,
             virt = (u8*)virt + PAGE_SIZE) {
-        pdpte_t *pdpt = get_or_alloc_pdpt(pml4, virt, flags);
-        pde_t *pd = get_or_alloc_pd(pdpt, virt, flags);
-        pte_t *pt = get_or_alloc_pt(pd, virt, flags);
+        // Intentionally shorten the flags to 16 bits to ignore XD bit for tables
+        pdpte_t *pdpt = get_or_alloc_pdpt(pml4, virt, pflags & 0xFFFF);
+        pde_t *pd = get_or_alloc_pd(pdpt, virt, pflags & 0xFFFF);
+        pte_t *pt = get_or_alloc_pt(pd, virt, pflags & 0xFFFF);
 
         u32 pt_ndx = get_pt_index(virt);
         if (ENTRY_PRESENT(pt[pt_ndx])) {
@@ -106,7 +111,7 @@ int map_pages(void *phys, void *virt, int flags, int num_pages)
                 (void*)((uintptr_t)pt[pt_ndx]));
             kerror("");
         }
-        pt[pt_ndx] = (uintptr_t)phys | flags;
+        pt[pt_ndx] = (uintptr_t)phys | pflags;
         __native_flush_tlb_single(virt);
     }
     return 0;
@@ -365,6 +370,118 @@ void drop_user_page_range(uintptr_t start, size_t size)
         drop_user_pdpt_range(pml4e, start, end);
 }
 
+static void update_user_pt_range(pde_t *pde, uintptr_t start,
+    uintptr_t end, unsigned long new_flags)
+{
+    if (!ENTRY_PRESENT(*pde))
+        return;
+
+    if (*pde & PG_HUGE_PAGE) {
+        *pde = PT_ADDR(*pde) | new_flags | PG_PRESENT | PG_HUGE_PAGE;
+        __native_flush_tlb_single((void*)start);
+        return;
+    }
+
+    pte_t *pt = (pte_t*)ENTRY_ADDR(*pde);
+    pte_t *pte = pt + get_pt_index(start);
+
+    for (; start < end; start += PAGE_SIZE, pte++) {
+        if (ENTRY_PRESENT(*pte)) {
+            *pte = PT_ADDR(*pte) | new_flags | PG_PRESENT;
+            __native_flush_tlb_single((void*)start);
+        }
+    }
+}
+
+static void update_user_pd_range(pdpte_t *pdpte, uintptr_t start,
+    uintptr_t end, unsigned long new_flags)
+{
+    if (!ENTRY_PRESENT(*pdpte))
+        return;
+
+    if (*pdpte & PG_HUGE_PAGE) {
+        *pdpte = PT_ADDR(*pdpte) | new_flags | PG_PRESENT | PG_HUGE_PAGE;
+        __native_flush_tlb_single((void*)start);
+        return;
+    }
+
+    pde_t *pd = (pde_t*)ENTRY_ADDR(*pdpte);
+    pde_t *pde = pd + get_pd_index(start);
+    uintptr_t next;
+
+    // Not on a 2MB boundary?
+    if (start & (PDE_SIZE - 1)) {
+        next = pde_addr_end(start, end);
+        update_user_pt_range(pde, start, next, new_flags);
+        start = next;
+        pde++;
+    }
+
+    // Full 2MB chunks
+    for (; end - start >= PDE_SIZE; start += PDE_SIZE, pde++) {
+        update_user_pt_range(pde, start, start + PDE_SIZE, new_flags);
+    }
+
+    // Remaining pages
+    if (start < end)
+        update_user_pt_range(pde, start, end, new_flags);
+}
+
+static void update_user_pdpt_range(pml4e_t *pml4e, uintptr_t start,
+    uintptr_t end, unsigned long new_flags)
+{
+    if (!ENTRY_PRESENT(*pml4e))
+        return;
+
+    pdpte_t *pdpt = (pdpte_t*)ENTRY_ADDR(*pml4e);
+    pdpte_t *pdpte = pdpt + get_pdpt_index(start);
+    uintptr_t next;
+
+    // Not on a 1GB boundary?
+    if (start & (PDPTE_SIZE - 1)) {
+        next = pdpte_addr_end(start, end);
+        update_user_pd_range(pdpte, start, next, new_flags);
+        start = next;
+        pdpte++;
+    }
+
+    // Full 1GB chunks
+    for (; end - start >= PDPTE_SIZE; start += PDPTE_SIZE, pdpte++) {
+        update_user_pd_range(pdpte, start, start + PDPTE_SIZE, new_flags);
+    }
+
+    // Remaining
+    if (start < end)
+        update_user_pd_range(pdpte, start, end, new_flags);
+}
+
+void update_user_page_range(uintptr_t start, size_t size, int flags)
+{
+    uintptr_t end = PAGE_ROUND_UP(start + size);
+    pml4e_t *pml4 = (pml4e_t*)ENTRY_ADDR(arch_get_pgd());
+    pml4e_t *pml4e = pml4 + get_pml4_index(start);
+    unsigned long new_flags = x86_to_page_flags(flags);
+
+    if (end > __USER_MAX_ADDR + 1)
+        panic("Tried to update kernel addr range: %p - %p\n", (void*)start, (void*)end);
+
+    // Not on a 512GB boundary?
+    if (start & (PML4E_SIZE - 1)) {
+        uintptr_t next = pml4e_addr_end(start, end);
+        update_user_pdpt_range(pml4e, start, next, new_flags);
+        start = next;
+        pml4e++;
+    }
+
+    // Full 512GB chunks
+    for (; end - start >= PML4E_SIZE; start += PML4E_SIZE, pml4e++) {
+        update_user_pdpt_range(pml4e, start, start + PML4E_SIZE, new_flags);
+    }
+
+    // Remaining
+    if (start < end)
+        update_user_pdpt_range(pml4e, start, end, new_flags);
+}
 
 static pdpte_t phys_map_pdpt[ENTRIES_PER_TABLE] __align(PAGE_SIZE);
 

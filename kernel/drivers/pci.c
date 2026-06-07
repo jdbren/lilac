@@ -191,7 +191,8 @@ void pcie_add_map(ACPI_TABLE_MCFG *mcfg)
 #endif
 
         map_pages((void *)(uintptr_t)mcfg_alloc->Address, va,
-            MEM_PF_WRITE | MEM_PF_UC | MEM_PF_NO_EXEC, PAGE_UP_COUNT(size));
+            MEM_PF_WRITE | MEM_PF_READ | MEM_PF_UC | MEM_PF_NO_EXEC,
+            PAGE_UP_COUNT(size));
 
         pcie_mmio_maps[pcie_mmio_map_cnt++] =
             (struct pcie_mmio_map) {

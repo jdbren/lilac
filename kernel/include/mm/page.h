@@ -76,31 +76,31 @@ void free_pages(void *addr, u32 pgcnt);
 void * get_free_pages(u32 pgcnt, u32 flags);
 void * get_zeroed_pages(u32 pgcnt, u32 flags);
 
-static inline __always_inline
+static inline
 struct page * alloc_page(u32 flags)
 {
     return alloc_pages(1, flags);
 }
 
-static inline __always_inline
+static inline
 void free_page(void *addr)
 {
     free_pages(addr, 1);
 }
 
-static inline __always_inline
+static inline
 void __free_page(struct page *frame)
 {
     __free_pages(frame, 1);
 }
 
-static inline __always_inline
+static inline
 void * get_free_page(void)
 {
     return get_free_pages(1, ALLOC_NORMAL);
 }
 
-static __always_inline
+static inline
 void * get_zeroed_page(void)
 {
     return get_zeroed_pages(1, ALLOC_NORMAL);

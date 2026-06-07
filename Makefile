@@ -57,3 +57,4 @@ distclean: clean
 
 compile-commands: clean
 	bear -- $(MAKE) kernel init user
+	$(MAKE) clean

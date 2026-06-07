@@ -16,9 +16,9 @@ uintptr_t __walk_pages(void *vaddr)
     return (uintptr_t)__get_physaddr(vaddr);
 }
 
-int x86_to_page_flags(int flags)
+unsigned long x86_to_page_flags(int flags)
 {
-    int result = 0;
+    unsigned long result = 0UL;
     if (flags & MEM_PF_WRITE)
         result |= PG_WRITE;
     if (flags & MEM_PF_USER)
@@ -31,6 +31,10 @@ int x86_to_page_flags(int flags)
         result |= PG_GLOBAL;
     if (flags & MEM_PF_UC)
         result |= (PG_CACHE_DISABLE | PG_WRITE_THROUGH);
+#ifdef __x86_64__
+    if (flags & MEM_PF_NO_EXEC)
+        result |= PG_EXEC_DISABLE;
+#endif
     return result;
 }
 

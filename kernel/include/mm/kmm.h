@@ -8,13 +8,14 @@
 #include <utility/multiboot2.h>
 
 // Paging map flags
-#define MEM_PF_WRITE        0001
-#define MEM_PF_USER         0002
-#define MEM_PF_NO_EXEC      0004
-#define MEM_PF_GLOBAL       0010
-#define MEM_PF_CACHE_WT     0020
-#define MEM_PF_NO_CACHE     0040
-#define MEM_PF_UC           0100
+#define MEM_PF_READ         0001
+#define MEM_PF_WRITE        0002
+#define MEM_PF_USER         0004
+#define MEM_PF_NO_EXEC      0010
+#define MEM_PF_GLOBAL       0020
+#define MEM_PF_CACHE_WT     0040
+#define MEM_PF_NO_CACHE     0100
+#define MEM_PF_UC           0200
 
 #define PAGE_ROUND_DOWN(x)  ((uintptr_t)(x) & ~((uintptr_t)(PAGE_SIZE - 1)))
 #define PAGE_ROUND_UP(x)    ((((uintptr_t)(x)) + ((uintptr_t)PAGE_SIZE - 1)) \

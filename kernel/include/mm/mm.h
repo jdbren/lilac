@@ -88,6 +88,7 @@ enum fault_return {
 int mm_fault(struct vm_desc *vma, uintptr_t addr, unsigned long flags);
 
 void drop_user_page_range(uintptr_t start, size_t size);
+void update_user_page_range(uintptr_t start, size_t size, int flags);
 
 #ifdef DEBUG_MM
 extern unsigned long mm_dbg_fault_file_pages_alloc;

@@ -116,8 +116,12 @@ int fb_mmap(__unused struct file *file, struct vm_desc *vma)
     size_t size = MIN((vma->end - vma->start) / PAGE_SIZE, boot_info.mbd.framebuffer->common.framebuffer_pitch
         * boot_info.mbd.framebuffer->common.framebuffer_height / PAGE_SIZE);
     int flags = MEM_PF_UC | MEM_PF_USER;
+    if (vma->vm_flags & VM_READ)
+        flags |= MEM_PF_READ;
     if (vma->vm_flags & VM_WRITE)
         flags |= MEM_PF_WRITE;
+    if (!(vma->vm_flags & VM_EXEC))
+        flags |= MEM_PF_NO_EXEC;
     return map_pages((void*)phys_addr, (void*)vma->start, flags, size);
 }
 
@@ -161,7 +165,8 @@ void graphics_init(void)
     size_t fb_size = PAGE_ROUND_UP(mfb->common.framebuffer_pitch * mfb->common.framebuffer_height);
     assert(fb_size < (1 << 26)); // 64 MB
     mmio_map_buffer_wc(fb_phys, (1 << 26));
-    fb->fb = (u8*)map_phys((void*)fb_phys, fb_size, MEM_PF_WRITE|MEM_PF_GLOBAL);
+    fb->fb = (u8*)map_phys((void*)fb_phys, fb_size,
+        MEM_PF_WRITE|MEM_PF_GLOBAL|MEM_PF_READ|MEM_PF_NO_EXEC);
     fb->fb_shadow = get_free_pages(fb_size / PAGE_SIZE, ALLOC_NORMAL);
     fb->fb_width = mfb->common.framebuffer_width;
     fb->fb_height = mfb->common.framebuffer_height;

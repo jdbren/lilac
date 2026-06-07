@@ -5,6 +5,7 @@
 #include <lilac/sched.h>
 #include <mm/mm.h>
 #include <asm/idt.h>
+#include "asm/regs.h"
 #include "paging.h"
 
 #pragma GCC diagnostic ignored "-Warray-bounds"
@@ -35,7 +36,7 @@ static void * find_exception(uintptr_t err_ip)
     return NULL;
 }
 
-void div0_handler(struct interrupt_frame *frame)
+void div0_handler(struct regs_state *frame)
 {
     if (frame->ip < __USER_STACK) { // user space fault
         klog(LOG_WARN, "Divide by zero in user space at %p, sending SIGFPE\n", frame->ip);
@@ -60,7 +61,7 @@ static unsigned long get_fault_flags(long err_code)
     return flags;
 }
 
-static int user_page_fault(long error, struct interrupt_frame *frame, uintptr_t addr)
+static int user_page_fault(long error, uintptr_t addr)
 {
     struct vm_desc *vma;
     int err = 0;
@@ -92,7 +93,7 @@ out:
     return err;
 }
 
-void pgflt_handler(long error_code, struct interrupt_frame *frame)
+void pgflt_handler(long error_code, struct regs_state *frame)
 {
     uintptr_t addr = 0;
     asm volatile ("mov %%cr2,%0\n\t" : "=r"(addr));
@@ -106,141 +107,155 @@ void pgflt_handler(long error_code, struct interrupt_frame *frame)
         if (!user_addr) {
             do_raise(current, SIGSEGV);
         } else {
-            user_page_fault(error_code, frame, addr);
+            user_page_fault(error_code, addr);
         }
     } else if (user_addr) {
-        user_page_fault(error_code, frame, addr);
+        user_page_fault(error_code, addr);
     } else if (handler && addr < __KERNEL_BASE) {
         klog(LOG_DEBUG, "Page fault at %x handled by %p\n", frame->ip, handler);
         frame->ip = (uintptr_t)handler;
     } else {
+        x86_dump_regs(frame);
         panic("Kernel page fault at %p (code %lx, cr2 %p)\n", (void*)frame->ip, error_code, (void*)addr);
     }
 }
 
-void gpflt_handler(long error_code, struct interrupt_frame *frame)
+void gpflt_handler(long error_code, struct regs_state *frame)
 {
-    uintptr_t addr = 0;
-    asm volatile ("mov %%cr2,%0\n\t" : "=r"(addr));
     klog(LOG_WARN, "General protection fault at %p, error code %x\n", frame->ip, error_code);
     void *handler = find_exception(frame->ip);
-    if (handler && addr < __KERNEL_BASE) {
+    if (handler && frame->ip < __KERNEL_BASE) {
         do_raise(current, SIGSEGV);
         frame->ip = (uintptr_t)handler;
     } else if (frame->ip < __USER_STACK) { // user space fault
         klog(LOG_WARN, "GP fault in user space at %p, sending SIGSEGV\n", frame->ip);
         do_raise(current, SIGSEGV);
     } else {
-        kerror("General protection fault detected\n");
+        x86_dump_regs(frame);
+        x86_print_stack_trace(frame);
+        kerror("Kernel GP fault occurred\n");
     }
 }
 
-void invldop_handler(struct interrupt_frame *frame)
+void invldop_handler(struct regs_state *frame)
 {
     klog(LOG_WARN, "Invalid opcode at %p\n", frame->ip);
     if (frame->ip < __USER_STACK) { // user space fault
         klog(LOG_WARN, "Invalid opcode in user space at %p, sending SIGILL\n", frame->ip);
         do_raise(current, SIGILL);
     } else {
+        x86_dump_regs(frame);
         kerror("Invalid opcode detected\n");
     }
 }
 
-void dblflt_handler(long error_code, struct interrupt_frame *frame)
+void dblflt_handler(long error_code, struct regs_state *frame)
 {
+    x86_dump_regs(frame);
     kerror("Double fault detected\n");
 }
 
-void debug_handler(struct interrupt_frame *frame)
+void debug_handler(struct regs_state *frame)
 {
+    x86_dump_regs(frame);
     klog(LOG_INFO, "Debug exception at %p\n", frame->ip);
     // For now, just ignore it.
 }
 
-void nmi_handler(struct interrupt_frame *frame)
+void nmi_handler(struct regs_state *frame)
 {
     klog(LOG_WARN, "Non-maskable interrupt at %p\n", frame->ip);
     kerror("NMI detected\n");
 }
 
-void brkp_handler(struct interrupt_frame *frame)
+void brkp_handler(struct regs_state *frame)
 {
+    x86_dump_regs(frame);
     klog(LOG_INFO, "Breakpoint at %p\n", frame->ip);
 }
 
-void ovflw_handler(struct interrupt_frame *frame)
+void ovflw_handler(struct regs_state *frame)
 {
     if (frame->ip < __USER_STACK) { // user space fault
         klog(LOG_WARN, "Overflow in user space, sending SIGFPE\n");
         do_raise(current, SIGFPE);
     } else {
+        x86_dump_regs(frame);
         kerror("Overflow detected\n");
     }
 }
 
-void bnd_handler(struct interrupt_frame *frame)
+void bnd_handler(struct regs_state *frame)
 {
     if (frame->ip < __USER_STACK) { // user space fault
         klog(LOG_WARN, "BOUND range exceeded in user space, sending SIGSEGV\n");
         do_raise(current, SIGSEGV);
     } else {
+        x86_dump_regs(frame);
         kerror("BOUND range exceeded detected\n");
     }
 }
 
-void dna_handler(struct interrupt_frame *frame)
+void dna_handler(struct regs_state *frame)
 {
     kerror("Device not available (FPU) fault detected\n");
 }
 
-void invldtss_handler(long error_code, struct interrupt_frame *frame)
+void invldtss_handler(long error_code, struct regs_state *frame)
 {
     klog(LOG_WARN, "Invalid TSS at %p, error code %x\n", frame->ip, error_code);
+    x86_dump_regs(frame);
     kerror("Invalid TSS detected\n");
 }
 
-void segnp_handler(long error_code, struct interrupt_frame *frame)
+void segnp_handler(long error_code, struct regs_state *frame)
 {
+    x86_dump_regs(frame);
     kerror("Segment not present fault detected\n");
 }
 
-void ssflt_handler(long error_code, struct interrupt_frame *frame)
+void ssflt_handler(long error_code, struct regs_state *frame)
 {
+    x86_dump_regs(frame);
     kerror("Stack segment fault detected\n");
 }
 
-void flpexc_handler(struct interrupt_frame *frame)
+void flpexc_handler(struct regs_state *frame)
 {
     if (frame->ip < __USER_STACK) { // user space fault
         klog(LOG_WARN, "Floating point exception in user space at %p, sending SIGFPE\n", frame->ip);
         do_raise(current, SIGFPE);
     } else {
+        x86_dump_regs(frame);
         kerror("Floating point exception detected\n");
     }
 }
 
-void align_handler(long error_code, struct interrupt_frame *frame)
+void align_handler(long error_code, struct regs_state *frame)
 {
     klog(LOG_WARN, "Alignment check fault at %p, error code %x\n", frame->ip, error_code);
     if (frame->ip < __USER_STACK) { // user space fault
         klog(LOG_WARN, "Alignment check in user space at %p, sending SIGBUS\n", frame->ip);
         do_raise(current, SIGBUS);
     } else {
+        x86_dump_regs(frame);
         kerror("Alignment check fault detected\n");
     }
 }
 
-void mchk_handler(struct interrupt_frame *frame)
+void mchk_handler(struct regs_state *frame)
 {
+    x86_dump_regs(frame);
     kerror("Machine check exception detected\n");
 }
 
-void simd_handler(struct interrupt_frame *frame)
+void simd_handler(struct regs_state *frame)
 {
     if (frame->ip < __USER_STACK) { // user space fault
         klog(LOG_WARN, "SIMD floating point exception in user space at %p, sending SIGFPE\n", frame->ip);
         do_raise(current, SIGFPE);
     } else {
+        x86_dump_regs(frame);
         kerror("SIMD floating point exception detected\n");
     }
 }

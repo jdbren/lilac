@@ -63,7 +63,7 @@ void ioapic_init(struct ioapic *ioapic, struct int_override *over, u8 num_over)
         ioapic = ioapic->next;
 
     ioapic_base = (uintptr_t)map_phys((void*)(uintptr_t)ioapic->address, PAGE_SIZE,
-        MEM_PF_UC | MEM_PF_WRITE);
+        MEM_PF_UC | MEM_PF_WRITE | MEM_PF_READ | MEM_PF_NO_EXEC);
     ioapic_gsi_base = ioapic->gsi_base;
 
     klog(LOG_INFO, "IOAPIC ID: %u, Version: 0x%02x, GSI base: %u\n",
