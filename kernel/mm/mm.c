@@ -15,6 +15,8 @@
 
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 
+#define DEBUG_MM
+
 struct mm_info * alloc_mm_info(void)
 {
     struct mm_info *info = kzmalloc(sizeof(*info));
@@ -274,6 +276,10 @@ struct vm_desc *vma_create_new_at(struct mm_info *mm, uintptr_t vaddr,
 
 static int vma_split(struct vm_desc *vma, uintptr_t start, uintptr_t end)
 {
+#ifdef DEBUG_MM
+    klog(LOG_DEBUG, "Splitting VMA %p-%p into %p-%p and %p-%p\n",
+        (void*)vma->start, (void*)vma->end, (void*)vma->start, (void*)start, (void*)end, (void*)vma->end);
+#endif
     struct vm_desc *tail = kzmalloc(sizeof(*tail));
     if (!tail)
         return -ENOMEM;
@@ -617,30 +623,34 @@ static int mm_update_region(struct vm_desc *vma, uintptr_t pgaddr,
     if (!vma) return -EINVAL;
     // If start address is not the beginning of the VMA
     if (vma->start < pgaddr) {
-        int ret = vma_split(vma, pgaddr, vma->end);
+        int ret = vma_split(vma, pgaddr, pgaddr);
         if (ret < 0)
             return ret;
         vma = vma->vm_next;
+        klog(LOG_DEBUG, "mm_update_region: split VMA, new VMA at %p-%p\n",
+            (void*)vma->start, (void*)vma->end);
         assert(vma && vma->start == pgaddr);
     }
 
     while (vma && vma->end <= end) {
         vma->vm_flags = (vma->vm_flags & ~VM_PROT_MASK) | prot_flags;
+        if (vma->end == end)
+            break;
         vma = vma->vm_next;
     }
 
     if (!vma)
-        panic("mm_update_region: reached end of VMA list before end address\n");
+        return -ENOMEM;
 
     // If the end address is not the end of the VMA
     if (vma->start < end) {
-        int ret = vma_split(vma, end, vma->end);
+        int ret = vma_split(vma, end, end);
         if (ret < 0)
             return ret;
         vma->vm_flags = (vma->vm_flags & ~VM_PROT_MASK) | prot_flags;
     }
 
-    int mem_flags = vma_flags_to_user_mem_flags(vma->vm_flags);
+    int mem_flags = vma_flags_to_user_mem_flags(prot_flags);
 
     acquire_lock(&vma->mm->page_table_lock);
     update_user_page_range(pgaddr, end - pgaddr, mem_flags);
@@ -673,6 +683,8 @@ static int do_mprotect(struct mm_info *mm, uintptr_t pgaddr,
 
 SYSCALL_DECL3(mprotect, void *, addr, size_t, len, int, prot)
 {
+    klog(LOG_DEBUG, "mprotect addr: %p, len: %lu, prot: %x\n",
+        addr, len, prot);
     uintptr_t pgaddr = (uintptr_t)addr;
     if (pgaddr & (PAGE_SIZE-1) || pgaddr >= __USER_MAX_ADDR)
         return -EINVAL;
