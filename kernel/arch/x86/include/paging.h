@@ -45,6 +45,8 @@ typedef u32 pte_t;
 
 #define PG_STRONG_UC (PG_CACHE_DISABLE | PG_WRITE_THROUGH)
 
+#define PG_PROT_NONE 0x200 // custom flag to indicate no permissions
+
 #define X86_FAULT_PRESENT    0x1
 #define X86_FAULT_WRITE      0x2
 #define X86_FAULT_USER       0x4

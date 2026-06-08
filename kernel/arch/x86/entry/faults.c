@@ -5,7 +5,7 @@
 #include <lilac/sched.h>
 #include <mm/mm.h>
 #include <asm/idt.h>
-#include "asm/regs.h"
+#include <asm/regs.h>
 #include "paging.h"
 
 #pragma GCC diagnostic ignored "-Warray-bounds"

@@ -154,22 +154,32 @@ static void copy_vm_area(void *cr3, struct vm_desc *new_desc)
     mm_dbg_fork_copy_pages_alloc += num_pages;
 #endif
 
-    // Copy data
-    asm ("stac\n\t");
-    memcpy((unsigned char*)phys_mem_mapping + phys, (void*)new_desc->start, num_pages * PAGE_SIZE);
-    asm ("clac\n\t");
+    if (!(new_desc->vm_flags & (VM_READ|VM_WRITE|VM_EXEC))) {
+        void *paddr = phys_mem_mapping + __walk_pages((void*)new_desc->start);
+        memcpy(phys_mem_mapping + phys, paddr, num_pages * PAGE_SIZE);
+    } else {
+        asm ("stac\n\t");
+        memcpy((unsigned char*)phys_mem_mapping + phys, (void*)new_desc->start, num_pages * PAGE_SIZE);
+        asm ("clac\n\t");
+    }
 
-    int flags = PG_USER | PG_PRESENT;
+    int flags = PG_USER;
 
     for (int i = 0; i < num_pages; i++) {
         void *virt = (void*)(new_desc->start + i * PAGE_SIZE);
         pml4e_t *pml4 = (pml4e_t*)cr3;
-        pdpte_t *pdpt = get_or_alloc_pdpt(pml4, virt, flags | PG_WRITE);
-        pde_t *pd = get_or_alloc_pd(pdpt, virt, flags | PG_WRITE);
-        pte_t *pt = get_or_alloc_pt(pd, virt, flags | PG_WRITE);
+        pdpte_t *pdpt = get_or_alloc_pdpt(pml4, virt, flags | PG_WRITE | PG_PRESENT);
+        pde_t *pd = get_or_alloc_pd(pdpt, virt, flags | PG_WRITE | PG_PRESENT);
+        pte_t *pt = get_or_alloc_pt(pd, virt, flags | PG_WRITE | PG_PRESENT);
 
+        if (!(new_desc->vm_flags & VM_EXEC))
+            flags |= PG_EXEC_DISABLE;
+        else
+            flags |= PG_PRESENT;
         if (new_desc->vm_flags & VM_WRITE)
-            flags |= PG_WRITE;
+            flags |= PG_WRITE|PG_PRESENT;
+        if (new_desc->vm_flags & VM_READ)
+            flags |= PG_PRESENT;
 
         pt[get_pt_index(virt)] = (phys + i * PAGE_SIZE) | flags;
     }

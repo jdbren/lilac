@@ -19,6 +19,9 @@ unsigned long mm_dbg_reclaim_pgd_pages_freed = 0;
 
 static bool check_access(struct vm_desc *vma, unsigned int flags)
 {
+    if (flags & FAULT_USER && !(vma->vm_flags & (VM_READ | VM_WRITE | VM_EXEC))) {
+        return false;
+    }
     if (flags & FAULT_WRITE && !(vma->vm_flags & VM_WRITE)) {
         return false;
     }

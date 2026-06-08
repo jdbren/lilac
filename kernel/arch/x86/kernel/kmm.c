@@ -35,6 +35,10 @@ unsigned long x86_to_page_flags(int flags)
     if (flags & MEM_PF_NO_EXEC)
         result |= PG_EXEC_DISABLE;
 #endif
+    if (!(flags & (MEM_PF_READ|MEM_PF_WRITE)) && (flags & MEM_PF_USER))
+        result |= PG_PROT_NONE;
+    else
+        result |= PG_PRESENT;
     return result;
 }
 

@@ -15,8 +15,6 @@
 
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 
-#define DEBUG_MM
-
 struct mm_info * alloc_mm_info(void)
 {
     struct mm_info *info = kzmalloc(sizeof(*info));
@@ -386,8 +384,11 @@ SYSCALL_DECL6(mmap, void*, addr, size_t, length, int, prot,
     uintptr_t pgaddr = PAGE_ROUND_DOWN(addr);
     int num_pages = PAGE_ROUND_UP(length + (addr - pgaddr)) / PAGE_SIZE;
 
-    klog(LOG_DEBUG, "mmap (addr: %p, length: %lu, prot: %x, flags: %x, fd: %d,"
+    klog(LOG_DEBUG, "mmap (addr: %p, length: %lu, prot: 0x%x, flags: 0x%x, fd: %d,"
         " offset: %ld)\n", addr, length, prot, flags, fd, offset);
+
+    if (!(flags & 3))
+        return -EINVAL;
 
     int mflags = convert_mmap_flags(prot, flags);
 
@@ -472,6 +473,8 @@ success:
 
 SYSCALL_DECL2(munmap, void*, addr, size_t, length)
 {
+    klog(LOG_DEBUG, "munmap (addr: %p, length: %lu)\n", addr, length);
+
     uintptr_t pgaddr = (uintptr_t)addr;
     if (length == 0 || length >= 0x1000000000UL || pgaddr == 0
             || pgaddr >= __USER_MAX_ADDR || pgaddr % PAGE_SIZE) {
@@ -692,6 +695,9 @@ SYSCALL_DECL3(mprotect, void *, addr, size_t, len, int, prot)
     uintptr_t end = PAGE_ROUND_UP(pgaddr + len);
     if (end < pgaddr || end > __USER_MAX_ADDR)
         return -EINVAL;
+
+    if (len == 0)
+        return 0;
 
     return do_mprotect(current->mm, pgaddr, end, convert_mmap_flags(prot, 0));
 }

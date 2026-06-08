@@ -53,7 +53,8 @@ pdpte_t * get_or_alloc_pdpt(pml4e_t *pml4, void *virt, u16 flags)
 #ifdef DEBUG_MM
     mm_dbg_page_table_pages_alloc++;
 #endif
-        pml4[pml4_ndx] = virt_to_phys(get_zeroed_page()) | flags | PG_WRITE;
+        pml4[pml4_ndx] = virt_to_phys(get_zeroed_page()) | flags | PG_WRITE |
+            PG_PRESENT;
 #ifdef DEBUG_PAGING
         klog(LOG_DEBUG, "Allocated PDPT at %p for %p\n",
             (void*)ENTRY_ADDR(pml4[pml4_ndx]), virt);
@@ -69,7 +70,8 @@ pde_t * get_or_alloc_pd(pdpte_t *pdpt, void *virt, u16 flags)
 #ifdef DEBUG_MM
     mm_dbg_page_table_pages_alloc++;
 #endif
-        pdpt[pdpt_ndx] = virt_to_phys(get_zeroed_page()) | flags | PG_WRITE;
+        pdpt[pdpt_ndx] = virt_to_phys(get_zeroed_page()) | flags | PG_WRITE |
+            PG_PRESENT;
 #ifdef DEBUG_PAGING
         klog(LOG_DEBUG, "Allocated PD at %p for %p\n",
             (void*)ENTRY_ADDR(pdpt[pdpt_ndx]), virt);
@@ -85,7 +87,8 @@ pte_t * get_or_alloc_pt(pde_t *pd, void *virt, u16 flags)
 #ifdef DEBUG_MM
     mm_dbg_page_table_pages_alloc++;
 #endif
-        pd[pd_ndx] = virt_to_phys(get_zeroed_page()) | flags;
+        pd[pd_ndx] = virt_to_phys(get_zeroed_page()) | flags | PG_WRITE |
+            PG_PRESENT;
 #ifdef DEBUG_PAGING
         klog(LOG_DEBUG, "Allocated PT at %p for %p\n",
             (void*)ENTRY_ADDR(pd[pd_ndx]), virt);
@@ -97,7 +100,7 @@ pte_t * get_or_alloc_pt(pde_t *pd, void *virt, u16 flags)
 int map_pages(void *phys, void *virt, int flags, int num_pages)
 {
     pml4e_t *pml4 = (pml4e_t*)ENTRY_ADDR(arch_get_pgd());
-    unsigned long pflags = x86_to_page_flags(flags) | PG_PRESENT;
+    unsigned long pflags = x86_to_page_flags(flags);
     for (int i = 0; i < num_pages; i++, phys = (u8*)phys + PAGE_SIZE,
             virt = (u8*)virt + PAGE_SIZE) {
         // Intentionally shorten the flags to 16 bits to ignore XD bit for tables
@@ -378,7 +381,7 @@ static void update_user_pt_range(pde_t *pde, uintptr_t start,
         return;
 
     if (*pde & PG_HUGE_PAGE) {
-        *pde = PT_ADDR(*pde) | new_flags | PG_PRESENT | PG_HUGE_PAGE;
+        *pde = PT_ADDR(*pde) | new_flags | PG_HUGE_PAGE;
         __native_flush_tlb_single((void*)start);
         return;
     }
@@ -388,7 +391,7 @@ static void update_user_pt_range(pde_t *pde, uintptr_t start,
 
     for (; start < end; start += PAGE_SIZE, pte++) {
         if (ENTRY_PRESENT(*pte)) {
-            *pte = PT_ADDR(*pte) | new_flags | PG_PRESENT;
+            *pte = PT_ADDR(*pte) | new_flags;
             __native_flush_tlb_single((void*)start);
         }
     }
@@ -401,7 +404,7 @@ static void update_user_pd_range(pdpte_t *pdpte, uintptr_t start,
         return;
 
     if (*pdpte & PG_HUGE_PAGE) {
-        *pdpte = PT_ADDR(*pdpte) | new_flags | PG_PRESENT | PG_HUGE_PAGE;
+        *pdpte = PT_ADDR(*pdpte) | new_flags | PG_HUGE_PAGE;
         __native_flush_tlb_single((void*)start);
         return;
     }
@@ -554,18 +557,18 @@ void *__get_physaddr(void *virt)
     if (!ENTRY_PRESENT(pdpt[pdpt_ndx]))
         return NULL;
     if (pdpt[pdpt_ndx] & PG_HUGE_PAGE)
-        return (void*)((pdpt[pdpt_ndx] & ~0xFFF) + ((uintptr_t)virt & 0xFFF));
+        return (void*)(PT_ADDR(pdpt[pdpt_ndx]) + ((uintptr_t)virt & 0xFFF));
     pde_t *pd = (pde_t*)ENTRY_ADDR(pdpt[pdpt_ndx]);
     u32 pd_ndx = get_pd_index(virt);
     if (!ENTRY_PRESENT(pd[pd_ndx]))
         return NULL;
     if (pd[pd_ndx] & PG_HUGE_PAGE)
-        return (void*)((pd[pd_ndx] & ~0xFFF) + ((uintptr_t)virt & 0xFFF));
+        return (void*)(PT_ADDR(pd[pd_ndx]) + ((uintptr_t)virt & 0xFFF));
     pte_t *pt = (pte_t*)ENTRY_ADDR(pd[pd_ndx]);
     u32 pt_ndx = get_pt_index(virt);
     if (!ENTRY_PRESENT(pt[pt_ndx]))
-        return NULL;
-    return (void*)((pt[pt_ndx] & ~0xFFF) + ((uintptr_t)virt & 0xFFF));
+        klog(LOG_WARN, "pte marked not present for %p, pte = %lx\n", virt, pt[pt_ndx]);
+    return (void*)(PT_ADDR(pt[pt_ndx]) + ((uintptr_t)virt & 0xFFF));
 }
 
 void * arch_map_frame_bitmap(size_t size)
