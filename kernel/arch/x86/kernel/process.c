@@ -155,8 +155,15 @@ static void copy_vm_area(void *cr3, struct vm_desc *new_desc)
 #endif
 
     if (!(new_desc->vm_flags & (VM_READ|VM_WRITE|VM_EXEC))) {
-        void *paddr = phys_mem_mapping + __walk_pages((void*)new_desc->start);
-        memcpy(phys_mem_mapping + phys, paddr, num_pages * PAGE_SIZE);
+        for (int i = 0; i < num_pages; i++) {
+            void *virt = (void*)(new_desc->start + i * PAGE_SIZE);
+            uintptr_t src_phys = __walk_pages(virt);
+            void *dst = phys_mem_mapping + phys + i * PAGE_SIZE;
+            if (src_phys)
+                memcpy(dst, phys_mem_mapping + src_phys, PAGE_SIZE);
+            else
+                memset(dst, 0, PAGE_SIZE);
+        }
     } else {
         asm ("stac\n\t");
         memcpy((unsigned char*)phys_mem_mapping + phys, (void*)new_desc->start, num_pages * PAGE_SIZE);

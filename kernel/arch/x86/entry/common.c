@@ -26,8 +26,12 @@ void x86_dump_regs(struct regs_state *regs)
 void x86_print_stack_trace(struct regs_state *regs)
 {
     klog(LOG_DEBUG, "Call trace:\n");
+    uintptr_t low = (uintptr_t)current->kstack_base;
+    uintptr_t high = low + __KERNEL_STACK_SZ;
     uintptr_t *stack = (uintptr_t*)regs->bp;
-    for (int i = 0; i < 16 && stack && stack[1]; i++) {
+    for (int i = 0; i < 16; i++) {
+        if (!stack || (uintptr_t)stack < low || (uintptr_t)(stack + 1) >= high || !stack[1])
+            break;
         klog(LOG_DEBUG, "  %p\n", (void*)stack[1]);
         stack = (uintptr_t*)stack[0];
     }
