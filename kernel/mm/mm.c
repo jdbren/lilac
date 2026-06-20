@@ -387,7 +387,9 @@ SYSCALL_DECL6(mmap, void*, addr, size_t, length, int, prot,
     klog(LOG_DEBUG, "mmap (addr: %p, length: %lu, prot: 0x%x, flags: 0x%x, fd: %d,"
         " offset: %ld)\n", addr, length, prot, flags, fd, offset);
 
-    if (!(flags & 3))
+    if (!(flags & MAP_SHARED) && !(flags & MAP_PRIVATE))
+        return -EINVAL;
+    if ((flags & MAP_SHARED) && (flags & MAP_PRIVATE))
         return -EINVAL;
 
     int mflags = convert_mmap_flags(prot, flags);

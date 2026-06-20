@@ -566,8 +566,10 @@ void *__get_physaddr(void *virt)
         return (void*)(PT_ADDR(pd[pd_ndx]) + ((uintptr_t)virt & 0xFFF));
     pte_t *pt = (pte_t*)ENTRY_ADDR(pd[pd_ndx]);
     u32 pt_ndx = get_pt_index(virt);
-    if (!ENTRY_PRESENT(pt[pt_ndx]))
+    if (!ENTRY_PRESENT(pt[pt_ndx]) && !(pt[pt_ndx] & PG_PROT_NONE)) {
         klog(LOG_WARN, "pte marked not present for %p, pte = %lx\n", virt, pt[pt_ndx]);
+        return NULL;
+    }
     return (void*)(PT_ADDR(pt[pt_ndx]) + ((uintptr_t)virt & 0xFFF));
 }
 
