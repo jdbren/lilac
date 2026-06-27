@@ -35,7 +35,7 @@ install-libc: copy-headers
 
 install-system: install install-libc init user
 	$(MAKE) -C init install
-	rm $(SYSROOT)/lib/ld-lilac.so.1
+	rm -f $(SYSROOT)/lib/ld-lilac.so.1
 	cp $(SYSROOT)/usr/lib/libc.so $(SYSROOT)/lib/ld-lilac.so.1
 
 # USERSPACE
