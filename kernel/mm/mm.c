@@ -372,7 +372,10 @@ int do_mmap_file(struct vm_desc *vma, struct file *file, unsigned long offset)
         vma->vm_flags |= VM_IO;
         return file->f_op->mmap(file, vma);
     }
-    return -EOPNOTSUPP;
+    vma->seg_vaddr = vma->start;
+    vma->seg_offset = offset;
+    vma->vm_fsize = vma->end - vma->start;
+    return 0;
 }
 
 

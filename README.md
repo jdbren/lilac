@@ -43,12 +43,12 @@ make install
 ```
 ```bash
 ../gcc/configure --target=$TARGET --with-sysroot=$HOME/lilac/sysroot --enable-languages=c,c++ \
-    --disable-fixincludes --disable-nls --enable-static
+    --disable-fixincludes --enable-static --enable-shared --enable-libatomic
 make all-gcc
 make install-gcc
 # then install libc
 # in musl
-./configure --target=x86_64-lilac --prefix=/usr --disable-shared --enable-debug
+./configure --target=x86_64-lilac --prefix=/usr
 make
 make DESTDIR=$HOME/lilac/sysroot install
 # back to gcc
