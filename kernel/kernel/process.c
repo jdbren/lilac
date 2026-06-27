@@ -160,11 +160,10 @@ SYSCALL_DECL0(setsid)
 }
 
 
-static void * load_executable(struct task *p)
+static int load_executable(struct task *p, struct exec_info *info)
 {
     const char *path = p->info.path;
     struct file *file = p->info.exec_file;
-    void *jmp = NULL;
 
     if (!file) {
         file = vfs_open(path, 0, 0);
@@ -176,16 +175,15 @@ static void * load_executable(struct task *p)
     }
 
     mmap_write_lock(p->mm);
-    jmp = elf_load(file, p->mm);
+    int ret = elf_load(file, p->mm, info);
     mmap_write_unlock(p->mm);
-    if (!jmp) {
-        klog(LOG_ERROR, "Failed to load ELF file\n");
-        goto out;
+    if (ret < 0) {
+        klog(LOG_ERROR, "Failed to load ELF file: %d\n", ret);
+        return ret;
     }
 
-out:
     klog(LOG_DEBUG, "ELF loaded\n");
-    return jmp;
+    return 0;
 }
 
 // Must be called with mm->mmap_lock held
@@ -282,8 +280,8 @@ void start_process(void)
     struct mm_info *mem = current->mm;
     klog(LOG_DEBUG, "Process %d starting\n", current->pid);
 
-    void *jmp = load_executable(current);
-    if (!jmp) {
+    struct exec_info einfo = {0};
+    if (load_executable(current, &einfo) < 0) {
         klog(LOG_ERROR, "Failed to load executable, exiting\n");
         exit(1);
     }
@@ -306,24 +304,34 @@ void start_process(void)
     // Copy argument and environment strings into brk area
     char *env_loc = (char*)mem->brk;
     char *arg_loc = env_loc + 0x1400;
-    sbrk(0x2000);
+    char *execfn_user = NULL;
+    sbrk(0x4000);
+
+    // TODO: replace with kernel entropy when available
+    char *random_loc = arg_loc + 0xc00;
+    static const u8 random_seed[16] = {
+        0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+        0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10,
+    };
+    if (copy_to_user(random_loc, random_seed, sizeof(random_seed))) {
+        klog(LOG_WARN, "Failed to copy random seed to user space\n");
+    }
 
     /*
-     * Set up the initial user stack per the System V ABI convention
-     * expected by musl's _start / _start_c / __libc_start_main:
+     * Set up the initial user stack per the System V AMD64 ABI:
      *
-     *   sp[0]              = argc
-     *   sp[1 .. argc]      = argv[0 .. argc-1]
-     *   sp[argc+1]         = NULL              (argv terminator)
-     *   sp[argc+2 .. +1+envc] = envp[0 .. envc-1]
-     *   sp[argc+envc+2]    = NULL              (envp terminator)
-     *   sp[...]            = 0, 0              (AT_NULL auxiliary vector)
+     *   sp[0]                       = argc
+     *   sp[1 .. argc]               = argv[0..argc-1]
+     *   sp[argc+1]                  = NULL              (argv terminator)
+     *   sp[argc+2 .. argc+1+envc]   = envp[0..envc-1]
+     *   sp[argc+envc+2]             = NULL              (envp terminator)
+     *   auxv pairs ...
+     *   AT_NULL, 0
      *
-     * _start_c(long *p):  argc = p[0]; argv = (void*)(p+1);
-     * __libc_start_main:  envp = argv + argc + 1;
-     *                     __auxv scanned past envp NULL terminator.
+     * musl's _start_c / _dlstart_c receive sp as their first argument.
      */
-    size_t nslots = 1 + (argc + 1) + (envc + 1) + 2;
+#define N_AUXV_PAIRS 14   /* number of AT_* pairs written below, excluding AT_NULL */
+    size_t nslots = 1 + (argc + 1) + (envc + 1) + (N_AUXV_PAIRS + 1) * 2;
     uintptr_t *sp = (uintptr_t *)__USER_STACK - nslots;
     sp = (uintptr_t *)((uintptr_t)sp & ~(uintptr_t)0xf);
 
@@ -332,6 +340,9 @@ void start_process(void)
 
     char **argv_ptr = (char **)(sp + 1);
     char **envp_ptr = argv_ptr + argc + 1;
+
+    if (current->info.argv && current->info.argv[0])
+        execfn_user = arg_loc;
 
     if (!current->info.argv) {
         // argv_ptr[0] = NULL;
@@ -347,16 +358,37 @@ void start_process(void)
         prepare_task_env(current, envp_ptr, env_loc, arg_loc);
     }
 
-    // Empty auxiliary vector (AT_NULL = 0)
+    // Auxiliary vector — must end with AT_NULL pair
     uintptr_t *auxv = (uintptr_t *)(envp_ptr + envc + 1);
-    // auxv[0] = 0;
-    put_user(0, &auxv[0]);
-    // auxv[1] = 0;
-    put_user(0, &auxv[1]);
+    int ai = 0;
+#define AUXV_PAIR(type, val) do { \
+    put_user((uintptr_t)(type), &auxv[ai]);     \
+    put_user((uintptr_t)(val),  &auxv[ai + 1]); \
+    ai += 2; \
+} while (0)
 
-    klog(LOG_DEBUG, "Going to user mode, jmp = %p, sp = %p, argc = %d, argv = %p, envp = %p\n",
-        jmp, sp, argc, argv_ptr, envp_ptr);
-    jump_usermode(jmp, (void*)sp, current->kstack);
+    AUXV_PAIR(AT_PHDR,   einfo.at_phdr);
+    AUXV_PAIR(AT_PHENT,  einfo.phentsize);
+    AUXV_PAIR(AT_PHNUM,  einfo.phnum);
+    AUXV_PAIR(AT_BASE,   einfo.interp_base);
+    AUXV_PAIR(AT_ENTRY,  einfo.app_entry);
+    AUXV_PAIR(AT_PAGESZ, PAGE_SIZE);
+    AUXV_PAIR(AT_SECURE, 0);
+    AUXV_PAIR(AT_RANDOM, random_loc);
+    AUXV_PAIR(AT_EXECFN, execfn_user);
+    AUXV_PAIR(AT_UID,    0);
+    AUXV_PAIR(AT_EUID,   0);
+    AUXV_PAIR(AT_GID,    0);
+    AUXV_PAIR(AT_EGID,   0);
+    AUXV_PAIR(AT_NULL,   0);
+#undef AUXV_PAIR
+#undef N_AUXV_PAIRS
+
+    klog(LOG_DEBUG, "Going to user mode: entry=%p sp=%p argc=%lu argv=%p envp=%p\n",
+         einfo.entry, sp, argc, argv_ptr, envp_ptr);
+    klog(LOG_DEBUG, "  AT_PHDR=%p AT_BASE=%lx AT_ENTRY=%p\n",
+         einfo.at_phdr, einfo.interp_base, einfo.app_entry);
+    jump_usermode(einfo.entry, (void*)sp, current->kstack);
 }
 
 

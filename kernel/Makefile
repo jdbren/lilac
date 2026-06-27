@@ -116,15 +116,11 @@ lib/rbtree.o
 LIBK_OBJS=$(patsubst %.c,%.o,$(wildcard lib/*/*.c))
 
 OBJS=\
-$(ARCHDIR)/crtbegin.o \
-$(KERNEL_OBJS) \
-$(ARCHDIR)/crtend.o
+$(KERNEL_OBJS)
 
 LINK_LIST=\
 $(LDFLAGS) \
-$(ARCHDIR)/crtbegin.o \
 $(KERNEL_OBJS) \
-$(ARCHDIR)/crtend.o \
 $(LIBS)
 
 

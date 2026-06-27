@@ -21,6 +21,7 @@ enum segment_type {
     DYNAMIC_SEG = 0x02,
     INTERP_SEG  = 0x03,
     NOTE_SEG    = 0x04,
+    PHDR_SEG    = 0x06,
 };
 
 enum segment_flags {
@@ -99,6 +100,35 @@ struct __packed elf64_pheader {
 struct mm_info;
 struct file;
 
-void * elf_load(struct file *elf_file, struct mm_info *mm);
+/*
+ * Output from elf_load(). Carries everything process setup needs to
+ * build the initial auxv and choose the correct entry point.
+ */
+struct exec_info {
+    void      *entry;        /* jump target: interp entry, or app entry if static */
+    void      *app_entry;    /* original app e_entry  → AT_ENTRY                  */
+    void      *at_phdr;      /* user-VA of main phdrs → AT_PHDR                   */
+    u16        phnum;        /* phdr count            → AT_PHNUM                  */
+    u16        phentsize;    /* phdr entry size       → AT_PHENT                  */
+    uintptr_t  interp_base;  /* interp load bias      → AT_BASE  (0 if static)    */
+};
+
+/* AT_* auxiliary-vector type constants */
+#define AT_NULL         0
+#define AT_PHDR         3
+#define AT_PHENT        4
+#define AT_PHNUM        5
+#define AT_PAGESZ       6
+#define AT_BASE         7
+#define AT_ENTRY        9
+#define AT_UID          11
+#define AT_EUID         12
+#define AT_GID          13
+#define AT_EGID         14
+#define AT_SECURE       23
+#define AT_RANDOM       25
+#define AT_EXECFN       31
+
+int elf_load(struct file *elf_file, struct mm_info *mm, struct exec_info *info);
 
 #endif

@@ -17,7 +17,7 @@ kbuild.config:
 
 config:
 	@if [ ! -f musl/config.mak ]; then \
-		cd musl && ./configure --target=x86_64-lilac --prefix=/usr --disable-shared --enable-debug; \
+		cd musl && ./configure --target=x86_64-lilac --prefix=/usr --enable-debug; \
 	fi
 
 kernel: copy-headers
@@ -35,6 +35,8 @@ install-libc: copy-headers
 
 install-system: install install-libc init user
 	$(MAKE) -C init install
+	rm $(SYSROOT)/lib/ld-lilac.so.1
+	cp $(SYSROOT)/usr/lib/libc.so $(SYSROOT)/lib/ld-lilac.so.1
 
 # USERSPACE
 init: install-libc

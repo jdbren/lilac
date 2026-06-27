@@ -20,7 +20,8 @@
             "forcedInclude": [
                 "${workspaceFolder}/.vscode/undefs.h"
             ],
-            "cppStandard": "c++23"
+            "cppStandard": "c++23",
+            "compileCommands": "${workspaceFolder}/compile_commands.json"
         },
         {
             "name": "Lilac32",
