@@ -47,7 +47,7 @@ static struct futex_bucket *futex_hash(uintptr_t uaddr)
     return &futex_table[key & FUTEX_HASH_MASK];
 }
 
-static int futex_wait(int __user *uaddr, int val)
+int futex_wait(int __user *uaddr, int val)
 {
     struct futex_bucket *bucket;
     struct futex_waiter *waiter;
@@ -93,7 +93,7 @@ static int futex_wait(int __user *uaddr, int val)
     return ret;
 }
 
-static int futex_wake(int __user *uaddr, int count)
+int futex_wake(int __user *uaddr, int count)
 {
     struct futex_bucket *bucket;
     struct futex_waiter *waiter, *tmp;
