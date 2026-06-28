@@ -88,6 +88,14 @@ SYSCALL_DECL0(gettid)
     return current->pid;
 }
 
+SYSCALL_DECL1(set_tid_address, int *, tidptr)
+{
+    if (tidptr && !access_ok(tidptr, sizeof(int)))
+        return -EFAULT;
+    current->clear_child_tid = tidptr;
+    return current->pid;
+}
+
 SYSCALL_DECL0(getppid)
 {
     return current->ppid;
