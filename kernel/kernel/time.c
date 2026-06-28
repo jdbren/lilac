@@ -17,6 +17,8 @@ static spinlock_t clock_write_lock = SPINLOCK_INIT;
 
 DEFINE_PER_CPU(struct rb_root_cached, timer_event_tree) = RB_ROOT_CACHED;
 
+void timer_ev_tick(void);
+
 bool timer_ev_less(struct rb_node *a, const struct rb_node *b)
 {
     struct timer_event *eva = rb_entry(a, struct timer_event, node);
@@ -110,15 +112,54 @@ SYSCALL_DECL2(gettimeofday, struct timeval*, tv, struct timezone*, tz)
     return 0;
 }
 
+static inline struct timer_event *
+timer_ev_add(struct timer_event *ev, struct rb_root_cached *tree)
+{
+    struct rb_node *ret = rb_add_cached(&ev->node, tree, timer_ev_less);
+    return ret ? ev : NULL;
+}
 
-static void timer_ev_enqueue(struct timer_event *ev, struct task *p)
+static inline struct timer_event *
+timer_ev_del(struct timer_event *ev, struct rb_root_cached *tree)
+{
+    struct rb_node *ret = rb_erase_cached(&ev->node, tree);
+    RB_CLEAR_NODE(&ev->node);
+    return ret ? ev : NULL;
+}
+
+void timer_ev_default_callback(struct timer_event *ev)
+{
+    set_task_running(ev->p);
+}
+
+struct timer_event * create_timer_event(struct task *p, ktime_t expires,
+    void (*callback)(struct timer_event *), void *context)
+{
+    struct timer_event *ev = kmalloc(sizeof(*ev));
+    if (!ev)
+        return NULL;
+    ev->p = p;
+    ev->expires = expires;
+    ev->callback = callback ? callback : timer_ev_default_callback;
+    ev->context = context;
+    INIT_LIST_HEAD(&ev->task_list);
+    RB_CLEAR_NODE(&ev->node);
+    return ev;
+}
+
+void destroy_timer_event(struct timer_event *ev)
+{
+    kfree(ev);
+}
+
+void timer_ev_enqueue(struct timer_event *ev, struct task *p)
 {
     struct rb_root_cached *root = get_cpu_var(timer_event_tree);
     timer_ev_add(ev, root);
     list_add_tail(&ev->task_list, &p->timer_ev_list);
 }
 
-static void timer_ev_dequeue(struct timer_event *ev)
+void timer_ev_dequeue(struct timer_event *ev)
 {
     struct rb_root_cached *root = get_cpu_var(timer_event_tree);
     timer_ev_del(ev, root);
@@ -127,7 +168,7 @@ static void timer_ev_dequeue(struct timer_event *ev)
 
 void timer_ev_tick(void)
 {
-    u64 now_ns = get_sys_time_ns();
+    ktime_t now_ns = ktime_get();
     struct rb_root_cached *root = get_cpu_var(timer_event_tree);
     struct rb_node *node;
 
@@ -141,35 +182,26 @@ void timer_ev_tick(void)
     }
 }
 
-static void sleep_ev_callback(struct timer_event *ev)
-{
-    set_task_running((struct task*)ev->context);
-}
-
+__attribute__((optimize("O0")))
 void busy_wait_usec(u32 micros)
 {
-    u64 start = get_sys_time_ns();
+    u64 start = ktime_get();
     u64 end = start + (u64)micros * 1000;
-    while (get_sys_time_ns() < end)
+    while (ktime_get() < end)
         __pause();
 }
 
 __attribute__((optimize("O0")))
 void usleep(u32 micros)
 {
-    u64 start = get_sys_time_ns();
-    u64 end = start + (u64)micros * 1000;
+    ktime_t end = ktime_add_ns(ktime_get(), (u64)micros * 1000);
     if (micros >= 1000) {
-        struct timer_event ev;
-        ev.expires = end;
-        ev.callback = sleep_ev_callback;
-        ev.context = (void *)current;
-
+        struct timer_event ev = TIMER_EV_INIT(ev, current, end, NULL, NULL);
         set_task_sleeping(current);
         timer_ev_enqueue(&ev, current);
         schedule();
     } else {
-        while (get_sys_time_ns() < end)
+        while (ktime_get() < end)
             __pause();
     }
 }
@@ -182,12 +214,12 @@ SYSCALL_DECL2(nanosleep, const struct timespec*, duration, struct timespec*, rem
     if (kduration.tv_sec < 0 || kduration.tv_nsec < 0 || kduration.tv_nsec >= NS_PER_SEC)
         return -EINVAL;
 
-    u64 start_ns = get_sys_time_ns();
-    u64 total_ns = kduration.tv_sec * NS_PER_SEC + kduration.tv_nsec;
+    ktime_t start_ns = ktime_get();
+    ktime_t total_ns = timespec_to_ktime(kduration);
 
     usleep(total_ns / 1000);
 
-    u64 end_ns = get_sys_time_ns();
+    ktime_t end_ns = ktime_get();
     if (task_interrupted_ack()) {
         if (rem) {
             u64 elapsed_ns = end_ns - start_ns;
@@ -209,7 +241,7 @@ SYSCALL_DECL2(nanosleep, const struct timespec*, duration, struct timespec*, rem
 
 static void alarm_handler(struct timer_event *ev)
 {
-    do_raise((struct task *)ev->context, SIGALRM);
+    do_raise(ev->p, SIGALRM);
     kfree(ev);
 }
 
@@ -233,8 +265,8 @@ SYSCALL_DECL1(alarm, unsigned int, seconds)
 {
     struct task *p = current;
     struct timer_event *ev;
-    u64 now = get_sys_time_ns();
-    u64 exp = now + (u64)seconds * NS_PER_SEC;
+    ktime_t now = ktime_get();
+    ktime_t exp = ktime_add_ns(now, (u64)seconds * NS_PER_SEC);
 
     klog(LOG_DEBUG, "Process %d set alarm for %u seconds\n", p->pid, seconds);
 
@@ -242,12 +274,9 @@ SYSCALL_DECL1(alarm, unsigned int, seconds)
     if (!seconds)
         return rem;
 
-    ev = kmalloc(sizeof(*ev));
+    ev = create_timer_event(p, exp, alarm_handler, NULL);
     if (!ev)
         return -ENOMEM;
-    ev->expires = exp;
-    ev->callback = alarm_handler;
-    ev->context = p;
 
     timer_ev_enqueue(ev, p);
     return rem;

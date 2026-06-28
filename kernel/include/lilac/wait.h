@@ -40,6 +40,14 @@ struct wq_entry {
     struct list_head entry;
 };
 
+#define WQ_ENTRY_INIT(name, t, w) { \
+    .task = t, \
+    .wakeup = w, \
+    .entry = LIST_HEAD_INIT(name.entry) \
+}
+
+#define WQ_ENTRY_EMPTY(name) (list_empty(&name.entry))
+
 int sleep_on(struct waitqueue *wq);
 struct task * wake_first(struct waitqueue *wq);
 void wake_all(struct waitqueue *wq);
