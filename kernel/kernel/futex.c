@@ -85,6 +85,7 @@ int futex_wait(int __user *uaddr, int val, ktime_t abs_to)
     int matches = futex_check_value_locked(uaddr, val);
     if (matches <= 0) {
         release_lock(&bucket->lock);
+        timer_ev_dequeue(&timeout_ev);
         return matches == 0 ? -EAGAIN : matches;
     }
 
