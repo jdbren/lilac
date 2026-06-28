@@ -1,5 +1,6 @@
 #include <lilac/clone.h>
 #include <lilac/fs.h>
+#include <lilac/futex.h>
 #include <lilac/lilac.h>
 #include <lilac/process.h>
 #include <lilac/sched.h>
@@ -330,6 +331,7 @@ static void mm_release(struct task *p, struct mm_info *mm)
     if (p->clear_child_tid) {
         put_user(0, p->clear_child_tid);
         // do_futex(p->clear_child_tid, FUTEX_WAKE, 1, NULL, NULL, 0, 0);
+        futex_wake(p->clear_child_tid, 1);
         p->clear_child_tid = NULL;
     }
 
