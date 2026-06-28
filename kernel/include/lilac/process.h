@@ -146,7 +146,7 @@ long             arch_restore_post_signal(void);
 void             jump_new_proc(struct task *next);
 // user mode jumps
 extern void      jump_usermode(void *addr, void *ustack, void *kstack);
-extern int       arch_return_from_fork(void *regs, void *kstack);
+extern int       arch_return_from_fork(void *regs, void *kstack, void *tls);
 
 #define INIT_STACK(KSTACK) ((uintptr_t)KSTACK + __KERNEL_STACK_SZ - sizeof(size_t))
 

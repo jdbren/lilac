@@ -179,6 +179,7 @@ int arch_return_from_fork(void *regs, void *kstack);
 	Params:
 	rdi = ptr to regs
 	rsi = ptr to kstack
+	rdx = ptr to tls
 
 	Jump to usermode in new process.
 */
@@ -186,6 +187,7 @@ int arch_return_from_fork(void *regs, void *kstack);
 .globl arch_return_from_fork
 .type arch_return_from_fork, @function
 arch_return_from_fork:
+	wrfsbase %rdx
 	mov %rdi, %r8
 	mov %rsi, %rdi
 	call set_tss_esp0

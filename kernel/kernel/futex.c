@@ -125,6 +125,8 @@ SYSCALL_DECL6(futex, int __user *, uaddr, int, op, int, val,
 {
     int cmd = op & FUTEX_CMD_MASK;
 
+    klog(LOG_DEBUG, "futex: cmd=%d, uaddr=%p, val=%d\n", cmd, uaddr, val);
+
     if (!uaddr || ((uintptr_t)uaddr & 3))
         return -EINVAL;
 
