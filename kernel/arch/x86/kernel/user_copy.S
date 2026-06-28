@@ -156,10 +156,9 @@ arch_cmpxchg8_user:
 .fault_handler:
 	mov $-EFAULT, %eax
 #ifdef __x86_64__
+	clac
 	cltq
-	pop %rbp
 	retq
 #else
-	pop %ebp
 	ret
 #endif

@@ -3,11 +3,11 @@
 #include <unistd.h>
 #include <pthread.h>
 
-int thread_func(void* arg)
+void * thread_func(void* arg)
 {
     char *s = arg;
     printf("Thread function received argument: %s\n", s);
-    return 0;
+    return NULL;
 }
 
 int main()
@@ -17,7 +17,7 @@ int main()
     printf("Main thread TID: %d\n", tid);
 
     pthread_t thread;
-    int ret = pthread_create(&thread, NULL, (void*(*)(void*))thread_func, str);
+    int ret = pthread_create(&thread, NULL, thread_func, str);
     if (ret != 0) {
         fprintf(stderr, "pthread_create failed: %d\n", ret);
         return 1;
