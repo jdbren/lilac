@@ -13,6 +13,7 @@
 #include <drivers/framebuffer.h>
 #include <acpi/acpi.h>
 #include <lib/icxxabi.h>
+#include <lilac/futex.h>
 
 extern void (*__init_array_start[])(void);
 extern void (*__init_array_end[])(void);
@@ -51,6 +52,7 @@ void start_kernel(void)
     arch_enable_interrupts();
 
     fs_init();
+    futex_init();
     sched_init();
     fb_init();
     kbd_init();

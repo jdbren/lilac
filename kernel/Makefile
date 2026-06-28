@@ -68,6 +68,7 @@ kernel/sched.o \
 kernel/signal.o \
 kernel/smp.o \
 kernel/sync.o \
+kernel/futex.o \
 kernel/syscall.o \
 kernel/time.o \
 kernel/user.o \

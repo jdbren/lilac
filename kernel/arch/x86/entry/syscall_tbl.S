@@ -90,6 +90,7 @@ syscall_table:
 	sc_tbl_entry mprotect	# 67
 	sc_tbl_entry mremap		# 68
 	sc_tbl_entry set_tid_address	# 69
+	sc_tbl_entry futex		# 70
 /*
 	sc_tbl_entry chmod		# 30
 	sc_tbl_entry chown		# 31
