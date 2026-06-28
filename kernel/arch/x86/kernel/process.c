@@ -373,6 +373,7 @@ static void create_ucontext(ucontext_t *uc)
 
 void arch_prepare_signal(void *pc, int signo)
 {
+    static const size_t FRAME_BYTES = sizeof(struct regs_state) + sizeof(ucontext_t);
     struct regs_state *regs = (struct regs_state*)current->regs;
     klog(LOG_DEBUG, "Pre signal orginal regs: ip=%lx sp=%lx\n", regs->ip, regs->sp);
     uintptr_t *ustack = (uintptr_t*)regs->sp;
@@ -386,15 +387,21 @@ void arch_prepare_signal(void *pc, int signo)
 
     return_addr = (uintptr_t)(ustack);
 
+    /*
+     * 16 byte alignment
+     * [return addr][regs_state][ucontext][sigtramp bytes]
+     */
+    const uintptr_t sigtramp_addr = (uintptr_t)ustack;
+    const uintptr_t regs_frame = (sigtramp_addr - FRAME_BYTES) & ~0xFUL;
+    const uintptr_t uc_frame = regs_frame + sizeof(struct regs_state);
+
     // create ucontext struct
-    ustack -= sizeof(ucontext_t) / sizeof(uintptr_t);
     create_ucontext(&uc);
-    if (copy_to_user(ustack, &uc, sizeof(ucontext_t)))
+    if (copy_to_user((void*)uc_frame, &uc, sizeof(ucontext_t)))
         goto fail;
 
     // save registers onto user stack
-    ustack -= sizeof(struct regs_state) / sizeof(uintptr_t);
-    if (copy_to_user(ustack, regs, sizeof(struct regs_state)))
+    if (copy_to_user((void*)regs_frame, regs, sizeof(struct regs_state)))
         goto fail;
 
     regs->ip = (uintptr_t)pc;
@@ -402,14 +409,23 @@ void arch_prepare_signal(void *pc, int signo)
     regs->di = signo;
     regs->si = 0; // siginfo
     regs->dx = 0; // ucontext
+    ustack = (uintptr_t*)(regs_frame - sizeof(uintptr_t));
 #else
+    ustack = (uintptr_t*)regs_frame;
     *--ustack = 0; // ucontext
     *--ustack = 0; // siginfo
     *--ustack = (u32)signo; // First argument: signo
 #endif
-    // *--ustack = return_addr;
+#ifdef __x86_64__
+    if (put_user(return_addr, ustack))
+        goto fail;
+    assert(((uintptr_t)ustack & 0xFUL) == 8);
+#else
+    // x86 32-bit cdecl entry frame: [return][arg1][arg2][arg3]
     if (put_user(return_addr, --ustack))
         goto fail;
+    assert(((uintptr_t)ustack & 0xFUL) == 0);
+#endif
     regs->sp = (uintptr_t)ustack;
     return;
 fail:
