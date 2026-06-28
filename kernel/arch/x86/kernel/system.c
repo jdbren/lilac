@@ -96,6 +96,7 @@ SYSCALL_DECL2(arch_prctl, int, code, unsigned long, addr)
     if (code == ARCH_SET_FS) {
         if (!access_ok((void*)addr, 0))
             return -EFAULT;
+        current->tls = (void *)addr;
         wrmsr(IA32_FS_BASE, addr);
     } else {
         return -EINVAL;
