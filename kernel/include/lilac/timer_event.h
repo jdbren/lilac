@@ -6,29 +6,34 @@
 
 struct timer_event {
     struct rb_node node;
-    u64 expires;
+    ktime_t expires;
+    struct task *p;
     void (*callback)(struct timer_event *);
     void *context;
     struct list_head task_list;
 };
 
-bool timer_ev_less(struct rb_node *a, const struct rb_node *b);
+#define TIMER_EV_INIT(name, t, exp, cb, ctx) (struct timer_event) { \
+        .node = RB_CLEAR_NODE(&name.node), \
+        .expires = exp, \
+        .callback = (cb) ? (cb) : timer_ev_default_callback, \
+        .p = t, \
+        .context = ctx, \
+        .task_list = (struct list_head) LIST_HEAD_INIT(name.task_list) \
+    }
 
-static inline struct timer_event *
-timer_ev_add(struct timer_event *ev, struct rb_root_cached *tree)
+void timer_ev_default_callback(struct timer_event *ev);
+
+struct timer_event * create_timer_event(struct task *p,
+    ktime_t expires, void (*callback)(struct timer_event *), void *context);
+void destroy_timer_event(struct timer_event *ev);
+
+void timer_ev_enqueue(struct timer_event *ev, struct task *p);
+void timer_ev_dequeue(struct timer_event *ev);
+
+static inline bool timer_ev_queued(struct timer_event *ev)
 {
-    struct rb_node *ret = rb_add_cached(&ev->node, tree, timer_ev_less);
-    return ret ? ev : NULL;
+    return !RB_EMPTY_NODE(&ev->node);
 }
-
-static inline struct timer_event *
-timer_ev_del(struct timer_event *ev, struct rb_root_cached *tree)
-{
-    struct rb_node *ret = rb_erase_cached(&ev->node, tree);
-    RB_CLEAR_NODE(&ev->node);
-    return ret ? ev : NULL;
-}
-
-void timer_ev_tick(void);
 
 #endif

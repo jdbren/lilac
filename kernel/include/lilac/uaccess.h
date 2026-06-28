@@ -8,6 +8,10 @@
 extern int arch_user_copy(void *dst, const void *src, size_t size);
 extern int arch_strncpy_from_user(char *dst, const char *src, size_t max_size);
 extern int arch_strnlen_user(const char *str, size_t max_size);
+extern int arch_cmpxchg4_user(int __user *ptr, int oldval, int newval,
+                              int *uvalptr);
+extern int arch_cmpxchg8_user(long long __user *ptr, long long oldval,
+                              long long newval, long long *uvalptr);
 
 #define __is_code(addr, size, mm) \
     ((uintptr_t)(addr) >= mm->start_code && (uintptr_t)(addr) + size < mm->end_code)
@@ -113,11 +117,17 @@ int __put_user(const void *src, __user void *ptr, size_t size)
     return copy_to_user(ptr, src, size);
 }
 
+/**
+ * Puts a simple value into user space. Returns 0 on success, -EFAULT on error.
+ */
 #define put_user(x, ptr) ({ \
     __typeof__(*(ptr)) __put_user_val = (x); \
     __put_user(&__put_user_val, (ptr), sizeof(__put_user_val)); \
 })
 
+/**
+ * Gets a simple value from user space. Returns 0 on success, -EFAULT on error.
+ */
 #define get_user(x, ptr) ({ \
     __typeof__((x)) __get_user_val; \
     int __get_user_err = copy_from_user(&__get_user_val, (ptr), sizeof(__get_user_val)); \
@@ -125,5 +135,29 @@ int __put_user(const void *src, __user void *ptr, size_t size)
         (x) = __get_user_val; \
     __get_user_err; \
 })
+
+/**
+ * Atomically compare the 4 byte value at ptr with oldval.
+ * If they match, replace it with newval.
+ * The value at ptr is stored in *uvalptr.
+ * Returns 1 if values match or 0 if not. -EFAULT on error.
+ */
+__must_check static inline int atomic_cmpxchg4_user(int __user *ptr,
+    int oldval, int newval, int *uvalptr)
+{
+    return arch_cmpxchg4_user(ptr, oldval, newval, uvalptr);
+}
+
+/**
+ * Atomically compare the 8 byte value at ptr with oldval.
+ * If they match, replace it with newval.
+ * The value at ptr is stored in *uvalptr.
+ * Returns 1 if values match or 0 if not. -EFAULT on error.
+ */
+__must_check static inline int atomic_cmpxchg8_user(long long __user *ptr,
+    long long oldval, long long newval, long long *uvalptr)
+{
+    return arch_cmpxchg8_user(ptr, oldval, newval, uvalptr);
+}
 
 #endif
