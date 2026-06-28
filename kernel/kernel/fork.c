@@ -236,7 +236,7 @@ static void return_from_fork(void)
         }
     }
     klog(LOG_DEBUG, "PID %d: Returning from fork\n", p->pid);
-    arch_return_from_fork(p->regs, p->kstack);
+    arch_return_from_fork(p->regs, p->kstack, p->tls);
 }
 
 static void wait_for_vfork_done(struct task *p, struct waitqueue *wq)
