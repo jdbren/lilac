@@ -4,6 +4,7 @@
 #ifndef __ASSEMBLY__
 
 #include <lilac/types.h>
+#include <asm/msr.h>
 
 #ifdef __x86_64__
 struct regs_state {
@@ -55,39 +56,61 @@ void x86_print_stack_trace(struct regs_state *regs);
 static inline unsigned long read_cr0(void)
 {
     unsigned long val;
-    asm ("mov %%cr0, %0" : "=r"(val));
+    __asm__ ("mov %%cr0, %0" : "=r"(val));
     return val;
 }
 
 static inline void write_cr0(unsigned long val)
 {
-    asm ("mov %0, %%cr0" :: "r"(val));
+    __asm__ ("mov %0, %%cr0" :: "r"(val));
 }
 
 static inline unsigned long read_cr2(void)
 {
     unsigned long val;
-    asm ("mov %%cr2, %0" : "=r"(val));
+    __asm__ ("mov %%cr2, %0" : "=r"(val));
     return val;
 }
 
 static inline unsigned long read_cr3(void)
 {
     unsigned long val;
-    asm ("mov %%cr3, %0" : "=r"(val));
+    __asm__ ("mov %%cr3, %0" : "=r"(val));
     return val;
 }
 
 static inline unsigned long read_cr4(void)
 {
     unsigned long val;
-    asm ("mov %%cr4, %0" : "=r"(val));
+    __asm__ ("mov %%cr4, %0" : "=r"(val));
     return val;
 }
 
+#ifdef __x86_64__
+static inline unsigned long read_cr8(void)
+{
+    unsigned long val;
+    __asm__ ("mov %%cr8, %0" : "=r"(val));
+    return val;
+}
+
+static inline unsigned long read_xcr0(void)
+{
+    unsigned long val;
+    __asm__ ("xgetbv" : "=a"(((unsigned int*)&val)[0]),
+        "=d"(((unsigned int*)&val)[1]) : "c"(0));
+    return val;
+}
+
+static inline unsigned long read_efer(void)
+{
+    return rdmsr(IA32_EFER);
+}
+#endif
+
 static inline void wbinvd(void)
 {
-    asm volatile("wbinvd" ::: "memory");
+    __asm__ volatile ("wbinvd" ::: "memory");
 }
 
 #endif /* !__ASSEMBLY__ */

@@ -9,9 +9,26 @@ static bool print(const char *data, size_t length)
     return true;
 }
 
-static char *convert(unsigned long num, int base)
+static char *convert_upper(unsigned long num, int base)
 {
     static char Representation[]= "0123456789ABCDEF";
+    static char buffer[50];
+    char *ptr;
+
+    ptr = &buffer[49];
+    *ptr = '\0';
+
+    do {
+        *--ptr = Representation[num%base];
+        num /= base;
+    } while (num != 0);
+
+    return(ptr);
+}
+
+static char *convert_lower(unsigned long num, int base)
+{
+    static char Representation[]= "0123456789abcdef";
     static char buffer[50];
     char *ptr;
 
@@ -136,7 +153,7 @@ int vprintf(const char *restrict format, va_list args)
                 i = -i;
                 putchar('-');
             }
-            char *s = convert(i, 10);
+            char *s = convert_upper(i, 10);
             unsigned len = strlen(s);
             if (use_width) {
                 if (width < len)
@@ -161,7 +178,7 @@ int vprintf(const char *restrict format, va_list args)
         else if (*format == 'x' || *format == 'p' || *format == 'X') {
             format++;
             unsigned long i = va_arg(args, unsigned long);
-            char *s = convert(i, 16);
+            char *s = (*format == 'X') ? convert_upper(i, 16) : convert_lower(i, 16);
             unsigned int len = strlen(s);
             if (use_width) {
                 if (width < len)
@@ -186,7 +203,7 @@ int vprintf(const char *restrict format, va_list args)
         else if (*format == 'u') {
             format++;
             unsigned int i = va_arg(args, unsigned int);
-            char *s = convert(i, 10);
+            char *s = convert_upper(i, 10);
             unsigned len = strlen(s);
             if (use_width) {
 				if (width < len)
@@ -211,7 +228,7 @@ int vprintf(const char *restrict format, va_list args)
         else if (*format == 'o') {
             format++;
             unsigned int i = va_arg(args, unsigned int);
-            char *s = convert(i, 8);
+            char *s = convert_upper(i, 8);
             unsigned len = strlen(s);
             if (use_width) {
                 if (width < len)
@@ -264,7 +281,7 @@ int vprintf(const char *restrict format, va_list args)
                         i = -i;
                         putchar('-');
                     }
-                    char *s = convert(i, 10);
+                    char *s = convert_upper(i, 10);
                     unsigned len = strlen(s);
                     if (use_width) {
                         if (width < len)
@@ -286,10 +303,10 @@ int vprintf(const char *restrict format, va_list args)
                         return -1;
                     written += len;
                 }
-                else if (*format == 'x') {
+                else if (*format == 'x' || *format == 'X') {
                     format++;
                     long long i = va_arg(args, long long);
-                    char *s = convert(i, 16);
+                    char *s = (*format == 'X') ? convert_upper(i, 16) : convert_lower(i, 16);
                     unsigned len = strlen(s);
                     if (!print(s, len))
                         return -1;
@@ -298,7 +315,7 @@ int vprintf(const char *restrict format, va_list args)
                 else if (*format == 'u') {
                     format++;
                     unsigned long long i = va_arg(args, unsigned long long);
-                    char *s = convert(i, 10);
+                    char *s = convert_upper(i, 10);
                     unsigned len = strlen(s);
                     if (!print(s, len))
                         return -1;
@@ -312,16 +329,16 @@ int vprintf(const char *restrict format, va_list args)
                     i = -i;
                     putchar('-');
                 }
-                char *s = convert(i, 10);
+                char *s = convert_upper(i, 10);
                 unsigned len = strlen(s);
                 if (!print(s, len))
                     return -1;
                 written += len;
             }
-            else if (*format == 'x') {
+            else if (*format == 'x' || *format == 'X') {
                 format++;
                 unsigned long i = va_arg(args, unsigned long);
-                char *s = convert(i, 16);
+                char *s = (*format == 'X') ? convert_upper(i, 16) : convert_lower(i, 16);
                 unsigned len = strlen(s);
                 if (use_width) {
                     if (width < len)
@@ -346,7 +363,7 @@ int vprintf(const char *restrict format, va_list args)
             else if (*format == 'u') {
                 format++;
                 unsigned long i = va_arg(args, unsigned long);
-                char *s = convert(i, 10);
+                char *s = convert_upper(i, 10);
                 unsigned len = strlen(s);
                 if (!print(s, len))
                     return -1;

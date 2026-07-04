@@ -104,6 +104,7 @@ void kstatus(int status, const char *message, ...)
 
 __noreturn void kerror(const char *msg, ...)
 {
+	asm("cli");
     va_list args;
 	write_to_screen = 1;
     u64 stime = get_sys_time_ns();
@@ -121,7 +122,12 @@ __noreturn void kerror(const char *msg, ...)
 	vprintf(msg, args);
 	va_end(args);
 
-	asm("cli");
-	while (1)
-		asm("hlt");
+    if (!msg || strlen(msg) == 0 || msg[strlen(msg) - 1] != '\n')
+        putchar('\n');
+
+    arch_panic_dump_regs();
+    arch_panic_stack_trace();
+	arch_disable_interrupts();
+    for (;;)
+        arch_halt_cpu();
 }

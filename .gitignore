@@ -1,7 +1,7 @@
 # sysroot and kernel files
 /sysroot
-lilac.ker
-lilac.iso
+*.ker
+*.iso
 *.img
 
 # Build files
@@ -29,4 +29,5 @@ libc/libc.a
 init/init
 kernel/drivers/acpi/acpi.lib
 kernel/arch/*/include/generated
+kernel/kernel/symbols_table.c
 compile_commands.json

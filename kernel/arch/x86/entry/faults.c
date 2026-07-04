@@ -115,8 +115,14 @@ void pgflt_handler(long error_code, struct regs_state *frame)
         klog(LOG_DEBUG, "Page fault at %x handled by %p\n", frame->ip, handler);
         frame->ip = (uintptr_t)handler;
     } else {
-        x86_dump_regs(frame);
-        panic("Kernel page fault at %p (code %lx, cr2 %p)\n", (void*)frame->ip, error_code, (void*)addr);
+        current->regs = frame;
+        panic("Kernel page fault at %p (code %lx, cr2 %p): %s%s%s%s%s\n",
+            (void*)frame->ip, error_code, (void*)addr,
+            (error_code & X86_FAULT_PRESENT) ? "protection " : "not-present ",
+            (error_code & X86_FAULT_WRITE) ? "write " : "read ",
+            (error_code & X86_FAULT_USER) ? "user " : "kernel ",
+            (error_code & X86_FAULT_INSTR) ? "instruction-fetch " : "",
+            (error_code & X86_FAULT_RSVD) ? "reserved-bit" : "");
     }
 }
 
@@ -131,8 +137,7 @@ void gpflt_handler(long error_code, struct regs_state *frame)
         klog(LOG_WARN, "GP fault in user space at %p, sending SIGSEGV\n", frame->ip);
         do_raise(current, SIGSEGV);
     } else {
-        x86_dump_regs(frame);
-        x86_print_stack_trace(frame);
+        current->regs = frame;
         kerror("Kernel GP fault occurred\n");
     }
 }
@@ -144,14 +149,14 @@ void invldop_handler(struct regs_state *frame)
         klog(LOG_WARN, "Invalid opcode in user space at %p, sending SIGILL\n", frame->ip);
         do_raise(current, SIGILL);
     } else {
-        x86_dump_regs(frame);
+        current->regs = frame;
         kerror("Invalid opcode detected\n");
     }
 }
 
 void dblflt_handler(long error_code, struct regs_state *frame)
 {
-    x86_dump_regs(frame);
+    current->regs = frame;
     kerror("Double fault detected\n");
 }
 

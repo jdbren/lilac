@@ -57,6 +57,8 @@ $(KERNEL_ARCH_OBJS) \
 kernel/kmain.o \
 kernel/device.o \
 kernel/elf.o \
+kernel/symbols.o \
+kernel/symbols_default.o \
 kernel/fork.o \
 kernel/ioctl.o \
 kernel/log.o \
@@ -119,6 +121,10 @@ LIBK_OBJS=$(patsubst %.c,%.o,$(wildcard lib/*/*.c))
 OBJS=\
 $(KERNEL_OBJS)
 
+KSYM_GEN_SRC=kernel/symbols_table.c
+KSYM_GEN_OBJ=$(KSYM_GEN_SRC:.c=.o)
+NM_TOOL=$(shell $(CC) -print-prog-name=nm)
+
 LINK_LIST=\
 $(LDFLAGS) \
 $(KERNEL_OBJS) \
@@ -130,12 +136,40 @@ $(LIBS)
 
 all: lilac.ker
 
-lilac.ker: install-headers $(OBJS) $(LINKER_SCRIPT) acpi libk.a
+lilac.nosyms.ker: install-headers $(OBJS) $(LINKER_SCRIPT) acpi libk.a
 ifndef VERBOSE
 	@echo "	CXXLD	$@"
 	@$(CXX) -T $(LINKER_SCRIPT) -o $@ $(LINK_LIST)
 else
 	$(CXX) -T $(LINKER_SCRIPT) -o $@ $(LINK_LIST)
+endif
+
+$(KSYM_GEN_SRC): lilac.nosyms.ker
+	@echo "	GEN	$@"
+	@echo '#include <stddef.h>' > $@
+	@echo '' >> $@
+	@echo 'struct kernel_symbol_entry {' >> $@
+	@echo '    unsigned long addr;' >> $@
+	@echo '    const char *name;' >> $@
+	@echo '};' >> $@
+	@echo '' >> $@
+	@echo 'const struct kernel_symbol_entry kernel_symbol_table[] = {' >> $@
+	@$(NM_TOOL) -n $< | awk '$$2 ~ /[tTwW]/ && $$3 !~ /^\./ { \
+		name = $$3; \
+		gsub(/\\/, "\\\\", name); \
+		gsub(/"/, "\\\"", name); \
+		printf("    { 0x%sull, \"%s\" },\n", $$1, name); \
+	}' >> $@
+	@echo '};' >> $@
+	@echo '' >> $@
+	@echo 'const size_t kernel_symbol_table_count = sizeof(kernel_symbol_table) / sizeof(kernel_symbol_table[0]);' >> $@
+
+lilac.ker: $(KSYM_GEN_OBJ) lilac.nosyms.ker
+ifndef VERBOSE
+	@echo "	CXXLD	$@"
+	@$(CXX) -T $(LINKER_SCRIPT) -o $@ $(LINK_LIST) $(KSYM_GEN_OBJ)
+else
+	$(CXX) -T $(LINKER_SCRIPT) -o $@ $(LINK_LIST) $(KSYM_GEN_OBJ)
 endif
 	$(GRUB_FILE) --is-x86-multiboot2 lilac.ker
 
@@ -208,7 +242,8 @@ else
 endif
 
 clean:
-	rm -f lilac.ker libk.a
+	rm -f lilac.ker lilac.nosyms.ker libk.a
+	rm -f $(KSYM_GEN_SRC) $(KSYM_GEN_OBJ) kernel/symbols_table.d
 	rm -rf $(ARCH_GEN_INCLUDES_DIR)
 	@rm -f $(OBJS) $(OBJS:.o=.d)
 	@rm -f $(LIBK_OBJS) $(LIBK_OBJS:.o=.d)

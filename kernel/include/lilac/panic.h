@@ -12,6 +12,8 @@ extern "C" {
 #endif
 
 void print_bitmap(void);
+void arch_panic_dump_regs(void);
+void arch_panic_stack_trace(void);
 
 #ifdef DEBUG
 #define assert(x) if (unlikely(!(x))) kerror("Assertion failed: " #x)

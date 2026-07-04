@@ -1,6 +1,8 @@
 #ifndef _LILAC_COMPILER_H
 #define _LILAC_COMPILER_H
 
+#include <stddef.h>
+
 #define typeof_member(T, m)	typeof(((T*)0)->m)
 
 /* Are two types/vars the same type (ignoring qualifiers)? */
@@ -20,5 +22,6 @@
 
 #define __unused __attribute__((unused))
 #define __maybe_unused [[maybe_unused]]
+#define __weak __attribute__((weak))
 
 #endif /* _LILAC_COMPILER_H */

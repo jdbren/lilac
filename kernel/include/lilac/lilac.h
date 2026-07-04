@@ -34,16 +34,19 @@ static inline void arch_idle(void)
     }
 }
 
-__always_inline
-static inline void arch_enable_interrupts(void)
+static __always_inline void arch_enable_interrupts(void)
 {
-    asm volatile ("sti");
+    __asm__ ("sti");
 }
 
-__always_inline
-static inline void arch_disable_interrupts(void)
+static __always_inline void arch_disable_interrupts(void)
 {
-    asm volatile ("cli");
+    __asm__ ("cli");
+}
+
+static __always_inline void arch_halt_cpu(void)
+{
+    __asm__ ("hlt");
 }
 #endif // __i386__ || __x86_64__
 
