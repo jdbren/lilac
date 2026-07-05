@@ -27,4 +27,8 @@ void kvlog(int level, const char* message, va_list args);
 void kvlog_raw(const char *data, va_list args);
 void kstatus(int status, const char* message, ...);
 
+void klog_lock(void);
+void klog_unlock(void);
+void klog_raw_nolock(const char *data, ...);
+
 #endif

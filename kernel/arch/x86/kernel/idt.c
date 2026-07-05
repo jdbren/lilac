@@ -2,8 +2,12 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/types.h>
 #include <lilac/config.h>
+#include <lilac/interrupt.h>
+#include <lilac/panic.h>
+#include <lilac/percpu.h>
 #include <asm/idt.h>
 #include <asm/pic.h>
+#include <asm/regs.h>
 #include <asm/segments.h>
 
 #define IDT_SIZE 256
@@ -68,6 +72,18 @@ void flpexc();
 void align();
 void mchk();
 void simd();
+void halt_cpu();
+
+void halt_cpu_handler(struct regs_state *frame)
+{
+    __asm__ ("cli");
+    klog_lock();
+    klog_raw_nolock("CPU %d halting\n", this_cpu_id());
+    x86_print_stack_trace(frame);
+    klog_unlock();
+    for (;;)
+        __asm__ ("hlt");
+}
 
 void idt_init(void)
 {
@@ -90,7 +106,8 @@ void idt_init(void)
     idt_entry(17, (uintptr_t)align,    __KERNEL_CS, 0, INT_GATE);
     idt_entry(18, (uintptr_t)mchk,     __KERNEL_CS, 0, INT_GATE);
     idt_entry(19, (uintptr_t)simd,     __KERNEL_CS, 0, INT_GATE);
-    idt_entry(0x80, (uintptr_t)syscall_handler, __KERNEL_CS, 0, INT_GATE | DPL_3);
+    idt_entry(SYSCALL_VECTOR, (uintptr_t)syscall_handler, __KERNEL_CS, 0, INT_GATE | DPL_3);
+    idt_entry(HALT_CPU_VECTOR, (uintptr_t)halt_cpu, __KERNEL_CS, 0, INT_GATE);
 
     pic_initialize();
     pit_init();
@@ -101,6 +118,8 @@ void idt_init(void)
 #ifdef __x86_64__
 void idt_entry(int num, uintptr_t offset, u16 selector, u8 ist, u8 attr)
 {
+    if (num < 0 || num >= IDT_SIZE)
+        panic("Invalid IDT entry number %d\n", num);
     idt_entry_t *target = idt_entries + num;
     target->offset_low = offset & 0xFFFF;
     target->offset_mid = (offset >> 16) & 0xFFFF;
@@ -113,6 +132,8 @@ void idt_entry(int num, uintptr_t offset, u16 selector, u8 ist, u8 attr)
 #else
 void idt_entry(int num, u32 offset, u16 selector, u8 unused, u8 attr)
 {
+    if (num < 0 || num >= IDT_SIZE)
+        panic("Invalid IDT entry number %d\n", num);
     idt_entry_t *target = idt_entries + num;
     target->offset_low = offset & 0xFFFF;
     target->offset_high = (offset >> 16) & 0xFFFF;

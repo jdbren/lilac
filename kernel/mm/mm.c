@@ -356,7 +356,7 @@ static int mmap_unmap_range(struct mm_info *mm, uintptr_t start, uintptr_t end)
 
     acquire_lock(&mm->page_table_lock);
     drop_user_page_range(start, end - start);
-    arch_tlb_flush_mmu(&tlb);
+    tlb_shootdown(&tlb, current);
     release_lock(&mm->page_table_lock);
 
 error:

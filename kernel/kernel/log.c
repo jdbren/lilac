@@ -3,7 +3,6 @@
 #include <lilac/timer.h>
 #include <lilac/process.h>
 #include <lilac/console.h>
-#include <lilac/panic.h>
 #include <drivers/framebuffer.h>
 
 
@@ -23,6 +22,29 @@ static spinlock_t log_lock = SPINLOCK_INIT;
 void set_log_level(int level)
 {
     log_level = level;
+}
+
+void klog_lock(void)
+{
+    acquire_lock(&log_lock);
+}
+
+void klog_unlock(void)
+{
+    release_lock(&log_lock);
+}
+
+void kvlog_raw_nolock(const char *data, va_list args)
+{
+    vprintf(data, args);
+}
+
+void klog_raw_nolock(const char *data, ...)
+{
+    va_list args;
+    va_start(args, data);
+    vprintf(data, args);
+    va_end(args);
 }
 
 void kvlog_raw(const char *data, va_list args)
@@ -100,34 +122,4 @@ void kstatus(int status, const char *message, ...)
     va_end(args);
 
     release_lock(&log_lock);
-}
-
-__noreturn void kerror(const char *msg, ...)
-{
-	asm("cli");
-    va_list args;
-	write_to_screen = 1;
-    u64 stime = get_sys_time_ns();
-
-    printf("[%4lld.%09lld] ", (long long)(stime / 1000000000ll),
-        (long long)(stime % 1000000000ll));
-    putchar('[');
-	graphics_setcolor(RGB_RED, RGB_BLACK);
-	printf(" PANIC ");
-    graphics_setcolor(RGB_WHITE, RGB_BLACK);
-    putchar(']');
-    printf(" (pid %d) ", get_pid());
-
-	va_start(args, msg);
-	vprintf(msg, args);
-	va_end(args);
-
-    if (!msg || strlen(msg) == 0 || msg[strlen(msg) - 1] != '\n')
-        putchar('\n');
-
-    arch_panic_dump_regs();
-    arch_panic_stack_trace();
-	arch_disable_interrupts();
-    for (;;)
-        arch_halt_cpu();
 }

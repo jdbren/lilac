@@ -8,29 +8,40 @@
 #ifdef __x86_64__
 void x86_dump_regs(struct regs_state *regs)
 {
-    klog(LOG_DEBUG, "==================== Register state ====================\n");
-    klog(LOG_DEBUG, "task: %p\n", current);
-    klog(LOG_DEBUG, "RIP: %04lx:%016lx RSP: %04lx:%016lx EFLAGS: %08lx\n",
+    printf("==================== Register state ====================\n");
+    printf("task: %p\n", current);
+    printf("RIP: %04lx:%016lx RSP: %04lx:%016lx EFLAGS: %08lx\n",
         regs->cs, regs->ip, regs->ss, regs->sp, regs->flags);
-    klog(LOG_DEBUG, "RAX: %016lx RBX: %016lx RCX: %016lx\n", regs->ax, regs->bx, regs->cx);
-    klog(LOG_DEBUG, "RDX: %016lx RSI: %016lx RDI: %016lx\n", regs->dx, regs->si, regs->di);
-    klog(LOG_DEBUG, "RBP: %016lx  R8: %016lx  R9: %016lx\n", regs->bp, regs->r8, regs->r9);
-    klog(LOG_DEBUG, "R10: %016lx R11: %016lx R12: %016lx\n", regs->r10, regs->r11, regs->r12);
-    klog(LOG_DEBUG, "R13: %016lx R14: %016lx R15: %016lx\n", regs->r13, regs->r14, regs->r15);
-    klog(LOG_DEBUG, " FS: %016lx  GS: %016lx KGS: %016lx\n",
+    printf("RAX: %016lx RBX: %016lx RCX: %016lx\n", regs->ax, regs->bx, regs->cx);
+    printf("RDX: %016lx RSI: %016lx RDI: %016lx\n", regs->dx, regs->si, regs->di);
+    printf("RBP: %016lx  R8: %016lx  R9: %016lx\n", regs->bp, regs->r8, regs->r9);
+    printf("R10: %016lx R11: %016lx R12: %016lx\n", regs->r10, regs->r11, regs->r12);
+    printf("R13: %016lx R14: %016lx R15: %016lx\n", regs->r13, regs->r14, regs->r15);
+    printf(" FS: %016lx  GS: %016lx KGS: %016lx\n",
         rdmsr(IA32_FS_BASE), rdmsr(IA32_GS_BASE), rdmsr(IA32_KERNEL_GS_BASE));
-    klog(LOG_DEBUG, "CR0: %016lx CR2: %016lx CR3: %016lx\n",
+    printf("CR0: %016lx CR2: %016lx CR3: %016lx\n",
         read_cr0(), read_cr2(), read_cr3());
-    klog(LOG_DEBUG, "CR4: %016lx EFER: %016lx\n", read_cr4(), read_efer());
-    klog(LOG_DEBUG, "========================================================\n");
+    printf("CR4: %016lx EFER: %016lx\n", read_cr4(), read_efer());
+    printf("========================================================\n");
 }
 
 void x86_print_stack_trace(struct regs_state *regs)
 {
-    klog(LOG_DEBUG, "Call trace:\n");
+    printf("Call trace:\n");
     uintptr_t low = (uintptr_t)current->kstack_base;
     uintptr_t high = low + __KERNEL_STACK_SZ;
     uintptr_t *stack = (uintptr_t*)regs->bp;
+
+    // Print current instruction pointer first
+    uintptr_t sym_addr = 0;
+    const char *sym_name = ksym_lookup(regs->ip, &sym_addr);
+    if (sym_name && regs->ip >= sym_addr) {
+        printf("  0x%p <%s+0x%lx>\n",
+            (void*)regs->ip, sym_name, (unsigned long)(regs->ip - sym_addr));
+    } else {
+        printf("  0x%p\n", (void*)regs->ip);
+    }
+
     for (int i = 0; i < 16; i++) {
         if (!stack || (uintptr_t)stack < low || (uintptr_t)(stack + 1) >= high || !stack[1])
             break;
@@ -39,10 +50,10 @@ void x86_print_stack_trace(struct regs_state *regs)
         const char *sym_name = ksym_lookup(ret_addr, &sym_addr);
 
         if (sym_name && ret_addr >= sym_addr) {
-            klog(LOG_DEBUG, "  0x%p <%s+0x%lx>\n",
+            printf("  0x%p <%s+0x%lx>\n",
                 (void*)ret_addr, sym_name, (unsigned long)(ret_addr - sym_addr));
         } else {
-            klog(LOG_DEBUG, "  0x%p\n", (void*)ret_addr);
+            printf("  0x%p\n", (void*)ret_addr);
         }
 
         stack = (uintptr_t*)stack[0];
@@ -143,14 +154,14 @@ void arch_panic_stack_trace(void)
 #else
 void x86_dump_regs(struct regs_state *regs)
 {
-    klog(LOG_DEBUG, "Register state:\n");
-    klog(LOG_DEBUG, "  EAX: %08lx  EBX: %08lx  ECX: %08lx  EDX: %08lx\n",
+    printf("Register state:\n");
+    printf("  EAX: %08lx  EBX: %08lx  ECX: %08lx  EDX: %08lx\n",
          regs->ax, regs->bx, regs->cx, regs->dx);
-    klog(LOG_DEBUG, "  ESI: %08lx  EDI: %08lx  EBP: %08lx  ESP: %08lx\n",
+    printf("  ESI: %08lx  EDI: %08lx  EBP: %08lx  ESP: %08lx\n",
          regs->si, regs->di, regs->bp, regs->sp);
-    klog(LOG_DEBUG, "  DS:  %04lx   ES:  %04lx   FS:  %04lx   GS:  %04lx\n",
+    printf("  DS:  %04lx   ES:  %04lx   FS:  %04lx   GS:  %04lx\n",
          regs->ds, regs->es, regs->fs, regs->gs);
-    klog(LOG_DEBUG, "  EIP: %08lx  CS:  %04lx   EFLAGS: %08lx\n",
+    printf("  EIP: %08lx  CS:  %04lx   EFLAGS: %08lx\n",
          regs->ip, regs->cs, regs->flags);
 }
 
