@@ -3,6 +3,9 @@
 
 #include <stdatomic.h>
 #include <lilac/types.h>
+#if defined __x86_64__ || defined __i386__
+#include <x86gprintrin.h>
+#endif
 
 #ifndef __cplusplus
 #include <lib/list.h>
@@ -14,12 +17,6 @@ extern "C" {
 
 typedef volatile atomic_flag spinlock_t;
 #define SPINLOCK_INIT ATOMIC_FLAG_INIT
-
-#ifdef __x86_64__
-#define __pause __builtin_ia32_pause
-#else
-#define __pause __builtin_ia32_pause
-#endif
 
 #define spin_lock_init(spin) atomic_flag_clear_explicit(spin, memory_order_relaxed);
 

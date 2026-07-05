@@ -54,6 +54,7 @@ extern uintptr_t __per_cpu_offset[CONFIG_MAX_CPUS];
 #define this_cpu_ptr(ptr) per_cpu_ptr(ptr, this_cpu_id())
 #define get_cpu_var(var) this_cpu_ptr(&var)
 
+extern struct cpu_local cpu_local_storage;
 
 void percpu_mem_init(void);
 void percpu_bsp_mem_init(void);

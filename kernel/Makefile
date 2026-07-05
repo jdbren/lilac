@@ -62,6 +62,7 @@ kernel/symbols_default.o \
 kernel/fork.o \
 kernel/ioctl.o \
 kernel/log.o \
+kernel/panic.o \
 kernel/pipe.o \
 kernel/process.o \
 kernel/reboot.o \
@@ -81,6 +82,7 @@ mm/pmem.o \
 mm/init.o \
 mm/valloc.o \
 mm/fault.o \
+mm/tlb.o \
 fs/fat32/fat32.o \
 fs/fat32/dir.o \
 fs/fat32/file.o \

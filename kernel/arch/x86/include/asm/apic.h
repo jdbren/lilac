@@ -19,8 +19,8 @@
 #define APIC_REG_ERR     0x280
 #define APIC_REG_CMCI    0x2F0
 
-#define APIC_ICR_DATA    0x300
-#define APIC_ICR_SELECT  0x310
+#define APIC_ICR_LOW     0x300
+#define APIC_ICR_HIGH    0x310
 #define APIC_LVT_TIMER   0x320
 #define APIC_LVT_THERMAL 0x330
 #define APIC_LVT_PERF    0x340
@@ -32,11 +32,12 @@
 #define APIC_TIMER_CURR  0x390
 #define APIC_TIMER_DIV   0x3E0
 
+#define APIC_DELIV_FIXED     (0<<8)
 #define APIC_DELIV_LOWPRI    (1<<8)
 #define APIC_DELIV_SMI       (2<<8)
 #define APIC_DELIV_NMI       (4<<8)
-#define APIC_DELIV_EXTINT    (7<<8)
 #define APIC_DELIV_INIT      (5<<8)
+#define APIC_DELIV_STARTUP   (6<<8)
 
 #define APIC_DELIV_STATUS    (1<<12)
 
@@ -64,8 +65,21 @@
 
 #ifndef __ASSEMBLY__
 
+#include <x86gprintrin.h>
 #include <lilac/types.h>
 #include <acpi/madt.h>
+
+extern uintptr_t lapic_base;
+
+static inline void apic_write_reg(u32 reg, u32 value)
+{
+    *(volatile u32*)(lapic_base + reg) = value;
+}
+
+static inline u32 apic_read_reg(u32 reg)
+{
+    return *(volatile u32*)(lapic_base + reg);
+}
 
 void apic_init(struct madt_info *madt);
 void lapic_enable(uintptr_t apic_base);

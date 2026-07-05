@@ -130,7 +130,7 @@ void arch_unmap_all_user_vm(struct mm_info *info)
         kfree(desc);
         desc = next;
     }
-    arch_tlb_flush_mmu(&tlb);
+    tlb_shootdown(&tlb, current);
     info->mmap = NULL;
     release_lock(&info->page_table_lock);
     mmap_write_unlock(info);
