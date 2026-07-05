@@ -5,7 +5,8 @@
 
 #define SYSCALL_VECTOR 0x80
 #define TLB_SHOOTDOWN_VECTOR 0xF0
-#define HALT_CPU_VECTOR 0xFF
+#define HALT_CPU_VECTOR 0xFE
+#define SPUR_INT_VECTOR 0xFF
 
 #define __isr_handler [[gnu::interrupt]]
 

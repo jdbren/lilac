@@ -4,6 +4,7 @@
 
 #include <lilac/lilac.h>
 #include <lilac/boot.h>
+#include <lilac/interrupt.h>
 #include <lilac/timer.h>
 #include <lilac/sync.h>
 #include <mm/kmm.h>
@@ -58,8 +59,8 @@ static bool has_x2apic(void)
 /* Set the physical address for local APIC registers */
 static void cpu_set_apic_base(uintptr_t apic, bool x2apic)
 {
-    u32 edx = (apic >> 32);
-    u32 eax = (apic & 0xfffff0000) | IA32_APIC_BASE_MSR_ENABLE;
+    u32 edx = ((u64)apic >> 32);
+    u32 eax = (apic & 0xffffff000) | IA32_APIC_BASE_MSR_ENABLE;
     if (x2apic)
         eax |= 0x400;
     write_msr(IA32_APIC_BASE, eax, edx);
@@ -132,7 +133,7 @@ void lapic_enable(uintptr_t addr) {
     klog(LOG_DEBUG, "Local APIC mapped at %p\n", (void*)lapic_base);
 
     /* Set the Spurious Interrupt Vector Register bit 8 to start receiving interrupts */
-    apic_write_reg(APIC_REG_SPUR, 0xff | 0x100);
+    apic_write_reg(APIC_REG_SPUR, SPUR_INT_VECTOR | 0x100);
 
     kstatus(STATUS_OK, "BSP local APIC enabled\n");
 }
@@ -140,7 +141,7 @@ void lapic_enable(uintptr_t addr) {
 void ap_lapic_enable(void)
 {
     cpu_set_apic_base(lapic_addr_orig, false);
-    apic_write_reg(APIC_REG_SPUR, 0xff | 0x100);
+    apic_write_reg(APIC_REG_SPUR, SPUR_INT_VECTOR | 0x100);
 }
 
 
