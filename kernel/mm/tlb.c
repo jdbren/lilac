@@ -20,7 +20,9 @@ static LIST_HEAD(shootdown_queue);
 
 __isr_handler void tlb_shootdown_handler(void *frame)
 {
+#ifdef DEBUG_MM
     klog(LOG_DEBUG, "Received TLB shootdown IPI on CPU %d\n", this_cpu_id());
+#endif
     while (!down_read_trylock(&sd_queue_lock))
         __pause();
     struct tlb_shootdown *sd;
@@ -51,23 +53,22 @@ void tlb_shootdown(struct tlb_inval *tlb, struct task *task)
         __pause();
     list_add_tail(&sd.list, &shootdown_queue);
     up_write(&sd_queue_lock);
-
+#ifdef DEBUG_MM
     klog(LOG_DEBUG, "Initiating TLB shootdown for mm %p, pending mask: %lx\n",
          tlb->mm, atomic_load(&sd.pending));
+#endif
     arch_broadcast_others_ipi(TLB_SHOOTDOWN_VECTOR);
 
     arch_tlb_flush_mmu(tlb);
     sd.pending &= ~(1 << this_cpu_id());
 
-    klog(LOG_DEBUG, "Waiting for TLB shootdown completion, pending mask: %lx\n",
-         atomic_load(&sd.pending));
-
     do {
         __pause();
     } while (sd.pending);
 
+#ifdef DEBUG_MM
     klog(LOG_DEBUG, "TLB shootdown completed for mm %p\n", tlb->mm);
-
+#endif
     while (!down_write_trylock(&sd_queue_lock))
         __pause();
     list_del(&sd.list);
