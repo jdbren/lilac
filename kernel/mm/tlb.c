@@ -21,7 +21,8 @@ static LIST_HEAD(shootdown_queue);
 __isr_handler void tlb_shootdown_handler(void *frame)
 {
     klog(LOG_DEBUG, "Received TLB shootdown IPI on CPU %d\n", this_cpu_id());
-    down_read(&sd_queue_lock);
+    while (!down_read_trylock(&sd_queue_lock))
+        __pause();
     struct tlb_shootdown *sd;
     list_for_each_entry(sd, &shootdown_queue, list) {
         struct tlb_inval *tlb = sd->tlb;
@@ -44,9 +45,10 @@ void tlb_shootdown(struct tlb_inval *tlb, struct task *task)
     struct tlb_shootdown sd = {
         .tlb = tlb,
         .task = task,
-        .pending = (1 << boot_info.ncpus) - 1,
+        .pending = (1UL << boot_info.ncpus) - 1,
     };
-    down_write(&sd_queue_lock);
+    while (!down_write_trylock(&sd_queue_lock))
+        __pause();
     list_add_tail(&sd.list, &shootdown_queue);
     up_write(&sd_queue_lock);
 
@@ -66,7 +68,8 @@ void tlb_shootdown(struct tlb_inval *tlb, struct task *task)
 
     klog(LOG_DEBUG, "TLB shootdown completed for mm %p\n", tlb->mm);
 
-    down_write(&sd_queue_lock);
+    while (!down_write_trylock(&sd_queue_lock))
+        __pause();
     list_del(&sd.list);
     up_write(&sd_queue_lock);
 }
