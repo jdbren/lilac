@@ -284,12 +284,14 @@ static unsigned int count_task_vec(char *const vec[])
 
 static void do_close_on_exec(struct task *p)
 {
+    acquire_lock(&p->files->lock);
     for (size_t i = 0; i < p->files->max; i++) {
-        if (p->files->fdarray[i] && (p->files->fdarray[i]->f_mode & O_CLOEXEC)) {
+        if (p->files->fdarray[i] && is_cloexec(p->files, i)) {
             vfs_close(p->files->fdarray[i]);
             p->files->fdarray[i] = NULL;
         }
     }
+    release_lock(&p->files->lock);
 }
 
 void start_process(void)

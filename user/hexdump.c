@@ -30,6 +30,11 @@ int main(int argc, char *argv[])
 
     fseek(file, 0, SEEK_END);
     size_t size = ftell(file);
+    if (size == -1) {
+        perror("ftell");
+        fclose(file);
+        return 1;
+    }
     fseek(file, 0, SEEK_SET);
     unsigned char *buffer = malloc(size);
     if (!buffer) {
