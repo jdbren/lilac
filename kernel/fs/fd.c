@@ -14,6 +14,12 @@ struct fdtable * alloc_fdtable(unsigned int size)
         kfree(files);
         return NULL;
     }
+    files->close_on_exec = kcalloc(BITS_TO_LONGS(size), sizeof(unsigned long));
+    if (!files->close_on_exec) {
+        kfree(files->fdarray);
+        kfree(files);
+        return NULL;
+    }
     files->max = size;
     spin_lock_init(&files->lock);
     files->ref_count = 1;
@@ -31,6 +37,10 @@ static int __set_fdtsize(struct fdtable *files, unsigned int size)
     if (!tmp)
         return -ENOMEM;
     files->fdarray = tmp;
+    tmp = krealloc(files->close_on_exec, sizeof(unsigned long) * BITS_TO_LONGS(size));
+    if (!tmp)
+        return -ENOMEM;
+    files->close_on_exec = tmp;
     for (size_t i = files->max; i < size; i++)
         files->fdarray[i] = NULL;
     files->max = size;

@@ -231,6 +231,9 @@ SYSCALL_DECL3(open, const char*, path, int, flags, int, mode)
         goto error;
     }
 
+    if (flags & O_CLOEXEC)
+        set_cloexec(current->files, fd);
+
 #ifdef DEBUG_VFS
     klog(LOG_DEBUG, "VFS: Opened file %s with fd %d\n", path_buf, fd);
 #endif

@@ -35,21 +35,21 @@ SYSCALL_DECL3(fcntl, int, fd, int, cmd, unsigned long, arg)
             }
 
             if (cmd == F_DUPFD_CLOEXEC)
-                f->f_mode |= O_CLOEXEC;
+                set_cloexec(current->files, new_fd);
 
             return new_fd;
         case F_GETFL:
             return f->f_mode;
         case F_SETFL:
-            f->f_mode = (f->f_mode & O_ACCMODE) | (arg & ~(O_ACCMODE|O_CREAT|O_EXCL|O_NOCTTY|O_TRUNC));
+            f->f_mode = (f->f_mode & O_ACCMODE) | (arg & ~(O_ACCMODE|O_CREAT|O_EXCL|O_NOCTTY|O_TRUNC|O_CLOEXEC));
             return 0;
         case F_GETFD:
-            return (f->f_mode & O_CLOEXEC) ? FD_CLOEXEC : 0;
+            return is_cloexec(current->files, fd) ? FD_CLOEXEC : 0;
         case F_SETFD:
             if (arg & FD_CLOEXEC)
-                f->f_mode |= O_CLOEXEC;
+                set_cloexec(current->files, fd);
             else
-                f->f_mode &= ~O_CLOEXEC;
+                clear_cloexec(current->files, fd);
             return 0;
         default:
             return -EINVAL;
