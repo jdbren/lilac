@@ -105,6 +105,7 @@ void pgflt_handler(long error_code, struct regs_state *frame)
 
     if (error_code & X86_FAULT_USER) {
         if (!user_addr) {
+            x86_dump_regs(frame);
             do_raise(current, SIGSEGV);
         } else {
             user_page_fault(error_code, addr);
@@ -135,6 +136,7 @@ void gpflt_handler(long error_code, struct regs_state *frame)
         frame->ip = (uintptr_t)handler;
     } else if (frame->ip < __USER_STACK) { // user space fault
         klog(LOG_WARN, "GP fault in user space at %p, sending SIGSEGV\n", frame->ip);
+        x86_dump_regs(frame);
         do_raise(current, SIGSEGV);
     } else {
         current->regs = frame;

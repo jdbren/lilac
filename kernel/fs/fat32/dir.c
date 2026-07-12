@@ -224,7 +224,7 @@ int fat32_mkdir(struct inode *dir, struct dentry *new_dentry, umode_t mode)
 
     if (clst >= 0x0FFFFFF8) {
         clst = __fat_find_free_clst(disk);
-        if (clst < 0)
+        if (clst <= 0)
             panic("No free clusters\n");
         __fat_add_new_clst(disk, prev_clst, clst);
         klog(LOG_DEBUG, "Added new cluster %x to dir\n", clst);
@@ -239,7 +239,7 @@ int fat32_mkdir(struct inode *dir, struct dentry *new_dentry, umode_t mode)
     }
 
     int new_clst = __fat_find_alloc_clst(disk, 0);
-    if (new_clst < 0) {
+    if (new_clst <= 0) {
         ret = -ENOSPC;
         goto error;
     }

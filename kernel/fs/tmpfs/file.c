@@ -19,11 +19,14 @@ static ssize_t tmpfs_read(struct file *file, void *buf, size_t cnt)
     struct tmpfs_file *tmp_inode = (struct tmpfs_file*)inode->i_private;
     size_t read = 0;
 
+    if (file->f_pos >= inode->i_size)
+        return 0;
+
     if (file->f_pos + cnt > inode->i_size)
         cnt = inode->i_size - file->f_pos;
 
     unsigned char *data = tmp_inode->data + file->f_pos;
-    while (cnt-- && *data) {
+    while (cnt--) {
         *(char*)buf++ = *data++;
         read++;
     }

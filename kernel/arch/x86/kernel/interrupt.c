@@ -2,7 +2,7 @@
 #include <asm/idt.h>
 #include <asm/segments.h>
 
-int install_isr(int num, void (*handler))
+int install_isr(int num, void (*handler)(void *))
 {
     idt_entry(num, (uintptr_t)handler, __KERNEL_CS, 0, INT_GATE);
     return 0;

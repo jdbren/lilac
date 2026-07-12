@@ -117,12 +117,11 @@ off_t vfs_lseek_unlocked(struct file *file, off_t offset, int whence)
 
 off_t vfs_lseek(struct file *file, off_t offset, int whence)
 {
-    off_t ret = 0;
     if (file->f_op->lseek)
         return file->f_op->lseek(file, offset, whence);
 
     mutex_lock(&file->f_pos_lock);
-    vfs_lseek_unlocked(file, offset, whence);
+    off_t ret = vfs_lseek_unlocked(file, offset, whence);
     mutex_unlock(&file->f_pos_lock);
     return ret;
 }

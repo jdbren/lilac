@@ -36,6 +36,7 @@ INCLUDEDIR=$PREFIX/include
 echo "export BUILD=${BUILD}" >> kbuild.config
 echo "export TARGET=${TARGET}" >> kbuild.config
 echo "export HOST=${HOST}" >> kbuild.config
+echo "export ARCH=${ARCH}" >> kbuild.config
 echo "export CONFIG_${ARCH}=y" >> kbuild.config
 
 echo "export MAKE=${MAKE}" >> kbuild.config

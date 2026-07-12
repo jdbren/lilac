@@ -58,7 +58,7 @@ int fat32_create(struct inode *parent, struct dentry *new, umode_t mode)
         kerror("Need to allocate new cluster\n");
 
     long new_clst = __fat_find_free_clst(disk);
-    if (new_clst == -1)
+    if (new_clst <= 0)
         kerror("No free clusters\n");
     disk->FAT.FAT_buf[new_clst - disk->FAT.first_clst] |= 0x0fffffffUL;
 

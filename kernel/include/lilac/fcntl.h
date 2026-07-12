@@ -5,26 +5,31 @@ extern "C" {
 #endif
 #define	__LILAC_USER_FCNTL_H
 
-#define O_ACCMODE   000000003
-#define O_RDONLY    000000000
-#define O_WRONLY    000000001
-#define O_RDWR      000000002
-#define O_APPEND    000000010
-#define O_CREAT     000001000
-#define O_TRUNC     000002000
-#define O_EXCL      000004000
-#define O_NONBLOCK  000040000
-#define O_NOCTTY    000100000
-#define	O_DIRECT    000400000
-#define O_CLOEXEC   001000000
-#define O_NOFOLLOW  004000000
-#define O_DIRECTORY 010000000
-#define O_EXEC      020000000
-#define O_SEARCH    020000000
-#define O_SYNC      040000000
+#define O_ACCMODE   03
+#define O_RDONLY    00
+#define O_WRONLY    01
+#define O_RDWR      02
 
-#define O_DSYNC O_SYNC
-#define O_RSYNC O_SYNC
+#define O_CREAT        0100
+#define O_EXCL         0200
+#define O_NOCTTY       0400
+#define O_TRUNC       01000
+#define O_APPEND      02000
+#define O_NONBLOCK    04000
+#define O_DSYNC      010000
+#define O_SYNC     04010000
+#define O_RSYNC    04010000
+#define O_DIRECTORY 0200000
+#define O_NOFOLLOW  0400000
+#define O_CLOEXEC  02000000
+
+#define O_ASYNC      020000
+#define O_DIRECT     040000
+#define O_LARGEFILE 0100000
+#define O_NOATIME  01000000
+#define O_PATH    010000000
+#define O_TMPFILE 020200000
+#define O_NDELAY O_NONBLOCK
 
 /* Encoding of the file mode.  */
 
@@ -57,16 +62,28 @@ extern "C" {
 #define	F_SETFD		2	/* Set fildes flags (close on exec) */
 #define	F_GETFL		3	/* Get file flags */
 #define	F_SETFL		4	/* Set file flags */
-#define	F_GETOWN 	5	/* Get owner - for ASYNC */
-#define	F_SETOWN 	6	/* Set owner - for ASYNC */
-#define	F_GETLK  	7	/* Get record-locking information */
-#define	F_SETLK  	8	/* Set or Clear a record-lock (Non-Blocking) */
-#define	F_SETLKW 	9	/* Set or Clear a record-lock (Blocking) */
-#define	F_RGETLK 	10	/* Test a remote lock to see if it is blocked */
-#define	F_RSETLK 	11	/* Set or unlock a remote lock */
-#define	F_CNVT 		12	/* Convert a fhandle to an open fd */
-#define	F_RSETLKW 	13	/* Set or Clear remote record-lock(Blocking) */
-#define	F_DUPFD_CLOEXEC	14	/* As F_DUPFD, but set close-on-exec flag */
+
+#define F_SETOWN 8
+#define F_GETOWN 9
+#define F_SETSIG 10
+#define F_GETSIG 11
+
+#if __LONG_MAX__ == 0x7fffffffL
+#define F_GETLK 12
+#define F_SETLK 13
+#define F_SETLKW 14
+#else
+#define F_GETLK 5
+#define F_SETLK 6
+#define F_SETLKW 7
+#endif
+
+#define F_SETOWN_EX 15
+#define F_GETOWN_EX 16
+
+#define F_GETOWNER_UIDS 17
+
+#define F_DUPFD_CLOEXEC 1030
 
 /* fcntl(2) flags (l_type field of flock structure) */
 #define	F_RDLCK		1	/* read lock */

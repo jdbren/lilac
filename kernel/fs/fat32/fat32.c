@@ -145,7 +145,7 @@ void __fat_write_clst(struct fat_disk *fat_disk,
         fat_disk->sect_per_clst);
 }
 
-int __fat_get_clst_num(struct file *file, struct fat_disk *disk)
+u32 __fat_get_clst_num(struct file *file, struct fat_disk *disk)
 {
     struct fat_file *fat_file = (struct fat_file*)file->f_dentry->d_inode->i_private;
     u32 clst_num = fat_clst_value(fat_file);
@@ -153,19 +153,19 @@ int __fat_get_clst_num(struct file *file, struct fat_disk *disk)
 
     while (clst_off--) {
         if (clst_num > 0x0FFFFFF8)
-            return -1;
+            return 0;
         clst_num = fat_value(clst_num, disk);
     }
 
     return clst_num;
 }
 
-int __fat_find_free_clst(struct fat_disk *disk)
+u32 __fat_find_free_clst(struct fat_disk *disk)
 {
     u32 clst = disk->fs_info.next_free_clst;
 
     if (disk->fs_info.free_clst_cnt == 0)
-        return -1;
+        return 0;
 
     while (1) {
         if (clst > disk->FAT.last_clst)
@@ -175,10 +175,10 @@ int __fat_find_free_clst(struct fat_disk *disk)
         clst++;
     }
 
-    return -1;
+    return 0;
 }
 
-int __fat_add_new_clst(struct fat_disk *disk, u32 prev_clst, u32 new_clst)
+u32 __fat_add_new_clst(struct fat_disk *disk, u32 prev_clst, u32 new_clst)
 {
     if (prev_clst != 0)
         fat_set_value(prev_clst, new_clst, disk);
@@ -189,11 +189,11 @@ int __fat_add_new_clst(struct fat_disk *disk, u32 prev_clst, u32 new_clst)
     return new_clst;
 }
 
-int __fat_find_alloc_clst(struct fat_disk *disk, u32 prev_clst)
+u32 __fat_find_alloc_clst(struct fat_disk *disk, u32 prev_clst)
 {
     int new_clst = __fat_find_free_clst(disk);
-    if (new_clst == -1)
-        return -1;
+    if (new_clst <= 0)
+        return 0;
     return __fat_add_new_clst(disk, prev_clst, new_clst);
 }
 

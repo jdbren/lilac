@@ -10,7 +10,7 @@
 
 #define __isr_handler [[gnu::interrupt]]
 
-int install_isr(int num, void (*handler));
+int install_isr(int num, void (*handler)(void*));
 int uninstall_isr(int num);
 
 void arch_eoi(void);
