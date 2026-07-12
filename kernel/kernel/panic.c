@@ -13,7 +13,7 @@ __noreturn void kerror(const char *msg, ...)
 
 	arch_disable_interrupts();
     va_list args;
-	write_to_screen = 1;
+	console_write_screen(1);
     u64 stime = ktime_get();
 
     if (!panic_mode) {

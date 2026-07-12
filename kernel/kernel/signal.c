@@ -7,10 +7,11 @@
 #include <lilac/uaccess.h>
 #include <lilac/wait.h>
 
-#define TERM_SIG (_SIGHUP | _SIGINT | _SIGKILL | _SIGPIPE | _SIGALRM | _SIGTERM)
+#define TERM_SIG (_SIGHUP | _SIGINT | _SIGKILL | _SIGPIPE | _SIGALRM | _SIGTERM | _SIGBUS)
 #define CORE_SIG (_SIGQUIT | _SIGILL | _SIGABRT | _SIGSEGV | _SIGFPE)
 #define STOP_SIG (_SIGSTOP | _SIGTSTP | _SIGTTIN | _SIGTTOU)
 static const sigset_t unblockable = _SIGKILL | _SIGSTOP;
+static const sigset_t synchronous = _SIGSEGV | _SIGFPE | _SIGILL | _SIGBUS | _SIGTRAP;
 
 int handle_signal(void)
 {
@@ -103,13 +104,22 @@ int do_raise(struct task *p, int sig)
         return 0; // Signal already pending
     }
 
-    if (ka->sa.sa_handler == SIG_IGN) {
+    if (ka->sa.sa_handler == SIG_IGN && !sigismember(&synchronous, sig)) {
         klog(LOG_DEBUG, "Signal %d ignored by process %d\n", sig, p->pid);
         return PTR_ERR(SIG_IGN); // Ignored signal
     }
 
     sigaddset(&p->pending, sig);
     p->flags.sig_pending = 1;
+
+    if (sigisblocked(p, sig)) {
+        klog(LOG_DEBUG, "Signal %d is currently blocked for process %d\n", sig, p->pid);
+        if (sigismember(&synchronous, sig) && p == current) {
+            klog(LOG_INFO, "Process %d received cannot handle %d, terminating\n", p->pid, sig);
+            p->exit_status = WCOREDUMP(sig);
+            do_exit();
+        }
+    }
 
     if (p->state == TASK_SLEEPING && !sigisblocked(p, sig)) {
         klog(LOG_DEBUG, "Waking up process %d for signal %d\n", p->pid, sig);

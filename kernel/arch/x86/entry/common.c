@@ -64,22 +64,8 @@ void arch_panic_dump_regs(void)
 {
     struct regs_state *regs = current ? (struct regs_state*)current->regs : NULL;
 
-    if (regs) {
-        printf("==================== Register state ====================\n");
-        printf("task: %p\n", current);
-        printf("RIP: %04lx:%016lx RSP: %04lx:%016lx EFLAGS: %08lx\n",
-            regs->cs, regs->ip, regs->ss, regs->sp, regs->flags);
-        printf("RAX: %016lx RBX: %016lx RCX: %016lx\n", regs->ax, regs->bx, regs->cx);
-        printf("RDX: %016lx RSI: %016lx RDI: %016lx\n", regs->dx, regs->si, regs->di);
-        printf("RBP: %016lx  R8: %016lx  R9: %016lx\n", regs->bp, regs->r8, regs->r9);
-        printf("R10: %016lx R11: %016lx R12: %016lx\n", regs->r10, regs->r11, regs->r12);
-        printf("R13: %016lx R14: %016lx R15: %016lx\n", regs->r13, regs->r14, regs->r15);
-        printf(" FS: %016lx  GS: %016lx KGS: %016lx\n",
-            rdmsr(IA32_FS_BASE), rdmsr(IA32_GS_BASE), rdmsr(IA32_KERNEL_GS_BASE));
-        printf("CR0: %016lx CR2: %016lx CR3: %016lx\n",
-            read_cr0(), read_cr2(), read_cr3());
-        printf("CR4: %016lx EFER: %016lx\n", read_cr4(), read_efer());
-        printf("========================================================\n");
+    if (regs && regs->ip >= __KERNEL_BASE) {
+        x86_dump_regs(regs);
         return;
     }
 
@@ -115,9 +101,9 @@ void arch_panic_stack_trace(void)
     }
 
     if (!bp || bp < low || bp >= high)
-        asm volatile("mov %%rbp, %0" : "=r"(bp));
+        bp = (uintptr_t)__builtin_frame_address(0);
 
-    if (!ip)
+    if (!ip || ip < __KERNEL_BASE)
         ip = (uintptr_t)__builtin_return_address(0);
 
     printf("Call trace:\n");

@@ -282,6 +282,16 @@ static unsigned int count_task_vec(char *const vec[])
     return cnt;
 }
 
+static void do_close_on_exec(struct task *p)
+{
+    for (size_t i = 0; i < p->files->max; i++) {
+        if (p->files->fdarray[i] && (p->files->fdarray[i]->f_mode & O_CLOEXEC)) {
+            vfs_close(p->files->fdarray[i]);
+            p->files->fdarray[i] = NULL;
+        }
+    }
+}
+
 void start_process(void)
 {
     sched_post_switch_unlock();
@@ -293,6 +303,8 @@ void start_process(void)
         klog(LOG_ERROR, "Failed to load executable, exiting\n");
         exit(1);
     }
+
+    do_close_on_exec(current);
 
     mmap_write_lock(mem);
     struct vm_desc *desc = mem->mmap;
@@ -405,12 +417,11 @@ static void exec_and_return(void)
 {
     klog(LOG_DEBUG, "Entering exec_and_return, pid = %d\n", current->pid);
     struct mm_info *old_mm = current->mm;
-    struct mm_info *mem = alloc_mm_info();
+    struct mm_info *mem = arch_process_mmap(sizeof(uintptr_t) == 8);
     if (!mem) {
         panic("Failed to allocate memory for new mm_info\n");
     }
     struct task *task = current;
-    mem->pgd = old_mm->pgd;
 
     task->mm = mem;
     task->pgd = mem->pgd;

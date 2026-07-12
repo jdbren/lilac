@@ -26,7 +26,7 @@ void *acpi_isr_context;
 
 struct interrupt_frame;
 
-__isr_handler void AcpiInt(struct interrupt_frame *frame)
+__isr_handler void AcpiInt(void *frame)
 {
     printf("ACPI interrupt\n");
     (*acpi_isr)(acpi_isr_context);

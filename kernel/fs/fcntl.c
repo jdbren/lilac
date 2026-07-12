@@ -13,6 +13,10 @@ SYSCALL_DECL3(fcntl, int, fd, int, cmd, unsigned long, arg)
         return PTR_ERR(f);
     int new_fd;
 
+#ifdef DEBUG_FCNTL
+    klog(LOG_DEBUG, "fcntl fd=%d, cmd=%d, arg=%lu\n", fd, cmd, arg);
+#endif
+
     switch (cmd) {
         case F_DUPFD:
         case F_DUPFD_CLOEXEC:
@@ -30,9 +34,8 @@ SYSCALL_DECL3(fcntl, int, fd, int, cmd, unsigned long, arg)
                 return new_fd;
             }
 
-            // if (cmd == F_DUPFD_CLOEXEC) {
-            //     f->f_mode |= O_CLOEXEC;
-            // }
+            if (cmd == F_DUPFD_CLOEXEC)
+                f->f_mode |= O_CLOEXEC;
 
             return new_fd;
         case F_GETFL:

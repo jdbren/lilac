@@ -1,4 +1,4 @@
-ARCHNAME=$(shell ../scripts/target-triplet-to-arch.sh $(HOST))
+-include ../kbuild.config
 UNAME=$(shell uname)
 ifeq ($(UNAME), Linux)
 GRUB_FILE=grub2-file
@@ -10,10 +10,10 @@ CFLAGS?=-Og
 LDFLAGS?=
 LIBS?=./drivers/acpi/acpi.lib ./libk.a
 
-DESTDIR?=sysroot
+DESTDIR?=$(SYSROOT)
 PREFIX?=/usr
 EXEC_PREFIX?=$(PREFIX)
-BOOTDIR?=$(EXEC_PREFIX)/boot
+BOOTDIR?=/boot
 INCLUDEDIR?=$(PREFIX)/include
 
 FLAGS=-D__lilac__ -D__KERNEL__ -DLOG_CPUID -Werror -Iinclude -ffreestanding \
@@ -33,11 +33,14 @@ CXXFLAGS:=$(CXXFLAGS) $(FLAGS) -D_GLIBCXX_NO_ASSERTIONS \
 LDFLAGS:=$(LDFLAGS) -nostdlib
 LIBS:=$(LIBS) -lgcc -lstdc++
 
-ARCHDIR=arch/$(ARCHNAME)
 ifdef CONFIG_x86_64
+ARCHDIR=arch/x86
 include $(ARCHDIR)/make64.config
-else
+else ifdef CONFIG_x86
+ARCHDIR=arch/x86
 include $(ARCHDIR)/make32.config
+else
+$(error Unknown arch)
 endif
 
 CFLAGS:=$(CFLAGS) $(KERNEL_ARCH_CFLAGS)
