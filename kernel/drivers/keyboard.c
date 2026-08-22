@@ -205,28 +205,28 @@ void kb_code(int scancode)
     }
 
     switch (scancode) {
-        case SHIFT_PRESSED:
-            key_status_map[SHIFT_PRESSED] = 1;
-            break;
-        case SHIFT_RELEASED:
-            key_status_map[SHIFT_PRESSED] = 0;
-            break;
-        case CTRL_PRESSED:
-            key_status_map[CTRL_PRESSED] = 1;
-            break;
-        case CTRL_RELEASED:
-            key_status_map[CTRL_PRESSED] = 0;
-            break;
-        case ALT_PRESSED:
-            key_status_map[ALT_PRESSED] = 1;
-            break;
-        case ALT_RELEASED:
-            key_status_map[ALT_PRESSED] = 0;
-            break;
-        case CAPS_LOCK:
-            key_status_map[CAPS_LOCK] = !key_status_map[CAPS_LOCK];
-            break;
-        default:
+    case SHIFT_PRESSED:
+        key_status_map[SHIFT_PRESSED] = 1;
+        break;
+    case SHIFT_RELEASED:
+        key_status_map[SHIFT_PRESSED] = 0;
+        break;
+    case CTRL_PRESSED:
+        key_status_map[CTRL_PRESSED] = 1;
+        break;
+    case CTRL_RELEASED:
+        key_status_map[CTRL_PRESSED] = 0;
+        break;
+    case ALT_PRESSED:
+        key_status_map[ALT_PRESSED] = 1;
+        break;
+    case ALT_RELEASED:
+        key_status_map[ALT_PRESSED] = 0;
+        break;
+    case CAPS_LOCK:
+        key_status_map[CAPS_LOCK] = !key_status_map[CAPS_LOCK];
+        break;
+    default:
         if (scancode < (int)ARRAY_SIZE(keyboard_map) && keyboard_map[scancode]) {
             if (key_status_map[SHIFT_PRESSED] || key_status_map[CAPS_LOCK])
                 c = keyboard_map_shift[scancode];

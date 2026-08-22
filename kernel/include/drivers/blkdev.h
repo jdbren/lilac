@@ -4,7 +4,7 @@
 #include <lilac/types.h>
 #include <lilac/config.h>
 #include <lilac/sync.h>
-#include <fs/types.h>
+#include <fs/fs_type.h>
 
 struct gendisk {
     int major;
@@ -43,19 +43,22 @@ struct block_device {
     struct mutex bd_holder_lock;
 };
 
-struct blkio_buffer {
-    struct block_device *bdev;
-    u32 lba;
-    u32 sector_cnt;
-    void *buffer;
+struct blkio_desc {
+    u64 b_block;
+    u32 b_sectors;
+    struct block_device *b_bdev;
+    unsigned char *b_data;
+    struct page *b_page;
     struct list_head b_list;
 };
-
-struct gpt_part_entry;
 
 __must_check
 int add_gendisk(struct gendisk *disk);
 int scan_partitions(struct gendisk *disk);
 struct block_device *get_bdev(int major);
+
+struct blkio_desc * bread(struct block_device *bdev, u64 block_num, u32 size);
+int bwriteback(struct block_device *bdev, struct blkio_desc *buf);
+int bdrop(struct block_device *bdev, struct blkio_desc *bio);
 
 #endif

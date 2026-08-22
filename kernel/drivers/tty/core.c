@@ -144,7 +144,7 @@ int tty_open(struct inode *inode, struct file *file)
     struct tty *tty;
     struct tty_file_private *tfp;
 
-    const char *name = file->f_dentry->d_name;
+    const char *name = file->f_dentry->d_name.data;
     char lastc = name[strlen(name)-1];
     int index = -1;
 

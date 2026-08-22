@@ -195,8 +195,8 @@ int fat32_mkdir(struct inode *dir, struct dentry *new_dentry, umode_t mode)
     int ret = 0;
 
     memset(name, ' ', 8);
-    for (int i = 0; i < 8 && isprint(new_dentry->d_name[i]); i++)
-        name[i] = new_dentry->d_name[i] = toupper(new_dentry->d_name[i]);
+    for (int i = 0; i < 8 && isprint(new_dentry->d_name.data[i]); i++)
+        name[i] = new_dentry->d_name.data[i] = toupper(new_dentry->d_name.data[i]);
 
     while (clst < 0x0FFFFFF8) {
         __fat_read_clst(disk, hd, clst, (void*)buffer);

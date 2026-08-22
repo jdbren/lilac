@@ -24,6 +24,7 @@ typedef unsigned int   mode_t;
 typedef unsigned long  ino_t;
 typedef unsigned int   dev_t;
 typedef long           off_t;
+typedef long long      loff_t;
 typedef long long      off64_t;
 typedef unsigned short nlink_t;
 typedef unsigned int   blksize_t;

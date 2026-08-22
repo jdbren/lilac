@@ -161,7 +161,7 @@ char * build_absolute_path(struct dentry *d)
         kfree(tmp);
         return buf;
     } else {
-        strcpy(buf, d->d_name);
+        strcpy(buf, d->d_name.data);
     }
 
     struct dentry *cur = d->d_parent;

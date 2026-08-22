@@ -17,7 +17,7 @@ struct dentry *dlookup(struct dentry *parent, char *name)
             name[i] = toupper(name[i]);
     }
     hlist_for_each_entry(d, &parent->d_children, d_sib) {
-        if (strcmp(d->d_name, name) == 0) {
+        if (lstrcmp_cstr(&d->d_name, name) == 0) {
             dget(d);
             return d;
         }
@@ -67,7 +67,8 @@ struct dentry * alloc_dentry(struct dentry *d_parent, const char *name)
 
     new_dentry->d_parent = d_parent;
     new_dentry->d_sb = i_parent->i_sb;
-    new_dentry->d_name = (char*)strdup(name);
+    new_dentry->d_name.data = strdup(name);
+    new_dentry->d_name.len = strlen(name);
     spin_lock_init(&new_dentry->d_lock);
     INIT_HLIST_HEAD(&new_dentry->d_children);
     INIT_HLIST_NODE(&new_dentry->d_sib);
@@ -78,7 +79,7 @@ struct dentry * alloc_dentry(struct dentry *d_parent, const char *name)
 
 void destroy_dentry(struct dentry *d)
 {
-    kfree(d->d_name);
+    kfree(d->d_name.data);
     kfree(d);
 }
 

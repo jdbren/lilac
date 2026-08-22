@@ -3,12 +3,12 @@
 
 #include <lilac/config.h>
 #include <lilac/types.h>
-#include <lib/list.h>
-// #include <lib/list_bl.h>
 #include <lilac/sync.h>
 #include <lilac/fdtable.h>
+#include <lib/list.h>
+#include <lib/lstr.h>
+#include <fs/fs_type.h>
 #include <fs/path.h>
-#include <fs/types.h>
 #include <fs/fcntl.h>
 
 /**
@@ -77,7 +77,7 @@ struct dentry {
     spinlock_t  d_lock;
     // struct hlist_bl_node d_hash; /* lookup hash list */
     struct dentry *d_parent;        /* parent directory */
-    char *d_name;
+    struct lstr d_name;
     struct inode *d_inode;          /* Where the name belongs to - NULL is negative */
 
     const struct dentry_operations *d_op;
@@ -166,6 +166,7 @@ struct file {
     struct mutex    f_pos_lock;
     struct dentry  *f_dentry;
     struct inode   *f_inode;
+    u64             f_version;
 
     const struct file_operations *f_op;
     union {

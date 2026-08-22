@@ -91,7 +91,7 @@ ssize_t fat32_write(struct file *file, const void *file_buf, size_t count)
     start_clst = fat32_get_or_alloc_clst_num(file, disk);
     if (start_clst == 0) {
         klog(LOG_ERROR, "fat32_write: no space to map cluster for %s (pos=%lu len=%lu)\n",
-            file->f_dentry ? file->f_dentry->d_name : "<unknown>", file->f_pos, count);
+            file->f_dentry ? file->f_dentry->d_name.data : "<unknown>", file->f_pos, count);
         bytes_written = -ENOSPC;
         goto out;
     }
@@ -99,7 +99,7 @@ ssize_t fat32_write(struct file *file, const void *file_buf, size_t count)
     if (offset) {
         if (__do_fat32_read(file, start_clst, buffer, 1) < 0) {
             klog(LOG_ERROR, "fat32_write: failed pre-read for partial write %s (pos=%lu)\n",
-                file->f_dentry ? file->f_dentry->d_name : "<unknown>", file->f_pos);
+                file->f_dentry ? file->f_dentry->d_name.data : "<unknown>", file->f_pos);
             bytes_written = -EIO;
             goto out;
         }
@@ -110,7 +110,7 @@ ssize_t fat32_write(struct file *file, const void *file_buf, size_t count)
     bytes_written = __do_fat32_write(file, start_clst, buffer, num_clst);
     if (bytes_written < 0) {
         klog(LOG_ERROR, "fat32_write: write failed for %s (pos=%lu len=%lu err=%ld)\n",
-            file->f_dentry ? file->f_dentry->d_name : "<unknown>", file->f_pos,
+            file->f_dentry ? file->f_dentry->d_name.data : "<unknown>", file->f_pos,
             count, bytes_written);
         goto out;
     }

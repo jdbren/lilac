@@ -24,7 +24,6 @@
 #define MIN_ALLOC_POWER (MIN_ALLOC == 4 ? 2 : \
                         MIN_ALLOC == 8 ? 3 : -1)
 #define RETAIN_FREE_SUPERBLOCK_COUNT 10
-#define PAGE_MASK (~(PAGE_SIZE - 1))
 #define is_aligned(POINTER, BYTE_COUNT) \
     (((uintptr_t)(POINTER)) % (BYTE_COUNT) == 0)
 

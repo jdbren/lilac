@@ -53,7 +53,7 @@ pdpte_t * get_or_alloc_pdpt(pml4e_t *pml4, void *virt, u16 flags)
 #ifdef DEBUG_MM
     mm_dbg_page_table_pages_alloc++;
 #endif
-        pml4[pml4_ndx] = virt_to_phys(get_zeroed_page()) | flags | PG_WRITE |
+    pml4[pml4_ndx] = virt_to_phys(get_zeroed_page()) | flags | PG_WRITE |
             PG_PRESENT;
 #ifdef DEBUG_PAGING
         klog(LOG_DEBUG, "Allocated PDPT at %p for %p\n",
@@ -70,7 +70,7 @@ pde_t * get_or_alloc_pd(pdpte_t *pdpt, void *virt, u16 flags)
 #ifdef DEBUG_MM
     mm_dbg_page_table_pages_alloc++;
 #endif
-        pdpt[pdpt_ndx] = virt_to_phys(get_zeroed_page()) | flags | PG_WRITE |
+    pdpt[pdpt_ndx] = virt_to_phys(get_zeroed_page()) | flags | PG_WRITE |
             PG_PRESENT;
 #ifdef DEBUG_PAGING
         klog(LOG_DEBUG, "Allocated PD at %p for %p\n",
@@ -87,7 +87,7 @@ pte_t * get_or_alloc_pt(pde_t *pd, void *virt, u16 flags)
 #ifdef DEBUG_MM
     mm_dbg_page_table_pages_alloc++;
 #endif
-        pd[pd_ndx] = virt_to_phys(get_zeroed_page()) | flags | PG_WRITE |
+    pd[pd_ndx] = virt_to_phys(get_zeroed_page()) | flags | PG_WRITE |
             PG_PRESENT;
 #ifdef DEBUG_PAGING
         klog(LOG_DEBUG, "Allocated PT at %p for %p\n",

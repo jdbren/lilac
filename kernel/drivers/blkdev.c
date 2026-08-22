@@ -1,9 +1,11 @@
+#include <drivers/blkdev.h>
+
 #include <lilac/log.h>
 #include <lilac/libc.h>
 #include <lilac/err.h>
-#include <drivers/blkdev.h>
 #include <lilac/fs.h>
 #include <mm/kmalloc.h>
+#include <mm/page.h>
 #include <fs/mbr.h>
 #include <fs/gpt.h>
 
@@ -159,5 +161,53 @@ static int create_block_dev(struct gendisk *disk,
     // Register with vfs
     // mount_bdev(bdev, type);
 
+    return 0;
+}
+
+struct blkio_desc * bread(struct block_device *bdev, u64 block_num, u32 size)
+{
+    struct gendisk *disk = bdev->disk;
+    struct blkio_desc *bio;
+
+    if (size % disk->sector_size != 0) {
+        klog(LOG_ERROR, "Read size must be a multiple of sector size\n");
+        return NULL;
+    }
+
+    bio = kzmalloc(sizeof(struct blkio_desc));
+    if (!bio)
+        return ERR_PTR(-ENOMEM);
+
+    bio->b_block = block_num;
+    bio->b_sectors = size / disk->sector_size;
+    bio->b_bdev = bdev;
+    bio->b_data = get_free_pages(size >> PAGE_SHIFT, 0);
+    if (!bio->b_data) {
+        kfree(bio);
+        return ERR_PTR(-ENOMEM);
+    }
+    bio->b_page = virt_to_page(bio->b_data);
+    INIT_LIST_HEAD(&bio->b_list);
+
+    disk->ops->disk_read(bdev->disk, bdev->first_sector_lba + block_num,
+        bio->b_data, bio->b_sectors);
+
+    return bio;
+}
+
+int bwriteback(struct block_device *bdev, struct blkio_desc *bio)
+{
+    struct gendisk *disk = bdev->disk;
+    int ret = disk->ops->disk_write(bdev->disk,
+        bdev->first_sector_lba + bio->b_block, bio->b_data, bio->b_sectors);
+    free_pages(bio->b_data, (bio->b_sectors * disk->sector_size) >> PAGE_SHIFT);
+    kfree(bio);
+    return ret;
+}
+
+int bdrop(struct block_device *bdev, struct blkio_desc *bio)
+{
+    free_pages(bio->b_data, (bio->b_sectors * bdev->disk->sector_size) >> PAGE_SHIFT);
+    kfree(bio);
     return 0;
 }

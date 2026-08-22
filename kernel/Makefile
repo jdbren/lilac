@@ -117,6 +117,7 @@ drivers/tty/fbcon.o \
 drivers/tty/ldisc.o \
 drivers/tty/vt.o \
 lib/icxxabi.o \
+lib/lstr.o \
 lib/operators.o \
 lib/multiboot.o \
 lib/rbtree.o

@@ -118,8 +118,8 @@ int vfs_mount(const char *source, const char *target,
     }
     sb->s_root = dentry;
 
-    dentry->d_name = kzmalloc(strlen(new_dentry->d_name)+1);
-    strcpy(dentry->d_name, new_dentry->d_name);
+    dentry->d_name.data = kzmalloc(new_dentry->d_name.len + 1);
+    strcpy(dentry->d_name.data, new_dentry->d_name.data);
     dentry->d_parent = parent;
     dentry->d_sb = sb;
 

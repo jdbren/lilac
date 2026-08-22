@@ -156,7 +156,7 @@ struct dentry *fat32_lookup(struct inode *parent, struct dentry *find,
     if (!info)
         return ERR_PTR(-ENOMEM);
 
-    if ((err = fat32_find(parent, find->d_name, info)) == 0) {
+    if ((err = fat32_find(parent, find->d_name.data, info)) == 0) {
         inode = fat_build_inode(parent->i_sb, info);
         if (IS_ERR(inode)) {
             kfree(info);

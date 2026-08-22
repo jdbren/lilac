@@ -9,6 +9,7 @@
 #undef PAGE_SIZE
 #define PAGE_SIZE           4096
 #define PAGE_SHIFT          12
+#define PAGE_MASK           (~(PAGE_SIZE-1))
 
 #ifdef __x86_64__
 #define __PHYS_MAP_ADDR     0xffff900000000000ULL

@@ -53,14 +53,15 @@ void fat_get_sfn(struct fat_file *entry, char *buffer)
 void get_fat_name(char fatname[12], const struct dentry *find)
 {
     int i, j;
-    const char *dot = strchr(find->d_name, '.');
+    const char *d_name = find->d_name.data;
+    const char *dot = strchr(d_name, '.');
     memset(fatname, ' ', 11);
     fatname[11] = '\0';
 
     // Copy up to 8 characters for the base name, stop at a dot
-    for (i = 0, j = 0; i < 8 && find->d_name[j] != '\0' &&
-         find->d_name[j] != '.'; i++, j++) {
-        fatname[i] = toupper(find->d_name[j]);
+    for (i = 0, j = 0; i < 8 && d_name[j] != '\0' &&
+         d_name[j] != '.'; i++, j++) {
+        fatname[i] = toupper(d_name[j]);
     }
 
     if (dot) {

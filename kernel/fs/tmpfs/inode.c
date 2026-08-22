@@ -22,7 +22,7 @@ static struct dentry *tmpfs_lookup(struct inode *dir, struct dentry *dentry,
     size_t i;
 
     for (i = 0; i < parent->num_entries; i++) {
-        if (!strcmp(entry->name, dentry->d_name)) {
+        if (!lstrcmp_cstr(&dentry->d_name, entry->name)) {
             iget(entry->inode);
             dentry->d_inode = entry->inode;
             return dentry;
@@ -63,7 +63,7 @@ tmpfs_create(struct inode *parent, struct dentry *new_dentry, umode_t mode)
         parent_dir->num_entries - 1;
     memset(new_entry, 0, sizeof(*new_entry));
     new_entry->inode = new_inode;
-    strcpy(new_entry->name, new_dentry->d_name);
+    strcpy(new_entry->name, new_dentry->d_name.data);
     new_entry->type = TMPFS_FILE;
 
     return 0;
@@ -94,7 +94,7 @@ static int tmpfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
     struct tmpfs_entry *new_entry = parent->children + parent->num_entries - 1;
     new_entry->inode = new_inode;
-    strcpy(new_entry->name, dentry->d_name);
+    strcpy(new_entry->name, dentry->d_name.data);
     new_entry->type = TMPFS_DIR;
 
     return 0;
@@ -112,7 +112,7 @@ static int tmpfs_rmdir(struct inode *dir, struct dentry *dentry)
 
     for (unsigned long i = 0; i < parent_dir->num_entries; i++) {
         struct tmpfs_entry *entry = &parent_dir->children[i];
-        if (entry->inode == inode && strcmp(entry->name, dentry->d_name) == 0) {
+        if (entry->inode == inode && strcmp(entry->name, dentry->d_name.data) == 0) {
             // Remove entry by shifting others
             for (unsigned long j = i; j < parent_dir->num_entries - 1; j++) {
                 parent_dir->children[j] = parent_dir->children[j + 1];
@@ -151,7 +151,7 @@ tmpfs_link(struct dentry *old_d, struct inode *dir, struct dentry *new_d)
     struct tmpfs_entry *new_entry = dir_info->children + dir_info->num_entries - 1;
     memset(new_entry, 0, sizeof(*new_entry));
     new_entry->inode = old_inode;
-    strcpy(new_entry->name, new_d->d_name);
+    strcpy(new_entry->name, new_d->d_name.data);
     new_entry->type = S_ISDIR(old_inode->i_mode) ? TMPFS_DIR : TMPFS_FILE;
 
     return 0;
@@ -164,7 +164,7 @@ static int tmpfs_unlink(struct inode *dir, struct dentry *dentry)
 
     for (unsigned long i = 0; i < dir_info->num_entries; i++) {
         struct tmpfs_entry *entry = &dir_info->children[i];
-        if (entry->inode == inode && strcmp(entry->name, dentry->d_name) == 0) {
+        if (entry->inode == inode && lstrcmp_cstr(&dentry->d_name, entry->name) == 0) {
             // Remove entry by shifting others
             for (unsigned long j = i; j < dir_info->num_entries - 1; j++) {
                 dir_info->children[j] = dir_info->children[j + 1];
@@ -206,7 +206,7 @@ tmpfs_symlink(struct inode *dir, struct dentry *link_d, const char *target)
         parent_dir->num_entries - 1;
     memset(new_entry, 0, sizeof(*new_entry));
     new_entry->inode = new_inode;
-    strcpy(new_entry->name, link_d->d_name);
+    strcpy(new_entry->name, link_d->d_name.data);
     new_entry->type = TMPFS_SYMLINK;
 
     return 0;

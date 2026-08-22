@@ -75,7 +75,8 @@ static int user_page_fault(long error, uintptr_t addr)
         goto out;
     }
 #if defined DEBUG_VMA || defined DEBUG_MM
-    klog(LOG_DEBUG, "Found VMA %lx-%lx for faulting address %lx\n", vma->start, vma->end, addr);
+    klog(LOG_DEBUG, "Found VMA %lx-%lx for faulting address %lx\n", 
+        vma->start, vma->end, addr);
     klog(LOG_DEBUG, "VMA flags: %x\n", vma->vm_flags);
 #endif
     int fault_ret = mm_fault(vma, addr, get_fault_flags(error));
