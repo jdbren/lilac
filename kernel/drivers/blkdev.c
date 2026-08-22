@@ -179,7 +179,7 @@ struct blkio_desc * bread(struct block_device *bdev, u64 block_num, u32 size)
         return ERR_PTR(-ENOMEM);
 
     bio->b_block = block_num;
-    bio->b_sectors = size / disk->sector_size;
+    bio->b_size = size;
     bio->b_bdev = bdev;
     bio->b_data = get_free_pages(size >> PAGE_SHIFT, 0);
     if (!bio->b_data) {
@@ -190,7 +190,7 @@ struct blkio_desc * bread(struct block_device *bdev, u64 block_num, u32 size)
     INIT_LIST_HEAD(&bio->b_list);
 
     disk->ops->disk_read(bdev->disk, bdev->first_sector_lba + block_num,
-        bio->b_data, bio->b_sectors);
+        bio->b_data, size / disk->sector_size);
 
     return bio;
 }
@@ -199,15 +199,15 @@ int bwriteback(struct block_device *bdev, struct blkio_desc *bio)
 {
     struct gendisk *disk = bdev->disk;
     int ret = disk->ops->disk_write(bdev->disk,
-        bdev->first_sector_lba + bio->b_block, bio->b_data, bio->b_sectors);
-    free_pages(bio->b_data, (bio->b_sectors * disk->sector_size) >> PAGE_SHIFT);
+        bdev->first_sector_lba + bio->b_block, bio->b_data, bio->b_size / disk->sector_size);
+    free_pages(bio->b_data, bio->b_size >> PAGE_SHIFT);
     kfree(bio);
     return ret;
 }
 
 int bdrop(struct block_device *bdev, struct blkio_desc *bio)
 {
-    free_pages(bio->b_data, (bio->b_sectors * bdev->disk->sector_size) >> PAGE_SHIFT);
+    free_pages(bio->b_data, bio->b_size >> PAGE_SHIFT);
     kfree(bio);
     return 0;
 }

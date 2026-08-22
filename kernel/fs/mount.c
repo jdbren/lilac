@@ -34,6 +34,8 @@ static enum fs_type str_to_fs(const char *fs_type)
 {
     if (!strcmp(fs_type, "msdos"))
         return MSDOS;
+    else if (!strcmp(fs_type, "ext2"))
+        return EXT2;
     else if (!strcmp(fs_type, "tmpfs"))
         return TMPFS;
     else

@@ -45,7 +45,7 @@ struct block_device {
 
 struct blkio_desc {
     u64 b_block;
-    u32 b_sectors;
+    size_t b_size;
     struct block_device *b_bdev;
     unsigned char *b_data;
     struct page *b_page;
