@@ -37,6 +37,7 @@ void start_kernel(void)
     graphics_init();
     console_init();
     kstatus(STATUS_OK, "Booting LilacOS v"KERNEL_VERSION" (on "KERNEL_ARCH")\n");
+    klog(LOG_INFO, "Boot args: %s\n", boot_info.mbd.cmdline);
 
     acpi_early_init();
     percpu_mem_init();

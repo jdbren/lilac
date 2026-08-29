@@ -138,6 +138,7 @@ isr_no_err flpexc
 isr_err    align
 isr_no_err mchk
 isr_no_err simd
+
 isr_no_err halt_cpu
 
 # isr_no_err 20

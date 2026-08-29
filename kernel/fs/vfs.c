@@ -3,6 +3,7 @@
 #include <lilac/fs.h>
 
 #include <lilac/lilac.h>
+#include <lilac/boot.h>
 #include <lilac/libc.h>
 #include <lilac/syscall.h>
 #include <lilac/device.h>
@@ -13,6 +14,7 @@
 #include <fs/fcntl.h>
 #include <fs/fat32.h>
 #include <fs/tmpfs.h>
+#include <fs/ext2.h>
 
 #include "utils.h"
 
@@ -35,10 +37,17 @@ struct dentry * get_root_dentry(void)
 }
 
 
-static void root_init(struct block_device *bdev)
+static void root_init(struct block_device *bdev, enum fs_type type)
 {
+    if (!bdev)
+        kerror("Invalid block device for root\n");
+    if (type <= NONE || type >= MAX_FS_TYPES)
+        kerror("Invalid filesystem type for root\n");
+
     struct super_block *sb = alloc_sb(bdev);
-    struct vfsmount *root_disk = get_empty_vfsmount(bdev->type);
+    struct vfsmount *root_disk = get_empty_vfsmount(type);
+    if (!root_disk)
+        kerror("Failed to get empty vfsmount for root\n");
 
     root_disk->mnt_sb = sb;
 
@@ -58,23 +67,70 @@ static void root_init(struct block_device *bdev)
     klog(LOG_INFO, "%s mounted on /\n", bdev->name);
 }
 
+static bool get_root_uuid(const char *boot_args, char *root_uuid)
+{
+    const char *uuid_start = strstr(boot_args, "root=");
+    if (!uuid_start)
+        return false;
+    uuid_start += 5; // Skip "root="
+    const char *uuid_end = strchr(uuid_start, ' ');
+    if (!uuid_end)
+        uuid_end = boot_args + strlen(boot_args);
+
+    size_t uuid_len = uuid_end - uuid_start;
+    strncpy(root_uuid, uuid_start, uuid_len);
+    root_uuid[uuid_len] = '\0';
+    return true;
+}
+
+static bool get_root_fstype(const char *boot_args, char *root_fstype)
+{
+    const char *fstype_start = strstr(boot_args, "rootfstype=");
+    if (!fstype_start)
+        return false;
+    fstype_start += 11; // Skip "rootfstype="
+    const char *fstype_end = strchr(fstype_start, ' ');
+    if (!fstype_end)
+        fstype_end = boot_args + strlen(boot_args);
+
+    size_t fstype_len = fstype_end - fstype_start;
+    strncpy(root_fstype, fstype_start, fstype_len);
+    root_fstype[fstype_len] = '\0';
+    return true;
+}
+
 void fs_init(void)
 {
-    int dev_major = SATA_DEVICE;
     struct block_device *bdev;
+    char root_uuid[37];
+    char root_fstype[16];
+    if (!get_root_uuid(boot_info.mbd.cmdline, root_uuid))
+        kerror("Failed to get root UUID from boot args\n");
+    if (!get_root_fstype(boot_info.mbd.cmdline, root_fstype))
+        kerror("Failed to get root filesystem type from boot args\n");
 
     if (scan_partitions(NULL))
         kerror("Partition scan failed\n");
-    bdev = get_bdev(dev_major);
+    bdev = get_bdev_by_uuid(root_uuid);
     if (!bdev)
         kerror("Failed to get root block device\n");
 
-    root_init(bdev);
+    root_init(bdev, str_to_fstype(root_fstype));
 
-    vfs_mount("tmpfs", "/tmp", "tmpfs", 0, NULL);
-    vfs_mount("tmpfs", "/dev", "tmpfs", 0, NULL);
+    struct block_device *tmp_bdev = kzmalloc(sizeof(struct block_device));
+    struct block_device *dev_bdev = kzmalloc(sizeof(struct block_device));
+    if (!tmp_bdev || !dev_bdev)
+        kerror("Failed to allocate block devices\n");
+    strcpy(tmp_bdev->name, "tmpfs");
+    strcpy(dev_bdev->name, "devfs");
+
+    vfs_mount(tmp_bdev, "/tmp", "tmpfs", 0, NULL);
+    vfs_mount(dev_bdev, "/dev", "tmpfs", 0, NULL);
     vfs_create("/dev/null", 0);
     vfs_create("/dev/zero", 0);
+
+    // Test
+    // vfs_mount(get_bdev_by_uuid("5376933F-2B06-489B-843D-3535E656468E"), "/mnt", "ext2", 0, NULL);
 
     kstatus(STATUS_OK, "Filesystem initialized\n");
 }

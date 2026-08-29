@@ -30,7 +30,7 @@ static int validate_params(const char *source, const char *target,
     return 0;
 }
 
-static enum fs_type str_to_fs(const char *fs_type)
+enum fs_type str_to_fstype(const char *fs_type)
 {
     if (!strcmp(fs_type, "msdos"))
         return MSDOS;
@@ -66,18 +66,18 @@ static struct dentry * get_final_dentry(struct dentry * parent, const char *path
 }
 
 // TODO: Implement device layer in fs
-int vfs_mount(const char *source, const char *target,
+int vfs_mount(struct block_device *srcdev, const char *target,
         const char *filesystemtype, unsigned long mountflags,
         const void *data)
 {
-    void *device = NULL; // str_to_device(source);
+    // void *device = NULL; // str_to_device(source);
     struct super_block *sb;
     struct dentry *dentry;
     struct vfsmount *mnt;
-    enum fs_type type = str_to_fs(filesystemtype);
+    enum fs_type type = str_to_fstype(filesystemtype);
     long err = 0;
 
-    err = validate_params(source, target, type, mountflags);
+    err = validate_params(srcdev->name, target, type, mountflags);
     if (err)
         return err;
 
@@ -105,15 +105,11 @@ int vfs_mount(const char *source, const char *target,
         parent->d_inode->i_op->mkdir(parent->d_inode, new_dentry, 0);
     }
 
-    struct block_device *bdev = kzmalloc(sizeof(struct block_device));
-    if (!bdev)
-        return -ENOMEM;
-    bdev->type = type;
-    sb = alloc_sb(bdev);
+    sb = alloc_sb(srcdev);
     if (IS_ERR(sb))
         return PTR_ERR(sb);
 
-    dentry = mnt->init_fs(device, sb); // Todo: add error handling
+    dentry = mnt->init_fs(srcdev, sb); // Todo: add error handling
     if (IS_ERR_OR_NULL(dentry)) {
         destroy_sb(sb);
         return -ENODEV;
@@ -129,7 +125,7 @@ int vfs_mount(const char *source, const char *target,
     mnt->mnt_root = dentry;
     new_dentry->d_mount = mnt;
 
-    klog(LOG_DEBUG, "Mounted %s on %s\n", source, target);
+    klog(LOG_DEBUG, "Mounted %s on %s\n", srcdev->name, target);
 
     return 0;
 }

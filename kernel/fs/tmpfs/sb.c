@@ -41,6 +41,7 @@ static void tmpfs_destroy_inode(struct inode *inode)
 struct dentry* tmpfs_init(void *device, struct super_block *sb)
 {
     klog(LOG_DEBUG, "Initializing tmpfs\n");
+    sb->s_type = TMPFS;
     sb->s_op = &tmpfs_sops;
     sb->s_blocksize = 0x1000;
     sb->s_maxbytes = 0xfffff;

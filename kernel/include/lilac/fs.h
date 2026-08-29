@@ -117,6 +117,7 @@ struct super_block {
     struct list_head    s_inodes;    /* all inodes for this fs */
 
     void *s_fs_info;    /* Filesystem private info */
+    unsigned long       s_blocksize_bits;
 };
 
 struct writeback_control {
@@ -204,7 +205,7 @@ int vfs_close(struct file *file);
 ssize_t vfs_getdents(struct file *file, struct dirent *dirp, int buf_size);
 int vfs_create(const char *path, umode_t mode);
 int vfs_mkdir(const char *path, umode_t mode);
-int vfs_mount(const char *source, const char *target,
+int vfs_mount(struct block_device *srcdev, const char *target,
         const char *filesystemtype, unsigned long mountflags,
         const void *data);
 int vfs_umount(const char *target);
@@ -242,5 +243,6 @@ typedef struct dentry *(*fs_init_func_t)(void*, struct super_block*);
 struct dentry * get_root_dentry(void);
 struct vfsmount * get_empty_vfsmount(enum fs_type type);
 fs_init_func_t get_fs_init(enum fs_type type);
+enum fs_type str_to_fstype(const char *fs_type);
 
 #endif
