@@ -6,13 +6,13 @@
 #include <lilac/config.h>
 
 __maybe_unused
-static inline u64 next_pow_2(u64 x)
+static inline unsigned long next_pow_2(unsigned long x)
 {
     return 1ULL << (64 - __builtin_clzl(x - 1));
 }
 
-__maybe_unused
-static inline bool is_pow_2(u64 x)
+static inline __attribute__((const))
+bool is_pow_2(unsigned long x)
 {
     return (x != 0) && ((x & (x - 1)) == 0);
 }

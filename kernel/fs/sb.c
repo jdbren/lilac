@@ -12,7 +12,6 @@ struct super_block * alloc_sb(struct block_device *bdev)
 
     sb->s_blocksize = 0x1000;
     sb->s_maxbytes = __INT32_MAX__;
-    sb->s_type = bdev->type;
     sb->s_count = 1;
     sb->s_active = true;
     sb->s_bdev = bdev;

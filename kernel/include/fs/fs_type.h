@@ -8,7 +8,8 @@ enum fs_type {
     NONE = -1,
     MSDOS,
     EXT2,
-    TMPFS
+    TMPFS,
+    MAX_FS_TYPES
 };
 
 /*

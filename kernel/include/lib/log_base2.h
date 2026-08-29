@@ -104,4 +104,32 @@ static int __ilog2_u64(u64 n)
 	__ilog2_u64(n)			\
 )
 
+static inline __attribute__((const))
+int __order_base_2(unsigned long n)
+{
+	return n > 1 ? ilog2(n - 1) + 1 : 0;
+}
+
+/**
+ * order_base_2 - calculate the (rounded up) base 2 order of the argument
+ * @n: parameter
+ *
+ * The first few values calculated by this routine:
+ *  ob2(0) = 0
+ *  ob2(1) = 0
+ *  ob2(2) = 1
+ *  ob2(3) = 2
+ *  ob2(4) = 2
+ *  ob2(5) = 3
+ *  ... and so on.
+ */
+#define order_base_2(n)				\
+(						\
+	__builtin_constant_p(n) ? (		\
+		((n) == 0 || (n) == 1) ? 0 :	\
+		ilog2((n) - 1) + 1) :		\
+	__order_base_2(n)			\
+)
+
+
 #endif

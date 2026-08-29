@@ -1,13 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 #include <lilac/fs.h>
 
-enum fs_type {
-    NONE = -1,
-    MSDOS,
-    EXT2,
-    TMPFS
-};
-
 /*
  * fs on-disk file type to dirent file type conversion
  */
