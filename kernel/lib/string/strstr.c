@@ -39,7 +39,7 @@ static char *twoway_strstr(const unsigned char *h, const unsigned char *n)
     size_t byteset[32 / sizeof(size_t)] = { 0 };
     size_t *shift = kcalloc(256, sizeof(size_t));
     if (!shift)
-        return ERR_PTR(-ENOMEM);
+        return NULL;
 
     /* Computing length of needle and fill shift table */
     for (l=0; n[l] && h[l]; l++)
