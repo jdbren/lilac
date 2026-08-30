@@ -86,6 +86,11 @@ mm/init.o \
 mm/valloc.o \
 mm/fault.o \
 mm/tlb.o \
+fs/ext2/sb.o \
+fs/ext2/inode.o \
+fs/ext2/dir.o \
+fs/ext2/file.o \
+fs/ext2/block.o \
 fs/fat32/fat32.o \
 fs/fat32/dir.o \
 fs/fat32/file.o \
@@ -95,10 +100,6 @@ fs/fat32/open.o \
 fs/tmpfs/inode.o \
 fs/tmpfs/file.o \
 fs/tmpfs/sb.o \
-fs/ext2/sb.o \
-fs/ext2/inode.o \
-fs/ext2/dir.o \
-fs/ext2/block.o \
 fs/vfs.o \
 fs/sb.o \
 fs/file.o \

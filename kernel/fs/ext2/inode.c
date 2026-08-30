@@ -202,8 +202,13 @@ struct inode *ext2_iget(struct super_block *sb, unsigned long ino)
     for (n = 0; n < EXT2_N_BLOCKS; n++)
         ei->i_data[n] = raw_inode->i_block[n];
 
-    inode->i_op = &ext2_iops;
-    inode->i_fop = &ext2_fops;
+    if (S_ISDIR(inode->i_mode)) {
+        inode->i_op = &ext2_dir_iops;
+        inode->i_fop = &ext2_dir_fops;
+    } else {
+        inode->i_op = &ext2_file_iops;
+        inode->i_fop = &ext2_file_fops;
+    }
 
     bdrop(bh);
     // unlock_new_inode(inode);
@@ -218,7 +223,7 @@ bad_inode:
 struct dentry * ext2_lookup(struct inode *dir, struct dentry *dentry,
     unsigned int flags)
 {
-    struct inode * inode;
+    struct inode *inode;
     ino_t ino;
     int res;
 
@@ -239,14 +244,3 @@ struct dentry * ext2_lookup(struct inode *dir, struct dentry *dentry,
     dentry->d_inode = inode;
     return NULL;
 }
-
-int ext2_open(struct inode *inode, struct file *file)
-{
-    file->f_op = &ext2_fops;
-    return 0;
-}
-
-const struct inode_operations ext2_iops = {
-    .open = ext2_open,
-    .lookup = ext2_lookup,
-};

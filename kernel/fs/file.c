@@ -16,6 +16,7 @@ struct file * alloc_file(struct dentry *d)
     if (d)
         dget(d);
     file->f_dentry = d;
+    file->f_inode = d ? d->d_inode : NULL;
     return file;
 }
 

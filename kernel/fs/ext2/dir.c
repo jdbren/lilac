@@ -248,6 +248,17 @@ int ext2_inode_by_name(struct inode *dir, const char *child, int namelen, ino_t 
     return 0;
 }
 
-const struct file_operations ext2_fops = {
+int ext2_dir_open(struct inode *inode, struct file *file)
+{
+    file->f_op = &ext2_dir_fops;
+    return 0;
+}
+
+const struct inode_operations ext2_dir_iops = {
+    .open = ext2_dir_open,
+    .lookup = ext2_lookup,
+};
+
+const struct file_operations ext2_dir_fops = {
     .readdir = ext2_readdir,
 };
