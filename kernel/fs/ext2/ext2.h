@@ -423,9 +423,6 @@ int ext2_inode_by_name(struct inode *dir, const char *child, int namelen, ino_t 
 struct inode *ext2_iget(struct super_block *sb, unsigned long ino);
 struct dentry *ext2_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags);
 
-extern const struct inode_operations ext2_iops;
-extern const struct file_operations ext2_dir_fops;
-
 static inline ext2_fsblk_t
 ext2_group_first_block_no(struct super_block *sb, unsigned long group_no)
 {
@@ -445,7 +442,10 @@ ext2_group_last_block_no(struct super_block *sb, unsigned long group_no)
             EXT2_BLOCKS_PER_GROUP(sb) - 1;
 }
 
-extern const struct inode_operations ext2_iops;
-extern const struct file_operations ext2_fops;
+extern const struct inode_operations ext2_dir_iops;
+extern const struct inode_operations ext2_file_iops;
+
+extern const struct file_operations ext2_dir_fops;
+extern const struct file_operations ext2_file_fops;
 
 #endif
