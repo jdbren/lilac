@@ -323,7 +323,7 @@ int vsnprintf(char *restrict buf, size_t size, const char *restrict fmt, va_list
     return (int)(str - buf);
 }
 
-int vsprintf(char *__restrict buf, size_t size, const char *__restrict fmt, va_list args)
+int vsprintf(char *__restrict buf, const char *__restrict fmt, va_list args)
 {
     return vsnprintf(buf, 0xfffful, fmt, args);
 }
