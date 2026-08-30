@@ -65,6 +65,11 @@ struct block_device {
 };
 
 struct blkio_desc {
+    struct {
+        int valid   :1;
+        int dirty   :1;
+        int locked  :1;
+    } b_state;
     u64 b_block;
     size_t b_size;
     struct block_device *b_bdev;

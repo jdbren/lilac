@@ -208,8 +208,7 @@ struct ext2_dir_entry *ext2_find_entry (struct inode *dir,
         if (unlikely(n > (dir->i_blocks * 512) / dir->i_sb->s_blocksize)) {
             ext2_error(dir->i_sb, __func__,
                 "dir %lu size %lld exceeds block count %u",
-                dir->i_ino, dir->i_size,
-                (unsigned int)dir->i_blocks);
+                dir->i_ino, dir->i_size, dir->i_blocks);
             goto out;
         }
     } while (n != start);

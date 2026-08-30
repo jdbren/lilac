@@ -38,7 +38,7 @@ ssize_t ext2_read(struct file *file, void *buf, size_t count)
         bio = sb_bread(sb, block);
         if (IS_ERR(bio))
             return PTR_ERR(bio);
-        memcpy(buf + bytes_read, bio->b_data + block_offset, bytes_to_copy);
+        memcpy((u8*)buf + bytes_read, bio->b_data + block_offset, bytes_to_copy);
         brelease(bio);
 
         bytes_read += bytes_to_copy;

@@ -292,7 +292,8 @@ static int create_block_dev(struct gendisk *disk,
     memcpy(bdev->uuid, part_entry->unique_partition_guid, 16);
     bdev->devnum = (disk->major << 20) | (disk->first_minor + num);
     bdev->first_sector_lba = part_entry->starting_lba;
-    bdev->num_sectors = part_entry->ending_lba - part_entry->starting_lba;
+    // last LBA inclusive
+    bdev->num_sectors = part_entry->ending_lba - part_entry->starting_lba + 1;
     bdev->disk = disk;
     if (disk->partitions == NULL) {
         disk->partitions = bdev;
@@ -392,10 +393,13 @@ struct blkio_desc * bread(struct block_device *bdev, u64 block_num, size_t size)
 int brelease(struct blkio_desc *bio)
 {
     struct block_device *bdev = bio->b_bdev;
-    struct gendisk *disk = bdev->disk;
-    unsigned long sector = bio->b_block << (bdev->blocksize_bits - SECTOR_SHIFT);
-    int ret = disk->ops->disk_write(bdev->disk, bdev->first_sector_lba + sector,
-        bio->b_data, bio->b_size / disk->sector_size);
+    int ret = 0;
+    if (bio->b_state.dirty) {
+        struct gendisk *disk = bdev->disk;
+        unsigned long sector = bio->b_block << (bdev->blocksize_bits - SECTOR_SHIFT);
+        ret = disk->ops->disk_write(bdev->disk, bdev->first_sector_lba + sector,
+            bio->b_data, bio->b_size / disk->sector_size);
+    }
     free_pages(bio->b_data, bio->b_size >> PAGE_SHIFT);
     kfree(bio);
     return ret;

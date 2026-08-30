@@ -155,6 +155,7 @@ void* alloc_frames(u32 num_pages)
 
     if (ptr == NULL) {
         klog(LOG_INFO, "Allocated frames = %lu, free frames = %lu\n", allocated_frames, total_frames - allocated_frames);
+        release_lock(&pg_frame_bm_lock);
         panic("Out of memory");
     }
 

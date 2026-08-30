@@ -4,6 +4,36 @@
 #include <lilac/err.h>
 #include <drivers/blkdev.h>
 
+struct inode * ext2_alloc_inode(struct super_block *sb)
+{
+    struct ext2_inode_info *ei = kzmalloc(sizeof(*ei));
+    struct inode *inode;
+
+    if (!ei)
+        return ERR_PTR(-ENOMEM);
+
+    inode = kzmalloc(sizeof(*inode));
+    if (!inode) {
+        kfree(ei);
+        return ERR_PTR(-ENOMEM);
+    }
+
+    inode->i_sb = sb;
+    inode->i_private = ei;
+    inode->i_count = 1;
+    list_add_tail(&inode->i_list, &sb->s_inodes);
+
+    return inode;
+}
+
+void ext2_destroy_inode(struct inode *inode)
+{
+    struct ext2_inode_info *ei = EXT2_I(inode);
+
+    kfree(ei);
+    kfree(inode);
+}
+
 struct ext2_group_desc * ext2_get_group_desc(struct super_block * sb,
                          unsigned int block_group,
                          struct blkio_desc ** bh)
@@ -14,7 +44,7 @@ struct ext2_group_desc * ext2_get_group_desc(struct super_block * sb,
     struct ext2_sb_info *sbi = EXT2_SB(sb);
 
     if (block_group >= sbi->s_groups_count) {
-        ext2_error (sb, "ext2_get_group_desc",
+        ext2_error (sb, __func__,
                 "block_group >= groups_count - "
                 "block_group = %d, groups_count = %lu",
                 block_group, sbi->s_groups_count);
@@ -24,7 +54,7 @@ struct ext2_group_desc * ext2_get_group_desc(struct super_block * sb,
     group_desc = block_group >> EXT2_DESC_PER_BLOCK_BITS(sb);
     offset = block_group & (EXT2_DESC_PER_BLOCK(sb) - 1);
     if (!sbi->s_group_desc[group_desc]) {
-        ext2_error (sb, "ext2_get_group_desc",
+        ext2_error (sb, __func__,
                 "Group descriptor not loaded - "
                 "block_group = %d, group_desc = %lu, desc = %lu",
                  block_group, group_desc, offset);
@@ -69,11 +99,11 @@ static struct ext2_inode *ext2_get_inode(struct super_block *sb, ino_t ino,
     return (struct ext2_inode *) (bh->b_data + offset);
 
 Einval:
-    ext2_error(sb, "ext2_get_inode", "bad inode number: %lu",
+    ext2_error(sb, __func__, "bad inode number: %lu",
            (unsigned long) ino);
     return ERR_PTR(-EINVAL);
 Eio:
-    ext2_error(sb, "ext2_get_inode",
+    ext2_error(sb, __func__,
            "unable to read inode block - inode=%lu, block=%lu",
            (unsigned long) ino, block);
 Egdp:

@@ -8,37 +8,9 @@
 
 #define BLOCK_SIZE 1024
 
+struct inode * ext2_alloc_inode(struct super_block *sb);
+void ext2_destroy_inode(struct inode *inode);
 void ext2_put_super(struct super_block *sb);
-
-struct inode * ext2_alloc_inode(struct super_block *sb)
-{
-    struct ext2_inode_info *ei = kzmalloc(sizeof(*ei));
-    struct inode *inode;
-
-    if (!ei)
-        return ERR_PTR(-ENOMEM);
-
-    inode = kzmalloc(sizeof(*inode));
-    if (!inode) {
-        kfree(ei);
-        return ERR_PTR(-ENOMEM);
-    }
-
-    inode->i_sb = sb;
-    inode->i_private = ei;
-    inode->i_count = 1;
-    list_add_tail(&inode->i_list, &sb->s_inodes);
-
-    return inode;
-}
-
-void ext2_destroy_inode(struct inode *inode)
-{
-    struct ext2_inode_info *ei = EXT2_I(inode);
-
-    kfree(ei);
-    kfree(inode);
-}
 
 const struct super_operations ext2_sops = {
     .alloc_inode = ext2_alloc_inode,
@@ -52,8 +24,9 @@ void ext2_error(struct super_block *sb, const char *function,
     va_list args;
     struct ext2_sb_info *sbi = EXT2_SB(sb);
     struct ext2_sb *es = sbi->s_es;
+    char *strbuf = kmalloc(1024);
 
-    if (1) { /* no read-only mount tracking yet; always allow marking errors */
+    if (!sb_rdonly(sb)) {
         acquire_lock(&sbi->s_lock);
         sbi->s_mount_state |= EXT2_ERROR_FS;
         es->s_state |= cpu_to_le16(EXT2_ERROR_FS);
@@ -62,21 +35,38 @@ void ext2_error(struct super_block *sb, const char *function,
     }
 
     va_start(args, fmt);
-    klog(LOG_ERROR, "EXT2-fs error (device %s): %s: ", sb->s_bdev->name, function);
-    kvlog(LOG_ERROR, fmt, args);
-    klog(LOG_ERROR, "\n");
+    if (strbuf)
+        vsnprintf(strbuf, 1024, fmt, args);
     va_end(args);
+
+    klog(LOG_ERROR, "EXT2-fs (%p): error: %s: %s\n",
+           sb, function, strbuf ? strbuf : "(error)");
+    kfree(strbuf);
+
+/*
+    if (test_opt(sb, ERRORS_PANIC))
+        panic("EXT2-fs: panic from previous error\n");
+    if (!sb_rdonly(sb) && test_opt(sb, ERRORS_RO)) {
+        ext2_msg(sb, KERN_CRIT,
+                 "error: remounting filesystem read-only");
+        sb->s_flags |= SB_RDONLY;
+    }
+*/
 }
 
-void ext2_msg(struct super_block *sb, const char *fmt, ...)
+void ext2_msg(struct super_block *sb, const char *prefix,
+        const char *fmt, ...)
 {
     va_list args;
+    char *strbuf = kmalloc(1024);
 
     va_start(args, fmt);
-    klog(LOG_INFO, "EXT2-fs (device %s): ", sb->s_bdev->name);
-    kvlog(LOG_INFO, fmt, args);
-    klog(LOG_INFO, "\n");
+    if (strbuf)
+        vsnprintf(strbuf, 1024, fmt, args);
     va_end(args);
+
+    klog(LOG_INFO, "%sEXT2-fs (%p): %s\n", prefix, sb, strbuf ? strbuf : "(error)");
+    kfree(strbuf);
 }
 
 static unsigned long descriptor_loc(struct super_block *sb,
@@ -227,7 +217,7 @@ ext2_read_super(struct block_device *bdev, struct super_block *sb)
         if (!ext2_sb->s_group_desc[i]) {
             for (int j = 0; j < i; j++)
                 bdrop(ext2_sb->s_group_desc[j]);
-            ext2_error(sb, "ext2_read_super", "unable to read group descriptors");
+            ext2_error(sb, __func__, "unable to read group descriptors");
             goto free_ext2_group_desc;
         }
     }
@@ -298,6 +288,8 @@ struct dentry * ext2_init(void *dev, struct super_block *sb)
     ret = ext2_read_super(bdev, sb);
     if (IS_ERR(ret))
         return ERR_CAST(ret);
+
+    sb->s_flags |= SB_RDONLY;
 
     root_inode = ext2_iget(sb, EXT2_ROOT_INO);
     if (IS_ERR(root_inode))
