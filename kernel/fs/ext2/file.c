@@ -36,8 +36,8 @@ ssize_t ext2_read(struct file *file, void *buf, size_t count)
         bytes_to_copy = MIN(bytes_to_copy, inode->i_size - pos);
 
         bio = sb_bread(sb, block);
-        if (IS_ERR(bio))
-            return PTR_ERR(bio);
+        if (IS_ERR_OR_NULL(bio))
+            return bio ? PTR_ERR(bio) : -EIO;
         memcpy((u8*)buf + bytes_read, bio->b_data + block_offset, bytes_to_copy);
         brelease(bio);
 
@@ -46,6 +46,7 @@ ssize_t ext2_read(struct file *file, void *buf, size_t count)
         iblock_index++;
     }
 
+    // file fpos is updated by caller
     return bytes_read;
 }
 
