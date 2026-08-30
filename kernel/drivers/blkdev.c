@@ -378,13 +378,18 @@ struct blkio_desc * bread(struct block_device *bdev, u64 block_num, size_t size)
     bio->b_page = virt_to_page(bio->b_data);
     INIT_LIST_HEAD(&bio->b_list);
 
-    disk->ops->disk_read(bdev->disk, bdev->first_sector_lba + sector,
+    long err = disk->ops->disk_read(bdev->disk, bdev->first_sector_lba + sector,
         bio->b_data, size >> SECTOR_SHIFT);
+
+    if (err < 0) {
+        bdrop(bio);
+        return ERR_PTR(err);
+    }
 
     return bio;
 }
 
-int bwriteback(struct blkio_desc *bio)
+int brelease(struct blkio_desc *bio)
 {
     struct block_device *bdev = bio->b_bdev;
     struct gendisk *disk = bdev->disk;

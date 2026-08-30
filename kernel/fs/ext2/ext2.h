@@ -277,13 +277,10 @@ struct ext2_inode {
     u32 i_dtime;
     u16 i_gid;
     u16 i_nlinks;
-    u32 i_disk_sectors;
+    u32 i_blocks;
     u32 i_flags;
     u32 i_osd1;
-    u32 i_block[12];
-    u32 i_block_indirect;
-    u32 i_block_double_indirect;
-    u32 i_block_triple_indirect;
+    u32 i_block[15];
     u32 i_generation;
     u32 i_file_acl;
     u32 i_dir_acl;
@@ -447,5 +444,8 @@ ext2_group_last_block_no(struct super_block *sb, unsigned long group_no)
         return ext2_group_first_block_no(sb, group_no) +
             EXT2_BLOCKS_PER_GROUP(sb) - 1;
 }
+
+extern const struct inode_operations ext2_iops;
+extern const struct file_operations ext2_fops;
 
 #endif

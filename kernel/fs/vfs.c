@@ -21,7 +21,7 @@
 // #define DEBUG_VFS 1
 
 static fs_init_func_t init_ops[4] = {
-    fat32_init, NULL, tmpfs_init, NULL
+    fat32_init, ext2_init, tmpfs_init, NULL
 };
 
 struct dentry *root_dentry = NULL;
@@ -130,7 +130,7 @@ void fs_init(void)
     vfs_create("/dev/zero", 0);
 
     // Test
-    // vfs_mount(get_bdev_by_uuid("5376933F-2B06-489B-843D-3535E656468E"), "/mnt", "ext2", 0, NULL);
+    vfs_mount(get_bdev_by_uuid("5376933F-2B06-489B-843D-3535E656468E"), "/mnt", "ext2", 0, NULL);
 
     kstatus(STATUS_OK, "Filesystem initialized\n");
 }
@@ -497,7 +497,6 @@ ssize_t vfs_getdents(struct file *file, struct dirent *dirp, int buf_size)
 #ifdef DEBUG_VFS
     klog(LOG_DEBUG, "VFS: Read %d entries\n", dir_cnt);
 #endif
-    file->f_pos += dir_cnt;
     return dir_cnt > 0 ? dir_cnt * (int)sizeof(struct dirent) : dir_cnt;
 }
 

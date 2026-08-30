@@ -143,6 +143,8 @@ void* alloc_frames(u32 num_pages)
             if (ptr) {
 #ifdef DEBUG_PAGING
                 klog(LOG_DEBUG, "Allocated %d physical frames at %p\n", num_pages, ptr);
+                klog(LOG_INFO, "Allocated frames = %lu, free frames = %lu\n",
+                    allocated_frames, total_frames - allocated_frames);
 #endif
                 break;
             }
@@ -151,8 +153,10 @@ void* alloc_frames(u32 num_pages)
             count = 0;
     }
 
-    if (ptr == NULL)
+    if (ptr == NULL) {
+        klog(LOG_INFO, "Allocated frames = %lu, free frames = %lu\n", allocated_frames, total_frames - allocated_frames);
         panic("Out of memory");
+    }
 
     release_lock(&pg_frame_bm_lock);
     allocated_frames += num_pages;
@@ -172,6 +176,8 @@ void free_frames(void *frame, u32 num_pages)
     }
 #ifdef DEBUG_PAGING
     klog(LOG_DEBUG, "Freed %d physical frames at %p\n", num_pages, frame);
+    klog(LOG_INFO, "Allocated frames = %lu, free frames = %lu\n",
+        allocated_frames, total_frames - allocated_frames);
 #endif
     release_lock(&pg_frame_bm_lock);
     allocated_frames -= num_pages;
