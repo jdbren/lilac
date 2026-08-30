@@ -45,6 +45,8 @@ static void root_init(struct block_device *bdev, enum fs_type type)
         kerror("Invalid filesystem type for root\n");
 
     struct super_block *sb = alloc_sb(bdev);
+    if (!sb)
+        kerror("Failed to allocate superblock\n");
     struct vfsmount *root_disk = get_empty_vfsmount(type);
     if (!root_disk)
         kerror("Failed to get empty vfsmount for root\n");

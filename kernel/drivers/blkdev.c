@@ -198,6 +198,7 @@ int scan_partitions(struct gendisk *disk)
     mbr = (struct MBR*)buf;
     if (mbr->signature != 0xAA55) {
         klog(LOG_ERROR, "Invalid MBR signature\n");
+        kfree(buf);
         return -1;
     }
 
@@ -211,6 +212,7 @@ int scan_partitions(struct gendisk *disk)
         disk->ops->disk_read(disk, 1, buf, 1);
         if (gpt_validate((struct GPT*)buf)) {
             klog(LOG_ERROR, "GPT invalid\n");
+            kfree(buf);
             return -1;
         }
         disk->ops->disk_read(disk, 2, buf, 1);
@@ -231,6 +233,7 @@ int scan_partitions(struct gendisk *disk)
         disk->state = GD_ADDED;
     }
 
+    kfree(buf);
     return 0;
 }
 
@@ -294,8 +297,8 @@ static int create_block_dev(struct gendisk *disk,
     bdev->first_sector_lba = part_entry->starting_lba;
     // last LBA inclusive
     bdev->num_sectors = part_entry->ending_lba - part_entry->starting_lba + 1;
-    set_blocksize(bdev, disk->sector_size);
     bdev->disk = disk;
+    set_blocksize(bdev, disk->sector_size);
     if (disk->partitions == NULL) {
         disk->partitions = bdev;
     } else {

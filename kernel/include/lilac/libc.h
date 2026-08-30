@@ -38,7 +38,7 @@ int printf(const char *__restrict__ format, ...);
 int vprintf(const char *__restrict__ format, va_list args);
 int sprintf(char *__restrict__ str, const char *__restrict__ fmt, ...);
 int snprintf(char *__restrict__ str, size_t size, const char *__restrict__ format, ...);
-int vsprintf(char *__restrict buf, size_t size, const char *__restrict fmt, va_list args);
+int vsprintf(char *__restrict buf, const char *__restrict fmt, va_list args);
 int vsnprintf(char *__restrict__ buf, size_t size, const char *__restrict__ fmt, va_list args);
 
 void *memcpy(void *__restrict__ dst, const void *__restrict__ src, size_t sz);

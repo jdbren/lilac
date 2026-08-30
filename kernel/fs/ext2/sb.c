@@ -144,7 +144,7 @@ ext2_read_super(struct block_device *bdev, struct super_block *sb)
     }
 
     ext2_sb_disk = (struct ext2_sb *)(bio->b_data + offset);
-    if (ext2_sb_disk->s_magic != EXT2_SUPER_MAGIC) {
+    if (ext2_sb_disk->s_magic != cpu_to_le16(EXT2_SUPER_MAGIC)) {
         klog(LOG_ERROR, "Invalid ext2 superblock magic: 0x%X\n", ext2_sb_disk->s_magic);
         sb = ERR_PTR(-EINVAL);
         goto free_bio;
