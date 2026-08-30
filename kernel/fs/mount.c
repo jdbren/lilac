@@ -20,11 +20,13 @@ struct vfsmount * get_empty_vfsmount(enum fs_type type)
     return NULL;
 }
 
-static int validate_params(const char *source, const char *target,
+static int validate_params(const struct block_device *source, const char *target,
     enum fs_type type, unsigned long mountflags)
 {
-    if (type < -1)
+    if (!source)
         return -ENODEV;
+    if (type <= FSTYPE_ERROR || type >= MAX_FS_TYPES)
+        return -EINVAL;
     if (numdisks >= 8)
         return -ENOMEM;
     return 0;
@@ -39,7 +41,7 @@ enum fs_type str_to_fstype(const char *fs_type)
     else if (!strcmp(fs_type, "tmpfs"))
         return TMPFS;
     else
-        return -1;
+        return FSTYPE_ERROR;
 }
 
 static struct dentry * get_parent_dentry(const char *path)
@@ -77,7 +79,7 @@ int vfs_mount(struct block_device *srcdev, const char *target,
     enum fs_type type = str_to_fstype(filesystemtype);
     long err = 0;
 
-    err = validate_params(srcdev->name, target, type, mountflags);
+    err = validate_params(srcdev, target, type, mountflags);
     if (err)
         return err;
 

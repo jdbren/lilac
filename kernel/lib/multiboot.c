@@ -7,6 +7,7 @@ void parse_multiboot(uintptr_t addr)
         kerror("Unaligned mbi:\n");
 
     struct multiboot_info *mbd = &boot_info.mbd;
+    mbd->cmdline = "";
 
     struct multiboot_tag *tag;
     for (tag = (struct multiboot_tag *)(addr + 8);

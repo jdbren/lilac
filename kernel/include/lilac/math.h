@@ -8,7 +8,8 @@
 __maybe_unused
 static inline unsigned long next_pow_2(unsigned long x)
 {
-    return 1ULL << (64 - __builtin_clzl(x - 1));
+    if (x <= 1) return 1;
+    return 1UL << (64 - __builtin_clzl(x - 1));
 }
 
 static inline __attribute__((const))

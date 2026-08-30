@@ -5,7 +5,7 @@
 #include <lilac/types.h>
 
 enum fs_type {
-    NONE = -1,
+    FSTYPE_ERROR = -1,
     MSDOS,
     EXT2,
     TMPFS,

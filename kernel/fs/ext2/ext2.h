@@ -408,7 +408,7 @@ struct ext2_inode_info {
 };
 
 void ext2_error(struct super_block *sb, const char *function, const char *fmt, ...);
-void ext2_msg(struct super_block *sb, const char *fmt, ...);
+void ext2_msg(struct super_block *sb, const char *prefix, const char *fmt, ...);
 
 int ext2_bg_has_super(struct super_block *sb, int group);
 unsigned long ext2_bg_num_gdb(struct super_block *sb, int group);
