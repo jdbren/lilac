@@ -86,8 +86,9 @@ struct block_device *get_bdev_by_uuid(const char *uuid);
 
 struct blkio_desc * bread(struct block_device *bdev, u64 block_num, size_t size);
 int brelease(struct blkio_desc *buf);
-int bdrop(struct blkio_desc *bio);
+void bdrop(struct blkio_desc *bio);
 
+int set_blocksize(struct block_device *bdev, int size);
 int sb_set_blocksize(struct super_block *sb, int size);
 int sb_min_blocksize(struct super_block *sb, int size);
 

@@ -7,16 +7,16 @@
 typedef size_t sector_t;
 
 typedef struct {
-	__le32	*p;
-	__le32	key;
-	struct blkio_desc *bh;
+    __le32	*p;
+    __le32	key;
+    struct blkio_desc *bh;
 } Indirect;
 
 
 static inline void add_chain(Indirect *p, struct blkio_desc *bh, __le32 *v)
 {
-	p->key = *(p->p = v);
-	p->bh = bh;
+    p->key = *(p->p = v);
+    p->bh = bh;
 }
 
 /**
@@ -50,45 +50,45 @@ static inline void add_chain(Indirect *p, struct blkio_desc *bh, __le32 *v)
  */
 
 static int ext2_block_to_path(struct inode *inode,
-			long i_block, int offsets[4], int *boundary)
+            long i_block, int offsets[4], int *boundary)
 {
-	int ptrs = EXT2_ADDR_PER_BLOCK(inode->i_sb);
-	int ptrs_bits = EXT2_ADDR_PER_BLOCK_BITS(inode->i_sb);
-	const long direct_blocks = EXT2_NDIR_BLOCKS,
-		indirect_blocks = ptrs,
-		double_blocks = (1 << (ptrs_bits * 2));
-	int n = 0;
-	int final = 0;
+    int ptrs = EXT2_ADDR_PER_BLOCK(inode->i_sb);
+    int ptrs_bits = EXT2_ADDR_PER_BLOCK_BITS(inode->i_sb);
+    const long direct_blocks = EXT2_NDIR_BLOCKS,
+        indirect_blocks = ptrs,
+        double_blocks = (1 << (ptrs_bits * 2));
+    int n = 0;
+    int final = 0;
 
-	if (i_block < 0) {
-		ext2_msg(inode->i_sb, KERN_WARN,
-			"warning: %s: block < 0", __func__);
-	} else if (i_block < direct_blocks) {
-		offsets[n++] = i_block;
-		final = direct_blocks;
-	} else if ( (i_block -= direct_blocks) < indirect_blocks) {
-		offsets[n++] = EXT2_IND_BLOCK;
-		offsets[n++] = i_block;
-		final = ptrs;
-	} else if ((i_block -= indirect_blocks) < double_blocks) {
-		offsets[n++] = EXT2_DIND_BLOCK;
-		offsets[n++] = i_block >> ptrs_bits;
-		offsets[n++] = i_block & (ptrs - 1);
-		final = ptrs;
-	} else if (((i_block -= double_blocks) >> (ptrs_bits * 2)) < ptrs) {
-		offsets[n++] = EXT2_TIND_BLOCK;
-		offsets[n++] = i_block >> (ptrs_bits * 2);
-		offsets[n++] = (i_block >> ptrs_bits) & (ptrs - 1);
-		offsets[n++] = i_block & (ptrs - 1);
-		final = ptrs;
-	} else {
-		ext2_msg(inode->i_sb, KERN_WARN,
-			"warning: %s: block is too big", __func__);
-	}
-	if (boundary)
-		*boundary = final - 1 - (i_block & (ptrs - 1));
+    if (i_block < 0) {
+        ext2_msg(inode->i_sb, KERN_WARN,
+            "warning: %s: block < 0", __func__);
+    } else if (i_block < direct_blocks) {
+        offsets[n++] = i_block;
+        final = direct_blocks;
+    } else if ( (i_block -= direct_blocks) < indirect_blocks) {
+        offsets[n++] = EXT2_IND_BLOCK;
+        offsets[n++] = i_block;
+        final = ptrs;
+    } else if ((i_block -= indirect_blocks) < double_blocks) {
+        offsets[n++] = EXT2_DIND_BLOCK;
+        offsets[n++] = i_block >> ptrs_bits;
+        offsets[n++] = i_block & (ptrs - 1);
+        final = ptrs;
+    } else if (((i_block -= double_blocks) >> (ptrs_bits * 2)) < ptrs) {
+        offsets[n++] = EXT2_TIND_BLOCK;
+        offsets[n++] = i_block >> (ptrs_bits * 2);
+        offsets[n++] = (i_block >> ptrs_bits) & (ptrs - 1);
+        offsets[n++] = i_block & (ptrs - 1);
+        final = ptrs;
+    } else {
+        ext2_msg(inode->i_sb, KERN_WARN,
+            "warning: %s: block is too big", __func__);
+    }
+    if (boundary)
+        *boundary = final - 1 - (i_block & (ptrs - 1));
 
-	return n;
+    return n;
 }
 
 /**
@@ -121,33 +121,33 @@ static int ext2_block_to_path(struct inode *inode,
  *	the whole chain, all way to the data (returns %NULL, *err == 0).
  */
 static Indirect *ext2_get_branch(struct inode *inode,
-				 int depth,
-				 int *offsets,
-				 Indirect chain[4],
-				 int *err)
+                 int depth,
+                 int *offsets,
+                 Indirect chain[4],
+                 int *err)
 {
-	struct super_block *sb = inode->i_sb;
-	Indirect *p = chain;
-	struct blkio_desc *bh;
+    struct super_block *sb = inode->i_sb;
+    Indirect *p = chain;
+    struct blkio_desc *bh;
 
-	*err = 0;
-	add_chain(chain, NULL, EXT2_I(inode)->i_data + *offsets);
-	if (!p->key)
-		goto no_block;
-	while (--depth) {
-		bh = sb_bread(sb, le32_to_cpu(p->key));
-		if (IS_ERR_OR_NULL(bh))
-			goto failure;
-		add_chain(++p, bh, (__le32*)bh->b_data + *++offsets);
-		if (!p->key)
-			goto no_block;
-	}
-	return NULL;
+    *err = 0;
+    add_chain(chain, NULL, EXT2_I(inode)->i_data + *offsets);
+    if (!p->key)
+        goto no_block;
+    while (--depth) {
+        bh = sb_bread(sb, le32_to_cpu(p->key));
+        if (IS_ERR_OR_NULL(bh))
+            goto failure;
+        add_chain(++p, bh, (__le32*)bh->b_data + *++offsets);
+        if (!p->key)
+            goto no_block;
+    }
+    return NULL;
 
 failure:
-	*err = -EIO;
+    *err = -EIO;
 no_block:
-	return p;
+    return p;
 }
 
 #if 0 /* allocation path removed - directory driver is read-only */
@@ -173,29 +173,29 @@ no_block:
 
 static ext2_fsblk_t ext2_find_near(struct inode *inode, Indirect *ind)
 {
-	struct ext2_inode_info *ei = EXT2_I(inode);
-	__le32 *start = ind->bh ? (__le32 *) ind->bh->b_data : ei->i_data;
-	__le32 *p;
-	ext2_fsblk_t bg_start;
-	ext2_fsblk_t colour;
+    struct ext2_inode_info *ei = EXT2_I(inode);
+    __le32 *start = ind->bh ? (__le32 *) ind->bh->b_data : ei->i_data;
+    __le32 *p;
+    ext2_fsblk_t bg_start;
+    ext2_fsblk_t colour;
 
-	/* Try to find previous block */
-	for (p = ind->p - 1; p >= start; p--)
-		if (*p)
-			return le32_to_cpu(*p);
+    /* Try to find previous block */
+    for (p = ind->p - 1; p >= start; p--)
+        if (*p)
+            return le32_to_cpu(*p);
 
-	/* No such thing, so let's try location of indirect block */
-	if (ind->bh)
-		return ind->bh->b_block;
+    /* No such thing, so let's try location of indirect block */
+    if (ind->bh)
+        return ind->bh->b_block;
 
-	/*
-	 * It is going to be referred from inode itself? OK, just put it into
-	 * the same cylinder group then.
-	 */
-	bg_start = ext2_group_first_block_no(inode->i_sb, ei->i_block_group);
-	colour = (current->pid % 16) *
-			(EXT2_BLOCKS_PER_GROUP(inode->i_sb) / 16);
-	return bg_start + colour;
+    /*
+     * It is going to be referred from inode itself? OK, just put it into
+     * the same cylinder group then.
+     */
+    bg_start = ext2_group_first_block_no(inode->i_sb, ei->i_block_group);
+    colour = (current->pid % 16) *
+            (EXT2_BLOCKS_PER_GROUP(inode->i_sb) / 16);
+    return bg_start + colour;
 }
 
 /**
@@ -208,22 +208,22 @@ static ext2_fsblk_t ext2_find_near(struct inode *inode, Indirect *ind)
  */
 
 static inline ext2_fsblk_t ext2_find_goal(struct inode *inode, long block,
-					  Indirect *partial)
+                      Indirect *partial)
 {
-	struct ext2_block_alloc_info *block_i;
+    struct ext2_block_alloc_info *block_i;
 
-	block_i = EXT2_I(inode)->i_block_alloc_info;
+    block_i = EXT2_I(inode)->i_block_alloc_info;
 
-	/*
-	 * try the heuristic for sequential allocation,
-	 * failing that at least try to get decent locality.
-	 */
-	if (block_i && (block == block_i->last_alloc_logical_block + 1)
-		&& (block_i->last_alloc_physical_block != 0)) {
-		return block_i->last_alloc_physical_block + 1;
-	}
+    /*
+     * try the heuristic for sequential allocation,
+     * failing that at least try to get decent locality.
+     */
+    if (block_i && (block == block_i->last_alloc_logical_block + 1)
+        && (block_i->last_alloc_physical_block != 0)) {
+        return block_i->last_alloc_physical_block + 1;
+    }
 
-	return ext2_find_near(inode, partial);
+    return ext2_find_near(inode, partial);
 }
 
 /**
@@ -239,29 +239,29 @@ static inline ext2_fsblk_t ext2_find_goal(struct inode *inode, long block,
  */
 static int
 ext2_blks_to_allocate(Indirect * branch, int k, unsigned long blks,
-		int blocks_to_boundary)
+        int blocks_to_boundary)
 {
-	unsigned long count = 0;
+    unsigned long count = 0;
 
-	/*
-	 * Simple case, [t,d]Indirect block(s) has not allocated yet
-	 * then it's clear blocks on that path have not allocated
-	 */
-	if (k > 0) {
-		/* right now don't hanel cross boundary allocation */
-		if (blks < blocks_to_boundary + 1)
-			count += blks;
-		else
-			count += blocks_to_boundary + 1;
-		return count;
-	}
+    /*
+     * Simple case, [t,d]Indirect block(s) has not allocated yet
+     * then it's clear blocks on that path have not allocated
+     */
+    if (k > 0) {
+        /* right now don't hanel cross boundary allocation */
+        if (blks < blocks_to_boundary + 1)
+            count += blks;
+        else
+            count += blocks_to_boundary + 1;
+        return count;
+    }
 
-	count++;
-	while (count < blks && count <= blocks_to_boundary
-		&& le32_to_cpu(*(branch[0].p + count)) == 0) {
-		count++;
-	}
-	return count;
+    count++;
+    while (count < blks && count <= blocks_to_boundary
+        && le32_to_cpu(*(branch[0].p + count)) == 0) {
+        count++;
+    }
+    return count;
 }
 
 /**
@@ -277,56 +277,56 @@ ext2_blks_to_allocate(Indirect * branch, int k, unsigned long blks,
  * Return: Number of blocks allocated.
  */
 static int ext2_alloc_blocks(struct inode *inode,
-			ext2_fsblk_t goal, int indirect_blks, int blks,
-			ext2_fsblk_t new_blocks[4], int *err)
+            ext2_fsblk_t goal, int indirect_blks, int blks,
+            ext2_fsblk_t new_blocks[4], int *err)
 {
-	int target, i;
-	unsigned long count = 0;
-	int index = 0;
-	ext2_fsblk_t current_block = 0;
-	int ret = 0;
+    int target, i;
+    unsigned long count = 0;
+    int index = 0;
+    ext2_fsblk_t current_block = 0;
+    int ret = 0;
 
-	/*
-	 * Here we try to allocate the requested multiple blocks at once,
-	 * on a best-effort basis.
-	 * To build a branch, we should allocate blocks for
-	 * the indirect blocks(if not allocated yet), and at least
-	 * the first direct block of this branch.  That's the
-	 * minimum number of blocks need to allocate(required)
-	 */
-	target = blks + indirect_blks;
+    /*
+     * Here we try to allocate the requested multiple blocks at once,
+     * on a best-effort basis.
+     * To build a branch, we should allocate blocks for
+     * the indirect blocks(if not allocated yet), and at least
+     * the first direct block of this branch.  That's the
+     * minimum number of blocks need to allocate(required)
+     */
+    target = blks + indirect_blks;
 
-	while (1) {
-		count = target;
-		/* allocating blocks for indirect blocks and direct blocks */
-		current_block = ext2_new_blocks(inode, goal, &count, err, 0);
-		if (*err)
-			goto failed_out;
+    while (1) {
+        count = target;
+        /* allocating blocks for indirect blocks and direct blocks */
+        current_block = ext2_new_blocks(inode, goal, &count, err, 0);
+        if (*err)
+            goto failed_out;
 
-		target -= count;
-		/* allocate blocks for indirect blocks */
-		while (index < indirect_blks && count) {
-			new_blocks[index++] = current_block++;
-			count--;
-		}
+        target -= count;
+        /* allocate blocks for indirect blocks */
+        while (index < indirect_blks && count) {
+            new_blocks[index++] = current_block++;
+            count--;
+        }
 
-		if (count > 0)
-			break;
-	}
+        if (count > 0)
+            break;
+    }
 
-	/* save the new block number for the first direct block */
-	new_blocks[index] = current_block;
+    /* save the new block number for the first direct block */
+    new_blocks[index] = current_block;
 
-	/* total number of blocks allocated for direct blocks */
-	ret = count;
-	*err = 0;
-	return ret;
+    /* total number of blocks allocated for direct blocks */
+    ret = count;
+    *err = 0;
+    return ret;
 failed_out:
-	for (i = 0; i <index; i++)
-		ext2_free_blocks(inode, new_blocks[i], 1);
-	if (index)
-		mark_inode_dirty(inode);
-	return ret;
+    for (i = 0; i <index; i++)
+        ext2_free_blocks(inode, new_blocks[i], 1);
+    if (index)
+        mark_inode_dirty(inode);
+    return ret;
 }
 
 /**
@@ -357,73 +357,73 @@ failed_out:
  */
 
 static int ext2_alloc_branch(struct inode *inode,
-			int indirect_blks, int *blks, ext2_fsblk_t goal,
-			int *offsets, Indirect *branch)
+            int indirect_blks, int *blks, ext2_fsblk_t goal,
+            int *offsets, Indirect *branch)
 {
-	int blocksize = inode->i_sb->s_blocksize;
-	int i, n = 0;
-	int err = 0;
-	struct blkio_desc *bh;
-	int num;
-	ext2_fsblk_t new_blocks[4];
-	ext2_fsblk_t current_block;
+    int blocksize = inode->i_sb->s_blocksize;
+    int i, n = 0;
+    int err = 0;
+    struct blkio_desc *bh;
+    int num;
+    ext2_fsblk_t new_blocks[4];
+    ext2_fsblk_t current_block;
 
-	num = ext2_alloc_blocks(inode, goal, indirect_blks,
-				*blks, new_blocks, &err);
-	if (err)
-		return err;
+    num = ext2_alloc_blocks(inode, goal, indirect_blks,
+                *blks, new_blocks, &err);
+    if (err)
+        return err;
 
-	branch[0].key = cpu_to_le32(new_blocks[0]);
-	/*
-	 * metadata blocks and data blocks are allocated.
-	 */
-	for (n = 1; n <= indirect_blks;  n++) {
-		/*
-		 * Get blkio_desc for parent block, zero it out
-		 * and set the pointer to new one, then send
-		 * parent to disk.
-		 */
-		bh = sb_getblk(inode->i_sb, new_blocks[n-1]);
-		if (unlikely(!bh)) {
-			err = -ENOMEM;
-			goto failed;
-		}
-		branch[n].bh = bh;
-		lock_buffer(bh);
-		memset(bh->b_data, 0, blocksize);
-		branch[n].p = (__le32 *) bh->b_data + offsets[n];
-		branch[n].key = cpu_to_le32(new_blocks[n]);
-		*branch[n].p = branch[n].key;
-		if ( n == indirect_blks) {
-			current_block = new_blocks[n];
-			/*
-			 * End of chain, update the last new metablock of
-			 * the chain to point to the new allocated
-			 * data blocks numbers
-			 */
-			for (i=1; i < num; i++)
-				*(branch[n].p + i) = cpu_to_le32(++current_block);
-		}
-		set_buffer_uptodate(bh);
-		unlock_buffer(bh);
-		mmb_mark_buffer_dirty(bh, &EXT2_I(inode)->i_metadata_bhs);
-		/* We used to sync bh here if IS_SYNC(inode).
-		 * But we now rely upon generic_write_sync()
-		 * and b_inode_buffers.  But not for directories.
-		 */
-		if (S_ISDIR(inode->i_mode) && IS_DIRSYNC(inode))
-			sync_dirty_buffer(bh);
-	}
-	*blks = num;
-	return err;
+    branch[0].key = cpu_to_le32(new_blocks[0]);
+    /*
+     * metadata blocks and data blocks are allocated.
+     */
+    for (n = 1; n <= indirect_blks;  n++) {
+        /*
+         * Get blkio_desc for parent block, zero it out
+         * and set the pointer to new one, then send
+         * parent to disk.
+         */
+        bh = sb_getblk(inode->i_sb, new_blocks[n-1]);
+        if (unlikely(!bh)) {
+            err = -ENOMEM;
+            goto failed;
+        }
+        branch[n].bh = bh;
+        lock_buffer(bh);
+        memset(bh->b_data, 0, blocksize);
+        branch[n].p = (__le32 *) bh->b_data + offsets[n];
+        branch[n].key = cpu_to_le32(new_blocks[n]);
+        *branch[n].p = branch[n].key;
+        if ( n == indirect_blks) {
+            current_block = new_blocks[n];
+            /*
+             * End of chain, update the last new metablock of
+             * the chain to point to the new allocated
+             * data blocks numbers
+             */
+            for (i=1; i < num; i++)
+                *(branch[n].p + i) = cpu_to_le32(++current_block);
+        }
+        set_buffer_uptodate(bh);
+        unlock_buffer(bh);
+        mmb_mark_buffer_dirty(bh, &EXT2_I(inode)->i_metadata_bhs);
+        /* We used to sync bh here if IS_SYNC(inode).
+         * But we now rely upon generic_write_sync()
+         * and b_inode_buffers.  But not for directories.
+         */
+        if (S_ISDIR(inode->i_mode) && IS_DIRSYNC(inode))
+            sync_dirty_buffer(bh);
+    }
+    *blks = num;
+    return err;
 
 failed:
-	for (i = 1; i < n; i++)
-		bforget(branch[i].bh);
-	for (i = 0; i < indirect_blks; i++)
-		ext2_free_blocks(inode, new_blocks[i], 1);
-	ext2_free_blocks(inode, new_blocks[i], num);
-	return err;
+    for (i = 1; i < n; i++)
+        bforget(branch[i].bh);
+    for (i = 0; i < indirect_blks; i++)
+        ext2_free_blocks(inode, new_blocks[i], 1);
+    ext2_free_blocks(inode, new_blocks[i], num);
+    return err;
 }
 
 /**
@@ -439,48 +439,48 @@ failed:
  * chain to new block and return 0.
  */
 static void ext2_splice_branch(struct inode *inode,
-			long block, Indirect *where, int num, int blks)
+            long block, Indirect *where, int num, int blks)
 {
-	int i;
-	struct ext2_block_alloc_info *block_i;
-	ext2_fsblk_t current_block;
+    int i;
+    struct ext2_block_alloc_info *block_i;
+    ext2_fsblk_t current_block;
 
-	block_i = EXT2_I(inode)->i_block_alloc_info;
+    block_i = EXT2_I(inode)->i_block_alloc_info;
 
-	/* XXX LOCKING probably should have i_meta_lock ?*/
-	/* That's it */
+    /* XXX LOCKING probably should have i_meta_lock ?*/
+    /* That's it */
 
-	*where->p = where->key;
+    *where->p = where->key;
 
-	/*
-	 * Update the host blkio_desc or inode to point to more just allocated
-	 * direct blocks blocks
-	 */
-	if (num == 0 && blks > 1) {
-		current_block = le32_to_cpu(where->key) + 1;
-		for (i = 1; i < blks; i++)
-			*(where->p + i ) = cpu_to_le32(current_block++);
-	}
+    /*
+     * Update the host blkio_desc or inode to point to more just allocated
+     * direct blocks blocks
+     */
+    if (num == 0 && blks > 1) {
+        current_block = le32_to_cpu(where->key) + 1;
+        for (i = 1; i < blks; i++)
+            *(where->p + i ) = cpu_to_le32(current_block++);
+    }
 
-	/*
-	 * update the most recently allocated logical & physical block
-	 * in i_block_alloc_info, to assist find the proper goal block for next
-	 * allocation
-	 */
-	if (block_i) {
-		block_i->last_alloc_logical_block = block + blks - 1;
-		block_i->last_alloc_physical_block =
-				le32_to_cpu(where[num].key) + blks - 1;
-	}
+    /*
+     * update the most recently allocated logical & physical block
+     * in i_block_alloc_info, to assist find the proper goal block for next
+     * allocation
+     */
+    if (block_i) {
+        block_i->last_alloc_logical_block = block + blks - 1;
+        block_i->last_alloc_physical_block =
+                le32_to_cpu(where[num].key) + blks - 1;
+    }
 
-	/* We are done with atomic stuff, now do the rest of housekeeping */
+    /* We are done with atomic stuff, now do the rest of housekeeping */
 
-	/* had we spliced it onto indirect block? */
-	if (where->bh)
-		mmb_mark_buffer_dirty(where->bh, &EXT2_I(inode)->i_metadata_bhs);
+    /* had we spliced it onto indirect block? */
+    if (where->bh)
+        mmb_mark_buffer_dirty(where->bh, &EXT2_I(inode)->i_metadata_bhs);
 
-	inode_set_ctime_current(inode);
-	mark_inode_dirty(inode);
+    inode_set_ctime_current(inode);
+    mark_inode_dirty(inode);
 }
 
 /*
@@ -502,164 +502,164 @@ static void ext2_splice_branch(struct inode *inode,
  * return < 0, error case.
  */
 static int ext2_get_blocks(struct inode *inode,
-			   sector_t iblock, unsigned long maxblocks,
-			   u32 *bno, bool *new, bool *boundary,
-			   int create)
+               sector_t iblock, unsigned long maxblocks,
+               u32 *bno, bool *new, bool *boundary,
+               int create)
 {
-	int err;
-	int offsets[4];
-	Indirect chain[4];
-	Indirect *partial;
-	ext2_fsblk_t goal;
-	int indirect_blks;
-	int blocks_to_boundary = 0;
-	int depth;
-	struct ext2_inode_info *ei = EXT2_I(inode);
-	int count = 0;
-	ext2_fsblk_t first_block = 0;
+    int err;
+    int offsets[4];
+    Indirect chain[4];
+    Indirect *partial;
+    ext2_fsblk_t goal;
+    int indirect_blks;
+    int blocks_to_boundary = 0;
+    int depth;
+    struct ext2_inode_info *ei = EXT2_I(inode);
+    int count = 0;
+    ext2_fsblk_t first_block = 0;
 
-	if (WARN_ON_ONCE(maxblocks == 0))
-		return -EINVAL;
+    if (WARN_ON_ONCE(maxblocks == 0))
+        return -EINVAL;
 
-	depth = ext2_block_to_path(inode,iblock,offsets,&blocks_to_boundary);
+    depth = ext2_block_to_path(inode,iblock,offsets,&blocks_to_boundary);
 
-	if (depth == 0)
-		return -EIO;
+    if (depth == 0)
+        return -EIO;
 
-	partial = ext2_get_branch(inode, depth, offsets, chain, &err);
-	/* Simplest case - block found, no allocation needed */
-	if (!partial) {
-		first_block = le32_to_cpu(chain[depth - 1].key);
-		count++;
-		/*map more blocks*/
-		while (count < maxblocks && count <= blocks_to_boundary) {
-			ext2_fsblk_t blk;
+    partial = ext2_get_branch(inode, depth, offsets, chain, &err);
+    /* Simplest case - block found, no allocation needed */
+    if (!partial) {
+        first_block = le32_to_cpu(chain[depth - 1].key);
+        count++;
+        /*map more blocks*/
+        while (count < maxblocks && count <= blocks_to_boundary) {
+            ext2_fsblk_t blk;
 
-			if (!verify_chain(chain, chain + depth - 1)) {
-				/*
-				 * Indirect block might be removed by
-				 * truncate while we were reading it.
-				 * Handling of that case: forget what we've
-				 * got now, go to reread.
-				 */
-				err = -EAGAIN;
-				count = 0;
-				partial = chain + depth - 1;
-				break;
-			}
-			blk = le32_to_cpu(*(chain[depth-1].p + count));
-			if (blk == first_block + count)
-				count++;
-			else
-				break;
-		}
-		if (err != -EAGAIN)
-			goto got_it;
-	}
+            if (!verify_chain(chain, chain + depth - 1)) {
+                /*
+                 * Indirect block might be removed by
+                 * truncate while we were reading it.
+                 * Handling of that case: forget what we've
+                 * got now, go to reread.
+                 */
+                err = -EAGAIN;
+                count = 0;
+                partial = chain + depth - 1;
+                break;
+            }
+            blk = le32_to_cpu(*(chain[depth-1].p + count));
+            if (blk == first_block + count)
+                count++;
+            else
+                break;
+        }
+        if (err != -EAGAIN)
+            goto got_it;
+    }
 
-	/* Next simple case - plain lookup or failed read of indirect block */
-	if (!create || err == -EIO)
-		goto cleanup;
+    /* Next simple case - plain lookup or failed read of indirect block */
+    if (!create || err == -EIO)
+        goto cleanup;
 
-	mutex_lock(&ei->truncate_mutex);
-	/*
-	 * If the indirect block is missing while we are reading
-	 * the chain(ext2_get_branch() returns -EAGAIN err), or
-	 * if the chain has been changed after we grab the semaphore,
-	 * (either because another process truncated this branch, or
-	 * another get_block allocated this branch) re-grab the chain to see if
-	 * the request block has been allocated or not.
-	 *
-	 * Since we already block the truncate/other get_block
-	 * at this point, we will have the current copy of the chain when we
-	 * splice the branch into the tree.
-	 */
-	if (err == -EAGAIN || !verify_chain(chain, partial)) {
-		while (partial > chain) {
-			brelse(partial->bh);
-			partial--;
-		}
-		partial = ext2_get_branch(inode, depth, offsets, chain, &err);
-		if (!partial) {
-			count++;
-			mutex_unlock(&ei->truncate_mutex);
-			goto got_it;
-		}
+    mutex_lock(&ei->truncate_mutex);
+    /*
+     * If the indirect block is missing while we are reading
+     * the chain(ext2_get_branch() returns -EAGAIN err), or
+     * if the chain has been changed after we grab the semaphore,
+     * (either because another process truncated this branch, or
+     * another get_block allocated this branch) re-grab the chain to see if
+     * the request block has been allocated or not.
+     *
+     * Since we already block the truncate/other get_block
+     * at this point, we will have the current copy of the chain when we
+     * splice the branch into the tree.
+     */
+    if (err == -EAGAIN || !verify_chain(chain, partial)) {
+        while (partial > chain) {
+            brelse(partial->bh);
+            partial--;
+        }
+        partial = ext2_get_branch(inode, depth, offsets, chain, &err);
+        if (!partial) {
+            count++;
+            mutex_unlock(&ei->truncate_mutex);
+            goto got_it;
+        }
 
-		if (err) {
-			mutex_unlock(&ei->truncate_mutex);
-			goto cleanup;
-		}
-	}
+        if (err) {
+            mutex_unlock(&ei->truncate_mutex);
+            goto cleanup;
+        }
+    }
 
-	/*
-	 * Okay, we need to do block allocation.  Lazily initialize the block
-	 * allocation info here if necessary
-	*/
-	if (S_ISREG(inode->i_mode) && (!ei->i_block_alloc_info))
-		ext2_init_block_alloc_info(inode);
+    /*
+     * Okay, we need to do block allocation.  Lazily initialize the block
+     * allocation info here if necessary
+    */
+    if (S_ISREG(inode->i_mode) && (!ei->i_block_alloc_info))
+        ext2_init_block_alloc_info(inode);
 
-	goal = ext2_find_goal(inode, iblock, partial);
+    goal = ext2_find_goal(inode, iblock, partial);
 
-	/* the number of blocks need to allocate for [d,t]indirect blocks */
-	indirect_blks = (chain + depth) - partial - 1;
-	/*
-	 * Next look up the indirect map to count the total number of
-	 * direct blocks to allocate for this branch.
-	 */
-	count = ext2_blks_to_allocate(partial, indirect_blks,
-					maxblocks, blocks_to_boundary);
-	/*
-	 * XXX ???? Block out ext2_truncate while we alter the tree
-	 */
-	err = ext2_alloc_branch(inode, indirect_blks, &count, goal,
-				offsets + (partial - chain), partial);
+    /* the number of blocks need to allocate for [d,t]indirect blocks */
+    indirect_blks = (chain + depth) - partial - 1;
+    /*
+     * Next look up the indirect map to count the total number of
+     * direct blocks to allocate for this branch.
+     */
+    count = ext2_blks_to_allocate(partial, indirect_blks,
+                    maxblocks, blocks_to_boundary);
+    /*
+     * XXX ???? Block out ext2_truncate while we alter the tree
+     */
+    err = ext2_alloc_branch(inode, indirect_blks, &count, goal,
+                offsets + (partial - chain), partial);
 
-	if (err) {
-		mutex_unlock(&ei->truncate_mutex);
-		goto cleanup;
-	}
+    if (err) {
+        mutex_unlock(&ei->truncate_mutex);
+        goto cleanup;
+    }
 
-	*new = true;
+    *new = true;
 
-	ext2_splice_branch(inode, iblock, partial, indirect_blks, count);
-	mutex_unlock(&ei->truncate_mutex);
+    ext2_splice_branch(inode, iblock, partial, indirect_blks, count);
+    mutex_unlock(&ei->truncate_mutex);
 got_it:
-	if (count > blocks_to_boundary)
-		*boundary = true;
-	err = count;
-	/* Clean up and exit */
-	partial = chain + depth - 1;	/* the whole chain */
+    if (count > blocks_to_boundary)
+        *boundary = true;
+    err = count;
+    /* Clean up and exit */
+    partial = chain + depth - 1;	/* the whole chain */
 cleanup:
-	while (partial > chain) {
-		brelse(partial->bh);
-		partial--;
-	}
-	if (err > 0)
-		*bno = le32_to_cpu(chain[depth-1].key);
-	return err;
+    while (partial > chain) {
+        brelse(partial->bh);
+        partial--;
+    }
+    if (err > 0)
+        *bno = le32_to_cpu(chain[depth-1].key);
+    return err;
 }
 
 int ext2_get_block(struct inode *inode, sector_t iblock,
-		struct blkio_desc *blkio, int create)
+        struct blkio_desc *blkio, int create)
 {
-	unsigned max_blocks = blkio->b_size >> inode->i_blkbits;
-	bool new = false, boundary = false;
-	u32 bno;
-	int ret;
+    unsigned max_blocks = blkio->b_size >> inode->i_blkbits;
+    bool new = false, boundary = false;
+    u32 bno;
+    int ret;
 
-	ret = ext2_get_blocks(inode, iblock, max_blocks, &bno, &new, &boundary,
-			create);
-	if (ret <= 0)
-		return ret;
+    ret = ext2_get_blocks(inode, iblock, max_blocks, &bno, &new, &boundary,
+            create);
+    if (ret <= 0)
+        return ret;
 
-	map_bh(bh_result, inode->i_sb, bno);
-	bh_result->b_size = (ret << inode->i_blkbits);
-	if (new)
-		set_buffer_new(bh_result);
-	if (boundary)
-		set_buffer_boundary(bh_result);
-	return 0;
+    map_bh(bh_result, inode->i_sb, bno);
+    bh_result->b_size = (ret << inode->i_blkbits);
+    if (new)
+        set_buffer_new(bh_result);
+    if (boundary)
+        set_buffer_boundary(bh_result);
+    return 0;
 
 }
 #endif /* allocation path removed - directory driver is read-only */
@@ -671,26 +671,33 @@ int ext2_get_block(struct inode *inode, sector_t iblock,
  */
 int ext2_get_block(struct inode *inode, unsigned long iblock, u32 *bno)
 {
-	int err;
-	int offsets[4];
-	Indirect chain[4];
-	Indirect *partial;
-	int depth;
-	int blocks_to_boundary = 0;
+    int err;
+    int offsets[4];
+    Indirect chain[4];
+    Indirect *partial;
+    int depth;
+    int blocks_to_boundary = 0;
 
-	*bno = 0;
+    *bno = 0;
 
-	depth = ext2_block_to_path(inode, iblock, offsets, &blocks_to_boundary);
-	if (depth == 0)
-		return -EIO;
+    depth = ext2_block_to_path(inode, iblock, offsets, &blocks_to_boundary);
+    if (depth == 0)
+        return -EIO;
 
-	partial = ext2_get_branch(inode, depth, offsets, chain, &err);
-	if (partial)
-		return err; /* hole (err == 0) or I/O error */
+    partial = ext2_get_branch(inode, depth, offsets, chain, &err);
 
-	*bno = le32_to_cpu(chain[depth - 1].key);
+    if (!partial) {
+        *bno = le32_to_cpu(chain[depth - 1].key);
+        partial = chain + depth - 1;
+    }
 
-	return 0;
+    /* Release all indirect blocks read while walking the chain. */
+    while (partial > chain) {
+        brelease(partial->bh);
+        partial--;
+    }
+
+    return err; /* 0 on success or hole, -EIO on read failure */
 }
 
 static inline int test_root(int a, int b)

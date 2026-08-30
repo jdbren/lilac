@@ -91,7 +91,8 @@ static struct ext2_inode *ext2_get_inode(struct super_block *sb, ino_t ino,
     offset = ((ino - 1) % EXT2_INODES_PER_GROUP(sb)) * EXT2_INODE_SIZE(sb);
     block = le32_to_cpu(gdp->bg_inode_table) +
         (offset >> EXT2_BLOCK_SIZE_BITS(sb));
-    if (!(bh = sb_bread(sb, block)))
+    bh = sb_bread(sb, block);
+    if (IS_ERR_OR_NULL(bh))
         goto Eio;
 
     *p = bh;

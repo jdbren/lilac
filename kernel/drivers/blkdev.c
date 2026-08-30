@@ -294,6 +294,7 @@ static int create_block_dev(struct gendisk *disk,
     bdev->first_sector_lba = part_entry->starting_lba;
     // last LBA inclusive
     bdev->num_sectors = part_entry->ending_lba - part_entry->starting_lba + 1;
+    set_blocksize(bdev, disk->sector_size);
     bdev->disk = disk;
     if (disk->partitions == NULL) {
         disk->partitions = bdev;
@@ -391,6 +392,8 @@ struct blkio_desc * bread(struct block_device *bdev, u64 block_num, size_t size)
 
 int brelease(struct blkio_desc *bio)
 {
+    if (!bio)
+        return 0;
     struct block_device *bdev = bio->b_bdev;
     int ret = 0;
     if (bio->b_state.dirty) {
@@ -404,9 +407,9 @@ int brelease(struct blkio_desc *bio)
     return ret;
 }
 
-int bdrop(struct blkio_desc *bio)
+void bdrop(struct blkio_desc *bio)
 {
+    if (!bio) return;
     free_pages(bio->b_data, PAGE_UP_COUNT(bio->b_size));
     kfree(bio);
-    return 0;
 }
