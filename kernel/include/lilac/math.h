@@ -9,7 +9,7 @@ __maybe_unused
 static inline unsigned long next_pow_2(unsigned long x)
 {
     if (x <= 1) return 1;
-    return 1UL << (64 - __builtin_clzl(x - 1));
+    return 1UL << (BITS_PER_LONG - __builtin_clzl(x - 1));
 }
 
 static inline __attribute__((const))

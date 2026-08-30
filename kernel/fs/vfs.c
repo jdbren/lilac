@@ -74,8 +74,10 @@ static bool get_root_uuid(const char *boot_args, char root_uuid[37])
         return false;
     uuid_start += 5; // Skip "root="
 
-    strncpy(root_uuid, uuid_start, 36);
-    root_uuid[36] = '\0';
+    const char *end = strchr(uuid_start, ' ');
+    size_t len = end ? (size_t)(end - uuid_start) : strnlen(uuid_start, 36);
+    memcpy(root_uuid, uuid_start, len);
+    root_uuid[len] = '\0';
     return true;
 }
 
@@ -85,8 +87,11 @@ static bool get_root_fstype(const char *boot_args, char root_fstype[16])
     if (!fstype_start)
         return false;
     fstype_start += 11; // Skip "rootfstype="
-    memset(root_fstype, 0, 16);
-    strncpy(root_fstype, fstype_start, 16);
+
+    const char *end = strchr(fstype_start, ' ');
+    size_t len = end ? (size_t)(end - fstype_start) : strnlen(fstype_start, 15);
+    memcpy(root_fstype, fstype_start, len);
+    root_fstype[len] = '\0';
     return true;
 }
 
@@ -120,10 +125,11 @@ void fs_init(void)
     vfs_create("/dev/null", 0);
     vfs_create("/dev/zero", 0);
 
-    // Test
+#ifdef DEBUG
     struct block_device *bd = get_bdev_by_uuid("5376933F-2B06-489B-843D-3535E656468E");
     if (bd)
         vfs_mount(bd, "/mnt", "ext2", 0, NULL);
+#endif
 
     kstatus(STATUS_OK, "Filesystem initialized\n");
 }

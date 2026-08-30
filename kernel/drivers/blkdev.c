@@ -362,7 +362,6 @@ struct blkio_desc * bread(struct block_device *bdev, u64 block_num, size_t size)
     }
 
     unsigned long sector = block_num << (bdev->blocksize_bits - SECTOR_SHIFT);
-    size = PAGE_ROUND_UP(size);
 
     bio = kzmalloc(sizeof(struct blkio_desc));
     if (!bio)
@@ -371,7 +370,7 @@ struct blkio_desc * bread(struct block_device *bdev, u64 block_num, size_t size)
     bio->b_block = block_num;
     bio->b_size = size;
     bio->b_bdev = bdev;
-    bio->b_data = get_free_pages(size >> PAGE_SHIFT, 0);
+    bio->b_data = get_free_pages(PAGE_UP_COUNT(size), 0);
     if (!bio->b_data) {
         kfree(bio);
         return ERR_PTR(-ENOMEM);
@@ -400,14 +399,14 @@ int brelease(struct blkio_desc *bio)
         ret = disk->ops->disk_write(bdev->disk, bdev->first_sector_lba + sector,
             bio->b_data, bio->b_size / disk->sector_size);
     }
-    free_pages(bio->b_data, bio->b_size >> PAGE_SHIFT);
+    free_pages(bio->b_data, PAGE_UP_COUNT(bio->b_size));
     kfree(bio);
     return ret;
 }
 
 int bdrop(struct blkio_desc *bio)
 {
-    free_pages(bio->b_data, bio->b_size >> PAGE_SHIFT);
+    free_pages(bio->b_data, PAGE_UP_COUNT(bio->b_size));
     kfree(bio);
     return 0;
 }

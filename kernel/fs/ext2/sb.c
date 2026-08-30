@@ -213,11 +213,14 @@ ext2_read_super(struct block_device *bdev, struct super_block *sb)
 
     for (int i = 0; i < ext2_sb->s_gdb_count; i++) {
         unsigned long block = descriptor_loc(sb, logic_sb_block, i);
-        ext2_sb->s_group_desc[i] = bread(bdev, block, sb->s_blocksize);
-        if (!ext2_sb->s_group_desc[i]) {
+        ext2_sb->s_group_desc[i] = sb_bread(sb, block);
+        if (IS_ERR_OR_NULL(ext2_sb->s_group_desc[i])) {
             for (int j = 0; j < i; j++)
                 bdrop(ext2_sb->s_group_desc[j]);
             ext2_error(sb, __func__, "unable to read group descriptors");
+            sb = ext2_sb->s_group_desc[i]
+                ? ERR_CAST(ext2_sb->s_group_desc[i])
+                : ERR_PTR(-EIO);
             goto free_ext2_group_desc;
         }
     }
