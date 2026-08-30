@@ -10,6 +10,7 @@
 #include <fs/fs_type.h>
 #include <fs/path.h>
 #include <fs/fcntl.h>
+#include <drivers/blkdev.h>
 
 /**
  * Based on the Linux VFS structures
@@ -40,7 +41,7 @@ struct inode {
     struct list_head    i_list; /* sb list of inodes */
     atomic_uint         i_count;
     unsigned int        i_nlink;
-    u64                 i_size;
+    loff_t              i_size;
     u64                 i_atime;
     u64                 i_mtime;
     u64                 i_ctime;
@@ -98,27 +99,72 @@ struct __cacheline_align dentry_operations {
     int (*d_init)(struct dentry *);
 };
 
+#define BIT(nr)			(1UL << (nr))
+#define BIT_ULL(nr)		(1ULL << (nr))
+
+/*
+ * sb->s_flags.  Note that these mirror the equivalent MS_* flags where
+ * represented in both.
+ */
+#define SB_RDONLY       BIT(0)	/* Mount read-only */
+// #define SB_NOSUID       BIT(1)	/* Ignore suid and sgid bits */
+// #define SB_NODEV        BIT(2)	/* Disallow access to device special files */
+// #define SB_NOEXEC       BIT(3)	/* Disallow program execution */
+// #define SB_SYNCHRONOUS  BIT(4)	/* Writes are synced at once */
+// #define SB_MANDLOCK     BIT(6)	/* Allow mandatory locks on an FS */
+// #define SB_DIRSYNC      BIT(7)	/* Directory modifications are synchronous */
+// #define SB_NOATIME      BIT(10)	/* Do not update access times. */
+// #define SB_NODIRATIME   BIT(11)	/* Do not update directory access times */
+// #define SB_SILENT       BIT(15)
+// #define SB_POSIXACL     BIT(16)	/* VFS does not apply the umask */
+// #define SB_INLINECRYPT  BIT(17)	/* Use blk-crypto for encrypted files */
+// #define SB_KERNMOUNT    BIT(22)	/* this is a kern_mount call */
+// #define SB_I_VERSION    BIT(23)	/* Update inode I_version field */
+// #define SB_LAZYTIME     BIT(25)	/* Update the on-disk [acm]times lazily */
+
+/* These sb flags are internal to the kernel */
+// #define SB_DEAD         BIT(21)
+// #define SB_DYING        BIT(24)
+// #define SB_SUBMOUNT     BIT(26)
+// #define SB_FORCE        BIT(27)
+// #define SB_NOSEC        BIT(28)
+// #define SB_BORN         BIT(29)
+// #define SB_ACTIVE       BIT(30)
+// #define SB_NOUSER       BIT(31)
+
+/* These flags relate to encoding and casefolding */
+#define SB_ENC_STRICT_MODE_FL	(1 << 0)
+
+#define sb_has_strict_encoding(sb) \
+	(sb->s_encoding_flags & SB_ENC_STRICT_MODE_FL)
+
 struct super_block {
     struct list_head    s_list;        /* Keep this first */
     unsigned long       s_blocksize;
+    unsigned char       s_blocksize_bits;
     unsigned long long  s_maxbytes;    /* Max file size */
     enum fs_type        s_type;
 
     const struct super_operations *s_op;
+    unsigned long       s_flags;
     struct dentry       *s_root;
     struct semaphore    s_umount;
     atomic_uint         s_count;
     atomic_bool         s_active;
+    spinlock_t          s_lock;      /* Protects the sb and inode list */
 
     struct block_device *s_bdev;
     struct file         *s_bdev_file;
 
-    spinlock_t          s_lock;      /* Protects the sb and inode list */
     struct list_head    s_inodes;    /* all inodes for this fs */
 
     void *s_fs_info;    /* Filesystem private info */
-    unsigned long       s_blocksize_bits;
 };
+
+static inline bool sb_rdonly(const struct super_block *sb) {
+    return sb->s_flags & SB_RDONLY;
+}
+#define IS_RDONLY(inode)	sb_rdonly((inode)->i_sb)
 
 struct writeback_control {
     unsigned long nr_to_write;
@@ -231,6 +277,7 @@ void dcache_add(struct dentry *d);
 void dcache_remove(struct dentry *d);
 
 struct inode * alloc_inode(struct super_block *sb);
+void destroy_inode(struct inode *inode);
 void iget(struct inode *inode);
 void iput(struct inode *inode);
 
@@ -244,5 +291,10 @@ struct dentry * get_root_dentry(void);
 struct vfsmount * get_empty_vfsmount(enum fs_type type);
 fs_init_func_t get_fs_init(enum fs_type type);
 enum fs_type str_to_fstype(const char *fs_type);
+
+static inline struct blkio_desc *sb_bread(struct super_block *sb, u64 block_num)
+{
+    return bread(sb->s_bdev, block_num, sb->s_blocksize);
+}
 
 #endif

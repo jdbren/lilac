@@ -81,6 +81,7 @@ int tmpfs_readdir(struct file *file, struct dirent *dirp, unsigned int count)
         entry++;
     }
 
+    file->f_pos = pos;
     return i;
 }
 

@@ -124,6 +124,7 @@ int fat32_readdir(struct file *file, struct dirent *dir_buf, unsigned int count)
         dir_buf[i] = info->buf.dirent[i + file->f_pos];
         i++;
     }
+    file->f_pos += i;
     return i;
 }
 
