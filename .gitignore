@@ -12,6 +12,7 @@
 # Debug, IDE, Filesystems
 .DS_Store
 .vscode/settings.json
+.cache
 
 # Text and debug files
 bugs.txt
