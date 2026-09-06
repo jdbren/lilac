@@ -75,7 +75,7 @@ static int user_page_fault(long error, uintptr_t addr)
         goto out;
     }
 #if defined DEBUG_VMA || defined DEBUG_MM
-    klog(LOG_DEBUG, "Found VMA %lx-%lx for faulting address %lx\n", 
+    klog(LOG_DEBUG, "Found VMA %lx-%lx for faulting address %lx\n",
         vma->start, vma->end, addr);
     klog(LOG_DEBUG, "VMA flags: %x\n", vma->vm_flags);
 #endif
@@ -204,9 +204,11 @@ void bnd_handler(struct regs_state *frame)
     }
 }
 
-void dna_handler(struct regs_state *frame)
+void fpu_nm_exception(void);
+
+void nm_handler(struct regs_state *frame)
 {
-    kerror("Device not available (FPU) fault detected\n");
+    fpu_nm_exception();
 }
 
 void invldtss_handler(long error_code, struct regs_state *frame)

@@ -126,7 +126,7 @@ isr_no_err brkp
 isr_no_err ovflw
 isr_no_err bnd
 isr_no_err invldop
-isr_no_err dna
+isr_no_err nm
 isr_err    dblflt
 # isr_no_err cso
 isr_err    invldtss

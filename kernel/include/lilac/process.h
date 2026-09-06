@@ -139,6 +139,7 @@ void *           arch_copy_regs(struct regs_state *src);
 void             save_fp_regs(struct task *p);
 void             restore_fp_regs(struct task *p);
 void             copy_fp_regs(struct task *dst, struct task *src);
+void             fpu_switch(struct task *prev, struct task *next);
 void             arch_prepare_signal(void *pc, int signo);
 long             arch_restore_post_signal(void);
 

@@ -2,6 +2,7 @@
 // GPL-3.0-or-later (see LICENSE.txt)
 #include <lilac/lilac.h>
 #include <lilac/process.h>
+#include <lilac/percpu.h>
 #include <lilac/libc.h>
 #include <lilac/rwsem.h>
 #include <lilac/sched.h>
@@ -273,44 +274,6 @@ void arch_set_user_sp(struct task *p, void *sp)
         panic("Current task has no regs state\n");
     }
     regs->sp = (uintptr_t)sp;
-}
-
-void save_fp_regs(struct task *p)
-{
-    if (!p->fp_regs)
-        p->fp_regs = kzmalloc(512);
-    if (!p->fp_regs)
-        panic("Out of memory allocating FP regs\n");
-#ifdef __x86_64__
-    __builtin_ia32_fxsave64(p->fp_regs);
-#else
-    __builtin_ia32_fxsave(p->fp_regs);
-#endif
-    // set TS flag
-    // write_cr0(read_cr0() | X86_CR0_TS);
-}
-
-// TODO mem leaks
-void copy_fp_regs(struct task *dst, struct task *src)
-{
-    dst->fp_regs = kmalloc(512);
-    if (!src->fp_regs)
-        save_fp_regs(src);
-    if (!dst->fp_regs || !src->fp_regs)
-        panic("FP regs not allocated for copy\n");
-    memcpy(dst->fp_regs, src->fp_regs, 512);
-}
-
-void restore_fp_regs(struct task *p)
-{
-    if (p->fp_regs == NULL)
-        return;
-#ifdef __x86_64__
-    __builtin_ia32_fxrstor64(p->fp_regs);
-#else
-    __builtin_ia32_fxrstor(p->fp_regs);
-#endif
-    // asm ("clts");
 }
 
 __section(".sigtramp") __noreturn

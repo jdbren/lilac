@@ -20,6 +20,7 @@ struct __align(64) cpu_local {
     long scratch;
     void *priv; // architecture specific data
     void *user_stack;
+    struct task *fpu_owner;
 };
 
 #pragma GCC diagnostic push

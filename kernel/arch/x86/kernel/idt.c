@@ -60,7 +60,7 @@ void brkp();
 void ovflw();
 void bnd();
 void invldop();
-void dna();
+void nm();
 void dblflt();
 void invldtss();
 void segnp();
@@ -95,7 +95,7 @@ void idt_init(void)
     idt_entry(4,  (uintptr_t)ovflw,    __KERNEL_CS, 0, INT_GATE);
     idt_entry(5,  (uintptr_t)bnd,      __KERNEL_CS, 0, INT_GATE);
     idt_entry(6,  (uintptr_t)invldop,  __KERNEL_CS, 0, INT_GATE);
-    idt_entry(7,  (uintptr_t)dna,      __KERNEL_CS, 0, INT_GATE);
+    idt_entry(7,  (uintptr_t)nm,      __KERNEL_CS, 0, INT_GATE);
     idt_entry(8,  (uintptr_t)dblflt,   __KERNEL_CS, 0, INT_GATE);
     idt_entry(10, (uintptr_t)invldtss, __KERNEL_CS, 0, INT_GATE);
     idt_entry(11, (uintptr_t)segnp,    __KERNEL_CS, 0, INT_GATE);

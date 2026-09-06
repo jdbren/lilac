@@ -207,6 +207,7 @@ void arch_pre_context_switch(struct task *prev, struct task *next)
 {
     set_tss_esp0((uintptr_t)next->kstack_base + __KERNEL_STACK_SZ);
     prev->tls = (void*)(uintptr_t)rdmsr(IA32_FS_BASE);
+    fpu_switch(prev, next);
 }
 
 void arch_post_context_switch(struct task *p)

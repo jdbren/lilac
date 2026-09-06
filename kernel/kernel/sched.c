@@ -300,11 +300,9 @@ static void context_switch(struct task *prev, struct task *next)
     klog(LOG_DEBUG, "\tPC: %p\n", next->pc);
     klog(LOG_DEBUG, "\tStack: %p\n", next->kstack);
 #endif
-    save_fp_regs(prev);
     arch_pre_context_switch(prev, next);
     __context_switch_asm(prev, next);
     arch_post_context_switch(prev);
-    restore_fp_regs(prev);
 }
 
 struct task *cross_cpu_task(int this_cpu)
