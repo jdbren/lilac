@@ -7,6 +7,8 @@
 
 #include "utils.h"
 
+#define VFS_MAX_SYMLINKS 20
+
 extern struct dentry *root_dentry;
 
 struct dentry *dlookup(struct dentry *parent, char *name)
@@ -99,7 +101,58 @@ static char * next_path_component(const char *path, int *pos)
     return name;
 }
 
-struct dentry * lookup_path_from(struct dentry *parent, const char *path)
+static int path_has_component(const char *path, int pos)
+{
+    while (path[pos] == '/')
+        pos++;
+    return path[pos] != '\0';
+}
+
+static struct dentry * lookup_path_from_inner(struct dentry *parent,
+    const char *path, int follow_final, unsigned int link_count);
+
+static struct dentry * resolve_symlink(struct dentry *find, const char *path,
+    int n_pos, int follow_final, unsigned int link_count)
+{
+    if (!find->d_inode->i_op->get_link)
+        return ERR_PTR(-EIO);
+
+    const char *target = find->d_inode->i_op->get_link(find, find->d_inode);
+    if (IS_ERR(target))
+        return ERR_CAST(target);
+    if (!target)
+        return ERR_PTR(-EIO);
+    if (link_count >= VFS_MAX_SYMLINKS)
+        return ERR_PTR(-ELOOP);
+
+    size_t target_len = strlen(target);
+    size_t suffix_pos = (size_t)n_pos;
+    size_t suffix_len = strlen(path + suffix_pos);
+    if (target_len > PATH_MAX - 2 ||
+        suffix_len > PATH_MAX - target_len - 2)
+        return ERR_PTR(-ENAMETOOLONG);
+
+    char *expanded = kmalloc(target_len + suffix_len + 2);
+    if (!expanded)
+        return ERR_PTR(-ENOMEM);
+    memcpy(expanded, target, target_len);
+    if (suffix_len > 0) {
+        if (target_len > 0 && expanded[target_len - 1] != '/')
+            expanded[target_len++] = '/';
+        memcpy(expanded + target_len, path + suffix_pos, suffix_len);
+        target_len += suffix_len;
+    }
+    expanded[target_len] = '\0';
+
+    struct dentry *base = expanded[0] == '/' ? root_dentry : find->d_parent;
+    struct dentry *resolved = lookup_path_from_inner(base, expanded,
+        follow_final, link_count + 1);
+    kfree(expanded);
+    return resolved;
+}
+
+static struct dentry * lookup_path_from_inner(struct dentry *parent,
+    const char *path, int follow_final, unsigned int link_count)
 {
     int n_pos = 0;
     struct inode *inode;
@@ -184,9 +237,26 @@ struct dentry * lookup_path_from(struct dentry *parent, const char *path)
             }
         }
         release_lock(&parent->d_lock);
+
+        if (find->d_inode && S_ISLNK(find->d_inode->i_mode) &&
+           (follow_final || path_has_component(path, n_pos))) {
+            return resolve_symlink(find, path, n_pos, follow_final, link_count);
+        }
+
         parent = find;
     }
     return parent;
+}
+
+struct dentry * lookup_path_from_flags(struct dentry *parent, const char *path,
+    int follow_final)
+{
+    return lookup_path_from_inner(parent, path, follow_final, 0);
+}
+
+struct dentry * lookup_path_from(struct dentry *parent, const char *path)
+{
+    return lookup_path_from_flags(parent, path, 1);
 }
 
 struct dentry * lookup_path(const char *path)

@@ -191,7 +191,7 @@ SYSCALL_DECL3(lseek, int, fd, off_t, offset, int, whence)
     return vfs_lseek(file, offset, whence);
 }
 
-struct dentry * vfs_lookup(const char *path)
+struct dentry * vfs_lookup_flags(const char *path, int follow_final)
 {
     struct dentry *start = root_dentry;
     if (*path == '\0')
@@ -206,7 +206,12 @@ struct dentry * vfs_lookup(const char *path)
     if (!strcmp(path, "/"))
         return root_dentry;
 
-    return lookup_path_from(start, path);
+    return lookup_path_from_flags(start, path, follow_final);
+}
+
+struct dentry * vfs_lookup(const char *path)
+{
+    return vfs_lookup_flags(path, 1);
 }
 
 static int create_file_at(struct dentry *new_d, umode_t mode)
@@ -223,10 +228,12 @@ struct file *vfs_open(const char *path, int flags, int mode)
     struct file *new_file;
     long err;
 
-    struct dentry *dentry = vfs_lookup(path);
+    struct dentry *dentry = vfs_lookup_flags(path, !(flags & O_NOFOLLOW));
     if (IS_ERR(dentry))
         return ERR_CAST(dentry);
     inode = dentry->d_inode;
+    if (inode && S_ISLNK(inode->i_mode))
+        return ERR_PTR(-ELOOP);
     if (!inode) {
         if (flags & O_CREAT) {
             int err = create_file_at(dentry, mode);
@@ -790,7 +797,7 @@ SYSCALL_DECL2(getcwd, char*, buf, size_t, size)
 
 int vfs_rmdir(const char *path)
 {
-    struct dentry *dentry = vfs_lookup(path);
+    struct dentry *dentry = vfs_lookup_flags(path, 0);
     if (IS_ERR(dentry))
         return PTR_ERR(dentry);
 
@@ -821,7 +828,7 @@ SYSCALL_DECL1(rmdir, const char*, path)
 
 int vfs_unlink(const char *path)
 {
-    struct dentry *dentry = vfs_lookup(path);
+    struct dentry *dentry = vfs_lookup_flags(path, 0);
     if (IS_ERR(dentry))
         return PTR_ERR(dentry);
 
@@ -863,7 +870,7 @@ int vfs_link(const char *oldpath, const char *newpath)
     if (!S_ISREG(old_inode->i_mode)) // only link regular files currently
         return -EPERM;
 
-    struct dentry *new_dentry = vfs_lookup(newpath);
+    struct dentry *new_dentry = vfs_lookup_flags(newpath, 0);
     if (IS_ERR(new_dentry))
         return PTR_ERR(new_dentry);
     if (new_dentry->d_inode)
@@ -902,7 +909,7 @@ SYSCALL_DECL2(link, const char*, oldpath, const char*, newpath)
 
 int vfs_symlink(const char *target, const char *linkpath)
 {
-    struct dentry *link_dentry = vfs_lookup(linkpath);
+    struct dentry *link_dentry = vfs_lookup_flags(linkpath, 0);
     if (IS_ERR(link_dentry))
         return PTR_ERR(link_dentry);
 
@@ -951,7 +958,7 @@ SYSCALL_DECL3(readlink, const char*, path, char *, buf, int, bufsize)
     if (IS_ERR(path_buf))
         return PTR_ERR(path_buf);
 
-    dentry = vfs_lookup(path_buf);
+    dentry = vfs_lookup_flags(path_buf, 0);
     if (IS_ERR(dentry)) {
         err = PTR_ERR(dentry);
         goto error;

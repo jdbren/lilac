@@ -31,6 +31,8 @@ void ext2_destroy_inode(struct inode *inode)
     struct ext2_inode_info *ei = EXT2_I(inode);
 
     kfree(ei);
+    if (inode->i_link)
+        kfree(inode->i_link);
     kfree(inode);
 }
 
