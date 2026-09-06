@@ -4,8 +4,6 @@
 #include <lilac/err.h>
 #include <drivers/blkdev.h>
 
-typedef size_t sector_t;
-
 typedef struct {
     __le32	*p;
     __le32	key;

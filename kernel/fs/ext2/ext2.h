@@ -442,8 +442,22 @@ ext2_group_last_block_no(struct super_block *sb, unsigned long group_no)
             EXT2_BLOCKS_PER_GROUP(sb) - 1;
 }
 
+/*
+ * Test whether an inode is a fast symlink.
+ */
+static inline int ext2_inode_is_fast_symlink(struct inode *inode)
+{
+    int ea_blocks = EXT2_I(inode)->i_file_acl ?
+        (inode->i_sb->s_blocksize >> 9) : 0;
+
+    return (S_ISLNK(inode->i_mode) &&
+        inode->i_blocks - ea_blocks == 0);
+}
+
 extern const struct inode_operations ext2_dir_iops;
 extern const struct inode_operations ext2_file_iops;
+extern const struct inode_operations ext2_symlink_iops;
+extern const struct inode_operations ext2_fast_symlink_iops;
 
 extern const struct file_operations ext2_dir_fops;
 extern const struct file_operations ext2_file_fops;

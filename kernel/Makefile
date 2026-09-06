@@ -91,6 +91,7 @@ fs/ext2/inode.o \
 fs/ext2/dir.o \
 fs/ext2/file.o \
 fs/ext2/block.o \
+fs/ext2/symlink.o \
 fs/fat32/fat32.o \
 fs/fat32/dir.o \
 fs/fat32/file.o \

@@ -70,7 +70,7 @@ struct blkio_desc {
         int dirty   :1;
         int locked  :1;
     } b_state;
-    u64 b_block;
+    sector_t b_block;
     size_t b_size;
     struct block_device *b_bdev;
     unsigned char *b_data;
@@ -84,9 +84,10 @@ int scan_partitions(struct gendisk *disk);
 struct block_device *get_bdev(int major);
 struct block_device *get_bdev_by_uuid(const char *uuid);
 
-struct blkio_desc * bread(struct block_device *bdev, u64 block_num, size_t size);
+struct blkio_desc * bread(struct block_device *bdev, sector_t block_num, size_t size);
 int brelease(struct blkio_desc *buf);
 void bdrop(struct blkio_desc *bio);
+struct blkio_desc * bdev_getblk(struct block_device *bdev, sector_t block_num, size_t size);
 
 int set_blocksize(struct block_device *bdev, int size);
 int sb_set_blocksize(struct super_block *sb, int size);

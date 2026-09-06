@@ -3,18 +3,18 @@
 #include <lilac/err.h>
 #include <lilac/libc.h>
 
-int ext2_file_open(struct inode *inode, struct file *file)
+static int ext2_file_open(struct inode *inode, struct file *file)
 {
     file->f_op = &ext2_file_fops;
     return 0;
 }
 
-int ext2_file_release(struct inode *inode, struct file *file)
+static int ext2_file_release(struct inode *inode, struct file *file)
 {
     return 0;
 }
 
-ssize_t ext2_read(struct file *file, void *buf, size_t count)
+static ssize_t ext2_read(struct file *file, void *buf, size_t count)
 {
     struct inode *inode = file->f_inode;
     struct super_block *sb = inode->i_sb;
