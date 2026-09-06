@@ -263,7 +263,10 @@ int vfs_dupf(int fd);
 int vfs_dup(int oldfd, int newfd);
 
 struct dentry * vfs_lookup(const char *path);
+struct dentry * vfs_lookup_flags(const char *path, int follow_final);
 struct dentry * lookup_path_from(struct dentry *parent, const char *path);
+struct dentry * lookup_path_from_flags(struct dentry *parent, const char *path,
+    int follow_final);
 struct dentry * lookup_path(const char *path);
 struct dentry * dlookup(struct dentry *parent, char *name);
 

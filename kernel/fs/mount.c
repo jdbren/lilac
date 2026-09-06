@@ -64,7 +64,7 @@ static struct dentry * get_final_dentry(struct dentry * parent, const char *path
     if (get_basename(basename, path, 16)) {
         return ERR_PTR(-EINVAL);
     }
-    return lookup_path_from(parent, basename);
+    return lookup_path_from_flags(parent, basename, 0);
 }
 
 // TODO: Implement device layer in fs

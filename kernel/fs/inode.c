@@ -118,11 +118,7 @@ void iput(struct inode *inode)
     list_del(&inode->i_list);
     release_lock(&sb->s_lock);
 
-    if (sb->s_op->destroy_inode) {
-        sb->s_op->destroy_inode(inode);
-    } else {
-        kfree(inode);
-    }
+    destroy_inode(inode);
 }
 
 /*

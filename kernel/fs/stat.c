@@ -8,18 +8,8 @@
 #include <lilac/uaccess.h>
 #include <drivers/blkdev.h>
 
-int vfs_stat(const struct file *f, struct stat *st)
+static int stat_inode(const struct inode *i_ptr, struct stat *st)
 {
-    struct inode *i_ptr;
-    if (f->f_inode) {
-        i_ptr = f->f_inode;
-    } else if (f->f_dentry) {
-        i_ptr = f->f_dentry->d_inode;
-    } else {
-        klog(LOG_WARN, "vfs_stat: unexpected missing inode on %p", f);
-        return -EBADF;
-    }
-
     st->st_ino = i_ptr->i_ino;
     // st->st_dev = i_ptr->i_sb->s_bdev->devnum;
     st->st_dev = 0;
@@ -43,10 +33,34 @@ int vfs_stat(const struct file *f, struct stat *st)
     return 0;
 }
 
+int vfs_stat(const struct file *f, struct stat *st)
+{
+    const struct inode *inode;
+    if (f->f_inode)
+        inode = f->f_inode;
+    else if (f->f_dentry)
+        inode = f->f_dentry->d_inode;
+    else {
+        klog(LOG_WARN, "vfs_stat: unexpected missing inode on %p", f);
+        return -EBADF;
+    }
+
+    return stat_inode(inode, st);
+}
+
+static long stat_path(const char *path, struct stat *st, int follow_final)
+{
+    struct dentry *dentry = vfs_lookup_flags(path, follow_final);
+    if (IS_ERR(dentry))
+        return PTR_ERR(dentry);
+    if (!dentry->d_inode)
+        return -ENOENT;
+    return stat_inode(dentry->d_inode, st);
+}
+
 SYSCALL_DECL2(stat, const char*, path, struct stat*, buf)
 {
     struct stat st;
-    struct file *file;
     char *path_buf;
     long err;
 
@@ -57,19 +71,29 @@ SYSCALL_DECL2(stat, const char*, path, struct stat*, buf)
     if (!access_ok(buf, sizeof(*buf)))
         return -EFAULT;
 
-    file = vfs_open(path_buf, 0, 0);
-    if (IS_ERR(file))
-        return PTR_ERR(file);
-
-    err = vfs_stat(file, &st);
-    if (err < 0) {
-        vfs_close(file);
-        return err;
-    }
-
-    vfs_close(file);
+    err = stat_path(path_buf, &st, 1);
     kfree(path_buf);
 
+    if (err < 0)
+        return err;
+    return copy_to_user(buf, &st, sizeof(st));
+}
+
+SYSCALL_DECL2(lstat, const char*, path, struct stat*, buf)
+{
+    struct stat st;
+    char *path_buf = get_user_path(path);
+    if (IS_ERR(path_buf))
+        return PTR_ERR(path_buf);
+    if (!access_ok(buf, sizeof(*buf))) {
+        kfree(path_buf);
+        return -EFAULT;
+    }
+
+    long err = stat_path(path_buf, &st, 0);
+    kfree(path_buf);
+    if (err < 0)
+        return err;
     return copy_to_user(buf, &st, sizeof(st));
 }
 
