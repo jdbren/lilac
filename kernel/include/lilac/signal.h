@@ -100,7 +100,10 @@ struct task;
 
 #define sig_get_active(t) SIG_APPLY_MASK(t->pending, t->blocked)
 
+// queue a signal for delivery to a task
 int do_raise(struct task *p, int sig);
+// immediate termination of the process
+void do_kill(struct task *p, int sig);
 int handle_signal(void);
 int kill_pgrp(int pgid, int sig);
 

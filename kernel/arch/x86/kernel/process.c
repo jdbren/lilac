@@ -15,6 +15,7 @@
 #include <mm/tlb.h>
 #include <asm/regs.h>
 #include <asm/cpu.h>
+#include <asm/segments.h>
 
 #include "paging.h"
 
@@ -359,7 +360,28 @@ fail:
     do_exit();
 }
 
-// TODO: this state of registers must be validated
+static bool validate_regs_state(struct regs_state *regs)
+{
+    if (!regs) {
+        klog(LOG_WARN, "Regs state is NULL\n");
+        return false;
+    }
+    if (regs->cs != __USER_CS || regs->ss != __USER_DS) {
+        klog(LOG_WARN, "Regs state has invalid segment selectors: cs=%lx ss=%lx\n",
+            regs->cs, regs->ss);
+        return false;
+    }
+    if (regs->sp > __USER_MAX_ADDR) {
+        klog(LOG_WARN, "Regs state has invalid stack pointer: sp=%lx\n", regs->sp);
+        return false;
+    }
+    if (regs->ip > __USER_MAX_ADDR) {
+        klog(LOG_WARN, "Regs state has invalid instruction pointer: ip=%lx\n", regs->ip);
+        return false;
+    }
+    return true;
+}
+
 long arch_restore_post_signal(void)
 {
     struct regs_state *regs = (struct regs_state*)current->regs;
@@ -373,13 +395,20 @@ long arch_restore_post_signal(void)
     uc = (ucontext_t*)(stack + sizeof(struct regs_state) / sizeof(uintptr_t));
     if (get_user(current->blocked, &uc->uc_sigmask)) {
         klog(LOG_WARN, "Failed to get signal mask from user context in signal return, SIGSEGV raised\n");
-        do_raise(current, SIGSEGV);
+        do_kill(current, SIGSEGV);
     }
+
     // Restore registers from user stack
     if (copy_from_user(regs, stack, sizeof(struct regs_state))) {
         klog(LOG_WARN, "Failed to copy regs from user stack in signal return, SIGSEGV raised\n");
-        do_raise(current, SIGSEGV);
+        do_kill(current, SIGSEGV);
     }
+
+    if (!validate_regs_state(regs)) {
+        klog(LOG_WARN, "Invalid regs state in signal return, SIGSEGV raised\n");
+        do_kill(current, SIGSEGV);
+    }
+
     klog(LOG_DEBUG, "Post signal restored regs: ip=%lx sp=%lx\n", regs->ip, regs->sp);
     return regs->ax; // original return value
 }

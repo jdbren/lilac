@@ -82,6 +82,13 @@ SYSCALL_DECL0(sigreturn)
     return arch_restore_post_signal();
 }
 
+void do_kill(struct task *p, int sig)
+{
+    klog(LOG_INFO, "Process %d received fatal signal %d, terminating\n", p->pid, sig);
+    p->exit_status = WCOREDUMP(sig);
+    do_exit();
+}
+
 int do_raise(struct task *p, int sig)
 {
     if (sig <= 0 || sig >= _NSIG) {
@@ -115,9 +122,7 @@ int do_raise(struct task *p, int sig)
     if (sigisblocked(p, sig)) {
         klog(LOG_DEBUG, "Signal %d is currently blocked for process %d\n", sig, p->pid);
         if (sigismember(&synchronous, sig) && p == current) {
-            klog(LOG_INFO, "Process %d received cannot handle %d, terminating\n", p->pid, sig);
-            p->exit_status = WCOREDUMP(sig);
-            do_exit();
+            do_kill(p, sig);
         }
     }
 
