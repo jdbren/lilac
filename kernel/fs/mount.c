@@ -111,7 +111,7 @@ int vfs_mount(struct block_device *srcdev, const char *target,
     if (IS_ERR(sb))
         return PTR_ERR(sb);
 
-    dentry = mnt->init_fs(srcdev, sb); // Todo: add error handling
+    dentry = mnt->init_fs(srcdev, sb);
     if (IS_ERR_OR_NULL(dentry)) {
         destroy_sb(sb);
         return -ENODEV;

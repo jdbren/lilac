@@ -1,4 +1,5 @@
 #include <lilac/libc.h>
+#include <lilac/errno.h>
 
 static bool print(const char *data, size_t length)
 {
@@ -57,8 +58,7 @@ int vprintf(const char *restrict format, va_list args)
             while (format[amount] && format[amount] != '%')
                 amount++;
             if (maxrem < amount) {
-                // TODO: Set errno to EOVERFLOW.
-                return -1;
+                return -EOVERFLOW;
             }
             if (!print(format, amount))
                 return -1;
@@ -111,8 +111,7 @@ int vprintf(const char *restrict format, va_list args)
             format++;
             char c = (char) va_arg(args, int /* char promotes to int */);
             if (!maxrem) {
-                // TODO: Set errno to EOVERFLOW.
-                return -1;
+                return -EOVERFLOW;
             }
             if (!print(&c, sizeof(c)))
                 return -1;
@@ -133,8 +132,7 @@ int vprintf(const char *restrict format, va_list args)
                 }
             }
             if (maxrem < len) {
-                // TODO: Set errno to EOVERFLOW.
-                return -1;
+                return -EOVERFLOW;
             }
             if (!print(str, len))
                 return -1;
@@ -374,8 +372,7 @@ int vprintf(const char *restrict format, va_list args)
             format = format_begun_at;
             size_t len = strlen(format);
             if (maxrem < len) {
-                // TODO: Set errno to EOVERFLOW.
-                return -1;
+                return -EOVERFLOW;
             }
             if (!print(format, len))
                 return -1;

@@ -228,7 +228,6 @@ static void ahci_install_device(struct ahci_device *dev)
         new_disk->sector_count = ata_id_sector_count(id_buf);
         klog(LOG_DEBUG, "Sector size: %u bytes\n", new_disk->sector_size);
         klog(LOG_DEBUG, "Sector count: %lu\n", new_disk->sector_count);
-        // TODO temp for debugging
         assert(new_disk->sector_size == 512);
         assert(new_disk->sector_count > 0);
     } else {
