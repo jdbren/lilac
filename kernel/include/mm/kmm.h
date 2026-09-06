@@ -49,6 +49,12 @@ uintptr_t __walk_pages(void *vaddr);
 
 int map_pages(void *physaddr, void *virtualaddr, int flags, int num_pages);
 int unmap_pages(void *virtualaddr, int num_pages);
+int remap_page(void *physaddr, void *virtualaddr, int flags);
+
+struct mm_info;
+
+void fork_copy_vm_area(uintptr_t child_pgd, struct mm_info *parent_mm,
+    uintptr_t start, uintptr_t end, int vm_flags);
 
 static inline int map_page(void *physaddr, void *virtualaddr, int flags)
 {

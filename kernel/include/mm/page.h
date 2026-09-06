@@ -8,10 +8,10 @@ static __always_inline
 unsigned long ___phys_addr(unsigned long x)
 {
 #ifdef __x86_64__
-	unsigned long y = x - __KERNEL_BASE;
+    unsigned long y = x - __KERNEL_BASE;
 
-	/* use the carry flag to determine if x was < __KERNEL_BASE */
-	return y + ((x > y) ? 0UL : (__KERNEL_BASE - __PHYS_MAP_ADDR));
+    /* use the carry flag to determine if x was < __KERNEL_BASE */
+    return y + ((x > y) ? 0UL : (__KERNEL_BASE - __PHYS_MAP_ADDR));
 #else
     return x >= __PHYS_MAP_ADDR ? x - __PHYS_MAP_ADDR : __pa(x);
 #endif

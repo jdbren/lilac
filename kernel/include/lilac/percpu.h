@@ -11,6 +11,8 @@
 extern char _percpu_start;
 extern char _percpu_end;
 
+extern bool smp_enabled;
+
 struct __align(64) cpu_local {
     struct cpu_local *self;
     unsigned int id;

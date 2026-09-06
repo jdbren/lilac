@@ -109,6 +109,7 @@ static int elf32_load(struct elf_header *hdr, struct mm_info *mm, struct file *e
         desc->mm = mm;
         desc->start = vma_start;
         desc->end = vma_end;
+        fget(elff);
         desc->vm_file = elff;
         desc->vm_pgoff = PAGE_ROUND_DOWN(phdr[i].p_offset) / PAGE_SIZE;
         desc->seg_vaddr = seg_vaddr;
@@ -180,9 +181,7 @@ static uintptr_t load_interp(const char *path, struct mm_info *mm)
 
         struct vm_desc *desc = kzmalloc(sizeof *desc);
         if (!desc) {
-            kfree(phdr);
-            vfs_close(f);
-            return 0;
+            panic("Out of memory");
         }
 
         // Interpreter is ET_DYN: p_vaddr values are relative to INTERP_BASE.
@@ -200,6 +199,7 @@ static uintptr_t load_interp(const char *path, struct mm_info *mm)
         desc->mm = mm;
         desc->start = vma_start;
         desc->end = vma_end;
+        fget(f);
         desc->vm_file = f;
         desc->vm_pgoff = PAGE_ROUND_DOWN(phdr[i].p_offset) / PAGE_SIZE;
         desc->seg_vaddr = seg_vaddr;
@@ -208,6 +208,8 @@ static uintptr_t load_interp(const char *path, struct mm_info *mm)
 
         vma_list_insert(desc, &mm->mmap);
     }
+
+    vfs_close(f);
 
     kfree(phdr);
 
@@ -342,6 +344,7 @@ static int elf64_load(struct elf_header *hdr, struct mm_info *mm, struct file *e
         desc->mm = mm;
         desc->start = vma_start;
         desc->end = vma_end;
+        fget(elff);
         desc->vm_file = elff;
         desc->vm_pgoff = PAGE_ROUND_DOWN(phdr[i].p_offset) / PAGE_SIZE;
         desc->seg_vaddr = seg_vaddr;

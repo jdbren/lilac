@@ -120,6 +120,93 @@ int map_pages(void *phys, void *virt, int flags, int num_pages)
     return 0;
 }
 
+int remap_page(void *phys, void *virt, int flags)
+{
+    pml4e_t *pml4 = (pml4e_t*)ENTRY_ADDR(arch_get_pgd());
+    unsigned long pflags = x86_to_page_flags(flags);
+    pdpte_t *pdpt = get_or_alloc_pdpt(pml4, virt, pflags & 0xFFFF);
+    pde_t *pd = get_or_alloc_pd(pdpt, virt, pflags & 0xFFFF);
+    pte_t *pt = get_or_alloc_pt(pd, virt, pflags & 0xFFFF);
+
+    pt[get_pt_index(virt)] = (uintptr_t)phys | pflags;
+    __native_flush_tlb_single(virt);
+    return 0;
+}
+
+// Copy the user page mappings using copy-on-write semantics
+// Assumes regular 4k page sizes
+void fork_copy_vm_area(uintptr_t child_pgd, struct mm_info *parent_mm,
+    uintptr_t start, uintptr_t end, int vm_flags)
+{
+    bool shared = (vm_flags & VM_SHARED) != 0;
+    int num_pages = (end - start) / PAGE_SIZE;
+
+    int flags = PG_USER;
+    if (!(vm_flags & VM_EXEC))
+        flags |= PG_EXEC_DISABLE;
+    if (vm_flags & (VM_READ|VM_WRITE))
+        flags |= PG_PRESENT;
+    if (shared && (vm_flags & VM_WRITE))
+        flags |= PG_WRITE;
+
+    pml4e_t *dst_pml4 = (pml4e_t*)ENTRY_ADDR(child_pgd);
+    pml4e_t *src_pml4 = (pml4e_t*)ENTRY_ADDR(arch_get_pgd());
+
+    // Cached table pointers
+    int cur_pml4_ndx = -1, cur_pdpt_ndx = -1, cur_pd_ndx = -1;
+    pdpte_t *src_pdpt = NULL, *dst_pdpt = NULL;
+    pde_t *src_pd = NULL, *dst_pd = NULL;
+    pte_t *src_pt = NULL, *dst_pt = NULL;
+
+    for (int i = 0; i < num_pages; i++) {
+        void *virt = (void*)(start + (uintptr_t)i * PAGE_SIZE);
+        u32 pml4_ndx = get_pml4_index(virt);
+        u32 pdpt_ndx = get_pdpt_index(virt);
+        u32 pd_ndx = get_pd_index(virt);
+        u32 pt_ndx = get_pt_index(virt);
+
+        if ((int)pml4_ndx != cur_pml4_ndx) {
+            cur_pml4_ndx = pml4_ndx;
+            cur_pdpt_ndx = -1;
+            src_pdpt = ENTRY_PRESENT(src_pml4[pml4_ndx]) ?
+                (pdpte_t*)ENTRY_ADDR(src_pml4[pml4_ndx]) : NULL;
+            dst_pdpt = get_or_alloc_pdpt(dst_pml4, virt, flags | PG_WRITE | PG_PRESENT);
+        }
+        if ((int)pdpt_ndx != cur_pdpt_ndx) {
+            cur_pdpt_ndx = pdpt_ndx;
+            cur_pd_ndx = -1;
+            src_pd = (src_pdpt && ENTRY_PRESENT(src_pdpt[pdpt_ndx])) ?
+                (pde_t*)ENTRY_ADDR(src_pdpt[pdpt_ndx]) : NULL;
+            dst_pd = get_or_alloc_pd(dst_pdpt, virt, flags | PG_WRITE | PG_PRESENT);
+        }
+        if ((int)pd_ndx != cur_pd_ndx) {
+            cur_pd_ndx = pd_ndx;
+            src_pt = (src_pd && ENTRY_PRESENT(src_pd[pd_ndx])) ?
+                (pte_t*)ENTRY_ADDR(src_pd[pd_ndx]) : NULL;
+            dst_pt = get_or_alloc_pt(dst_pd, virt, flags | PG_WRITE | PG_PRESENT);
+        }
+
+        if (!src_pt || !ENTRY_PRESENT(src_pt[pt_ndx]))
+            continue;
+
+        uintptr_t src_phys = PT_ADDR(src_pt[pt_ndx]);
+        struct page *pg = phys_to_page(src_phys);
+        get_page(pg);
+#ifdef DEBUG_MM
+        mm_dbg_fork_copy_pages_alloc++;
+#endif
+        dst_pt[pt_ndx] = src_phys | flags;
+
+        if (!shared && (vm_flags & VM_WRITE)) {
+            // remove write permission from parent
+            lock_page_table(parent_mm);
+            src_pt[pt_ndx] &= ~(pte_t)PG_WRITE;
+            __native_flush_tlb_single(virt);
+            unlock_page_table(parent_mm);
+        }
+    }
+}
+
 static bool table_is_empty(u64 *table)
 {
     for (int i = 0; i < ENTRIES_PER_TABLE; i++)
@@ -571,6 +658,52 @@ void *__get_physaddr(void *virt)
         return NULL;
     }
     return (void*)(PT_ADDR(pt[pt_ndx]) + ((uintptr_t)virt & 0xFFF));
+}
+
+// Returns 1 if the page was dirty and clears, 0 if clean, -1 if not present
+int get_and_clear_pte_dirty(void *virt)
+{
+    pml4e_t *pml4 = (pml4e_t*)ENTRY_ADDR(arch_get_pgd());
+    u32 pml4_ndx = get_pml4_index(virt);
+    if (!ENTRY_PRESENT(pml4[pml4_ndx]))
+        return -1;
+    pdpte_t *pdpt = (pdpte_t*)ENTRY_ADDR(pml4[pml4_ndx]);
+    u32 pdpt_ndx = get_pdpt_index(virt);
+    if (!ENTRY_PRESENT(pdpt[pdpt_ndx]))
+        return -1;
+
+    if (pdpt[pdpt_ndx] & PG_HUGE_PAGE) {
+        if (!(pdpt[pdpt_ndx] & PG_DIRTY))
+            return 0;
+        pdpt[pdpt_ndx] &= ~(uintptr_t)PG_DIRTY;
+        __native_flush_tlb_single(virt);
+        return 1;
+    }
+
+    pde_t *pd = (pde_t*)ENTRY_ADDR(pdpt[pdpt_ndx]);
+    u32 pd_ndx = get_pd_index(virt);
+    if (!ENTRY_PRESENT(pd[pd_ndx]))
+        return -1;
+
+    if (pd[pd_ndx] & PG_HUGE_PAGE) {
+        if (!(pd[pd_ndx] & PG_DIRTY))
+            return 0;
+        pd[pd_ndx] &= ~(uintptr_t)PG_DIRTY;
+        __native_flush_tlb_single(virt);
+        return 1;
+    }
+
+    pte_t *pt = (pte_t*)ENTRY_ADDR(pd[pd_ndx]);
+    u32 pt_ndx = get_pt_index(virt);
+    if (!ENTRY_PRESENT(pt[pt_ndx]))
+        return -1;
+
+    if (!(pt[pt_ndx] & PG_DIRTY))
+        return 0;
+
+    pt[pt_ndx] &= ~(uintptr_t)PG_DIRTY;
+    __native_flush_tlb_single(virt);
+    return 1;
 }
 
 void * arch_map_frame_bitmap(size_t size)

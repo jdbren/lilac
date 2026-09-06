@@ -136,6 +136,39 @@ static int do_anon_fault(struct vm_desc *vma, uintptr_t pgaddr, unsigned long fl
     return FAULT_SUCCESS;
 }
 
+// Handle a write fault on a page shared by copy_vm_area() at fork time
+static int do_cow_fault(struct vm_desc *vma, uintptr_t pgaddr)
+{
+    uintptr_t old_phys = __walk_pages((void*)pgaddr);
+    if (!old_phys)
+        return FAULT_OOM;
+
+    int mem_pflags = MEM_PF_USER | MEM_PF_WRITE;
+    if (vma->vm_flags & VM_READ)
+        mem_pflags |= MEM_PF_READ;
+    if (!(vma->vm_flags & VM_EXEC))
+        mem_pflags |= MEM_PF_NO_EXEC;
+
+    struct page *old_page = phys_to_page(old_phys);
+    struct mm_info *mm = vma->mm;
+
+    lock_page_table(mm);
+    if (old_page->refcount == 1) {
+        // If the page was already copied and is now only referenced by this process
+        update_user_page_range(pgaddr, PAGE_SIZE, mem_pflags);
+        unlock_page_table(mm);
+        return FAULT_SUCCESS;
+    }
+
+    void *new_page = fault_page_alloc();
+    memcpy(new_page, phys_to_virt(old_phys), PAGE_SIZE);
+    remap_page((void*)virt_to_phys(new_page), (void*)pgaddr, mem_pflags);
+    unlock_page_table(mm);
+
+    put_page(old_page);
+    return FAULT_SUCCESS;
+}
+
 // Handle user memory faults
 int mm_fault(struct vm_desc *vma, uintptr_t addr, unsigned long flags)
 {
@@ -145,8 +178,9 @@ int mm_fault(struct vm_desc *vma, uintptr_t addr, unsigned long flags)
         return FAULT_PROT_VIOLATION;
 
     if (flags & FAULT_PTE_EXIST) {
-        // TODO: Handle present PTE case (copy-on-write)
-        kerror("Page table entry already exists for address %lx\n", addr);
+        if (!(flags & FAULT_WRITE) || !(vma->vm_flags & VM_WRITE))
+            return FAULT_PROT_VIOLATION;
+        return do_cow_fault(vma, page_start);
     }
 
     if (vma->vm_file)

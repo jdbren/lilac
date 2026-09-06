@@ -282,6 +282,8 @@ static int vma_split(struct vm_desc *vma, uintptr_t start, uintptr_t end)
     if (!tail)
         return -ENOMEM;
     *tail = *vma;
+    if (tail->vm_file)
+        fget(tail->vm_file);
     tail->start = end;
     vma->end = start;
     // Insert the tail after the current vma
@@ -290,6 +292,36 @@ static int vma_split(struct vm_desc *vma, uintptr_t start, uintptr_t end)
     if (vma->vm_next)
         vma->vm_next->vm_prev = tail;
     vma->vm_next = tail;
+    return 0;
+}
+
+// Write any dirty pages in [start, end) of a MAP_SHARED file VMA back to disk.
+int writeback_vma_range(struct vm_desc *vma, uintptr_t start, uintptr_t end)
+{
+    if (!vma->vm_file || !(vma->vm_flags & VM_SHARED) || (vma->vm_flags & VM_IO))
+        return 0;
+
+    start = MAX(start, vma->start);
+    end = MIN(end, vma->end);
+
+    for (uintptr_t pgaddr = PAGE_ROUND_DOWN(start); pgaddr < end; pgaddr += PAGE_SIZE) {
+        if (get_and_clear_pte_dirty((void*)pgaddr) <= 0)
+            continue;
+
+        if (pgaddr < vma->seg_vaddr)
+            continue;
+        size_t off_in_seg = pgaddr - vma->seg_vaddr;
+        if (off_in_seg >= vma->vm_fsize)
+            continue;
+
+        size_t bytes = MIN((size_t)PAGE_SIZE, vma->vm_fsize - off_in_seg);
+        uintptr_t phys = __walk_pages((void*)pgaddr);
+        if (!phys)
+            continue;
+
+        vfs_lseek(vma->vm_file, vma->seg_offset + off_in_seg, 0);
+        vfs_write(vma->vm_file, phys_to_virt(phys), bytes);
+    }
     return 0;
 }
 
@@ -308,9 +340,13 @@ static int vma_unmap_range(struct vm_desc *vma, uintptr_t start, uintptr_t end)
     while (vma && vma->start < end) {
         struct vm_desc *next = vma->vm_next;
 
+        writeback_vma_range(vma, start, end);
+
         if (vma->start >= start && vma->end <= end) {
             // Entirely contained
             vma_list_remove(vma, &vma->mm->mmap);
+            if (vma->vm_file)
+                fput(vma->vm_file);
             kfree(vma);
         } else if (vma->start < start && vma->end > end) {
             // VMA spans beyond both sides
@@ -363,18 +399,27 @@ error:
     return err;
 }
 
-// TODO: implement file-backed mmap properly
 int do_mmap_file(struct vm_desc *vma, struct file *file, unsigned long offset)
 {
+    fget(file);
     vma->vm_file = file;
     vma->vm_pgoff = offset / PAGE_SIZE;
     if (file->f_op && file->f_op->mmap) {
         vma->vm_flags |= VM_IO;
         return file->f_op->mmap(file, vma);
     }
+
+    struct inode *inode = file->f_inode;
+    loff_t fsize;
+    acquire_lock(&inode->i_lock);
+    fsize = inode->i_size;
+    release_lock(&inode->i_lock);
+
     vma->seg_vaddr = vma->start;
     vma->seg_offset = offset;
-    vma->vm_fsize = vma->end - vma->start;
+    // faults past EOF are zero-filled
+    vma->vm_fsize = (offset >= (unsigned long)fsize) ? 0
+        : MIN((unsigned long)(fsize - offset), vma->end - vma->start);
     return 0;
 }
 
@@ -460,6 +505,7 @@ SYSCALL_DECL6(mmap, void*, addr, size_t, length, int, prot,
 
     ret = do_mmap_file(vma, file, offset);
     if (ret < 0) {
+        fput(file);
         goto free_vma;
     }
 
@@ -705,4 +751,37 @@ SYSCALL_DECL3(mprotect, void *, addr, size_t, len, int, prot)
         return 0;
 
     return do_mprotect(current->mm, pgaddr, end, convert_mmap_flags(prot, 0));
+}
+
+SYSCALL_DECL3(msync, void *, addr, size_t, len, int, flags)
+{
+    klog(LOG_DEBUG, "msync addr: %p, len: %lu, flags: %x\n", addr, len, flags);
+    uintptr_t pgaddr = (uintptr_t)addr;
+    if (pgaddr & (PAGE_SIZE-1) || pgaddr >= __USER_MAX_ADDR)
+        return -EINVAL;
+    if ((flags & MS_ASYNC) && (flags & MS_SYNC))
+        return -EINVAL;
+
+    uintptr_t end = PAGE_ROUND_UP(pgaddr + len);
+    if (end < pgaddr || end > __USER_MAX_ADDR)
+        return -EINVAL;
+
+    if (len == 0)
+        return 0;
+
+    struct mm_info *mm = current->mm;
+    mmap_read_lock(mm);
+    if (!mm_range_is_mapped(mm, pgaddr, end)) {
+        mmap_read_unlock(mm);
+        return -ENOMEM;
+    }
+
+    struct vm_desc *vma = find_vma(mm, pgaddr);
+    while (vma && vma->start < end) {
+        writeback_vma_range(vma, pgaddr, end);
+        vma = vma->vm_next;
+    }
+    mmap_read_unlock(mm);
+
+    return 0;
 }

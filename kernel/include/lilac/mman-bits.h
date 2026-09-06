@@ -15,4 +15,8 @@
 #define MAP_ANON       0x20
 #define MAP_ANONYMOUS  MAP_ANON
 
+#define MS_ASYNC       0x1
+#define MS_INVALIDATE  0x2
+#define MS_SYNC        0x4
+
 #endif

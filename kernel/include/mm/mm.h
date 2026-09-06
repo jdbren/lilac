@@ -33,6 +33,9 @@ struct mm_info * alloc_mm_info(void);
 #define mmap_write_unlock(mm) up_write(&(mm)->mmap_lock)
 #define mmap_drop_to_read(mm) downgrade_write(&(mm)->mmap_lock)
 
+#define lock_page_table(mm) acquire_lock(&(mm)->page_table_lock)
+#define unlock_page_table(mm) release_lock(&(mm)->page_table_lock)
+
 
 #define VM_NONE         0x0000
 #define VM_READ         0x0001
@@ -89,6 +92,8 @@ int mm_fault(struct vm_desc *vma, uintptr_t addr, unsigned long flags);
 
 void drop_user_page_range(uintptr_t start, size_t size);
 void update_user_page_range(uintptr_t start, size_t size, int flags);
+int get_and_clear_pte_dirty(void *virt);
+int writeback_vma_range(struct vm_desc *vma, uintptr_t start, uintptr_t end);
 
 #ifdef DEBUG_MM
 extern unsigned long mm_dbg_fault_file_pages_alloc;

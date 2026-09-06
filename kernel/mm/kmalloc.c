@@ -100,6 +100,87 @@ static void sb_mtf(struct sb_header*, struct sb_list*);
 static void sb_atf(struct sb_header*, struct sb_list*);
 static size_t next_pow_2(size_t);
 
+static void check_superblock_free_list(const struct sb_header *header,
+    size_t size, unsigned int cpu, int bucket_idx)
+{
+    uintptr_t block_start = (uintptr_t)header;
+    uintptr_t block_end = block_start + SUPERBLOCKSIZE;
+    const alloc_t *alloc = header->free;
+    u32 count = 0;
+
+    while (alloc != NULL) {
+        uintptr_t alloc_addr = (uintptr_t)alloc;
+        if (alloc_addr < block_start + sizeof(*header) ||
+                alloc_addr >= block_end || !is_aligned(alloc, size)) {
+            panic("kmalloc: invalid free-list node %p in superblock %p (cpu %u, bucket %d, size %lu)\n",
+                alloc, header, cpu, bucket_idx, size);
+        }
+        if (++count > header->free_count) {
+            panic("kmalloc: free-list cycle in superblock %p (cpu %u, bucket %d, size %lu)\n",
+                header, cpu, bucket_idx, size);
+        }
+        alloc = alloc->next;
+    }
+
+    if (count != header->free_count) {
+        panic("kmalloc: free-list count mismatch in superblock %p (cpu %u, bucket %d, expected %u, found %u)\n",
+            header, cpu, bucket_idx, header->free_count, count);
+    }
+}
+
+static void kmalloc_check_size(size_t size)
+{
+    if (size == 0 || size > SUPERBLOCKSIZE / 2)
+        panic("kmalloc: cannot check allocation size %lu\n", size);
+
+    size = size < MIN_ALLOC ? MIN_ALLOC : next_pow_2(size);
+    int bucket_idx = log2(size) - MIN_ALLOC_POWER;
+
+    for (unsigned int cpu = 0; cpu < 1; cpu++) {
+        if (__per_cpu_offset[cpu] == 0)
+            continue;
+
+        struct sb_list *bucket = get_bucket(bucket_idx);
+        struct sb_header *previous = NULL;
+        struct sb_header *header = bucket->head;
+        u32 free_count = 0;
+        u32 superblocks = 0;
+
+        while (header != NULL) {
+            if (++superblocks > bucket->num_sb) {
+                panic("kmalloc: superblock-list cycle in cpu %u bucket %d\n",
+                    cpu, bucket_idx);
+            }
+            if (header->canary != 0xDEAD || header->is_large ||
+                    header->alloc_size != size || header->cpu != cpu ||
+                    header->prev != previous) {
+                panic("kmalloc: invalid superblock %p (cpu %u, bucket %d)\n",
+                    header, cpu, bucket_idx);
+            }
+
+            check_superblock_free_list(header, size, cpu, bucket_idx);
+            free_count += header->free_count;
+            previous = header;
+            header = header->next;
+        }
+
+        if (superblocks != bucket->num_sb || free_count != bucket->free_count) {
+            panic("kmalloc: bucket %d count mismatch on cpu %u (superblocks %u/%u, free %u/%u)\n",
+                bucket_idx, cpu, superblocks, bucket->num_sb,
+                free_count, bucket->free_count);
+        }
+    }
+}
+
+void kmalloc_validate_heap(void)
+{
+#ifdef DEBUG_CHECK_KMALLOC
+    for (int i = 0; i < BUCKETS - MIN_ALLOC_POWER - 1; i++) {
+        kmalloc_check_size(1 << (i + MIN_ALLOC_POWER));
+    }
+#endif
+}
+
 #ifdef CONFIG_KMALLOC_STATS
 static inline u16 sb_capacity(const struct sb_header *header)
 {
@@ -302,11 +383,12 @@ void kfree(const void *ptr)
     if (header != NULL && !(header == bucket->head))
         sb_mtf(header, bucket);
 #ifdef DEBUG_KMALLOC
-    klog(LOG_DEBUG, "kfree: Freed memory at %p, bucket %d, free_count %d\n",
+    printf("kfree: Freed memory at %p, bucket %d, free_count %d\n",
            ptr, bucket_idx, bucket->free_count);
 #endif
 #ifdef DEBUG_CHECK_KMALLOC
     verify_bucket_counts();
+    kmalloc_validate_heap();
 #endif
 }
 
@@ -369,6 +451,10 @@ static void* malloc_small(size_t size)
     header->free_count--;
     bucket->free_count--;
 
+#ifdef DEBUG_CHECK_KMALLOC
+    kmalloc_validate_heap();
+#endif
+
     assert(is_aligned(alloc, size));
     return (void*)alloc;
 }
@@ -423,6 +509,7 @@ static void init_super(struct sb_header *header, size_t size, struct sb_list *bu
         current->next = next;
         current = next;
     }
+    current->next = NULL;
 }
 
 // Move superblock to front of list

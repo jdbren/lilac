@@ -7,6 +7,7 @@
 #include <lilac/sched.h>
 #include <lilac/uaccess.h>
 #include <lilac/wait.h>
+#include <lilac/fs.h>
 #include <mm/mm.h>
 #include <mm/kmm.h>
 #include <mm/page.h>
@@ -112,7 +113,7 @@ void arch_unmap_all_user_vm(struct mm_info *info)
 
     klog(LOG_DEBUG, "Unmapping all user VM for mm %p\n", info);
     mmap_write_lock(info);
-    acquire_lock(&info->page_table_lock);
+    lock_page_table(info);
     struct vm_desc *desc = info->mmap;
     while (desc) {
         struct vm_desc *next = desc->vm_next;
@@ -125,14 +126,17 @@ void arch_unmap_all_user_vm(struct mm_info *info)
         if (desc->vm_flags & VM_IO) {
             unmap_pages((void*)desc->start, (desc->end - desc->start) / PAGE_SIZE);
         } else {
+            writeback_vma_range(desc, desc->start, desc->end);
             drop_user_page_range(desc->start, desc->end - desc->start);
         }
+        if (desc->vm_file)
+            fput(desc->vm_file);
         kfree(desc);
         desc = next;
     }
     tlb_shootdown(&tlb, current);
     info->mmap = NULL;
-    release_lock(&info->page_table_lock);
+    unlock_page_table(info);
     mmap_write_unlock(info);
 }
 
@@ -146,52 +150,6 @@ void arch_reclaim_mem(struct task *p)
 
 
 #ifdef __x86_64__
-static void copy_vm_area(void *cr3, struct vm_desc *new_desc)
-{
-    int num_pages = PAGE_ROUND_UP(new_desc->end - new_desc->start) / PAGE_SIZE;
-    uintptr_t phys = virt_to_phys(get_zeroed_pages(num_pages, ALLOC_NORMAL));
-#ifdef DEBUG_MM
-    mm_dbg_fork_copy_pages_alloc += num_pages;
-#endif
-
-    if (!(new_desc->vm_flags & (VM_READ|VM_WRITE|VM_EXEC))) {
-        for (int i = 0; i < num_pages; i++) {
-            void *virt = (void*)(new_desc->start + i * PAGE_SIZE);
-            uintptr_t src_phys = __walk_pages(virt);
-            void *dst = phys_mem_mapping + phys + i * PAGE_SIZE;
-            if (src_phys)
-                memcpy(dst, phys_mem_mapping + src_phys, PAGE_SIZE);
-            else
-                memset(dst, 0, PAGE_SIZE);
-        }
-    } else {
-        asm ("stac\n\t");
-        memcpy((unsigned char*)phys_mem_mapping + phys, (void*)new_desc->start, num_pages * PAGE_SIZE);
-        asm ("clac\n\t");
-    }
-
-    int flags = PG_USER;
-
-    for (int i = 0; i < num_pages; i++) {
-        void *virt = (void*)(new_desc->start + i * PAGE_SIZE);
-        pml4e_t *pml4 = (pml4e_t*)cr3;
-        pdpte_t *pdpt = get_or_alloc_pdpt(pml4, virt, flags | PG_WRITE | PG_PRESENT);
-        pde_t *pd = get_or_alloc_pd(pdpt, virt, flags | PG_WRITE | PG_PRESENT);
-        pte_t *pt = get_or_alloc_pt(pd, virt, flags | PG_WRITE | PG_PRESENT);
-
-        if (!(new_desc->vm_flags & VM_EXEC))
-            flags |= PG_EXEC_DISABLE;
-        else
-            flags |= PG_PRESENT;
-        if (new_desc->vm_flags & VM_WRITE)
-            flags |= PG_WRITE|PG_PRESENT;
-        if (new_desc->vm_flags & VM_READ)
-            flags |= PG_PRESENT;
-
-        pt[get_pt_index(virt)] = (phys + i * PAGE_SIZE) | flags;
-    }
-}
-
 struct mm_info *arch_copy_mmap(struct mm_info *parent)
 {
     struct mm_info *child = arch_process_mmap(sizeof(void*) == 8);
@@ -203,7 +161,6 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
     child->brk = parent->brk;
     child->start_stack = parent->start_stack;
     child->total_vm = parent->total_vm;
-    u64 *cr3 = (void*)(phys_mem_mapping + child->pgd);
 
     struct vm_desc *desc = parent->mmap;
     while (desc) {
@@ -218,10 +175,13 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
         new_desc->mm = child;
         new_desc->vm_next = NULL;
         new_desc->vm_prev = NULL;
+        if (new_desc->vm_file)
+            fget(new_desc->vm_file);
         vma_list_insert(new_desc, &child->mmap);
         desc = desc->vm_next;
 
-        copy_vm_area((void*)cr3, new_desc);
+        fork_copy_vm_area(child->pgd, parent, new_desc->start, new_desc->end,
+            new_desc->vm_flags);
     }
 
     return child;
@@ -250,6 +210,8 @@ struct mm_info *arch_copy_mmap(struct mm_info *parent)
         new_desc->mm = child;
         new_desc->vm_next = NULL;
         new_desc->vm_prev = NULL;
+        if (new_desc->vm_file)
+            fget(new_desc->vm_file);
         vma_list_insert(new_desc, &child->mmap);
         desc = desc->vm_next;
 

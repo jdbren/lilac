@@ -1,5 +1,5 @@
 #include <lilac/fs.h>
-#include <lilac/err.h>
+#include <lilac/panic.h>
 #include <lilac/log.h>
 #include <mm/kmalloc.h>
 
@@ -34,6 +34,9 @@ void fput(struct file *file)
 #ifdef DEBUG_VFS_FULL
     klog(LOG_DEBUG, "fput: file = %p, count = %u\n", file, file->f_count - 1);
 #endif
+    if (file->f_count <= 0)
+        panic("fput: file count is invalid for file = %p\n", file);
+
     if (--file->f_count)
         return;
 

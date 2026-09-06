@@ -213,7 +213,7 @@ struct dirent {
 
 struct file {
     spinlock_t      f_lock;
-    atomic_uint     f_count;
+    atomic_int      f_count;
     mode_t          f_mode;
     atomic_uint     f_owner;
     off_t           f_pos;

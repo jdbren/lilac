@@ -16,7 +16,7 @@ __noreturn void kerror(const char *msg, ...)
 	console_write_screen(1);
     u64 stime = ktime_get();
 
-    if (!panic_mode) {
+    if (!panic_mode && smp_enabled) {
         arch_broadcast_others_ipi(HALT_CPU_VECTOR);
         panic_mode = true;
     }
@@ -42,7 +42,8 @@ __noreturn void kerror(const char *msg, ...)
     arch_panic_stack_trace();
     klog_unlock();
 
-    arch_ipi_send_self(HALT_CPU_VECTOR);
+    if (smp_enabled)
+        arch_ipi_send_self(HALT_CPU_VECTOR);
     for (;;)
         arch_halt_cpu();
 }
