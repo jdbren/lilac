@@ -139,9 +139,14 @@ static int do_anon_fault(struct vm_desc *vma, uintptr_t pgaddr, unsigned long fl
 // Handle a write fault on a page shared by copy_vm_area() at fork time
 static int do_cow_fault(struct vm_desc *vma, uintptr_t pgaddr)
 {
+    struct mm_info *mm = vma->mm;
+
+    lock_page_table(mm);
     uintptr_t old_phys = __walk_pages((void*)pgaddr);
-    if (!old_phys)
+    if (!old_phys) {
+        unlock_page_table(mm);
         return FAULT_OOM;
+    }
 
     int mem_pflags = MEM_PF_USER | MEM_PF_WRITE;
     if (vma->vm_flags & VM_READ)
@@ -150,9 +155,6 @@ static int do_cow_fault(struct vm_desc *vma, uintptr_t pgaddr)
         mem_pflags |= MEM_PF_NO_EXEC;
 
     struct page *old_page = phys_to_page(old_phys);
-    struct mm_info *mm = vma->mm;
-
-    lock_page_table(mm);
     if (old_page->refcount == 1) {
         // If the page was already copied and is now only referenced by this process
         update_user_page_range(pgaddr, PAGE_SIZE, mem_pflags);

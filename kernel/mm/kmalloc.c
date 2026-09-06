@@ -134,41 +134,37 @@ static void kmalloc_check_size(size_t size)
         panic("kmalloc: cannot check allocation size %lu\n", size);
 
     size = size < MIN_ALLOC ? MIN_ALLOC : next_pow_2(size);
-    int bucket_idx = log2(size) - MIN_ALLOC_POWER;
+    const int bucket_idx = log2(size) - MIN_ALLOC_POWER;
+    const int cpu = this_cpu_id();
 
-    for (unsigned int cpu = 0; cpu < 1; cpu++) {
-        if (__per_cpu_offset[cpu] == 0)
-            continue;
+    struct sb_list *bucket = get_bucket(bucket_idx);
+    struct sb_header *previous = NULL;
+    struct sb_header *header = bucket->head;
+    u32 free_count = 0;
+    u32 superblocks = 0;
 
-        struct sb_list *bucket = get_bucket(bucket_idx);
-        struct sb_header *previous = NULL;
-        struct sb_header *header = bucket->head;
-        u32 free_count = 0;
-        u32 superblocks = 0;
-
-        while (header != NULL) {
-            if (++superblocks > bucket->num_sb) {
-                panic("kmalloc: superblock-list cycle in cpu %u bucket %d\n",
-                    cpu, bucket_idx);
-            }
-            if (header->canary != 0xDEAD || header->is_large ||
-                    header->alloc_size != size || header->cpu != cpu ||
-                    header->prev != previous) {
-                panic("kmalloc: invalid superblock %p (cpu %u, bucket %d)\n",
-                    header, cpu, bucket_idx);
-            }
-
-            check_superblock_free_list(header, size, cpu, bucket_idx);
-            free_count += header->free_count;
-            previous = header;
-            header = header->next;
+    while (header != NULL) {
+        if (++superblocks > bucket->num_sb) {
+            panic("kmalloc: superblock-list cycle in cpu %u bucket %d\n",
+                cpu, bucket_idx);
+        }
+        if (header->canary != 0xDEAD || header->is_large ||
+                header->alloc_size != size || header->cpu != cpu ||
+                header->prev != previous) {
+            panic("kmalloc: invalid superblock %p (cpu %u, bucket %d)\n",
+                header, cpu, bucket_idx);
         }
 
-        if (superblocks != bucket->num_sb || free_count != bucket->free_count) {
-            panic("kmalloc: bucket %d count mismatch on cpu %u (superblocks %u/%u, free %u/%u)\n",
-                bucket_idx, cpu, superblocks, bucket->num_sb,
-                free_count, bucket->free_count);
-        }
+        check_superblock_free_list(header, size, cpu, bucket_idx);
+        free_count += header->free_count;
+        previous = header;
+        header = header->next;
+    }
+
+    if (superblocks != bucket->num_sb || free_count != bucket->free_count) {
+        panic("kmalloc: bucket %d count mismatch on cpu %u (superblocks %u/%u, free %u/%u)\n",
+            bucket_idx, cpu, superblocks, bucket->num_sb,
+            free_count, bucket->free_count);
     }
 }
 

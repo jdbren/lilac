@@ -32,7 +32,7 @@ void fput(struct file *file)
     if (dentry)
         inode = dentry->d_inode;
 #ifdef DEBUG_VFS_FULL
-    klog(LOG_DEBUG, "fput: file = %p, count = %u\n", file, file->f_count - 1);
+    klog(LOG_DEBUG, "fput: file = %p, count = %d\n", file, file->f_count - 1);
 #endif
     if (file->f_count <= 0)
         panic("fput: file count is invalid for file = %p\n", file);

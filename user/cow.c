@@ -54,6 +54,5 @@ int main(void)
 
     int status;
     waitpid(pid, &status, 0);
-    printf("Child exited with status %d\n",WEXITSTATUS(status));
     return WIFEXITED(status) ? WEXITSTATUS(status) : 5;
 }

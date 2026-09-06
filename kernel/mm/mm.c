@@ -304,6 +304,7 @@ int writeback_vma_range(struct vm_desc *vma, uintptr_t start, uintptr_t end)
     start = MAX(start, vma->start);
     end = MIN(end, vma->end);
 
+    lock_page_table(vma->mm);
     for (uintptr_t pgaddr = PAGE_ROUND_DOWN(start); pgaddr < end; pgaddr += PAGE_SIZE) {
         if (get_and_clear_pte_dirty((void*)pgaddr) <= 0)
             continue;
@@ -322,6 +323,7 @@ int writeback_vma_range(struct vm_desc *vma, uintptr_t start, uintptr_t end)
         vfs_lseek(vma->vm_file, vma->seg_offset + off_in_seg, 0);
         vfs_write(vma->vm_file, phys_to_virt(phys), bytes);
     }
+    unlock_page_table(vma->mm);
     return 0;
 }
 
