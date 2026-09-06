@@ -53,12 +53,19 @@ struct inode {
 
     const struct file_operations *i_fop;
 
+    union {
+        struct pipe_buf *i_pipe;
+        // struct cdev    *i_cdev;
+        char            *i_link;
+        // unsigned        i_dir_seq;
+    };
+
     void *i_private; /* fs or device private pointer */
 };
 
 struct __cacheline_align inode_operations {
     struct dentry * (*lookup)(struct inode *, struct dentry *, unsigned int);
-    const char * (*get_link) (struct dentry *, struct inode *);
+    const char * (*get_link)(struct dentry *, struct inode *);
     int (*open)(struct inode *, struct file *);
     int (*create)(struct inode *, struct dentry *, umode_t);
     int (*link)(struct dentry *old_d, struct inode *dir, struct dentry *new_d);
@@ -136,7 +143,7 @@ struct __cacheline_align dentry_operations {
 #define SB_ENC_STRICT_MODE_FL	(1 << 0)
 
 #define sb_has_strict_encoding(sb) \
-	(sb->s_encoding_flags & SB_ENC_STRICT_MODE_FL)
+    (sb->s_encoding_flags & SB_ENC_STRICT_MODE_FL)
 
 struct super_block {
     struct list_head    s_list;        /* Keep this first */
@@ -216,10 +223,7 @@ struct file {
     u64             f_version;
 
     const struct file_operations *f_op;
-    union {
-        struct pipe_buf *pipe; // for pipe files
-        void *f_data; // other fs specific data
-    };
+    void *f_data; // other fs specific data
     struct vfsmount *f_disk;
 };
 
@@ -292,9 +296,14 @@ struct vfsmount * get_empty_vfsmount(enum fs_type type);
 fs_init_func_t get_fs_init(enum fs_type type);
 enum fs_type str_to_fstype(const char *fs_type);
 
-static inline struct blkio_desc *sb_bread(struct super_block *sb, u64 block_num)
+static inline struct blkio_desc *sb_bread(struct super_block *sb, sector_t block_num)
 {
     return bread(sb->s_bdev, block_num, sb->s_blocksize);
+}
+
+static inline struct blkio_desc *sb_getblk(struct super_block *sb, sector_t block_num)
+{
+    return bdev_getblk(sb->s_bdev, block_num, sb->s_blocksize);
 }
 
 #endif

@@ -54,6 +54,9 @@ struct pipe_buf * create_pipe(size_t buf_size)
         return ERR_PTR(-ENOMEM);
     }
 
+    p->p_inode->i_pipe = p;
+    p->p_inode->i_size = buf_size;
+
     p->buf_size = buf_size;
     INIT_LIST_HEAD(&p->read_wq.task_list);
     INIT_LIST_HEAD(&p->write_wq.task_list);
@@ -88,7 +91,7 @@ ssize_t pipe_read(struct file *f, void *buf, size_t count)
         return 0;
 
 
-    struct pipe_buf *pipe = f->pipe;
+    struct pipe_buf *pipe = f->f_inode->i_pipe;
     int pos, to_read;
     if (!pipe) {
         klog(LOG_ERROR, "pipe_read: Invalid pipe buffer\n");
@@ -123,7 +126,7 @@ ssize_t pipe_write(struct file *f, const void *buf, size_t count)
 {
     if (count == 0 || !buf || !f)
         return 0;
-    struct pipe_buf *pipe = f->pipe;
+    struct pipe_buf *pipe = f->f_inode->i_pipe;
     if (!pipe) {
         klog(LOG_ERROR, "pipe_write: Invalid pipe buffer\n");
         return -EIO;
@@ -165,10 +168,10 @@ ssize_t pipe_write(struct file *f, const void *buf, size_t count)
 
 int pipe_close(struct inode *i, struct file *f)
 {
-    if (!f || !f->pipe)
+    if (!f || !f->f_inode || !f->f_inode->i_pipe)
         return -EINVAL;
 
-    struct pipe_buf *p = f->pipe;
+    struct pipe_buf *p = f->f_inode->i_pipe;
     acquire_lock(&p->lock);
 
     if ((f->f_mode & O_ACCMODE) == O_WRONLY) {
@@ -190,7 +193,6 @@ int pipe_close(struct inode *i, struct file *f)
         destroy_pipe(p);
     }
 
-    f->pipe = NULL;
     return 0;
 }
 
@@ -215,12 +217,10 @@ SYSCALL_DECL1(pipe, int, pipefd[2])
 
     read_end->f_op = &pipe_fops;
     read_end->f_mode = O_RDONLY;
-    read_end->pipe = p;
     read_end->f_inode = p->p_inode;
 
     write_end->f_op = &pipe_fops;
     write_end->f_mode = O_WRONLY;
-    write_end->pipe = p;
     write_end->f_inode = p->p_inode;
 
     int rfd = get_next_fd(current->files, read_end);

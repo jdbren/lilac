@@ -2,15 +2,14 @@
 #define _FS_PATH_H
 
 #include <lilac/config.h>
-
-#ifndef PATH_MAX
-#define PATH_MAX 1024
-#endif
-#ifndef NAME_MAX
-#define NAME_MAX 64
-#endif
+#include <lilac/libc.h>
 
 __must_check
 char * get_user_path(const char *path);
+
+static inline void nd_terminate_link(void *name, size_t len, size_t maxlen)
+{
+    ((char *) name)[MIN(len, maxlen)] = '\0';
+}
 
 #endif

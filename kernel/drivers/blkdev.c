@@ -355,7 +355,7 @@ int sb_min_blocksize(struct super_block *sb, int size)
     return sb_set_blocksize(sb, size);
 }
 
-struct blkio_desc * bread(struct block_device *bdev, u64 block_num, size_t size)
+struct blkio_desc * bread(struct block_device *bdev, sector_t block_num, size_t size)
 {
     struct gendisk *disk = bdev->disk;
     struct blkio_desc *bio;
@@ -415,4 +415,24 @@ void bdrop(struct blkio_desc *bio)
     if (!bio) return;
     free_pages(bio->b_data, PAGE_UP_COUNT(bio->b_size));
     kfree(bio);
+}
+
+struct blkio_desc * bdev_getblk(struct block_device *bdev, sector_t block_num, size_t size)
+{
+    struct blkio_desc *bio = kzmalloc(sizeof(struct blkio_desc));
+    if (!bio)
+        return ERR_PTR(-ENOMEM);
+
+    bio->b_block = block_num;
+    bio->b_size = size;
+    bio->b_bdev = bdev;
+    bio->b_data = get_free_pages(PAGE_UP_COUNT(size), 0);
+    if (!bio->b_data) {
+        kfree(bio);
+        return ERR_PTR(-ENOMEM);
+    }
+    bio->b_page = virt_to_page(bio->b_data);
+    INIT_LIST_HEAD(&bio->b_list);
+
+    return bio;
 }

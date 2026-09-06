@@ -29,6 +29,7 @@ typedef long long      off64_t;
 typedef unsigned short nlink_t;
 typedef unsigned int   blksize_t;
 typedef unsigned long  blkcnt_t;
+typedef unsigned long  sector_t;
 typedef unsigned short uid_t;
 typedef unsigned short gid_t;
 typedef s64 time_t;

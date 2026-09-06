@@ -255,9 +255,14 @@ struct file *vfs_open(const char *path, int flags, int mode)
     if (IS_ERR_OR_NULL(new_file))
         return ERR_PTR(-ENOMEM);
 
-    if ((err = inode->i_op->open(inode, new_file)) < 0) {
-        fput(new_file);
-        return ERR_PTR(err);
+    if (inode->i_op->open) {
+        if ((err = inode->i_op->open(inode, new_file)) < 0) {
+            fput(new_file);
+            return ERR_PTR(err);
+        }
+    } else {
+        klog(LOG_DEBUG, "VFS: No open operation for inode %p\n", inode);
+        new_file->f_op = inode->i_fop;
     }
 
     new_file->f_mode = flags | (flags & ~(O_CREAT|O_EXCL|O_NOCTTY|O_TRUNC));
@@ -935,7 +940,9 @@ SYSCALL_DECL2(symlink, const char*, target, const char*, linkpath)
 SYSCALL_DECL3(readlink, const char*, path, char *, buf, int, bufsize)
 {
     struct dentry *dentry;
+    struct inode *inode;
     char *path_buf;
+    long err;
 
     if (!access_ok(buf, bufsize))
         return -EFAULT;
@@ -945,16 +952,46 @@ SYSCALL_DECL3(readlink, const char*, path, char *, buf, int, bufsize)
         return PTR_ERR(path_buf);
 
     dentry = vfs_lookup(path_buf);
-    if (IS_ERR(dentry))
-        return PTR_ERR(dentry);
-    if (!dentry->d_inode)
-        return -ENOENT;
-    if (!S_ISLNK(dentry->d_inode->i_mode))
-        return -EINVAL;
-    if (!dentry->d_inode->i_op->readlink)
-        return -EINVAL;
+    if (IS_ERR(dentry)) {
+        err = PTR_ERR(dentry);
+        goto error;
+    }
 
-    return dentry->d_inode->i_op->readlink(dentry, buf, bufsize);
+    if (!dentry->d_inode) {
+        err = -ENOENT;
+        goto error;
+    }
+
+    inode = dentry->d_inode;
+    if (!S_ISLNK(inode->i_mode)) {
+        err = -EINVAL;
+        goto error;
+    }
+
+    if (inode->i_op->readlink) {
+        err = inode->i_op->readlink(dentry, buf, bufsize);
+    } else if (inode->i_op->get_link) {
+        const char *lnk = inode->i_op->get_link(dentry, inode);
+        if (IS_ERR(lnk)) {
+            err = PTR_ERR(lnk);
+            goto error;
+        }
+        int len = strlen(lnk);
+        if (len >= bufsize) {
+            err = -ERANGE;
+            goto error;
+        }
+        err = copy_to_user(buf, lnk, len);
+        if (err < 0)
+            goto error;
+        err = len;
+    } else {
+        err = -EINVAL;
+    }
+
+error:
+    kfree(path_buf);
+    return err;
 }
 
 struct iovec {
