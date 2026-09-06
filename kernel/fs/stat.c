@@ -68,8 +68,10 @@ SYSCALL_DECL2(stat, const char*, path, struct stat*, buf)
     if (IS_ERR(path_buf))
         return PTR_ERR(path_buf);
 
-    if (!access_ok(buf, sizeof(*buf)))
+    if (!access_ok(buf, sizeof(*buf))) {
+        kfree(path_buf);
         return -EFAULT;
+    }
 
     err = stat_path(path_buf, &st, 1);
     kfree(path_buf);

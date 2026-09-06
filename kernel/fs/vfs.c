@@ -951,6 +951,8 @@ SYSCALL_DECL3(readlink, const char*, path, char *, buf, int, bufsize)
     char *path_buf;
     long err;
 
+    if (bufsize <= 0)
+        return -EINVAL;
     if (!access_ok(buf, bufsize))
         return -EFAULT;
 
@@ -984,7 +986,7 @@ SYSCALL_DECL3(readlink, const char*, path, char *, buf, int, bufsize)
             goto error;
         }
         int len = strlen(lnk);
-        if (len >= bufsize) {
+        if (len > bufsize) {
             err = -ERANGE;
             goto error;
         }
