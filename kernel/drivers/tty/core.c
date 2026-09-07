@@ -63,6 +63,7 @@ static struct tty ttys[NUM_STATIC_TTYS] = {
         .termios_lock = SPINLOCK_INIT,
         .ctrl.lock = SPINLOCK_INIT,
         .read_wait.lock = SPINLOCK_INIT,
+        .flow_wait.lock = SPINLOCK_INIT,
     }
 };
 static spinlock_t ttys_lock = SPINLOCK_INIT;
@@ -87,6 +88,7 @@ int init_tty_struct(struct tty *tty, int i)
     mutex_init(&tty->write_lock);
     mutex_init(&tty->winsize_lock);
     INIT_LIST_HEAD(&tty->read_wait.task_list);
+    INIT_LIST_HEAD(&tty->flow_wait.task_list);
     tty->data = kzmalloc(sizeof(*tty->data));
     mutex_init(&tty->data->read_lock);
     tty->index = i;
@@ -229,12 +231,9 @@ int __tty_check_change(struct tty *tty, int sig)
         if (is_ignored(sig)) {
             if (sig == SIGTTIN)
                 ret = -EIO;
-        }
-        // TODO
-        /*else if (is_current_pgrp_orphaned()) {
+        } else if (is_current_pgrp_orphaned()) {
             ret = -EIO;
-        }*/
-        else {
+        } else {
             kill_pgrp(pgrp, sig);
             // set_thread_flag(TIF_SIGPENDING);
             ret = -ERESTART;

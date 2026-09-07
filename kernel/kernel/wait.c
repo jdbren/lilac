@@ -132,7 +132,6 @@ static pid_t handle_exited_child(struct task *child, int *status)
         klog(LOG_DEBUG, "wait_any: Child %d exited with status %d\n", child_pid, *status);
     }
     reap_task(child);
-    kfree(child);
     return child_pid;
 }
 
@@ -176,7 +175,6 @@ static pid_t wait_for(struct task *p, int *status, bool nohang, bool wait_stoppe
 
     if (p->state == TASK_ZOMBIE) {
         reap_task(p);
-        kfree(p);
     }
     return pid;
 }

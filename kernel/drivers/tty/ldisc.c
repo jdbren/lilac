@@ -288,7 +288,7 @@ static bool flow_control(struct tty *tty, u8 c)
 
     if (c == START_CHAR(tty)) {
         tty->ctrl.stopped = false;
-        // TODO: wake output processes
+        wake_all(&tty->flow_wait);
         return true;
     } else if (c == STOP_CHAR(tty)) {
         tty->ctrl.stopped = true;
@@ -628,10 +628,8 @@ ssize_t default_tty_write(struct tty *tty, struct file *file, const u8 *buf, siz
     mutex_lock(&tty->write_lock);
 
     if (tty->ctrl.stopped) {
-        // TODO: Should block until resumed
         klog(LOG_WARN, "tty_write: output is stopped by flow control\n");
-        mutex_unlock(&tty->write_lock);
-        return -EAGAIN;
+        sleep_on(&tty->flow_wait);
     }
 
     ssize_t ret;

@@ -64,6 +64,7 @@ struct task {
     void *fp_regs;  // Floating point / SIMD registers
     void *tls;      // Thread-local storage
     void *kstack_base;
+    struct regs_state *reg_store; // heap allocated storage for regs
 
     spinlock_t lock;
 
@@ -117,13 +118,15 @@ struct task {
     char name[32];
 };
 
+#define get_pid() (current->pid)
+
 struct task *init_process(void);
-int get_pid(void);
 void reap_task(struct task *p);
 __noreturn void do_exit(void);
 struct task * get_task_by_pid(int pid);
 struct task * get_pgrp_leader(int pgid);
 struct task * get_any_pgrp_member(pid_t pgid);
+int is_current_pgrp_orphaned(void);
 
 // Architecture-specific functions
 void             arch_pre_context_switch(struct task *prev, struct task *next);
@@ -135,7 +138,8 @@ void             arch_reclaim_mem(struct task *p);
 void *           arch_user_stack(void);
 void *           arch_get_user_sp(void);
 void             arch_set_user_sp(struct task *p, void *sp);
-void *           arch_copy_regs(struct regs_state *src);
+struct regs_state *alloc_regs_state(void);
+void *           arch_copy_regs(struct regs_state *dst, struct regs_state *src);
 void             save_fp_regs(struct task *p);
 void             restore_fp_regs(struct task *p);
 void             copy_fp_regs(struct task *dst, struct task *src);

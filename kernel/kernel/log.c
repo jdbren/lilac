@@ -1,7 +1,7 @@
 #include <lilac/log.h>
 #include <lilac/libc.h>
 #include <lilac/timer.h>
-#include <lilac/process.h>
+#include <lilac/sched.h>
 #include <lilac/console.h>
 #include <drivers/framebuffer.h>
 

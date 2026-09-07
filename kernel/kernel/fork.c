@@ -184,7 +184,10 @@ static struct task * clone_process(struct clone_args *args)
     child->pgd = child->mm->pgd;
     child->kstack = (void*)INIT_STACK(child->kstack_base);
 
-    child->regs = arch_copy_regs(cur->regs);
+    child->reg_store = alloc_regs_state();
+    if (!child->reg_store)
+        panic("Failed to allocate regs_state for child process\n");
+    child->regs = arch_copy_regs(child->reg_store, cur->regs);
     if (args->stack) {
         klog(LOG_DEBUG, "Setting user stack pointer to %p\n", args->stack);
         arch_set_user_sp(child, args->stack);
@@ -421,7 +424,6 @@ void cleanup_task(struct task *p)
     put_sighandlers(p->sighand);
 }
 
-// TODO: race conditions related to reaping and tasks
 void reap_task(struct task *p)
 {
     if (p->state != TASK_ZOMBIE) {
@@ -435,12 +437,13 @@ void reap_task(struct task *p)
     hash_del(&p->pid_hash);
     hash_del(&p->pgid_hash);
     hash_del(&p->sid_hash);
-    // kfree(p->regs); // ISSUE This is sometimes stack memory, so can't free currently
+    kfree(p->reg_store);
     free_pages(p->kstack_base, __KERNEL_STACK_SZ / PAGE_SIZE);
     if (p->mm->ref_count == 0) {
         arch_reclaim_mem(p);
         kfree(p->mm);
     }
+    kfree(p);
 }
 
 __noreturn void do_exit(void)

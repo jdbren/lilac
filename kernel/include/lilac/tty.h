@@ -146,7 +146,7 @@ struct tty_data {
     int line_start;
     int vmin_cnt;
 
-    struct mutex read_lock;
+    mutex_t read_lock;
 
     bool line_ready;
     bool at_eof;
@@ -180,6 +180,7 @@ struct tty {
     } ctrl;
 
     struct waitqueue read_wait;
+    struct waitqueue flow_wait;
 
     char name[32];
     union {

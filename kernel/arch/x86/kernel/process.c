@@ -258,14 +258,15 @@ void *arch_get_user_sp(void)
     return (void*)regs->sp;
 }
 
-void *arch_copy_regs(struct regs_state *src)
+struct regs_state * alloc_regs_state(void)
 {
-    struct regs_state *regs = kzmalloc(sizeof *regs);
-    if (!regs) {
-        panic("Out of memory allocating regs_state\n");
-    }
-    *regs = *src;
-    return regs;
+    return kzmalloc(sizeof(struct regs_state));
+}
+
+void *arch_copy_regs(struct regs_state *dst, struct regs_state *src)
+{
+    *dst = *src;
+    return dst;
 }
 
 void arch_set_user_sp(struct task *p, void *sp)

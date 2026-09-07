@@ -72,10 +72,39 @@ inline struct task *get_any_pgrp_member(pid_t pgid)
     return NULL;
 }
 
-
-inline int get_pid(void)
+/*
+static inline int thread_group_empty(struct task *p)
 {
-    return current->pid;
+	return thread_group_leader(p) &&
+	       list_is_last(&p->thread_node, &p->signal->thread_head);
+}
+*/
+
+/*
+ * Determine if a process group is "orphaned", according to the POSIX
+ * definition in 2.2.2.52.  Orphaned process groups are not to be affected
+ * by terminal-generated stop signals.  Newly orphaned process groups are
+ * to receive a SIGHUP and a SIGCONT.
+ *
+ * "I ask you, have you ever known what it is to be an orphan?"
+ */
+static int will_become_orphaned_pgrp(int pgid, struct task *ignored_task)
+{
+    struct task *p;
+    pgrp_for_each(p, pgid) {
+        // if ((p == ignored_task) || (p->exit_state && thread_group_empty(p)) || p->ppid == 1)
+        if ((p == ignored_task) || (p->ppid == 1))
+            continue;
+
+        if (p->parent->pgid != pgid && p->parent->sid == p->sid)
+            return 0;
+    }
+    return 1;
+}
+
+int is_current_pgrp_orphaned(void)
+{
+    return will_become_orphaned_pgrp(current->pgid, NULL);
 }
 
 SYSCALL_DECL0(getpid)
