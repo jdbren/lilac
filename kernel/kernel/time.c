@@ -8,7 +8,6 @@
 #include <lilac/boot.h>
 #include <lilac/uaccess.h>
 
-// Alarm events are owned by the timer lists once queued
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 
 static void nop(__unused unsigned long x) {}
@@ -22,13 +21,13 @@ static spinlock_t clock_write_lock = SPINLOCK_INIT;
 struct timer_base {
     struct rb_root_cached tree;
     struct timer_event *running;    // callback in progress on this cpu
-    struct task *running_task;      // its ev->p; ev itself may be freed by then
+    struct task *running_task;      // its ev->p
 };
 
 /*
  * Each cpu's timer interrupt only walks its own tree, but events are cancelled
  * from any cpu (the task may have migrated since it queued the event) and the
- * task's timer_ev_list spans cpus, so a single irqsave lock covers all of it.
+ * task's timer_ev_list spans cpus
  */
 static spinlock_t timer_lock = SPINLOCK_INIT;
 static DEFINE_PER_CPU(struct timer_base, timer_bases);
