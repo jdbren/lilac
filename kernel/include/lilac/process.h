@@ -44,7 +44,6 @@ struct task_flags {
     u8 need_resched :1;
     u8 exiting      :1;
     u8 in_syscall   :1;
-    u8 sig_pending  :1;
     u8 signaled     :1;
     u8 interrupted  :1;
     u8 state_change :1;
@@ -106,7 +105,7 @@ struct task {
     struct fdtable *files;
 
     struct sighandlers *sighand;
-    sigset_t pending;
+    _Atomic sigset_t pending;
     sigset_t blocked;
 
     struct tty *ctty;

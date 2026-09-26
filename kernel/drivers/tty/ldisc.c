@@ -225,8 +225,7 @@ void default_tty_set_termios(struct tty *tty, const struct termios *old)
     }
 
     if (!is_canon) {
-        // wake_all(&tty->read_wait);
-        wake_first(&tty->read_wait);
+        wake_all(&tty->read_wait);
     }
 
     data_unlock(data);
@@ -341,12 +340,10 @@ static void handle_c_char(struct tty *tty, u8 c)
         // commit current line and mark EOF
         if (EDIT_LEN(data) > 0) {
             c_commit_line(data);
-            // wake_all(&tty->read_wait);
         } else {
             data->at_eof = true;
-            // wake_all(&tty->read_wait);
         }
-        wake_first(&tty->read_wait);
+        wake_all(&tty->read_wait);
     } else if (c == '\n' || (L_ICANON(tty) && c == EOL_CHAR(tty))) {
         c_add_char(data, '\n');
         c_commit_line(data);
@@ -354,8 +351,7 @@ static void handle_c_char(struct tty *tty, u8 c)
         if (L_ECHO(tty) || L_ECHONL(tty))
             echo_char(tty, '\n');
 
-        // wake_all(&tty->read_wait);
-        wake_first(&tty->read_wait);
+        wake_all(&tty->read_wait);
     } else if (c >= 32 || c == '\t') {
         c_add_char(data, c);
         if (L_ECHO(tty))
@@ -398,8 +394,7 @@ static void handle_nc_char(struct tty *tty, u8 c)
     u8 vmin = tty->termios.c_cc[VMIN];
     if (vmin == 0 || data->vmin_cnt >= vmin ||
         c == '\n' || c == EOF_CHAR(tty)) {
-        // wake_all(&tty->read_wait);
-        wake_first(&tty->read_wait);
+        wake_all(&tty->read_wait);
     }
 }
 

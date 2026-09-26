@@ -84,8 +84,7 @@ static int do_file_fault(struct vm_desc *vma, uintptr_t pgaddr, unsigned long fl
          pgaddr, start_in_page, off_in_seg, file_offset, bytes_to_read);
 #endif
 
-    vfs_lseek(f, file_offset, 0);
-    ssize_t bytes = vfs_read(f, buf + start_in_page, bytes_to_read);
+    ssize_t bytes = vfs_read_at(f, buf + start_in_page, bytes_to_read, file_offset);
     if (bytes < 0) {
         free_page(buf);
         return FAULT_FILE_ERROR;

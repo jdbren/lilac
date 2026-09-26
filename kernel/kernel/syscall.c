@@ -13,13 +13,13 @@
 int do_kernel_exit_work(void)
 {
     arch_disable_interrupts();
-    while (current->flags.need_resched || current->flags.sig_pending) {
+    while (current->flags.need_resched || sigispending(current)) {
         arch_enable_interrupts();
         if (current->flags.need_resched) {
             current->flags.need_resched = 0;
             schedule();
         }
-        if (current->flags.sig_pending) {
+        if (sigispending(current)) {
             handle_signal();
             arch_disable_interrupts();
             break;

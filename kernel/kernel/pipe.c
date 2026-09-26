@@ -137,7 +137,7 @@ ssize_t pipe_read(struct file *f, void *buf, size_t count)
     pipe->data_size -= to_read;
 
     release_lock(&pipe->lock);
-    wake_first(&pipe->write_wq);
+    wake_all(&pipe->write_wq);
     return to_read;
 }
 
@@ -180,7 +180,7 @@ ssize_t pipe_write(struct file *f, const void *buf, size_t count)
     pipe->data_size += to_write;
     release_lock(&pipe->lock);
 
-    wake_first(&pipe->read_wq);
+    wake_all(&pipe->read_wq);
 
     if (to_write != count) {
         klog(LOG_WARN, "pipe_write: Partial write (%d of %lu bytes)\n", to_write, count);
