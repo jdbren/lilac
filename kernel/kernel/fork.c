@@ -136,6 +136,7 @@ static struct task * clone_process(struct clone_args *args)
     child->rq_node = (struct rb_node){0};
     INIT_LIST_HEAD(&child->children);
     child->on_rq = false;
+    child->on_cpu = false;
 
     child->pid = ++num_tasks;
     if (flags & CLONE_THREAD) {
@@ -439,6 +440,10 @@ void reap_task(struct task *p)
         return;
     }
     klog(LOG_DEBUG, "Reaping task %d\n", p->pid);
+    // The child marks itself a zombie before its final schedule(), so it may
+    // still be running on its kernel stack; wait until it has switched away
+    while (__atomic_load_n(&p->on_cpu, __ATOMIC_ACQUIRE))
+        __pause();
     kfree(p->fp_regs);
     p->fp_regs = NULL;
     list_del(&p->sibling);

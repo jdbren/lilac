@@ -86,6 +86,20 @@ void destroy_pipe(struct pipe_buf *p)
     kfree(p);
 }
 
+static void ring_copy_out(struct pipe_buf *pipe, void *dst, unsigned int pos, size_t n)
+{
+    size_t first = MIN(n, (size_t)(pipe->buf_size - pos));
+    memcpy(dst, pipe->buffer + pos, first);
+    memcpy((u8 *)dst + first, pipe->buffer, n - first);
+}
+
+static void ring_copy_in(struct pipe_buf *pipe, unsigned int pos, const void *src, size_t n)
+{
+    size_t first = MIN(n, (size_t)(pipe->buf_size - pos));
+    memcpy(pipe->buffer + pos, src, first);
+    memcpy(pipe->buffer, (const u8 *)src + first, n - first);
+}
+
 ssize_t pipe_read(struct file *f, void *buf, size_t count)
 {
     if (count == 0 || !buf || !f)
@@ -116,7 +130,7 @@ ssize_t pipe_read(struct file *f, void *buf, size_t count)
 
     pos = pipe->read_pos;
     to_read = MIN(count, pipe->data_size);
-    memcpy(buf, pipe->buffer + pos, to_read);
+    ring_copy_out(pipe, buf, pos, to_read);
     pipe->read_pos = (pos + to_read) % pipe->buf_size;
     pipe->data_size -= to_read;
 
@@ -158,7 +172,7 @@ ssize_t pipe_write(struct file *f, const void *buf, size_t count)
     acquire_lock(&pipe->lock);
     int pos = pipe->write_pos;
     unsigned int to_write = MIN(count, pipe->buf_size - pipe->data_size);
-    memcpy(pipe->buffer + pos, buf, to_write);
+    ring_copy_in(pipe, pos, buf, to_write);
     pipe->write_pos = (pos + to_write) % pipe->buf_size;
     pipe->data_size += to_write;
     release_lock(&pipe->lock);

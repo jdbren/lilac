@@ -176,14 +176,21 @@ static void kbd_send(int keycode)
     }
 }
 
-static int scancode_queue[32];
-static int scancode_queue_start = 0;
-static int scancode_queue_end = 0;
+#define SCANCODE_QUEUE_SZ 32
+static int scancode_queue[SCANCODE_QUEUE_SZ];
+static volatile int scancode_queue_start = 0;
+static volatile int scancode_queue_end = 0;
+
+// The file that put the keyboard in raw mode; closing it restores KB_STD
+static struct file *raw_owner;
 
 static void scancode_add(int scancode)
 {
+    int next = (scancode_queue_end + 1) % SCANCODE_QUEUE_SZ;
+    if (next == scancode_queue_start)
+        return; // full
     scancode_queue[scancode_queue_end] = scancode;
-    scancode_queue_end = (scancode_queue_end + 1) % 32;
+    scancode_queue_end = next;
 }
 
 static int scancode_pop()
@@ -191,7 +198,7 @@ static int scancode_pop()
     if (scancode_queue_start == scancode_queue_end)
         return -1; // empty
     int scancode = scancode_queue[scancode_queue_start];
-    scancode_queue_start = (scancode_queue_start + 1) % 32;
+    scancode_queue_start = (scancode_queue_start + 1) % SCANCODE_QUEUE_SZ;
     return scancode;
 }
 
@@ -275,16 +282,34 @@ int kb_ioctl(struct file *f, int op, void *argp)
     switch (op) {
     case KBDGMODE:
         return vt_kbd.mode;
-    case KBDSMODE:
-        return kb_set_mode((int)(uintptr_t)argp);
+    case KBDSMODE: {
+        int mode = (int)(uintptr_t)argp;
+        int ret = kb_set_mode(mode);
+        if (!ret)
+            raw_owner = mode == KB_RAW ? f : NULL;
+        return ret;
+    }
     default:
         return -EINVAL;
     }
 }
 
+// A raw-mode owner that exits or crashes must not leave the console deaf
+static int kb_release(struct inode *inode, struct file *file)
+{
+    (void)inode;
+    if (raw_owner == file) {
+        raw_owner = NULL;
+        kb_set_mode(KB_STD);
+        scancode_queue_start = scancode_queue_end;
+    }
+    return 0;
+}
+
 static const struct file_operations keyboard_fops = {
     .read = kb_read_raw,
-    .ioctl = kb_ioctl
+    .ioctl = kb_ioctl,
+    .release = kb_release,
 };
 
 int kb_open(struct inode *inode, struct file *file)
