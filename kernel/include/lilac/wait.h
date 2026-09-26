@@ -49,9 +49,26 @@ struct wq_entry {
 #define WQ_ENTRY_EMPTY(name) (list_empty(&name.entry))
 
 int sleep_on(struct waitqueue *wq);
+void prepare_wait(struct waitqueue *wq, struct wq_entry *wait, u8 state);
+void end_wait(struct waitqueue *wq, struct wq_entry *wait);
 struct task * wake_first(struct waitqueue *wq);
 void wake_all(struct waitqueue *wq);
 
 void notify_parent(struct task *parent, struct task *child);
+
+/**
+ * Sleep until cond is true, ignoring signals. Whoever makes cond true must
+ * wake wq afterwards (wake_all / wake_first). Safe to wake from IRQ context.
+ */
+#define wait_event_uninterruptible(wq, cond) do { \
+    struct wq_entry __wait = WQ_ENTRY_INIT(__wait, current, NULL); \
+    for (;;) { \
+        prepare_wait(&(wq), &__wait, TASK_UNINTERRUPTIBLE); \
+        if (cond) \
+            break; \
+        yield(); \
+    } \
+    end_wait(&(wq), &__wait); \
+} while (0)
 
 #endif // LILAC_WAIT_H

@@ -3,6 +3,7 @@
 
 #include <lilac/types.h>
 
+#define AHCI_VECTOR 0x30
 #define SYSCALL_VECTOR 0x80
 #define TLB_SHOOTDOWN_VECTOR 0xF0
 #define HALT_CPU_VECTOR 0xFE

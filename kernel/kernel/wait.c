@@ -36,9 +36,10 @@ static inline void __add_wait_entry(struct wq_entry *wait, struct waitqueue *wq)
 
 static void add_wait_entry(struct wq_entry *wait, struct waitqueue *wq)
 {
-    acquire_lock(&wq->lock);
+    unsigned long flags;
+    acquire_lock_irqsave(&wq->lock, &flags);
     __add_wait_entry(wait, wq);
-    release_lock(&wq->lock);
+    release_lock_irqrestore(&wq->lock, flags);
 }
 
 static inline void __remove_wait_entry(struct wq_entry *wait)
@@ -48,10 +49,11 @@ static inline void __remove_wait_entry(struct wq_entry *wait)
 
 static void remove_wait_entry(struct wq_entry *wait, struct waitqueue *wq)
 {
+    unsigned long flags;
     if (!list_empty(&wait->entry)) {
-        acquire_lock(&wq->lock);
+        acquire_lock_irqsave(&wq->lock, &flags);
         __remove_wait_entry(wait);
-        release_lock(&wq->lock);
+        release_lock_irqrestore(&wq->lock, flags);
     }
 }
 
@@ -257,6 +259,28 @@ SYSCALL_DECL3(waitpid, int, pid, int*, status, int, options)
     return ret;
 }
 
+/**
+ * Queue current on wq (if not already queued) and mark it asleep in the given
+ * state
+ */
+void prepare_wait(struct waitqueue *wq, struct wq_entry *wait, u8 state)
+{
+    unsigned long flags;
+
+    acquire_lock_irqsave(&wq->lock, &flags);
+    if (list_empty(&wait->entry))
+        __add_wait_entry(wait, wq);
+    release_lock_irqrestore(&wq->lock, flags);
+    set_current_state(state);
+}
+
+// Call after prepare_wait for a stack-allocated entry
+void end_wait(struct waitqueue *wq, struct wq_entry *wait)
+{
+    set_task_running(current);
+    remove_wait_entry(wait, wq);
+}
+
 int sleep_on(struct waitqueue *wq)
 {
     return sleep_task_on(current, wq, NULL);
@@ -291,13 +315,14 @@ struct task * wake_first(struct waitqueue *wq)
 void wake_all(struct waitqueue *wq)
 {
     struct wq_entry *wait, *tmp;
+    unsigned long flags;
 
-    acquire_lock(&wq->lock);
+    acquire_lock_irqsave(&wq->lock, &flags);
     list_for_each_entry_safe(wait, tmp, &wq->task_list, entry) {
         __remove_wait_entry(wait);
         set_task_running(wait->task);
     }
-    release_lock(&wq->lock);
+    release_lock_irqrestore(&wq->lock, flags);
 }
 
 void notify_parent(struct task *parent, struct task *child)

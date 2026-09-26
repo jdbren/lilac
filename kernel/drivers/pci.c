@@ -1,10 +1,12 @@
 #include <limits.h>
+#include <stddef.h>
 #include <drivers/pci.h>
 #include <lilac/libc.h>
 #include <lilac/log.h>
 #include <lilac/device.h>
 #include <lilac/port.h>
 #include <lilac/panic.h>
+#include <lilac/errno.h>
 #include <mm/kmm.h>
 #include <mm/kmalloc.h>
 #include <mm/page.h>
@@ -85,6 +87,53 @@ static ACPI_STATUS pcie_init_device(ACPI_HANDLE ObjHandle, UINT32 Level,
     return AE_OK;
 }
 
+volatile void *pci_find_cap(struct pci_device *dev, u8 id)
+{
+    volatile u8 *cfg = (volatile u8 *)dev;
+    int guard = 48;
+
+    if (!(((volatile struct pci_device *)dev)->Status & PCI_STATUS_CAP_LIST))
+        return NULL;
+
+    u8 ptr = cfg[offsetof(struct pci_device, type0.CapabilitiesPtr)] & ~0x3;
+    while (ptr && guard--) {
+        if (cfg[ptr] == id)
+            return cfg + ptr;
+        ptr = cfg[ptr + 1] & ~0x3;
+    }
+    return NULL;
+}
+
+// Enable a single MSI vector delivered to dest_apic, and turn off legacy INTx
+int pci_enable_msi(struct pci_device *dev, u8 vector, u8 dest_apic)
+{
+    volatile u8 *cap = pci_find_cap(dev, PCI_CAP_ID_MSI);
+    volatile struct pci_device *vdev = dev;
+
+    if (!cap)
+        return -ENODEV;
+
+    volatile u16 *ctrl = (volatile u16 *)(cap + 2);
+    volatile u32 *addr_lo = (volatile u32 *)(cap + 4);
+    volatile u16 *data;
+
+    u16 flags = *ctrl & ~(PCI_MSI_FLAGS_ENABLE | PCI_MSI_FLAGS_QSIZE);
+    *ctrl = flags;
+
+    *addr_lo = MSI_ADDR_BASE | ((u32)dest_apic << MSI_ADDR_DEST_SHIFT);
+    if (flags & PCI_MSI_FLAGS_64BIT) {
+        *(volatile u32 *)(cap + 8) = 0;
+        data = (volatile u16 *)(cap + 12);
+    } else {
+        data = (volatile u16 *)(cap + 8);
+    }
+    *data = vector; // fixed delivery, edge triggered
+
+    *ctrl = flags | PCI_MSI_FLAGS_ENABLE;
+    vdev->Command |= PCI_COMMAND_MASTER | PCI_COMMAND_INTX_DISABLE;
+    return 0;
+}
+
 void pcie_read_device(ACPI_DEVICE_INFO *Info, int bus)
 {
     struct pci_device *pci_dev;
@@ -106,7 +155,7 @@ void pcie_read_device(ACPI_DEVICE_INFO *Info, int bus)
             pci_dev->SubClass == 0x06 &&
             pci_dev->ProgIf == 0x01) {
         klog(LOG_INFO, "Found AHCI Controller at %02x:%02x.%x\n", bus, dev, fn);
-        ahci_init((void *)(uintptr_t)(pci_dev->type0.BaseAddresses[5] & 0xFFFFF000));
+        ahci_init(pci_dev);
     }
 }
 

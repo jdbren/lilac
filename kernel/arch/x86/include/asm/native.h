@@ -3,6 +3,7 @@
 
 #include <lilac/config.h>
 #include <x86gprintrin.h>
+#include <asm/cpu-flags.h>
 
 #define native_irq_save(flags) asm volatile ("pushf\n\tpop %0" : "=r"(flags) :: "memory")
 #define native_irq_restore(flags) asm volatile ("push %0\n\tpopf" :: "r"(flags) : "memory")
@@ -38,6 +39,11 @@ static inline unsigned long arch_get_flags(void)
     unsigned long flags;
     native_irq_save(flags);
     return flags;
+}
+
+static inline int arch_irqs_enabled(void)
+{
+    return (arch_get_flags() & X86_FLAGS_IF) != 0;
 }
 
 static inline void arch_local_irq_save(unsigned long *fp)
