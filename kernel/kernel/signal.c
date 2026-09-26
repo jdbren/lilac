@@ -30,8 +30,6 @@ int handle_signal(void)
 
     struct ksigaction *ka = &p->sighand->actions[sig];
     sigdelset(&p->pending, sig);
-    if (p->pending == 0)
-        p->flags.sig_pending = 0;
 
     int sig_bit = (1 << sig);
     if (ka->sa.sa_handler == SIG_IGN) {
@@ -70,7 +68,7 @@ SYSCALL_DECL0(pause)
 {
     klog(LOG_DEBUG, "Process %d called pause\n", current->pid);
     set_task_sleeping(current);
-    while (!current->flags.sig_pending)
+    while (!sigispending(current))
         yield();
     return -EINTR;
 }
@@ -117,7 +115,6 @@ int do_raise(struct task *p, int sig)
     }
 
     sigaddset(&p->pending, sig);
-    p->flags.sig_pending = 1;
 
     if (sigisblocked(p, sig)) {
         klog(LOG_DEBUG, "Signal %d is currently blocked for process %d\n", sig, p->pid);
@@ -300,7 +297,7 @@ SYSCALL_DECL1(sigsuspend, sigset_t*, set)
     klog(LOG_DEBUG, "sigsuspend: changing mask from %lx to %lx", oldmask, newmask);
     current->blocked = newmask;
 
-    while (!current->flags.sig_pending) {
+    while (!sigispending(current)) {
         current->state = TASK_SLEEPING;
         yield();
     }

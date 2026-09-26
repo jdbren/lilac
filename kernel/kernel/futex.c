@@ -1,6 +1,5 @@
 // Copyright (C) 2025 Jackson Brenneman
 // GPL-3.0-or-later (see LICENSE.txt)
-#include <stdatomic.h>
 #include <lilac/futex.h>
 #include <lilac/sched.h>
 #include <lilac/sync.h>
@@ -70,7 +69,6 @@ int futex_wait(int __user *uaddr, int val, ktime_t abs_to)
         assert(RB_EMPTY_NODE(&timeout_ev.node));
         timer_ev_enqueue(&timeout_ev, current);
     }
-
 
     waiter.uaddr = (uintptr_t)uaddr;
     waiter.task = current;

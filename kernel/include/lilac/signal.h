@@ -88,17 +88,17 @@ typedef struct ucontext {
 
 struct task;
 
+#define SIG_APPLY_MASK(set, mask) ((set) & ~(mask))
+
+#define sig_get_active(t) SIG_APPLY_MASK((t)->pending, (t)->blocked)
+
 #define sigisblocked(t, sig) ((t)->blocked & (1UL << (sig)))
-#define sigispending(t) ((t)->flags.sig_pending)
+#define sigispending(t) (sig_get_active(t) != 0)
 #define sigaddset(set, sig) (*(set) |= (1UL << (sig)))
 #define sigdelset(set, sig) (*(set) &= ~(1UL << (sig)))
 #define sigemptyset(set) (*(set) = 0)
 #define sigfillset(set) (*(set) = ~0UL)
 #define sigismember(set, sig) ((*(set) & (1UL << (sig))) != 0)
-
-#define SIG_APPLY_MASK(set, mask) ((set) & ~(mask))
-
-#define sig_get_active(t) SIG_APPLY_MASK(t->pending, t->blocked)
 
 // queue a signal for delivery to a task
 int do_raise(struct task *p, int sig);

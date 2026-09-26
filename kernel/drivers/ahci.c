@@ -295,7 +295,6 @@ static int ahci_issue_and_wait(struct ahci_device *dev, int slot)
     port->ci = bit;
 
     if (ahci_can_sleep()) {
-        klog(LOG_DEBUG, "ahci: waiting for port %d slot %d\n", dev->portno, slot);
         wait_event_uninterruptible(dev->wq, !(port->ci & bit) || dev->error);
     } else {
         while ((port->ci & bit) && !dev->error) {

@@ -56,4 +56,14 @@ static inline void arch_local_irq_restore(unsigned long flags)
     native_irq_restore(flags);
 }
 
+#define begin_irqs_disabled() \
+    { \
+        unsigned long flags; \
+        arch_local_irq_save(&flags); \
+        arch_disable_interrupts();
+
+#define end_irqs_disabled() \
+        arch_local_irq_restore(flags); \
+    }
+
 #endif

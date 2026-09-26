@@ -325,10 +325,14 @@ ssize_t vfs_read_at(struct file *file, void *buf, size_t count, unsigned long po
             return 0;
     }
 
+    // f_op->read reads at f_pos, so hold the lock across the swap; the file
+    // may be shared (e.g. a mapping inherited across fork)
+    mutex_lock(&file->f_pos_lock);
     unsigned long old_pos = file->f_pos;
     file->f_pos = pos;
     ssize_t bytes = file->f_op->read(file, buf, count);
     file->f_pos = old_pos;
+    mutex_unlock(&file->f_pos_lock);
 
     return bytes;
 }
