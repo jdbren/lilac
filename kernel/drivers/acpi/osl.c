@@ -188,15 +188,17 @@ void AcpiOsDeleteLock(ACPI_SPINLOCK Handle)
     kfree((void*)Handle);
 }
 
+// ACPICA's SCI handler takes these, so they must disable interrupts
 ACPI_CPU_FLAGS AcpiOsAcquireLock(ACPI_SPINLOCK Handle)
 {
-    acquire_lock(Handle);
-    return AE_OK;
+    unsigned long flags;
+    acquire_lock_irqsave(Handle, &flags);
+    return flags;
 }
 
 void AcpiOsReleaseLock(ACPI_SPINLOCK Handle, ACPI_CPU_FLAGS Flags)
 {
-    release_lock(Handle);
+    release_lock_irqrestore(Handle, Flags);
 }
 
 //Interrupts

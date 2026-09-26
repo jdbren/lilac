@@ -19,6 +19,19 @@ static inline void tty_data_init(struct tty_data *data)
     memset(&data->input, 0, sizeof(data->input));
     data->line_start = 0;
     mutex_init(&data->read_lock);
+    spin_lock_init(&data->lock);
+}
+
+static inline void data_lock(struct tty_data *data)
+{
+    unsigned long flags;
+    acquire_lock_irqsave(&data->lock, &flags);
+    data->lock_flags = flags;
+}
+
+static inline void data_unlock(struct tty_data *data)
+{
+    release_lock_irqrestore(&data->lock, data->lock_flags);
 }
 
 static inline void nc_add_char(struct tty_data *data, char c)
@@ -193,6 +206,8 @@ void default_tty_set_termios(struct tty *tty, const struct termios *old)
     bool was_canon = old ? (old->c_lflag & ICANON) : false;
     bool is_canon = L_ICANON(tty);
 
+    data_lock(data);
+
     if (is_canon && !was_canon) {
         // Move any buffered data to edit area
         while (data->input.rpos != data->input.wpos) {
@@ -213,6 +228,8 @@ void default_tty_set_termios(struct tty *tty, const struct termios *old)
         // wake_all(&tty->read_wait);
         wake_first(&tty->read_wait);
     }
+
+    data_unlock(data);
 
     klog(LOG_DEBUG, "termios changed: canon=%d echo=%d isig=%d\n",
          is_canon, L_ECHO(tty), L_ISIG(tty));
@@ -391,7 +408,7 @@ void default_tty_receive_buf(struct tty *tty, const u8 *cp, const u8 *fp, size_t
 {
     struct tty_data *data = tty->data;
 
-    mutex_lock(&data->read_lock);
+    data_lock(data);
 
     u8 c;
     while (count--) {
@@ -415,7 +432,7 @@ void default_tty_receive_buf(struct tty *tty, const u8 *cp, const u8 *fp, size_t
             handle_nc_char(tty, c);
     }
 
-    mutex_unlock(&data->read_lock);
+    data_unlock(data);
 }
 
 static ssize_t c_read(struct tty *tty, u8 *buf, size_t nr)
@@ -427,10 +444,12 @@ static ssize_t c_read(struct tty *tty, u8 *buf, size_t nr)
     while (copied < nr) {
         while (!data->line_ready && !data->at_eof && BUF_EMPTY(data)) {
             klog(LOG_DEBUG, "c_read: proc %d waiting for line\n", get_pid());
+            data_unlock(data);
             mutex_unlock(&data->read_lock);
             int ret = wait_event_interruptible(tty->read_wait,
                 data->line_ready || data->at_eof || !BUF_EMPTY(data));
             mutex_lock(&data->read_lock);
+            data_lock(data);
             if (ret == -EINTR)
                 return copied > 0 ? (ssize_t)copied : -EINTR;
         }
@@ -487,9 +506,11 @@ static ssize_t nc_read(struct tty *tty, u8 *buf, size_t nr)
         while (copied < vmin || (copied < nr && !BUF_EMPTY(data))) {
             while (BUF_EMPTY(data)) {
                 // klog(LOG_DEBUG, "noncanon_read: waiting for vmin=%d (have %lu)\n", vmin, copied);
+                data_unlock(data);
                 mutex_unlock(&data->read_lock);
                 int ret = wait_event_interruptible(tty->read_wait, !BUF_EMPTY(data));
                 mutex_lock(&data->read_lock);
+                data_lock(data);
                 if (ret == -EINTR)
                     return copied > 0 ? (ssize_t)copied : -EINTR;
             }
@@ -527,9 +548,11 @@ static ssize_t nc_read(struct tty *tty, u8 *buf, size_t nr)
         // For now, behave like case 2
         while (copied < vmin) {
             while (BUF_EMPTY(data)) {
+                data_unlock(data);
                 mutex_unlock(&data->read_lock);
                 int ret = wait_event_interruptible(tty->read_wait, !BUF_EMPTY(data));
                 mutex_lock(&data->read_lock);
+                data_lock(data);
                 if (ret == -EINTR)
                     return copied > 0 ? (ssize_t)copied : -EINTR;
             }
@@ -608,6 +631,7 @@ ssize_t default_tty_read(struct tty *tty, struct file *file, u8 *buf, size_t nr,
     struct tty_data *data = tty->data;
 
     mutex_lock(&data->read_lock);
+    data_lock(data);
 
     ssize_t ret;
     if (L_ICANON(tty)) {
@@ -616,6 +640,7 @@ ssize_t default_tty_read(struct tty *tty, struct file *file, u8 *buf, size_t nr,
         ret = nc_read(tty, buf, nr);
     }
 
+    data_unlock(data);
     mutex_unlock(&data->read_lock);
     return ret;
 }

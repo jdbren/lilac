@@ -323,10 +323,25 @@ static void do_close_on_exec(struct task *p)
     release_lock(&p->files->lock);
 }
 
+static void load_and_start(void);
+
+// First run of a new task, reached from schedule() with this rq's lock held
 void start_process(void)
 {
     sched_post_switch_unlock();
     arch_enable_interrupts();
+    load_and_start();
+}
+
+// Reached from exec via jump_new_proc, which does not take the rq lock
+static void start_exec(void)
+{
+    arch_enable_interrupts();
+    load_and_start();
+}
+
+static void load_and_start(void)
+{
     struct mm_info *mem = current->mm;
     klog(LOG_DEBUG, "Process %d starting\n", current->pid);
 
@@ -458,7 +473,7 @@ static void exec_and_return(void)
     task->mm = mem;
     task->pgd = mem->pgd;
     task->kstack = (void*)INIT_STACK(task->kstack_base);
-    task->pc = (uintptr_t)start_process;
+    task->pc = (uintptr_t)start_exec;
     task->state = TASK_RUNNING;
     // Reset custom signal handlers to default
     for (int i = 0; i < _NSIG; i++) {

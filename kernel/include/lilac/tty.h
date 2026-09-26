@@ -146,7 +146,9 @@ struct tty_data {
     int line_start;
     int vmin_cnt;
 
-    mutex_t read_lock;
+    mutex_t read_lock;          // serializes readers; process context only
+    spinlock_t lock;            // input state; shared with the keyboard IRQ
+    unsigned long lock_flags;   // irq state saved by the holder of lock
 
     bool line_ready;
     bool at_eof;
