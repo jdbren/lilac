@@ -3,9 +3,7 @@
 
 #include <stdatomic.h>
 #include <lilac/types.h>
-#if defined __x86_64__ || defined __i386__
-#include <x86gprintrin.h>
-#endif
+#include <asm/native.h>
 
 #ifndef __cplusplus
 #include <lib/list.h>
@@ -28,6 +26,27 @@ typedef volatile atomic_flag spinlock_t;
 #define release_lock(spin) atomic_flag_clear_explicit(spin, memory_order_release)
 
 #define try_acquire_lock(spin) (!atomic_flag_test_and_set_explicit(spin, memory_order_acquire))
+
+#define acquire_lock_irq(spin) do { \
+    arch_disable_interrupts(); \
+    acquire_lock(spin); \
+} while (0)
+
+#define release_lock_irq(spin) do { \
+    release_lock(spin); \
+    arch_enable_interrupts(); \
+} while (0)
+
+#define acquire_lock_irqsave(spin, flagp) do { \
+    arch_local_irq_save(flagp); \
+    arch_disable_interrupts(); \
+    acquire_lock(spin); \
+} while (0)
+
+#define release_lock_irqrestore(spin, flags) do { \
+    release_lock(spin); \
+    arch_local_irq_restore(flags); \
+} while (0)
 
 struct lockref {
     spinlock_t lock;

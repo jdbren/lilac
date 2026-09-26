@@ -145,6 +145,7 @@ int tty_open(struct inode *inode, struct file *file)
 {
     struct tty *tty;
     struct tty_file_private *tfp;
+    unsigned long flags;
 
     const char *name = file->f_dentry->d_name.data;
     char lastc = name[strlen(name)-1];
@@ -162,14 +163,14 @@ int tty_open(struct inode *inode, struct file *file)
         tty->ops->open(tty, file);
     }
 
-    acquire_lock(&tty->ctrl.lock);
+    acquire_lock_irqsave(&tty->ctrl.lock, &flags);
     tty_get(tty);
     if (tty->refcount == 1) {
         tty->ctrl.session = current->sid;
         tty->ctrl.pgrp = current->pgid;
         current->ctty = tty;
     }
-    release_lock(&tty->ctrl.lock);
+    release_lock_irqrestore(&tty->ctrl.lock, flags);
 
     tfp = kzmalloc(sizeof(struct tty_file_private));
     if (!tfp)
@@ -213,7 +214,7 @@ static inline int is_ignored(int sig)
  */
 int __tty_check_change(struct tty *tty, int sig)
 {
-    // unsigned long flags;
+    unsigned long flags;
     int ret = 0;
 
     if (current->ctty != tty)
@@ -221,11 +222,9 @@ int __tty_check_change(struct tty *tty, int sig)
 
     int pgrp = current->pgid;
 
-    // spin_lock_irqsave(&tty->ctrl.lock, flags);
-    acquire_lock(&tty->ctrl.lock);
+    acquire_lock_irqsave(&tty->ctrl.lock, &flags);
     int tty_pgrp = tty->ctrl.pgrp;
-    release_lock(&tty->ctrl.lock);
-    // spin_unlock_irqrestore(&tty->ctrl.lock, flags);
+    release_lock_irqrestore(&tty->ctrl.lock, flags);
 
     if (tty_pgrp && pgrp != tty_pgrp) {
         if (is_ignored(sig)) {

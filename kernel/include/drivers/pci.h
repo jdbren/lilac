@@ -117,7 +117,7 @@ struct pci_device {
             u8 Diagnostic;
         } type2;
 
-    } u;
+    };
 
     u8 DeviceSpecific[108];
 };

@@ -1,8 +1,8 @@
 #include <lilac/lilac.h>
 #include <lilac/boot.h>
 #include <lilac/timer.h>
-#include <mm/kmm.h>
 #include <lilac/percpu.h>
+#include <mm/kmm.h>
 #include <asm/cpu-flags.h>
 #include <asm/msr.h>
 #include <asm/segments.h>
@@ -11,6 +11,7 @@
 #include <asm/idt.h>
 #include <asm/io.h>
 #include <asm/apic.h>
+#include <asm/native.h>
 
 #include "paging.h"
 

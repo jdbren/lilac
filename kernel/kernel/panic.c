@@ -6,6 +6,7 @@
 #include <lilac/percpu.h>
 #include <lilac/timer.h>
 #include <drivers/framebuffer.h>
+#include <asm/native.h>
 
 __noreturn void kerror(const char *msg, ...)
 {

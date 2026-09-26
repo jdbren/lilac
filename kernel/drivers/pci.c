@@ -106,7 +106,7 @@ void pcie_read_device(ACPI_DEVICE_INFO *Info, int bus)
             pci_dev->SubClass == 0x06 &&
             pci_dev->ProgIf == 0x01) {
         klog(LOG_INFO, "Found AHCI Controller at %02x:%02x.%x\n", bus, dev, fn);
-        ahci_init((void *)(uintptr_t)(pci_dev->u.type0.BaseAddresses[5] & 0xFFFFF000));
+        ahci_init((void *)(uintptr_t)(pci_dev->type0.BaseAddresses[5] & 0xFFFFF000));
     }
 }
 
