@@ -449,7 +449,7 @@ void sched_tick(void)
     if (leftmost && leftmost != cur) {
         s64 diff = (s64)(cur->vruntime - leftmost->vruntime);
 
-        if (diff > MIN_GRANULARITY)
+        if (cur == rq->idle || diff > MIN_GRANULARITY)
             cur->flags.need_resched = 1;
     }
 
