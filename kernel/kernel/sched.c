@@ -283,6 +283,11 @@ void schedule_task(struct task *new_task)
 #endif
 }
 
+bool is_idle_task(struct task *p)
+{
+    return p == this_cpu_rq()->idle;
+}
+
 bool sched_running(void)
 {
     return sched_timer == 1;
@@ -363,7 +368,9 @@ void schedule(void)
     struct task *cur = current;
     struct task *next;
     struct rq *rq = this_cpu_rq();
+    unsigned long flags;
 
+    arch_local_irq_save(&flags);
     arch_disable_interrupts();
 
     acquire_lock(&rq->lock);
@@ -395,6 +402,8 @@ void schedule(void)
     } else {
         release_lock(&rq->lock);
     }
+
+    arch_local_irq_restore(flags);
 }
 
 

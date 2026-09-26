@@ -6,6 +6,8 @@
 #include <mm/mm.h>
 #include <asm/idt.h>
 #include <asm/regs.h>
+#include <asm/cpu-flags.h>
+#include <asm/native.h>
 #include "paging.h"
 
 #pragma GCC diagnostic ignored "-Warray-bounds"
@@ -98,6 +100,10 @@ void pgflt_handler(long error_code, struct regs_state *frame)
 {
     uintptr_t addr = 0;
     asm volatile ("mov %%cr2,%0\n\t" : "=r"(addr));
+
+    // Fault handling can block
+    if (frame->flags & X86_FLAGS_IF)
+        arch_enable_interrupts();
 #ifdef DEBUG_MM
     klog(LOG_DEBUG, "Page fault at %p, Code: %lx, IP: %p\n", addr, error_code, frame->ip);
 #endif

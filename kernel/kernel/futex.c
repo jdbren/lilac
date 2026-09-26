@@ -85,7 +85,8 @@ int futex_wait(int __user *uaddr, int val, ktime_t abs_to)
     int matches = futex_check_value_locked(uaddr, val);
     if (matches <= 0) {
         release_lock(&bucket->lock);
-        timer_ev_dequeue(&timeout_ev);
+        if (abs_to)
+            timer_ev_dequeue(&timeout_ev);
         return matches == 0 ? -EAGAIN : matches;
     }
 
@@ -105,15 +106,9 @@ int futex_wait(int __user *uaddr, int val, ktime_t abs_to)
     if (!WQ_ENTRY_EMPTY(waiter.wq))
         list_del_init(&waiter.wq.entry);
 
-    if (abs_to) {
-        if (timer_ev_queued(&timeout_ev)) {
-            // we were woken up, remove the timeout if it hasn't expired yet
-            timer_ev_dequeue(&timeout_ev);
-        } else {
-            // we timed out
-            ret = -ETIMEDOUT;
-        }
-    }
+    // Removing it ourselves means we were woken first
+    if (abs_to && !timer_ev_dequeue(&timeout_ev))
+        ret = -ETIMEDOUT;
     release_lock(&bucket->lock);
 
     if (task_interrupted_ack())

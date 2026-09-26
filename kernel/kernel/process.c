@@ -326,6 +326,7 @@ static void do_close_on_exec(struct task *p)
 void start_process(void)
 {
     sched_post_switch_unlock();
+    arch_enable_interrupts();
     struct mm_info *mem = current->mm;
     klog(LOG_DEBUG, "Process %d starting\n", current->pid);
 

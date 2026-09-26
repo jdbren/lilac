@@ -132,7 +132,8 @@ void* alloc_frames(u32 num_pages)
     if (num_pages == 0)
         return 0;
 
-    acquire_lock(&pg_frame_bm_lock);
+    unsigned long flags;
+    acquire_lock_irqsave(&pg_frame_bm_lock, &flags);
 
     void *ptr = NULL;
     int start = 0;
@@ -155,12 +156,12 @@ void* alloc_frames(u32 num_pages)
 
     if (ptr == NULL) {
         klog(LOG_INFO, "Allocated frames = %lu, free frames = %lu\n", allocated_frames, total_frames - allocated_frames);
-        release_lock(&pg_frame_bm_lock);
+        release_lock_irqrestore(&pg_frame_bm_lock, flags);
         panic("Out of memory");
     }
 
-    release_lock(&pg_frame_bm_lock);
     allocated_frames += num_pages;
+    release_lock_irqrestore(&pg_frame_bm_lock, flags);
     return ptr;
 }
 
@@ -169,7 +170,8 @@ void free_frames(void *frame, u32 num_pages)
     if (num_pages == 0)
         return;
 
-    acquire_lock(&pg_frame_bm_lock);
+    unsigned long flags;
+    acquire_lock_irqsave(&pg_frame_bm_lock, &flags);
 
     for (page_t *pg = (page_t*)frame, *end = (page_t*)frame + num_pages;
             pg < end; pg++) {
@@ -180,8 +182,8 @@ void free_frames(void *frame, u32 num_pages)
     klog(LOG_INFO, "Allocated frames = %lu, free frames = %lu\n",
         allocated_frames, total_frames - allocated_frames);
 #endif
-    release_lock(&pg_frame_bm_lock);
     allocated_frames -= num_pages;
+    release_lock_irqrestore(&pg_frame_bm_lock, flags);
 }
 
 static void __mark_frames(size_t index, size_t offset, size_t pg_cnt)

@@ -187,14 +187,23 @@ void x86_debug_syscall_exit(struct regs_state *regs)
 }
 #endif
 
+static inline bool user_mode(struct regs_state *regs)
+{
+    return (regs->cs & 3) != 0;
+}
+
 int x86_kernel_entry(struct regs_state *regs)
 {
-    current->regs = (void*)regs;
+    if (user_mode(regs))
+        current->regs = (void*)regs;
     return 0;
 }
 
-int x86_kernel_exit(void)
+int x86_kernel_exit(struct regs_state *regs)
 {
+    if (!user_mode(regs) && !is_idle_task(current))
+        return 0;
+
     do_kernel_exit_work();
     if (current->flags.signaled) {
         current->flags.signaled = 0;

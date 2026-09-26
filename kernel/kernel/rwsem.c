@@ -17,7 +17,8 @@ void down_read(struct rw_semaphore *sem)
             if (atomic_compare_exchange_weak(&sem->count, &count, count + 1))
                 return;
         } else {
-            sleep_on(&sem->wait_list);
+            wait_event_uninterruptible(sem->wait_list,
+                atomic_load(&sem->count) >= 0);
         }
     }
 }
@@ -40,7 +41,8 @@ void down_write(struct rw_semaphore *sem)
             if (atomic_compare_exchange_weak(&sem->count, &count, -1))
                 return;
         } else {
-            sleep_on(&sem->wait_list);
+            wait_event_uninterruptible(sem->wait_list,
+                atomic_load(&sem->count) == 0);
         }
     }
 }

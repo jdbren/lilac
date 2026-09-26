@@ -4,8 +4,11 @@
 #include <lilac/types.h>
 #include <lib/rbtree.h>
 
+struct timer_base;
+
 struct timer_event {
     struct rb_node node;
+    struct timer_base *base;    // per-cpu tree it was queued on
     ktime_t expires;
     struct task *p;
     void (*callback)(struct timer_event *);
@@ -29,7 +32,8 @@ struct timer_event * create_timer_event(struct task *p,
 void destroy_timer_event(struct timer_event *ev);
 
 void timer_ev_enqueue(struct timer_event *ev, struct task *p);
-void timer_ev_dequeue(struct timer_event *ev);
+bool timer_ev_dequeue(struct timer_event *ev);
+void timer_ev_task_exit(struct task *p);
 
 static inline bool timer_ev_queued(struct timer_event *ev)
 {

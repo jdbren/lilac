@@ -27,6 +27,7 @@
 	mov  %gs:CPU_LOCAL_SCRATCH,%rdi 	# error code
 	call \name\()_handler
 
+	mov  %rsp, %rdi
 	call x86_kernel_exit
 
 	testb $3, CS(%rsp)
@@ -53,6 +54,7 @@
 	mov  %rsp, %rdi   # reg stack frame
 	call \name\()_handler
 
+	mov  %rsp, %rdi
 	call x86_kernel_exit
 
 	testb $3, CS(%rsp)
@@ -174,6 +176,7 @@ isr_no_err halt_cpu
 	call \func
 	call apic_eoi
 
+	mov  %rsp, %rdi
 	call x86_kernel_exit
 
 	testb $3, CS(%rsp)

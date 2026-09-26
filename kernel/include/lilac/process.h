@@ -100,8 +100,6 @@ struct task {
     struct waitqueue *vfork_done;
 
     int exit_status;
-    bool parent_wait;
-    bool waiting_any;
 
     struct fs_info *fs;
     struct fdtable *files;
