@@ -75,6 +75,7 @@ struct task {
     u8 policy;
     u8 cpu;
     bool on_rq;
+    bool on_cpu;
     u64 runtime;
     u64 vruntime;
     // u64 timeslice;

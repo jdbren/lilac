@@ -67,6 +67,7 @@ struct rq {
     // these are never on rq
     struct task *curr; // current running task
     struct task *idle; // idle task
+    struct task *prev; // task being switched away from
 
     struct rb_root_cached queue;
 };
@@ -124,9 +125,19 @@ static bool prio_comp(struct rb_node *a, const struct rb_node *b)
     return task_a->vruntime < task_b->vruntime;
 }
 
+/*
+ * Runs on the new task's stack right after a switch (including a new task's
+ * first run), so the previous task's stack is no longer in use
+ */
 void sched_post_switch_unlock(void)
 {
-    release_lock(&this_cpu_rq()->lock);
+    struct rq *rq = this_cpu_rq();
+    struct task *prev = rq->prev;
+
+    rq->prev = NULL;
+    if (prev)
+        __atomic_store_n(&prev->on_cpu, false, __ATOMIC_RELEASE);
+    release_lock(&rq->lock);
 }
 
 void __rq_del(struct rq *rq, struct task *p)
@@ -396,6 +407,8 @@ void schedule(void)
 
     if (next != cur) {
         rq->curr = next;
+        rq->prev = cur;
+        next->on_cpu = true;
         context_switch(cur, next);
         sched_post_switch_unlock();
         cur->exec_started = read_ticks();
