@@ -34,17 +34,17 @@ LDFLAGS:=$(LDFLAGS) -nostdlib
 LIBS:=$(LIBS) -lgcc -lstdc++
 
 ifdef CONFIG_x86_64
-ARCHDIR=arch/x86
+export ARCHDIR=arch/x86
 include $(ARCHDIR)/make64.config
 else ifdef CONFIG_x86
-ARCHDIR=arch/x86
+export ARCHDIR=arch/x86
 include $(ARCHDIR)/make32.config
 else
 $(error Unknown arch)
 endif
 
-CFLAGS:=$(CFLAGS) $(KERNEL_ARCH_CFLAGS)
-CXXFLAGS:=$(CXXFLAGS) $(KERNEL_ARCH_CFLAGS)
+export CFLAGS:=$(CFLAGS) $(KERNEL_ARCH_CFLAGS)
+export CXXFLAGS:=$(CXXFLAGS) $(KERNEL_ARCH_CFLAGS)
 LDFLAGS:=$(LDFLAGS) $(KERNEL_ARCH_LDFLAGS)
 LIBS:=$(LIBS) $(KERNEL_ARCH_LIBS)
 

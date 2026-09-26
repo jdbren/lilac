@@ -18,8 +18,8 @@
 #define	SATA_SIG_PM	    0x96690101	// Port multiplier
 
 #define NUM_PRDT_ENTRIES 8
-#define CMD_LIST_SZ 32
-#define NUM_CMD_SLOTS 32
+#define MAX_PORTS 32
+#define MAX_CMD_SLOTS 32
 
 #define AHCI_DEV_NULL 0
 #define AHCI_DEV_SATA 1
@@ -59,7 +59,9 @@ const struct disk_operations ahci_ops = {
 
 static hba_mem_t *abar;
 static int num_ports;
+static int max_used_port;
 static int num_devices;
+static int num_cmd_slots;
 
 static uintptr_t ahci_base;
 static uintptr_t ahci_phys_base;
@@ -82,7 +84,6 @@ static int ahci_identify(struct ahci_device *dev, u16 *buf);
 void ahci_init(hba_mem_t *abar_phys)
 {
     static bool initialized = false;
-    int size;
     u32 pi;
     int i = 0;
 
@@ -93,8 +94,12 @@ void ahci_init(hba_mem_t *abar_phys)
 
     initialized = true;
 
-    abar = map_phys((void*)abar_phys, PAGE_SIZE,
+    const int mem_region_size = MAX_PORTS * sizeof(hba_port_t) + sizeof(*abar);
+    abar = map_phys((void*)abar_phys, mem_region_size,
         MEM_PF_WRITE | MEM_PF_UC | MEM_PF_READ | MEM_PF_NO_EXEC);
+
+    abar->ghc |= (1 << 31); // Set AHCI enable
+    num_cmd_slots = ((abar->cap >> 8) & 0x1F) + 1;
 
     pi = abar->pi;
     while (i < 32) {
@@ -114,30 +119,28 @@ void ahci_init(hba_mem_t *abar_phys)
                 klog(LOG_INFO, "SEMB drive found at port %d\n", i);
             else if (dt == AHCI_DEV_PM)
                 klog(LOG_INFO, "PM drive found at port %d\n", i);
-            num_ports++;
+            if (dt == AHCI_DEV_SATA)
+                max_used_port = i;
         }
         pi >>= 1;
         i++;
     }
 
-    if (num_ports == 0) {
+    if (num_devices == 0) {
         printf("No AHCI drives found\n");
         return;
     }
 
-    size = num_ports * sizeof(hba_port_t) + sizeof(*abar);
-    if (size > PAGE_SIZE) {
-        unmap_phys((void*)abar, PAGE_SIZE);
-        abar = map_phys((void*)abar_phys, size,
-            MEM_PF_WRITE | MEM_PF_UC | MEM_PF_READ | MEM_PF_NO_EXEC);
-    }
-
+    num_ports = max_used_port + 1;
     port_mem_init(num_ports);
-    for (i = 0; i < num_ports; i++)
-        ahci_port_rebase(&abar->ports[i], i);
+    for (i = 0; i < num_devices; i++)
+        ahci_port_rebase(devices[i].port, devices[i].portno);
 
     for (i = 0; i < num_devices; i++)
         ahci_install_device(&devices[i]);
+
+    // TODO: set GHC.IE once an interrupt handler is registered
+    abar->is = 0xFFFFFFFF;
 
     kstatus(STATUS_OK, "AHCI controller initialized\n");
 }
@@ -169,10 +172,11 @@ static int check_type(hba_port_t *port)
 
 static void port_mem_init(int num_ports)
 {
-    int size = sizeof(struct HBA_CMD_HEADER) * CMD_LIST_SZ * num_ports
+    // Layout strides assume MAX_CMD_SLOTS per port regardless of CAP.NCS
+    int size = sizeof(struct HBA_CMD_HEADER) * MAX_CMD_SLOTS * num_ports
         + sizeof(struct HBA_FIS) * num_ports
-        + sizeof(struct HBA_CMD_TBL) * CMD_LIST_SZ * num_ports
-        + sizeof(struct HBA_PRDT_ENTRY) * NUM_PRDT_ENTRIES * CMD_LIST_SZ * num_ports;
+        + sizeof(struct HBA_CMD_TBL) * MAX_CMD_SLOTS * num_ports
+        + sizeof(struct HBA_PRDT_ENTRY) * NUM_PRDT_ENTRIES * MAX_CMD_SLOTS * num_ports;
 
     int npages = PAGE_ROUND_UP(size) / PAGE_SIZE;
     struct page *pg = alloc_pages(npages, 0);
@@ -185,9 +189,19 @@ static void port_mem_init(int num_ports)
     memset((void*)ahci_base, 0, npages * PAGE_SIZE);
 }
 
+#define DEFAULT_PORT_INT_MASK ( \
+    AHCI_PORT_INTR_DHR | \
+    AHCI_PORT_INTR_TFE | \
+    AHCI_PORT_INTR_HBF | \
+    AHCI_PORT_INTR_HBD)
+
 void ahci_port_rebase(hba_port_t *port, int portno)
 {
     stop_cmd(port);	// Stop command engine
+
+    port->is = 0xFFFFFFFF;
+    port->serr = 0xFFFFFFFF;
+    port->ie = DEFAULT_PORT_INT_MASK;
 
     // Command list offset: 1K*portno
     port->clb = ahci_phys_addr(get_clb(portno));
@@ -201,7 +215,7 @@ void ahci_port_rebase(hba_port_t *port, int portno)
 
     // Command table size = 256*32 = 8K per port
     hba_cmd_header_t *cmdheader = (hba_cmd_header_t*)(get_clb(portno));
-    for (int i = 0; i < NUM_CMD_SLOTS; i++) {
+    for (int i = 0; i < num_cmd_slots; i++) {
         cmdheader[i].prdtl = NUM_PRDT_ENTRIES;
         // 256 bytes per command table, 64+16+48+16*8
         // Command table offset: 40K + 8K*portno + cmdheader_index*256
@@ -563,8 +577,7 @@ static int find_cmdslot(hba_port_t *port)
 {
     // If not set in SACT and CI, the slot is free
     u32 slots = (port->sact | port->ci);
-    for (int i=0; i < NUM_CMD_SLOTS; i++)
-    {
+    for (int i = 0; i < num_cmd_slots; i++) {
         if ((slots&1) == 0)
             return i;
         slots >>= 1;

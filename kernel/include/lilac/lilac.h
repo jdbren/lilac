@@ -23,31 +23,4 @@ void print_system_info(void);
 
 #define __no_stack_chk __attribute__((no_stack_protector))
 
-#if defined __i386__ || defined __x86_64__
-static inline void arch_idle(void)
-{
-    while (1) {
-        asm volatile (
-            "sti\n\t"
-            "hlt"
-        );
-    }
-}
-
-static __always_inline void arch_enable_interrupts(void)
-{
-    __asm__ ("sti");
-}
-
-static __always_inline void arch_disable_interrupts(void)
-{
-    __asm__ ("cli");
-}
-
-static __always_inline void arch_halt_cpu(void)
-{
-    __asm__ ("hlt");
-}
-#endif // __i386__ || __x86_64__
-
 #endif // _LILAC_LILAC_H
