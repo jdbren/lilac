@@ -139,13 +139,14 @@ void __rq_del(struct rq *rq, struct task *p)
 
 void rq_del(struct task *p)
 {
+    unsigned long flags;
 #ifdef DEBUG_SCHED
     klog(LOG_DEBUG, "Removing task %d from run queue\n", p->pid);
 #endif
     struct rq *rq = cpu_rq(p->cpu);
-    acquire_lock(&rq->lock);
+    acquire_lock_irqsave(&rq->lock, &flags);
     __rq_del(rq, p);
-    release_lock(&rq->lock);
+    release_lock_irqrestore(&rq->lock, flags);
 }
 
 void __rq_add(struct rq *rq, struct task *p)
@@ -158,19 +159,21 @@ void __rq_add(struct rq *rq, struct task *p)
 
 void rq_add(struct task *p)
 {
+    unsigned long flags;
 #ifdef DEBUG_SCHED
     klog(LOG_DEBUG, "Adding task %d to run queue\n", p->pid);
 #endif
     struct rq *rq = cpu_rq(p->cpu);
-    acquire_lock(&rq->lock);
+    acquire_lock_irqsave(&rq->lock, &flags);
     __rq_add(rq, p);
-    release_lock(&rq->lock);
+    release_lock_irqrestore(&rq->lock, flags);
 }
 
 void set_task_running(struct task *p)
 {
+    unsigned long flags;
     struct rq *rq = cpu_rq(p->cpu);
-    acquire_lock(&p->lock); // for state change
+    acquire_lock_irqsave(&p->lock, &flags); // for state change
     acquire_lock(&rq->lock); // for on_rq and add
     if (p->state == TASK_ZOMBIE) {
         panic("Tried to wake up a zombie process %d\n", p->pid);
@@ -183,13 +186,14 @@ void set_task_running(struct task *p)
         // klog(LOG_DEBUG, "Waking up task %d\n", p->pid);
     }
     release_lock(&rq->lock);
-    release_lock(&p->lock);
+    release_lock_irqrestore(&p->lock, flags);
 }
 
 void set_task_stopped(struct task *p)
 {
+    unsigned long flags;
     struct rq *rq = cpu_rq(p->cpu);
-    acquire_lock(&p->lock);
+    acquire_lock_irqsave(&p->lock, &flags);
     acquire_lock(&rq->lock);
     if (p->on_rq)
         __rq_del(rq, p);
@@ -197,13 +201,14 @@ void set_task_stopped(struct task *p)
     p->flags.state_change = 1;
     klog(LOG_DEBUG, "Task %d is now stopped\n", p->pid);
     release_lock(&rq->lock);
-    release_lock(&p->lock);
+    release_lock_irqrestore(&p->lock, flags);
 }
 
 void set_task_sleeping(struct task *p)
 {
+    unsigned long flags;
     struct rq *rq = cpu_rq(p->cpu);
-    acquire_lock(&p->lock);
+    acquire_lock_irqsave(&p->lock, &flags);
     acquire_lock(&rq->lock);
     if (p->state == TASK_RUNNING) {
         if (p->on_rq)
@@ -212,13 +217,14 @@ void set_task_sleeping(struct task *p)
         // klog(LOG_DEBUG, "Task %d is now sleeping\n", p->pid);
     }
     release_lock(&rq->lock);
-    release_lock(&p->lock);
+    release_lock_irqrestore(&p->lock, flags);
 }
 
 void set_task_uninterruptible(struct task *p)
 {
+    unsigned long flags;
     struct rq *rq = cpu_rq(p->cpu);
-    acquire_lock(&p->lock);
+    acquire_lock_irqsave(&p->lock, &flags);
     acquire_lock(&rq->lock);
     if (p->state == TASK_RUNNING) {
         if (p->on_rq)
@@ -227,7 +233,7 @@ void set_task_uninterruptible(struct task *p)
         // klog(LOG_DEBUG, "Task %d is now uninterruptible\n", p->pid);
     }
     release_lock(&rq->lock);
-    release_lock(&p->lock);
+    release_lock_irqrestore(&p->lock, flags);
 }
 
 void set_current_state(u8 state)
@@ -263,17 +269,23 @@ void yield(void)
 
 void schedule_task(struct task *new_task)
 {
-    acquire_lock(&new_task->lock);
+    unsigned long flags;
+    acquire_lock_irqsave(&new_task->lock, &flags);
     new_task->state = TASK_RUNNING;
     new_task->vruntime = current->vruntime + MIN_GRANULARITY;
     rq_add(new_task);
-    release_lock(&new_task->lock);
+    release_lock_irqrestore(&new_task->lock, flags);
 #ifdef DEBUG_SCHED
     struct task *tmp = NULL, *t = new_task;
     rbtree_postorder_for_each_entry_safe(t, tmp, &rqs[0].queue.rb_root, rq_node) {
         klog(LOG_DEBUG, "RB: Task %d in queue\n", t->pid);
     }
 #endif
+}
+
+bool sched_running(void)
+{
+    return sched_timer == 1;
 }
 
 void sched_clock_enable(void)

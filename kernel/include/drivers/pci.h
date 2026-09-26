@@ -19,6 +19,24 @@ void pciConfigWrite(u8 bus, u8 slot, u8 func, u8 offset, u32 data,
 void pcie_add_map(ACPI_TABLE_MCFG *mcfg);
 void pci_read_device(ACPI_DEVICE_INFO *Info);
 
+#define PCI_COMMAND_MASTER          (1 << 2)
+#define PCI_COMMAND_INTX_DISABLE    (1 << 10)
+#define PCI_STATUS_CAP_LIST         (1 << 4)
+
+#define PCI_CAP_ID_MSI              0x05
+
+#define PCI_MSI_FLAGS_ENABLE        (1 << 0)
+#define PCI_MSI_FLAGS_QSIZE         (7 << 4)
+#define PCI_MSI_FLAGS_64BIT         (1 << 7)
+
+#define MSI_ADDR_BASE               0xFEE00000
+#define MSI_ADDR_DEST_SHIFT         12
+
+struct pci_device;
+
+volatile void *pci_find_cap(struct pci_device *dev, u8 id);
+int pci_enable_msi(struct pci_device *dev, u8 vector, u8 dest_apic);
+
 
 struct pci_device {
     u16 VendorID;

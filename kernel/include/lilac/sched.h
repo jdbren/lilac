@@ -8,6 +8,7 @@
 void sched_init(void);
 void sched_ap_rq_init(int cpu);
 void sched_clock_enable(void);
+bool sched_running(void);
 void schedule(void);
 void sched_tick(void);
 void yield(void);
@@ -25,6 +26,7 @@ void rq_del(struct task *p);
 void set_task_running(struct task *p);
 void set_task_stopped(struct task *p);
 void set_task_sleeping(struct task *p);
+void set_task_uninterruptible(struct task *p);
 void set_current_state(u8 state);
 
 #define __set_current_state(statev) current->state = (statev)

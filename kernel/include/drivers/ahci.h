@@ -146,7 +146,10 @@ typedef struct HBA_CMD_TBL {
 } hba_cmd_tbl_t;
 
 
-void ahci_init(hba_mem_t *abar);
+struct pci_device;
+
+void ahci_init(struct pci_device *pdev);
+void ahci_irq(void *frame);
 void ahci_port_rebase(hba_port_t *port, int portno);
 void ahci_start_cmd(hba_port_t *port);
 void stop_cmd(hba_port_t *port);

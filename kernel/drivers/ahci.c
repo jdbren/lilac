@@ -3,12 +3,18 @@
 #include <lilac/device.h>
 #include <lilac/panic.h>
 #include <lilac/sync.h>
+#include <lilac/sched.h>
+#include <lilac/wait.h>
+#include <lilac/interrupt.h>
 #include <drivers/ahci.h>
 #include <drivers/blkdev.h>
+#include <drivers/pci.h>
 #include <mm/kmm.h>
 #include <mm/kmalloc.h>
 #include <mm/page.h>
 #include <utility/ata.h>
+#include <asm/apic.h>
+#include <asm/native.h>
 
 #pragma GCC diagnostic ignored "-Wpointer-to-int-cast"
 
@@ -37,6 +43,15 @@
 
 #define HBA_PxIS_TFES   (1 << 30)
 
+#define HBA_GHC_IE      (1 << 1)
+#define HBA_GHC_AE      (1U << 31)
+
+#define AHCI_PORT_INTR_ERR ( \
+    AHCI_PORT_INTR_TFE | \
+    AHCI_PORT_INTR_HBF | \
+    AHCI_PORT_INTR_HBD | \
+    AHCI_PORT_INTR_IF)
+
 #define get_clb(portnum) \
     ((void*)(ahci_base + (portnum << 10)))
 #define get_fb(portnum) \
@@ -49,7 +64,9 @@ struct ahci_device {
     hba_port_t *port;
     int portno;
     int type;
-    spinlock_t port_lock;
+    mutex_t port_lock;
+    struct waitqueue wq;
+    volatile u32 error; // for current command
 };
 
 const struct disk_operations ahci_ops = {
@@ -66,6 +83,10 @@ static int num_cmd_slots;
 static uintptr_t ahci_base;
 static uintptr_t ahci_phys_base;
 static struct ahci_device *devices;
+static struct ahci_device *port_to_dev[MAX_PORTS];
+static bool irq_enabled;
+
+extern void ahci_handler(void *);
 
 #define ahci_phys_addr(x) \
     (ahci_phys_base + ((uintptr_t)(x) - ahci_base))
@@ -79,10 +100,12 @@ static int __ahci_read(struct ahci_device *dev, u32 startl, u32 starth,
 static int __ahci_write(struct ahci_device *dev, u32 startl, u32 starth,
     u32 count, u16 *buf);
 static int ahci_identify(struct ahci_device *dev, u16 *buf);
+static void ahci_enable_irq(struct pci_device *pdev);
 
 // Initialize AHCI controller
-void ahci_init(hba_mem_t *abar_phys)
+void ahci_init(struct pci_device *pdev)
 {
+    hba_mem_t *abar_phys = (void *)(uintptr_t)(pdev->type0.BaseAddresses[5] & 0xFFFFF000);
     static bool initialized = false;
     u32 pi;
     int i = 0;
@@ -98,7 +121,7 @@ void ahci_init(hba_mem_t *abar_phys)
     abar = map_phys((void*)abar_phys, mem_region_size,
         MEM_PF_WRITE | MEM_PF_UC | MEM_PF_READ | MEM_PF_NO_EXEC);
 
-    abar->ghc |= (1 << 31); // Set AHCI enable
+    abar->ghc |= HBA_GHC_AE;
     num_cmd_slots = ((abar->cap >> 8) & 0x1F) + 1;
 
     pi = abar->pi;
@@ -109,7 +132,6 @@ void ahci_init(hba_mem_t *abar_phys)
                 klog(LOG_INFO, "SATA drive found at port %d\n", i);
                 devices = krealloc(devices, (num_devices+1) * sizeof(*devices));
                 devices[num_devices].port = &abar->ports[i];
-                spin_lock_init(&devices[num_devices].port_lock);
                 devices[num_devices].portno = i;
                 devices[num_devices++].type = dt;
             }
@@ -133,14 +155,19 @@ void ahci_init(hba_mem_t *abar_phys)
 
     num_ports = max_used_port + 1;
     port_mem_init(num_ports);
-    for (i = 0; i < num_devices; i++)
+    for (i = 0; i < num_devices; i++) {
+        mutex_init(&devices[i].port_lock);
+        spin_lock_init(&devices[i].wq.lock);
+        INIT_LIST_HEAD(&devices[i].wq.task_list);
+        devices[i].error = 0;
+        port_to_dev[devices[i].portno] = &devices[i];
         ahci_port_rebase(devices[i].port, devices[i].portno);
+    }
 
     for (i = 0; i < num_devices; i++)
         ahci_install_device(&devices[i]);
 
-    // TODO: set GHC.IE once an interrupt handler is registered
-    abar->is = 0xFFFFFFFF;
+    ahci_enable_irq(pdev);
 
     kstatus(STATUS_OK, "AHCI controller initialized\n");
 }
@@ -193,7 +220,98 @@ static void port_mem_init(int num_ports)
     AHCI_PORT_INTR_DHR | \
     AHCI_PORT_INTR_TFE | \
     AHCI_PORT_INTR_HBF | \
-    AHCI_PORT_INTR_HBD)
+    AHCI_PORT_INTR_HBD | \
+    AHCI_PORT_INTR_IF)
+
+static void ahci_enable_irq(struct pci_device *pdev)
+{
+    install_isr(AHCI_VECTOR, ahci_handler);
+    if (pci_enable_msi(pdev, AHCI_VECTOR, get_lapic_id())) {
+        klog(LOG_WARN, "ahci: no MSI capability, staying in polling mode\n");
+        return;
+    }
+
+    for (int i = 0; i < num_devices; i++)
+        devices[i].port->is = 0xFFFFFFFF;
+    abar->is = 0xFFFFFFFF;
+    abar->ghc |= HBA_GHC_IE;
+    irq_enabled = true;
+}
+
+void ahci_irq(void *frame)
+{
+    (void)frame;
+    u32 pending = abar->is;
+
+    for (u32 bits = pending; bits; bits &= bits - 1) {
+        int p = __builtin_ctz(bits);
+        hba_port_t *port = &abar->ports[p];
+        u32 pis = port->is;
+        port->is = pis; // clear
+
+        struct ahci_device *dev = port_to_dev[p];
+        if (!dev)
+            continue;
+        if (pis & AHCI_PORT_INTR_ERR)
+            dev->error |= pis;
+        wake_all(&dev->wq);
+    }
+
+    abar->is = pending;
+}
+
+static bool ahci_can_sleep(void)
+{
+    return irq_enabled && sched_running() && arch_irqs_enabled();
+}
+
+static void ahci_port_recover(struct ahci_device *dev)
+{
+    hba_port_t *port = dev->port;
+
+    klog(LOG_ERROR, "ahci: port %d error: is=%08x tfd=%08x serr=%08x\n",
+        dev->portno, dev->error, port->tfd, port->serr);
+    stop_cmd(port);
+    port->serr = port->serr;
+    port->is = port->is;
+    ahci_start_cmd(port);
+}
+
+// Issue the prepared command in slot and wait for it; caller holds port_lock
+static int ahci_issue_and_wait(struct ahci_device *dev, int slot)
+{
+    hba_port_t *port = dev->port;
+    u32 bit = 1U << slot;
+    int spin = 0;
+
+    while ((port->tfd & (ATA_DEV_BUSY | ATA_DEV_DRQ)) && spin < 1000000)
+        spin++;
+    if (spin == 1000000) {
+        klog(LOG_ERROR, "ahci: port %d is hung\n", dev->portno);
+        return -EIO;
+    }
+
+    dev->error = 0;
+    port->ci = bit;
+
+    if (ahci_can_sleep()) {
+        klog(LOG_DEBUG, "ahci: waiting for port %d slot %d\n", dev->portno, slot);
+        wait_event_uninterruptible(dev->wq, !(port->ci & bit) || dev->error);
+    } else {
+        while ((port->ci & bit) && !dev->error) {
+            if (port->is & HBA_PxIS_TFES)
+                dev->error |= port->is;
+        }
+        if (port->is & HBA_PxIS_TFES)
+            dev->error |= port->is;
+    }
+
+    if (dev->error) {
+        ahci_port_recover(dev);
+        return -EIO;
+    }
+    return 0;
+}
 
 void ahci_port_rebase(hba_port_t *port, int portno)
 {
@@ -308,7 +426,7 @@ int ahci_write(struct gendisk *disk, u64 lba, const void *buf, u32 count)
 static int ahci_identify(struct ahci_device *dev, u16 *buf)
 {
     hba_port_t *port = dev->port;
-    acquire_lock(&dev->port_lock);
+    mutex_lock(&dev->port_lock);
 
     int ret = 0;
     int slot = find_cmdslot(port);
@@ -337,35 +455,12 @@ static int ahci_identify(struct ahci_device *dev, u16 *buf)
     cmdfis->command = ATA_CMD_IDENTIFY;
     cmdfis->device = 0;
 
-    int spin = 0;
-    while ((port->tfd & (ATA_DEV_BUSY | ATA_DEV_DRQ)) && spin < 1000000)
-        spin++;
-
-    if (spin == 1000000) {
-        klog(LOG_ERROR, "ahci: Port is hung\n");
-        ret = -EIO;
-        goto out;
-    }
-
-    port->ci = 1<<slot;
-
-    while (1) {
-        if ((port->ci & (1<<slot)) == 0)
-            break;
-        if (port->is & HBA_PxIS_TFES) {
-            klog(LOG_ERROR, "ahci: Identify error\n");
-            ret = -EIO;
-            goto out;
-        }
-    }
-
-    if (port->is & HBA_PxIS_TFES) {
+    ret = ahci_issue_and_wait(dev, slot);
+    if (ret)
         klog(LOG_ERROR, "ahci: Identify error\n");
-        ret = -EIO;
-    }
 
 out:
-    release_lock(&dev->port_lock);
+    mutex_unlock(&dev->port_lock);
     return ret;
 }
 
@@ -375,13 +470,11 @@ static int __ahci_read(struct ahci_device *dev, u32 startl, u32 starth,
     u32 count, u16 *buf)
 {
     hba_port_t *port = dev->port;
-    acquire_lock(&dev->port_lock);
+    mutex_lock(&dev->port_lock);
 
     int ret = 0;
     int i = 0;
     u32 sec_rem = count;
-    port->is = (u32) -1;		// Clear pending interrupt bits
-    int spin = 0; 				// Spin lock timeout counter
     int slot = find_cmdslot(port);
     if (slot == -1) {
         klog(LOG_ERROR, "ahci: No free command slot\n");
@@ -404,7 +497,6 @@ static int __ahci_read(struct ahci_device *dev, u32 startl, u32 starth,
     {
         cmdtbl->prdt_entry[i].dba = (u32)buf;
         cmdtbl->prdt_entry[i].dbc = 8 * 1024 - 1;	// 8K bytes
-        // cmdtbl->prdt_entry[i].i = 1;
         buf += 0x1000;	// 4K words
         sec_rem -= 16;	// 16 sectors
     }
@@ -412,7 +504,6 @@ static int __ahci_read(struct ahci_device *dev, u32 startl, u32 starth,
     if (sec_rem > 0) {
         cmdtbl->prdt_entry[i].dba = (u32)buf;
         cmdtbl->prdt_entry[i].dbc = (sec_rem<<9)-1;	// 512 bytes per sector
-        // cmdtbl->prdt_entry[i].i = 1;
     }
 
     // Setup command
@@ -434,41 +525,12 @@ static int __ahci_read(struct ahci_device *dev, u32 startl, u32 starth,
     cmdfis->countl = count & 0xFF;
     cmdfis->counth = (count >> 8) & 0xFF;
 
-    // The below loop waits until the port is no longer busy before issuing a new command
-    while ((port->tfd & (ATA_DEV_BUSY | ATA_DEV_DRQ)) && spin < 1000000)
-        spin++;
-    if (spin == 1000000) {
-        klog(LOG_ERROR, "ahci: Port is hung\n");
-        ret = -EIO;
-        goto out;
-    }
-
-    port->ci = 1<<slot;	// Issue command
-
-    // Wait for completion
-    while (1)
-    {
-        // In some longer duration reads, it may be helpful to spin on the DPS bit
-        // in the PxIS port field as well (1 << 5)
-        if ((port->ci & (1<<slot)) == 0)
-            break;
-        if (port->is & HBA_PxIS_TFES)	// Task file error
-        {
-            klog(LOG_ERROR, "ahci: Read disk error\n");
-            ret = -EIO;
-            goto out;
-        }
-    }
-
-    // Check again
-    if (port->is & HBA_PxIS_TFES) {
+    ret = ahci_issue_and_wait(dev, slot);
+    if (ret)
         klog(LOG_ERROR, "ahci: Read disk error\n");
-        ret = -EIO;
-        goto out;
-    }
 
 out:
-    release_lock(&dev->port_lock);
+    mutex_unlock(&dev->port_lock);
     return ret;
 }
 
@@ -477,12 +539,10 @@ static int __ahci_write(struct ahci_device *dev, u32 startl, u32 starth,
     u32 count, u16 *buf)
 {
     hba_port_t *port = dev->port;
-    acquire_lock(&dev->port_lock);
+    mutex_lock(&dev->port_lock);
     u32 sec_rem = count;
-    port->is = UINT32_MAX;		// Clear pending interrupt bits
     int ret = 0;
     int i = 0;
-    int spin = 0; 				// Spin lock timeout counter
     int slot = find_cmdslot(port);
     if (slot == -1) {
         klog(LOG_ERROR, "ahci: No free command slot\n");
@@ -505,7 +565,6 @@ static int __ahci_write(struct ahci_device *dev, u32 startl, u32 starth,
     {
         cmdtbl->prdt_entry[i].dba = (u32)buf;
         cmdtbl->prdt_entry[i].dbc = 8 * 1024 - 1;	// 8K bytes
-        // cmdtbl->prdt_entry[i].i = 1;
         buf += 0x1000;	// 4K words
         sec_rem -= 16;	// 16 sectors
     }
@@ -513,7 +572,6 @@ static int __ahci_write(struct ahci_device *dev, u32 startl, u32 starth,
     if (sec_rem > 0) {
         cmdtbl->prdt_entry[i].dba = (u32)buf;
         cmdtbl->prdt_entry[i].dbc = (sec_rem<<9)-1;	// 512 bytes per sector
-        // cmdtbl->prdt_entry[i].i = 1;
     }
 
     // Setup command
@@ -535,39 +593,12 @@ static int __ahci_write(struct ahci_device *dev, u32 startl, u32 starth,
     cmdfis->countl = count & 0xFF;
     cmdfis->counth = (count >> 8) & 0xFF;
 
-    // The below loop waits until the port is no longer busy before issuing a new command
-    while ((port->tfd & (ATA_DEV_BUSY | ATA_DEV_DRQ)) && spin < 1000000)
-        spin++;
-    if (spin == 1000000) {
-        klog(LOG_ERROR, "ahci: Port is hung\n");
-        ret = -EIO;
-        goto out;
-    }
-
-    port->ci = 1<<slot;	// Issue command
-
-    // Wait for completion
-    while (1) {
-        // In some longer duration reads, it may be helpful to spin on the DPS bit
-        // in the PxIS port field as well (1 << 5)
-        if ((port->ci & (1<<slot)) == 0)
-            break;
-        if (port->is & HBA_PxIS_TFES) {
-            klog(LOG_ERROR, "ahci: Write disk error\n");
-            ret = -EIO;
-            goto out;
-        }
-    }
-
-    // Check again
-    if (port->is & HBA_PxIS_TFES) {
+    ret = ahci_issue_and_wait(dev, slot);
+    if (ret)
         klog(LOG_ERROR, "ahci: Write disk error\n");
-        ret = -EIO;
-        goto out;
-    }
 
 out:
-    release_lock(&dev->port_lock);
+    mutex_unlock(&dev->port_lock);
     return ret;
 }
 
