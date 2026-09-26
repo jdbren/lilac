@@ -1184,9 +1184,15 @@ static void v_termout(struct vc_state *vt, const char *s, int len)
     vt->con_ops->con_cursor(vt, CURSOR_ON);
 }
 
+// Terminal state is written both by tty writers and by keyboard-IRQ echo
+static spinlock_t vt_lock = SPINLOCK_INIT;
+
 ssize_t vt_write(struct tty *tty, const u8 *buf, size_t count)
 {
+    unsigned long flags;
+    acquire_lock_irqsave(&vt_lock, &flags);
     v_termout(tty->driver_data, (const char*)buf, count);
+    release_lock_irqrestore(&vt_lock, flags);
     return count;
 }
 

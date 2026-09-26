@@ -71,7 +71,7 @@ struct dentry * alloc_dentry(struct dentry *d_parent, const char *name)
     new_dentry->d_sb = i_parent->i_sb;
     new_dentry->d_name.data = strdup(name);
     new_dentry->d_name.len = strlen(name);
-    spin_lock_init(&new_dentry->d_lock);
+    mutex_init(&new_dentry->d_lock);
     INIT_HLIST_HEAD(&new_dentry->d_children);
     INIT_HLIST_NODE(&new_dentry->d_sib);
     new_dentry->d_count = 1;
@@ -169,18 +169,18 @@ static struct dentry * lookup_path_from_inner(struct dentry *parent,
 #ifdef DEBUG_VFS
         klog(LOG_DEBUG, "VFS: Looking up %s\n", name);
 #endif
-        acquire_lock(&parent->d_lock);
+        mutex_lock(&parent->d_lock);
 
         if (strcmp(name, ".") == 0) {
             kfree(name);
-            release_lock(&parent->d_lock);
+            mutex_unlock(&parent->d_lock);
             continue;
         } else if (strcmp(name, "..") == 0) {
             kfree(name);
             tmp = parent;
             if (parent->d_parent != NULL)
                 parent = parent->d_parent;
-            release_lock(&tmp->d_lock);
+            mutex_unlock(&tmp->d_lock);
             continue;
         }
 
@@ -192,7 +192,7 @@ static struct dentry * lookup_path_from_inner(struct dentry *parent,
             find = alloc_dentry(parent, name);
             if (IS_ERR_OR_NULL(find)) {
                 kfree(name);
-                release_lock(&parent->d_lock);
+                mutex_unlock(&parent->d_lock);
                 return find;
             }
 
@@ -201,14 +201,14 @@ static struct dentry * lookup_path_from_inner(struct dentry *parent,
                 klog(LOG_DEBUG, "VFS: %s is not a directory\n", parent->d_name);
                 kfree(name);
                 destroy_dentry(find);
-                release_lock(&parent->d_lock);
+                mutex_unlock(&parent->d_lock);
                 return ERR_PTR(-ENOTDIR);
             }
 
             if ((err = PTR_ERR(inode->i_op->lookup(inode, find, 0))) < 0) {
                 kfree(name);
                 destroy_dentry(find);
-                release_lock(&parent->d_lock);
+                mutex_unlock(&parent->d_lock);
                 return ERR_PTR(err);
             }
 
@@ -216,7 +216,7 @@ static struct dentry * lookup_path_from_inner(struct dentry *parent,
             kfree(name);
             // If the inode is NULL, we've reached a dead end (negative dentry)
             if (find->d_inode == NULL) {
-                release_lock(&parent->d_lock);
+                mutex_unlock(&parent->d_lock);
                 return find;
             }
         } else {
@@ -225,7 +225,7 @@ static struct dentry * lookup_path_from_inner(struct dentry *parent,
 #endif
             kfree(name);
             if (find->d_inode == NULL) {
-                release_lock(&parent->d_lock);
+                mutex_unlock(&parent->d_lock);
                 return find;
             }
 
@@ -236,7 +236,7 @@ static struct dentry * lookup_path_from_inner(struct dentry *parent,
                 find = find->d_mount->mnt_root;
             }
         }
-        release_lock(&parent->d_lock);
+        mutex_unlock(&parent->d_lock);
 
         if (find->d_inode && S_ISLNK(find->d_inode->i_mode) &&
            (follow_final || path_has_component(path, n_pos))) {

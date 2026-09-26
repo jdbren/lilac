@@ -82,7 +82,7 @@ struct __cacheline_align inode_operations {
 
 struct dentry {
     atomic_uint d_count;
-    spinlock_t  d_lock;
+    mutex_t     d_lock;             /* held across lookup, which may sleep */
     // struct hlist_bl_node d_hash; /* lookup hash list */
     struct dentry *d_parent;        /* parent directory */
     struct lstr d_name;

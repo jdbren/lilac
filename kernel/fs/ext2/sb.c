@@ -306,6 +306,7 @@ struct dentry * ext2_init(void *dev, struct super_block *sb)
     root_dentry->d_sb = sb;
     root_dentry->d_inode = root_inode;
     root_dentry->d_count = 1;
+    mutex_init(&root_dentry->d_lock);
 
     sb->s_root = root_dentry;
     return root_dentry;

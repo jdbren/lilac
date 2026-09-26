@@ -249,6 +249,7 @@ struct dentry *fat32_init(void *dev, struct super_block *sb)
     root_dentry->d_sb = sb;
     root_dentry->d_inode = root_inode;
     root_dentry->d_count = 1;
+    mutex_init(&root_dentry->d_lock);
 
     // Initialize the super block
     sb->s_blocksize = fat_disk->bytes_per_clst;

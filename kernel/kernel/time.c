@@ -5,6 +5,7 @@
 #include <lilac/log.h>
 #include <lilac/sched.h>
 #include <lilac/percpu.h>
+#include <lilac/boot.h>
 #include <lilac/uaccess.h>
 
 // Alarm events are owned by the timer lists once queued
@@ -21,6 +22,7 @@ static spinlock_t clock_write_lock = SPINLOCK_INIT;
 struct timer_base {
     struct rb_root_cached tree;
     struct timer_event *running;    // callback in progress on this cpu
+    struct task *running_task;      // its ev->p; ev itself may be freed by then
 };
 
 /*
@@ -219,10 +221,12 @@ void timer_ev_tick(void)
 
         __timer_ev_dequeue(ev);
         base->running = ev;
+        base->running_task = ev->p;
         release_lock(&timer_lock);
         ev->callback(ev);
         acquire_lock(&timer_lock);
         base->running = NULL;
+        base->running_task = NULL;
     }
     release_lock(&timer_lock);
 }
@@ -326,6 +330,17 @@ void timer_ev_task_exit(struct task *p)
         __timer_ev_dequeue(ev);
         if (ev->callback == alarm_handler)
             list_add(&ev->task_list, &dead);
+    }
+
+    // A callback already running elsewhere (e.g. an alarm raising a signal)
+    // still uses p; the task must not be reaped until it finishes
+    for (int cpu = 0; cpu < boot_info.ncpus; cpu++) {
+        struct timer_base *base = per_cpu_ptr(&timer_bases, cpu);
+        while (base->running_task == p) {
+            release_lock_irqrestore(&timer_lock, flags);
+            __pause();
+            acquire_lock_irqsave(&timer_lock, &flags);
+        }
     }
     release_lock_irqrestore(&timer_lock, flags);
 

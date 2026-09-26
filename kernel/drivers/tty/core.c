@@ -91,6 +91,7 @@ int init_tty_struct(struct tty *tty, int i)
     INIT_LIST_HEAD(&tty->flow_wait.task_list);
     tty->data = kzmalloc(sizeof(*tty->data));
     mutex_init(&tty->data->read_lock);
+    spin_lock_init(&tty->data->lock);
     tty->index = i;
     strcpy(tty->name, "tty");
     tty->name[3] = i + '0';
