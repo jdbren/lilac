@@ -7,6 +7,7 @@
 #include <lilac/syscall.h>
 #include <lilac/uaccess.h>
 #include <lilac/wait.h>
+#include <lilac/timer_event.h>
 #include <mm/page.h>
 
 static atomic_int num_tasks = 1;
@@ -135,7 +136,6 @@ static struct task * clone_process(struct clone_args *args)
     child->rq_node = (struct rb_node){0};
     INIT_LIST_HEAD(&child->children);
     child->on_rq = false;
-    child->parent_wait = false;
 
     child->pid = ++num_tasks;
     if (flags & CLONE_THREAD) {
@@ -244,7 +244,7 @@ static void return_from_fork(void)
 
 static void wait_for_vfork_done(struct task *p, struct waitqueue *wq)
 {
-    sleep_on(wq);
+    wait_event_uninterruptible(*wq, READ_ONCE(p->vfork_done) == NULL);
 }
 
 int do_clone(struct clone_args *args)
@@ -338,9 +338,16 @@ static void mm_release(struct task *p, struct mm_info *mm)
         p->clear_child_tid = NULL;
     }
 
-    if (p->vfork_done) {
-        wake_all(p->vfork_done);
-        p->vfork_done = NULL;
+    struct waitqueue *vfork_wq = p->vfork_done;
+    if (vfork_wq) {
+        unsigned long flags;
+        // The waitqueue is on the parent's stack. Clear the flag and wake under
+        // its lock: the parent can't leave end_wait (which takes the lock)
+        // until we have released it and stopped touching the queue.
+        acquire_lock_irqsave(&vfork_wq->lock, &flags);
+        WRITE_ONCE(p->vfork_done, NULL);
+        __wake_all(vfork_wq);
+        release_lock_irqrestore(&vfork_wq->lock, flags);
     }
 
     if (!--mm->ref_count)
@@ -418,6 +425,7 @@ static void cleanup_memory(struct mm_info *mm)
 void cleanup_task(struct task *p)
 {
     klog(LOG_DEBUG, "Cleaning up task %d\n", p->pid);
+    timer_ev_task_exit(p);
     cleanup_task_info(&p->info);
     cleanup_fs(p->fs, p->files);
     cleanup_memory(p->mm);

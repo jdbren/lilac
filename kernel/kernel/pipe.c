@@ -6,6 +6,7 @@
 #include <mm/page.h>
 #include <lilac/uaccess.h>
 #include <lilac/timer.h>
+#include <lilac/sched.h>
 
 ssize_t pipe_read(struct file *f, void *buf, size_t count);
 ssize_t pipe_write(struct file *f, const void *buf, size_t count);
@@ -101,12 +102,14 @@ ssize_t pipe_read(struct file *f, void *buf, size_t count)
 #ifdef DEBUG_PIPE
     klog(LOG_DEBUG, "pipe_read: Reading %lu bytes from pipe %p\n", count, pipe);
 #endif
-    if (pipe->data_size == 0) {
-        if (pipe->n_writers == 0) {
+    while (READ_ONCE(pipe->data_size) == 0) {
+        if (READ_ONCE(pipe->n_writers) == 0) {
             klog(LOG_DEBUG, "pipe_read: No writers, returning 0 bytes\n");
             return 0; // EOF
         }
-        sleep_on(&pipe->read_wq);
+        if (wait_event_interruptible(pipe->read_wq,
+                READ_ONCE(pipe->data_size) != 0 || READ_ONCE(pipe->n_writers) == 0))
+            return -EINTR;
     }
 
     acquire_lock(&pipe->lock);
@@ -140,9 +143,12 @@ ssize_t pipe_write(struct file *f, const void *buf, size_t count)
 #ifdef DEBUG_PIPE
     klog(LOG_DEBUG, "pipe_write: Writing %lu bytes to pipe %p\n", count, pipe);
 #endif
-    if (pipe->data_size == pipe->buf_size) {
-        sleep_on(&pipe->write_wq);
-        if (pipe->n_readers == 0) {
+    while (READ_ONCE(pipe->data_size) == pipe->buf_size) {
+        if (wait_event_interruptible(pipe->write_wq,
+                READ_ONCE(pipe->data_size) < pipe->buf_size ||
+                READ_ONCE(pipe->n_readers) == 0))
+            return -EINTR;
+        if (READ_ONCE(pipe->n_readers) == 0) {
             klog(LOG_WARN, "pipe_write: No readers after wake, raising SIGPIPE\n");
             do_raise(current, SIGPIPE);
             return -EPIPE;
@@ -176,6 +182,9 @@ int pipe_close(struct inode *i, struct file *f)
 
     if ((f->f_mode & O_ACCMODE) == O_WRONLY) {
         p->n_writers--;
+        // Blocked readers must see EOF
+        if (p->n_writers == 0)
+            wake_all(&p->read_wq);
     } else if ((f->f_mode & O_ACCMODE) == O_RDONLY) {
         p->n_readers--;
         if (p->n_readers == 0)

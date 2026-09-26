@@ -35,6 +35,8 @@ syscall_entry:
 	mov  %rsp,%rdi
 	call x86_kernel_entry
 
+	sti
+
 #ifdef DEBUG_ENTRY
 	mov  %rsp,%rdi
 	call x86_debug_syscall_entry
@@ -70,7 +72,10 @@ syscall_entry:
 	call x86_debug_syscall_exit
 #endif
 
+	lea  8(%rsp), %rdi # regs
 	call x86_kernel_exit
+
+	cli
 	pop  %r12 # original return value
 	test %rax,%rax
 

@@ -9,6 +9,7 @@ void sched_init(void);
 void sched_ap_rq_init(int cpu);
 void sched_clock_enable(void);
 bool sched_running(void);
+bool is_idle_task(struct task *p);
 void schedule(void);
 void sched_tick(void);
 void yield(void);

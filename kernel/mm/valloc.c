@@ -39,7 +39,8 @@ static void *find_vaddr(int num_pages)
     int start = 0;
     int count = 0;
 
-    acquire_lock(&kheap_bm_lock);
+    unsigned long flags;
+    acquire_lock_irqsave(&kheap_bm_lock, &flags);
     for (size_t i = 0; i < KHEAP_BITMAP_SIZE / sizeof(uintptr_t); i++) {
         if (kheap_bitmap[i] != ~0UL) {
             ptr = __check_bitmap(i, num_pages, &count, &start);
@@ -49,7 +50,7 @@ static void *find_vaddr(int num_pages)
         else
             count = 0;
     }
-    release_lock(&kheap_bm_lock);
+    release_lock_irqrestore(&kheap_bm_lock, flags);
 
     if (!ptr)
         kerror("KERNEL OUT OF VIRTUAL MEMORY");
@@ -65,10 +66,11 @@ static void free_vaddr(u8 *page, u32 num_pages)
 #ifdef DEBUG_KMM
     klog(LOG_DEBUG, "Freed %d pages at %x\n", num_pages, page);
 #endif
-    acquire_lock(&kheap_bm_lock);
+    unsigned long flags;
+    acquire_lock_irqsave(&kheap_bm_lock, &flags);
     for (u8 *end = page + num_pages * PAGE_SIZE; page < end; page += PAGE_SIZE)
         __free_vaddr(page);
-    release_lock(&kheap_bm_lock);
+    release_lock_irqrestore(&kheap_bm_lock, flags);
 }
 
 void * get_free_vaddr(int num_pages)

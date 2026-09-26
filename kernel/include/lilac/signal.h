@@ -88,13 +88,13 @@ typedef struct ucontext {
 
 struct task;
 
-#define sigisblocked(t, sig) ((t)->blocked & (1 << (sig)))
+#define sigisblocked(t, sig) ((t)->blocked & (1UL << (sig)))
 #define sigispending(t) ((t)->flags.sig_pending)
-#define sigaddset(set, sig) (*(set) |= (1 << (sig)))
-#define sigdelset(set, sig) (*(set) &= ~(1 << (sig)))
+#define sigaddset(set, sig) (*(set) |= (1UL << (sig)))
+#define sigdelset(set, sig) (*(set) &= ~(1UL << (sig)))
 #define sigemptyset(set) (*(set) = 0)
 #define sigfillset(set) (*(set) = ~0UL)
-#define sigismember(set, sig) ((*(set) & (1 << (sig))) != 0)
+#define sigismember(set, sig) ((*(set) & (1UL << (sig))) != 0)
 
 #define SIG_APPLY_MASK(set, mask) ((set) & ~(mask))
 

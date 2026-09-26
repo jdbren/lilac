@@ -49,10 +49,15 @@ void tlb_shootdown(struct tlb_inval *tlb, struct task *task)
         .task = task,
         .pending = (1UL << boot_info.ncpus) - 1,
     };
+    unsigned long flags;
+
+    arch_local_irq_save(&flags);
+    arch_disable_interrupts();
     while (!down_write_trylock(&sd_queue_lock))
         __pause();
     list_add_tail(&sd.list, &shootdown_queue);
     up_write(&sd_queue_lock);
+    arch_local_irq_restore(flags);
 #ifdef DEBUG_MM
     klog(LOG_DEBUG, "Initiating TLB shootdown for mm %p, pending mask: %lx\n",
          tlb->mm, atomic_load(&sd.pending));
@@ -69,8 +74,11 @@ void tlb_shootdown(struct tlb_inval *tlb, struct task *task)
 #ifdef DEBUG_MM
     klog(LOG_DEBUG, "TLB shootdown completed for mm %p\n", tlb->mm);
 #endif
+    arch_local_irq_save(&flags);
+    arch_disable_interrupts();
     while (!down_write_trylock(&sd_queue_lock))
         __pause();
     list_del(&sd.list);
     up_write(&sd_queue_lock);
+    arch_local_irq_restore(flags);
 }

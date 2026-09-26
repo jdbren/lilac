@@ -7,6 +7,9 @@
 #include <lilac/percpu.h>
 #include <lilac/uaccess.h>
 
+// Alarm events are owned by the timer lists once queued
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+
 static void nop(__unused unsigned long x) {}
 
 void (*handle_tick)(unsigned long ms) = nop;
@@ -15,7 +18,18 @@ atomic_uint time_seq = 0;
 ktime_t system_time_base_ns = 0;
 static spinlock_t clock_write_lock = SPINLOCK_INIT;
 
-DEFINE_PER_CPU(struct rb_root_cached, timer_event_tree) = RB_ROOT_CACHED;
+struct timer_base {
+    struct rb_root_cached tree;
+    struct timer_event *running;    // callback in progress on this cpu
+};
+
+/*
+ * Each cpu's timer interrupt only walks its own tree, but events are cancelled
+ * from any cpu (the task may have migrated since it queued the event) and the
+ * task's timer_ev_list spans cpus, so a single irqsave lock covers all of it.
+ */
+static spinlock_t timer_lock = SPINLOCK_INIT;
+static DEFINE_PER_CPU(struct timer_base, timer_bases);
 
 void timer_ev_tick(void);
 
@@ -154,32 +168,63 @@ void destroy_timer_event(struct timer_event *ev)
 
 void timer_ev_enqueue(struct timer_event *ev, struct task *p)
 {
-    struct rb_root_cached *root = get_cpu_var(timer_event_tree);
-    timer_ev_add(ev, root);
+    unsigned long flags;
+    acquire_lock_irqsave(&timer_lock, &flags);
+    ev->base = get_cpu_var(timer_bases);
+    timer_ev_add(ev, &ev->base->tree);
     list_add_tail(&ev->task_list, &p->timer_ev_list);
+    release_lock_irqrestore(&timer_lock, flags);
 }
 
-void timer_ev_dequeue(struct timer_event *ev)
+static bool __timer_ev_dequeue(struct timer_event *ev)
 {
-    struct rb_root_cached *root = get_cpu_var(timer_event_tree);
-    timer_ev_del(ev, root);
-    list_del(&ev->task_list);
+    if (!timer_ev_queued(ev))
+        return false;
+    timer_ev_del(ev, &ev->base->tree);
+    list_del_init(&ev->task_list);
+    return true;
+}
+
+/*
+ * Returns true if the event was removed before it fired. Otherwise it has
+ * already fired, and this waits for its callback to finish.
+ */
+bool timer_ev_dequeue(struct timer_event *ev)
+{
+    unsigned long flags;
+    bool removed;
+
+    acquire_lock_irqsave(&timer_lock, &flags);
+    removed = __timer_ev_dequeue(ev);
+    while (!removed && ev->base && ev->base->running == ev) {
+        release_lock_irqrestore(&timer_lock, flags);
+        __pause();
+        acquire_lock_irqsave(&timer_lock, &flags);
+    }
+    release_lock_irqrestore(&timer_lock, flags);
+    return removed;
 }
 
 void timer_ev_tick(void)
 {
     ktime_t now_ns = ktime_get();
-    struct rb_root_cached *root = get_cpu_var(timer_event_tree);
+    struct timer_base *base = get_cpu_var(timer_bases);
     struct rb_node *node;
 
-    while ((node = root->rb_leftmost) != NULL) {
+    acquire_lock(&timer_lock); // interrupt context
+    while ((node = base->tree.rb_leftmost) != NULL) {
         struct timer_event *ev = rb_entry(node, struct timer_event, node);
         if (ev->expires > now_ns)
             break;
 
-        timer_ev_dequeue(ev);
+        __timer_ev_dequeue(ev);
+        base->running = ev;
+        release_lock(&timer_lock);
         ev->callback(ev);
+        acquire_lock(&timer_lock);
+        base->running = NULL;
     }
+    release_lock(&timer_lock);
 }
 
 __attribute__((optimize("O0")))
@@ -200,6 +245,7 @@ void usleep(u32 micros)
         set_task_sleeping(current);
         timer_ev_enqueue(&ev, current);
         schedule();
+        timer_ev_dequeue(&ev);
     } else {
         while (ktime_get() < end)
             __pause();
@@ -248,17 +294,43 @@ static void alarm_handler(struct timer_event *ev)
 static unsigned int alarm_cancel(struct task *p, u64 now_ns)
 {
     unsigned int sec_remaining = 0;
-    struct timer_event *ev, *tmp;
-    list_for_each_entry_safe(ev, tmp, &p->timer_ev_list, task_list) {
+    struct timer_event *ev, *found = NULL;
+    unsigned long flags;
+
+    // Find and unqueue under one lock hold so the alarm can't fire in between
+    acquire_lock_irqsave(&timer_lock, &flags);
+    list_for_each_entry(ev, &p->timer_ev_list, task_list) {
         if (ev->callback == alarm_handler) {
             sec_remaining = ev->expires > now_ns ?
                 (unsigned int)((ev->expires - now_ns) / NS_PER_SEC) : 0;
-            timer_ev_dequeue(ev);
-            kfree(ev);
+            __timer_ev_dequeue(ev);
+            found = ev;
             break;
         }
     }
+    release_lock_irqrestore(&timer_lock, flags);
+
+    kfree(found);
     return sec_remaining;
+}
+
+// Cancel a dead task's pending events
+void timer_ev_task_exit(struct task *p)
+{
+    struct timer_event *ev, *tmp;
+    unsigned long flags;
+    LIST_HEAD(dead);
+
+    acquire_lock_irqsave(&timer_lock, &flags);
+    list_for_each_entry_safe(ev, tmp, &p->timer_ev_list, task_list) {
+        __timer_ev_dequeue(ev);
+        if (ev->callback == alarm_handler)
+            list_add(&ev->task_list, &dead);
+    }
+    release_lock_irqrestore(&timer_lock, flags);
+
+    list_for_each_entry_safe(ev, tmp, &dead, task_list)
+        kfree(ev);
 }
 
 SYSCALL_DECL1(alarm, unsigned int, seconds)

@@ -3,6 +3,7 @@
 
 #include <lilac/config.h>
 #include <lilac/sync.h>
+#include <lilac/errno.h>
 #include <lib/list.h>
 
 #define WNOHANG 1
@@ -48,11 +49,12 @@ struct wq_entry {
 
 #define WQ_ENTRY_EMPTY(name) (list_empty(&name.entry))
 
-int sleep_on(struct waitqueue *wq);
 void prepare_wait(struct waitqueue *wq, struct wq_entry *wait, u8 state);
 void end_wait(struct waitqueue *wq, struct wq_entry *wait);
+bool wait_signal_pending(void);
 struct task * wake_first(struct waitqueue *wq);
 void wake_all(struct waitqueue *wq);
+void __wake_all(struct waitqueue *wq);
 
 void notify_parent(struct task *parent, struct task *child);
 
@@ -70,5 +72,27 @@ void notify_parent(struct task *parent, struct task *child);
     } \
     end_wait(&(wq), &__wait); \
 } while (0)
+
+/**
+ * An unblocked signal ends the wait.
+ * Evaluates to 0 once cond is true, or -EINTR if a signal arrived first.
+ */
+#define wait_event_interruptible(wq, cond) ({ \
+    struct wq_entry __wait = WQ_ENTRY_INIT(__wait, current, NULL); \
+    int __ret = 0; \
+    for (;;) { \
+        prepare_wait(&(wq), &__wait, TASK_SLEEPING); \
+        if (cond) \
+            break; \
+        if (wait_signal_pending()) { \
+            __ret = -EINTR; \
+            break; \
+        } \
+        yield(); \
+    } \
+    end_wait(&(wq), &__wait); \
+    task_interrupted_ack(); \
+    __ret; \
+})
 
 #endif // LILAC_WAIT_H

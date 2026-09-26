@@ -227,10 +227,14 @@ void *kmalloc(size_t size)
     verify_bucket_counts();
 #endif
 
+    unsigned long flags;
+    arch_local_irq_save(&flags);
+    arch_disable_interrupts();
     if (size > SUPERBLOCKSIZE/2)
         alloc = malloc_large(size);
     else
         alloc = malloc_small(size);
+    arch_local_irq_restore(flags);
 
     assert(is_aligned(alloc, MIN_ALLOC));
 #ifdef DEBUG_KMALLOC
@@ -298,7 +302,18 @@ void *kcalloc(size_t num, size_t size)
     return kzmalloc(num * size);
 }
 
+static void __kfree(const void *ptr);
+
 void kfree(const void *ptr)
+{
+    unsigned long flags;
+    arch_local_irq_save(&flags);
+    arch_disable_interrupts();
+    __kfree(ptr);
+    arch_local_irq_restore(flags);
+}
+
+static void __kfree(const void *ptr)
 {
     if (ptr == NULL) return;
 

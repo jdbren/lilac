@@ -106,7 +106,7 @@ int do_raise(struct task *p, int sig)
         set_task_running(p);
     }
 
-    if (sig & pending) {
+    if (sigismember(&pending, sig)) {
         klog(LOG_DEBUG, "Signal %d already pending for process %d\n", sig, p->pid);
         return 0; // Signal already pending
     }
@@ -126,7 +126,10 @@ int do_raise(struct task *p, int sig)
         }
     }
 
-    if (p->state == TASK_SLEEPING && !sigisblocked(p, sig)) {
+    // Pairs with the barrier in prepare_wait (via its locks): either the waiter
+    // sees the pending signal, or we see it sleeping and wake it
+    atomic_thread_fence(memory_order_seq_cst);
+    if (READ_ONCE(p->state) == TASK_SLEEPING && !sigisblocked(p, sig)) {
         klog(LOG_DEBUG, "Waking up process %d for signal %d\n", p->pid, sig);
         p->flags.interrupted = 1;
         set_task_running(p);

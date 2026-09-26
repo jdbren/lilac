@@ -4,6 +4,7 @@
 #include <lilac/sched.h>
 #include <lilac/syscall.h>
 #include <lilac/uaccess.h>
+#include <lilac/signal.h>
 
 #pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 
@@ -12,34 +13,9 @@ static struct waitqueue wait_q = {
     .task_list = LIST_HEAD_INIT(wait_q.task_list),
 };
 
-static inline
-struct wq_entry * alloc_wq_entry(struct task *p)
-{
-    struct wq_entry *wait = kmalloc(sizeof(*wait));
-    if (!wait) {
-        klog(LOG_ERROR, "Failed to allocate wait queue entry\n");
-        return NULL;
-    }
-    wait->task = p;
-    return wait;
-}
-
-static inline void release_wq_entry(struct wq_entry *wait)
-{
-    kfree(wait);
-}
-
 static inline void __add_wait_entry(struct wq_entry *wait, struct waitqueue *wq)
 {
     list_add_tail(&wait->entry, &wq->task_list);
-}
-
-static void add_wait_entry(struct wq_entry *wait, struct waitqueue *wq)
-{
-    unsigned long flags;
-    acquire_lock_irqsave(&wq->lock, &flags);
-    __add_wait_entry(wait, wq);
-    release_lock_irqrestore(&wq->lock, flags);
 }
 
 static inline void __remove_wait_entry(struct wq_entry *wait)
@@ -50,11 +26,9 @@ static inline void __remove_wait_entry(struct wq_entry *wait)
 static void remove_wait_entry(struct wq_entry *wait, struct waitqueue *wq)
 {
     unsigned long flags;
-    if (!list_empty(&wait->entry)) {
-        acquire_lock_irqsave(&wq->lock, &flags);
-        __remove_wait_entry(wait);
-        release_lock_irqrestore(&wq->lock, flags);
-    }
+    acquire_lock_irqsave(&wq->lock, &flags);
+    __remove_wait_entry(wait);
+    release_lock_irqrestore(&wq->lock, flags);
 }
 
 static struct wq_entry *find_waiting_task(struct waitqueue *wq, int pid)
@@ -71,34 +45,6 @@ static struct wq_entry *find_waiting_task(struct waitqueue *wq, int pid)
     return NULL;
 }
 
-// Called by task when it wakes in case it was interrupted while waiting
-int finish_wait(struct waitqueue *wq, struct wq_entry *wq_ent)
-{
-    set_task_running(current);
-    remove_wait_entry(wq_ent, wq);
-    release_wq_entry(wq_ent);
-    if (task_interrupted_ack())
-        return -EINTR;
-    return 0;
-}
-
-static int sleep_task_on(struct task *p, struct waitqueue *wq, wq_wake_func_t callback)
-{
-    struct wq_entry *wait;
-#ifdef DEBUG_SCHED
-    klog(LOG_DEBUG, "Process %d: Sleeping on waitqueue\n", p->pid);
-#endif
-    set_task_sleeping(p);
-    wait = alloc_wq_entry(p);
-    if (!wait) {
-        klog(LOG_ERROR, "Failed to allocate wait entry for task %d\n", p->pid);
-        return -ENOMEM;
-    }
-    wait->wakeup = callback;
-    add_wait_entry(wait, wq);
-    yield();
-    return finish_wait(wq, wait);
-}
 
 
 static struct task * find_exited_child(struct task *parent, int pid)
@@ -145,40 +91,46 @@ static pid_t handle_stopped_child(struct task *child, int *status)
     return child->pid;
 }
 
-static pid_t wait_for(struct task *p, int *status, bool nohang, bool wait_stopped)
+static bool child_waitable(struct task *p, bool wait_stopped)
 {
     u8 state = READ_ONCE(p->state);
+    return state == TASK_ZOMBIE || (wait_stopped && state == TASK_STOPPED);
+}
 
-    if (state == TASK_ZOMBIE) {
-        return handle_exited_child(p, status);
-    } else if (state == TASK_STOPPED && wait_stopped) {
-        return handle_stopped_child(p, status);
+static bool any_child_waitable(struct task *parent, bool wait_stopped)
+{
+    struct task *child;
+    list_for_each_entry(child, &parent->children, sibling) {
+        u8 state = READ_ONCE(child->state);
+        if (state == TASK_ZOMBIE)
+            return true;
+        if (wait_stopped && state == TASK_STOPPED && child->flags.state_change)
+            return true;
     }
+    return false;
+}
 
-    if (nohang) {
-        klog(LOG_DEBUG, "Task %d has not exited yet, returning immediately\n", p->pid);
-        return 0;
+static pid_t wait_for(struct task *p, int *status, bool nohang, bool wait_stopped)
+{
+    for (;;) {
+        u8 state = READ_ONCE(p->state);
+
+        if (state == TASK_ZOMBIE) {
+            return handle_exited_child(p, status);
+        } else if (state == TASK_STOPPED && wait_stopped) {
+            return handle_stopped_child(p, status);
+        }
+
+        if (nohang) {
+            klog(LOG_DEBUG, "Task %d has not exited yet, returning immediately\n", p->pid);
+            return 0;
+        }
+
+        klog(LOG_DEBUG, "Process %d: Waiting for task %d\n", get_pid(), p->pid);
+        int ret = wait_event_interruptible(wait_q, child_waitable(p, wait_stopped));
+        if (ret < 0)
+            return ret;
     }
-
-    klog(LOG_DEBUG, "Process %d: Waiting for task %d\n", get_pid(), p->pid);
-    p->parent_wait = true;
-    int ret = sleep_task_on(current, &wait_q, NULL);
-    if (ret < 0) {
-#ifdef DEBUG_SCHED
-        klog(LOG_DEBUG, "sleep_task_on returned %d while waiting for task %d\n", ret, p->pid);
-#endif
-        return ret;
-    }
-
-    pid_t pid = p->pid;
-    klog(LOG_DEBUG, "Task %d has exited or stopped, continuing task %d\n", pid, get_pid());
-    if (status)
-        *status = p->exit_status;
-
-    if (p->state == TASK_ZOMBIE) {
-        reap_task(p);
-    }
-    return pid;
 }
 
 
@@ -214,19 +166,16 @@ static pid_t wait_any(int *status, bool nohang, bool wait_stopped)
     if (nohang)
         return 0;
 
-    current->waiting_any = true;
-    sleep_task_on(current, &wait_q, NULL);
+    for (;;) {
+        int ret = wait_event_interruptible(wait_q,
+            any_child_waitable(current, wait_stopped));
+        if (ret < 0)
+            return ret;
 
-    result = check_children(status, wait_stopped);
-    if (result != 0)
-        return result;
-
-    if (!list_empty(&current->children)) {
-        klog(LOG_INFO, "wait_any: No child has exited after being woken up, returning -EINTR\n");
-        return -EINTR; // interrupted by signal
+        result = check_children(status, wait_stopped);
+        if (result != 0)
+            return result;
     }
-
-    return -ECHILD; // no children at all
 }
 
 // TODO: POSIX says when SIGCHLD is SIG_IGN, then wait all children and return ECHILD
@@ -281,47 +230,60 @@ void end_wait(struct waitqueue *wq, struct wq_entry *wait)
     remove_wait_entry(wait, wq);
 }
 
-int sleep_on(struct waitqueue *wq)
+bool wait_signal_pending(void)
 {
-    return sleep_task_on(current, wq, NULL);
+    return sig_get_active(current) != 0;
 }
 
 static void wakeup_by_pid_on(int pid, struct waitqueue *wq)
 {
+    unsigned long flags;
+
+    acquire_lock_irqsave(&wq->lock, &flags);
     struct wq_entry *wq_ent = find_waiting_task(wq, pid);
-    if (!wq_ent)
-        return;
-    remove_wait_entry(wq_ent, wq);
-    set_task_running(wq_ent->task);
+    if (wq_ent) {
+        struct task *task = wq_ent->task;
+        __remove_wait_entry(wq_ent);
+        set_task_running(task);
+    }
+    release_lock_irqrestore(&wq->lock, flags);
 }
 
 struct task * wake_first(struct waitqueue *wq)
 {
-    struct wq_entry *wait = NULL;
     struct task *task = NULL;
+    unsigned long flags;
 
+    acquire_lock_irqsave(&wq->lock, &flags);
     if (!list_empty(&wq->task_list)) {
-        wait = list_first_entry(&wq->task_list, struct wq_entry, entry);
+        struct wq_entry *wait =
+            list_first_entry(&wq->task_list, struct wq_entry, entry);
         task = wait->task;
-        remove_wait_entry(wait, wq);
-    }
-
-    if (task)
+        __remove_wait_entry(wait);
         set_task_running(task);
+    }
+    release_lock_irqrestore(&wq->lock, flags);
 
     return task;
 }
 
-void wake_all(struct waitqueue *wq)
+// Caller holds wq->lock
+void __wake_all(struct waitqueue *wq)
 {
     struct wq_entry *wait, *tmp;
-    unsigned long flags;
 
-    acquire_lock_irqsave(&wq->lock, &flags);
     list_for_each_entry_safe(wait, tmp, &wq->task_list, entry) {
+        struct task *task = wait->task;
         __remove_wait_entry(wait);
-        set_task_running(wait->task);
+        set_task_running(task);
     }
+}
+
+void wake_all(struct waitqueue *wq)
+{
+    unsigned long flags;
+    acquire_lock_irqsave(&wq->lock, &flags);
+    __wake_all(wq);
     release_lock_irqrestore(&wq->lock, flags);
 }
 
@@ -332,10 +294,9 @@ void notify_parent(struct task *parent, struct task *child)
         return;
     }
     klog(LOG_DEBUG, "Notifying parent %d of child %d exit\n", parent->pid, child->pid);
-    if (child->parent_wait || parent->waiting_any) {
-        parent->waiting_any = false;
-        wakeup_by_pid_on(parent->pid, &wait_q);
-    }
+    // the parent's wait loop rechecks its children, so a
+    // spurious wake is harmless and a missed one hangs waitpid
+    wakeup_by_pid_on(parent->pid, &wait_q);
     if (child->exit_signal > 0) {
         do_raise(parent, child->exit_signal);
     }

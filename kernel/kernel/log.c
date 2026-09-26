@@ -18,6 +18,7 @@
 
 static int log_level = LOG_LEVEL;
 static spinlock_t log_lock = SPINLOCK_INIT;
+static unsigned long log_lock_flags;
 
 void set_log_level(int level)
 {
@@ -26,12 +27,14 @@ void set_log_level(int level)
 
 void klog_lock(void)
 {
-    acquire_lock(&log_lock);
+    unsigned long flags;
+    acquire_lock_irqsave(&log_lock, &flags);
+    log_lock_flags = flags;
 }
 
 void klog_unlock(void)
 {
-    release_lock(&log_lock);
+    release_lock_irqrestore(&log_lock, log_lock_flags);
 }
 
 void kvlog_raw_nolock(const char *data, va_list args)
@@ -49,9 +52,9 @@ void klog_raw_nolock(const char *data, ...)
 
 void kvlog_raw(const char *data, va_list args)
 {
-    acquire_lock(&log_lock);
+    klog_lock();
     vprintf(data, args);
-    release_lock(&log_lock);
+    klog_unlock();
 }
 
 void kvlog(int level, const char *data, va_list args)
@@ -61,7 +64,7 @@ void kvlog(int level, const char *data, va_list args)
     int orig_write_to_screen = write_to_screen;
     long long stime = (long long) get_sys_time_ns();
 
-    acquire_lock(&log_lock);
+    klog_lock();
     struct framebuffer_color text_color = graphics_getcolor();
 
     if (level == LOG_ERROR)
@@ -84,7 +87,7 @@ void kvlog(int level, const char *data, va_list args)
     vprintf(data, args);
 
     write_to_screen = orig_write_to_screen;
-    release_lock(&log_lock);
+    klog_unlock();
 }
 
 void klog(int level, const char *data, ...)
@@ -100,7 +103,7 @@ void kstatus(int status, const char *message, ...)
     va_list args;
     if (!message) return;
 
-    acquire_lock(&log_lock);
+    klog_lock();
 
     printf("[");
     switch (status)
@@ -121,5 +124,5 @@ void kstatus(int status, const char *message, ...)
     vprintf(message, args);
     va_end(args);
 
-    release_lock(&log_lock);
+    klog_unlock();
 }
