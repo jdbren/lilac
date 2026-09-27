@@ -434,6 +434,21 @@ int tty_ioctl(struct file *f, int op, void *argp)
         if (get_user(pgrp, (pid_t*)argp))
             return -EFAULT;
         return tcsetpgrp(tty, pgrp);
+    case TIOCGWINSZ: {
+        mutex_lock(&tty->winsize_lock);
+        struct winsize ws = tty->winsize;
+        mutex_unlock(&tty->winsize_lock);
+        return copy_to_user(argp, &ws, sizeof(ws)) ? -EFAULT : 0;
+    }
+    case TIOCSWINSZ: {
+        struct winsize ws;
+        if (copy_from_user(&ws, argp, sizeof(ws)))
+            return -EFAULT;
+        mutex_lock(&tty->winsize_lock);
+        tty->winsize = ws;
+        mutex_unlock(&tty->winsize_lock);
+        return 0;
+    }
     default:
         return -EINVAL;
     }
