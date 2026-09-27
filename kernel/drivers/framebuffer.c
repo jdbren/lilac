@@ -168,6 +168,8 @@ void graphics_init(void)
     fb->fb = (u8*)map_phys((void*)fb_phys, fb_size,
         MEM_PF_WRITE|MEM_PF_GLOBAL|MEM_PF_READ|MEM_PF_NO_EXEC);
     fb->fb_shadow = get_free_pages(fb_size / PAGE_SIZE, ALLOC_NORMAL);
+    if (!fb->fb_shadow)
+        panic("Out of memory allocating framebuffer shadow\n");
     fb->fb_width = mfb->common.framebuffer_width;
     fb->fb_height = mfb->common.framebuffer_height;
     fb->fb_pitch = mfb->common.framebuffer_pitch;

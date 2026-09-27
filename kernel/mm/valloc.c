@@ -109,6 +109,8 @@ void * map_virt(void *virt, int size, int flags)
 {
     int num_pages = PAGE_ROUND_UP(size) / PAGE_SIZE;
     void *phys = alloc_frames(num_pages);
+    if (!phys)
+        return NULL;
     map_pages(phys, virt, flags, num_pages);
     return phys;
 }

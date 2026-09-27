@@ -77,7 +77,10 @@ static struct mm_info * make_32_bit_mmap()
 #ifdef __x86_64__
 static struct mm_info * make_64_bit_mmap()
 {
-    uintptr_t cr3 = virt_to_phys(get_zeroed_page());
+    void *pgd = get_zeroed_page();
+    if (!pgd)
+        panic("Out of memory allocating page directory\n");
+    uintptr_t cr3 = virt_to_phys(pgd);
 #ifdef DEBUG_MM
     mm_dbg_pgd_pages_alloc++;
 #endif

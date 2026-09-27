@@ -70,6 +70,8 @@ ssize_t fat32_read(struct file *file, void *file_buf, size_t count)
     u32 num_clst = ROUND_UP(count + offset, disk->bytes_per_clst) /
         disk->bytes_per_clst;
     volatile unsigned char *buffer = get_free_pages(PAGE_UP_COUNT(disk->bytes_per_clst * num_clst), 0);
+    if (!buffer)
+        return -ENOMEM;
 
     start_clst = __fat_get_clst_num(file, disk);
     if (start_clst == 0)

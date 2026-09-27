@@ -90,9 +90,13 @@ static int do_file_fault(struct vm_desc *vma, uintptr_t pgaddr)
 
 map_page_out:
     acquire_lock(&vma->mm->page_table_lock);
-    map_page((void *)virt_to_phys(buf), (void *)pgaddr,
+    int err = map_page((void *)virt_to_phys(buf), (void *)pgaddr,
         vma_flags_to_user_mem_flags(vma->vm_flags));
     release_lock(&vma->mm->page_table_lock);
+    if (err) {
+        free_page(buf);
+        return FAULT_OOM;
+    }
 
     return FAULT_SUCCESS;
 }
@@ -106,9 +110,13 @@ static int do_anon_fault(struct vm_desc *vma, uintptr_t pgaddr)
     mm_dbg_fault_anon_pages_alloc++;
 #endif
     acquire_lock(&vma->mm->page_table_lock);
-    map_page((void*)virt_to_phys(page), (void*)pgaddr,
+    int err = map_page((void*)virt_to_phys(page), (void*)pgaddr,
         vma_flags_to_user_mem_flags(vma->vm_flags));
     release_lock(&vma->mm->page_table_lock);
+    if (err) {
+        free_page(page);
+        return FAULT_OOM;
+    }
     return FAULT_SUCCESS;
 }
 
