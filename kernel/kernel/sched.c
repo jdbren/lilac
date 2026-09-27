@@ -259,12 +259,20 @@ void set_current_state(u8 state)
         case TASK_UNINTERRUPTIBLE:
             set_task_uninterruptible(current);
             break;
-        case TASK_ZOMBIE:
-            current->state = TASK_ZOMBIE;
-            current->flags.state_change = 1;
-            if (current->on_rq)
-                rq_del(current);
+        case TASK_ZOMBIE: {
+            struct task *p = current;
+            unsigned long flags;
+            struct rq *rq = cpu_rq(p->cpu);
+            acquire_lock_irqsave(&p->lock, &flags);
+            acquire_lock(&rq->lock);
+            if (p->on_rq)
+                __rq_del(rq, p);
+            p->state = TASK_ZOMBIE;
+            p->flags.state_change = 1;
+            release_lock(&rq->lock);
+            release_lock_irqrestore(&p->lock, flags);
             break;
+        }
         case TASK_STOPPED:
             set_task_stopped(current);
             break;
@@ -401,7 +409,7 @@ void schedule(void)
         __rq_del(rq, next);
     }
 
-    if (cur->state == TASK_RUNNING && cur != rq->idle && !cur->on_rq) {
+    if (next != cur && cur->state == TASK_RUNNING && cur != rq->idle && !cur->on_rq) {
         __rq_add(rq, cur);
     }
 

@@ -418,6 +418,8 @@ SYSCALL_DECL6(mmap, void*, addr, size_t, length, int, prot,
     klog(LOG_DEBUG, "mmap (addr: %p, length: %lu, prot: 0x%x, flags: 0x%x, fd: %d,"
         " offset: %ld)\n", addr, length, prot, flags, fd, offset);
 
+    if (length == 0)
+        return -EINVAL;
     if (!(flags & MAP_SHARED) && !(flags & MAP_PRIVATE))
         return -EINVAL;
     if ((flags & MAP_SHARED) && (flags & MAP_PRIVATE))
@@ -526,7 +528,7 @@ SYSCALL_DECL2(munmap, void*, addr, size_t, length)
     mmap_write_lock(mm);
     ret = mmap_unmap_range(mm, pgaddr, end);
     mmap_write_unlock(mm);
-    return ret;
+    return ret < 0 ? ret : 0;
 }
 
 // After growing a file VMA, extend the file-backed part if it was previously
