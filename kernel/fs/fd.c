@@ -41,8 +41,10 @@ static int __set_fdtsize(struct fdtable *files, unsigned int size)
     if (!tmp)
         return -ENOMEM;
     files->close_on_exec = tmp;
-    for (size_t i = files->max; i < size; i++)
+    for (size_t i = files->max; i < size; i++) {
         files->fdarray[i] = NULL;
+        clear_cloexec(files, i);
+    }
     files->max = size;
     klog(LOG_DEBUG, "Increased max file descriptors to %d\n", size);
     return files->max;
@@ -90,6 +92,7 @@ int get_fd_exact_replace(struct fdtable *files, int fd, struct file *file)
     }
 
     files->fdarray[fd] = file;
+    clear_cloexec(files, fd);
     release_lock(&files->lock);
     return fd;
 }
@@ -112,6 +115,7 @@ int get_fd_start_at(struct fdtable *files, int start, struct file *file)
     for (int i = start; i < (int)files->max; i++) {
         if (!files->fdarray[i]) {
             files->fdarray[i] = file;
+            clear_cloexec(files, i);
             release_lock(&files->lock);
             return i;
         }
@@ -133,6 +137,7 @@ int get_next_fd(struct fdtable *files, struct file *file)
         goto unlock;
 
     files->fdarray[fd] = file;
+    clear_cloexec(files, fd);
 unlock:
     release_lock(&files->lock);
     return fd;
