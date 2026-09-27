@@ -1,4 +1,4 @@
-PROJECTS=kernel init user musl
+PROJECTS=kernel init user tests musl
 
 -include kbuild.config
 export DESTDIR=$(SYSROOT)
@@ -8,7 +8,7 @@ export VERBOSE=1
 endif
 
 .PHONY: all clean distclean install install-system
-.PHONY: kernel init user copy-headers config
+.PHONY: kernel init user tests test copy-headers config
 
 all: kernel
 
@@ -44,6 +44,12 @@ init: install-libc
 
 user: install-libc
 	$(MAKE) -C user
+
+tests: install-libc
+	$(MAKE) -C tests
+
+test:
+	./scripts/run-tests.sh
 
 # CLEAN
 clean:
