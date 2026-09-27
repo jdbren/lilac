@@ -47,6 +47,8 @@ struct task_flags {
     u8 signaled     :1;
     u8 interrupted  :1;
     u8 state_change :1;
+    u8 mm_last_ref  :1;
+    u8 restore_sigmask :1;
 };
 
 struct task {
@@ -95,11 +97,13 @@ struct task {
 
     pid_t tgid;     // Thread group ID
     int exit_signal;
+    int exit_status;
     pid_t *set_child_tid;
     pid_t *clear_child_tid;
     struct waitqueue *vfork_done;
 
-    int exit_status;
+    int group_exit_code;
+    bool group_exit;
 
     struct fs_info *fs;
     struct fdtable *files;
@@ -114,6 +118,10 @@ struct task {
 
     struct task_info info;
     char name[32];
+
+    long syscall_nr;
+    sigset_t saved_sigmask;
+    struct ksiginfo siginfo[_NSIG];
 };
 
 #define get_pid() (current->pid)
@@ -142,7 +150,9 @@ void             save_fp_regs(struct task *p);
 void             restore_fp_regs(struct task *p);
 void             copy_fp_regs(struct task *dst, struct task *src);
 void             fpu_switch(struct task *prev, struct task *next);
-void             arch_prepare_signal(void *pc, int signo);
+void             arch_prepare_signal(void *pc, int signo, const struct ksiginfo *info,
+                                     void *restorer);
+void             arch_restart_syscall(struct task *p, bool sa_restart);
 long             arch_restore_post_signal(void);
 
 // kernel mode jump
@@ -158,6 +168,9 @@ extern int       arch_return_from_fork(void *regs, void *kstack, void *tls);
 extern DECLARE_HASHTABLE(pid_table, PID_HASH_BITS);
 extern DECLARE_HASHTABLE(pgid_table, PID_HASH_BITS);
 extern DECLARE_HASHTABLE(sid_table, PID_HASH_BITS);
+
+// Protects the pid/pgid/sid hash tables and every task's children list
+extern spinlock_t tasklist_lock;
 
 #define pgrp_for_each(p, pgid) hash_for_each_possible(pgid_table, p, pgid_hash, pgid) \
     if (p->pgid == pgid)

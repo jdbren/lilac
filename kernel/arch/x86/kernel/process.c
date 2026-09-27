@@ -115,6 +115,10 @@ void arch_unmap_all_user_vm(struct mm_info *info)
 
     klog(LOG_DEBUG, "Unmapping all user VM for mm %p\n", info);
     mmap_write_lock(info);
+    // writeback_vma_range takes the page table lock itself
+    for (struct vm_desc *d = info->mmap; d; d = d->vm_next)
+        if (!(d->vm_flags & VM_IO))
+            writeback_vma_range(d, d->start, d->end);
     lock_page_table(info);
     struct vm_desc *desc = info->mmap;
     while (desc) {
@@ -128,7 +132,6 @@ void arch_unmap_all_user_vm(struct mm_info *info)
         if (desc->vm_flags & VM_IO) {
             unmap_pages((void*)desc->start, (desc->end - desc->start) / PAGE_SIZE);
         } else {
-            writeback_vma_range(desc, desc->start, desc->end);
             drop_user_page_range(desc->start, desc->end - desc->start);
         }
         if (desc->vm_file)
@@ -292,13 +295,20 @@ void sigtramp(void)
 static void create_ucontext(ucontext_t *uc)
 {
     uc->uc_link = NULL;
-    uc->uc_sigmask = current->blocked;
+    // sigreturn restores this; after sigsuspend it must be the pre-suspend mask
+    if (current->flags.restore_sigmask) {
+        uc->uc_sigmask = current->saved_sigmask;
+        current->flags.restore_sigmask = 0;
+    } else {
+        uc->uc_sigmask = current->blocked;
+    }
     uc->uc_stack.ss_sp = NULL;
     uc->uc_stack.ss_flags = 0;
     uc->uc_stack.ss_size = 0;
 }
 
-void arch_prepare_signal(void *pc, int signo)
+void arch_prepare_signal(void *pc, int signo, const struct ksiginfo *info,
+                         void *restorer)
 {
     static const size_t FRAME_BYTES = sizeof(struct regs_state) + sizeof(ucontext_t);
     struct regs_state *regs = (struct regs_state*)current->regs;
@@ -306,21 +316,45 @@ void arch_prepare_signal(void *pc, int signo)
     uintptr_t *ustack = (uintptr_t*)regs->sp;
     uintptr_t return_addr;
     ucontext_t uc;
+#ifdef __x86_64__
+    // The interrupted code may have live data in its 128-byte red zone
+    ustack = (uintptr_t*)((uintptr_t)ustack - 128);
+#endif
 
-    // copy bytecode of sigtramp to user stack
     ustack = (uintptr_t*)((uintptr_t)ustack - 8);
-    if (copy_to_user(ustack, sigtramp, 8))
-        goto fail;
-
-    return_addr = (uintptr_t)(ustack);
+    if (restorer) {
+        return_addr = (uintptr_t)restorer;
+    } else {
+        // copy bytecode of sigtramp to user stack
+        if (copy_to_user(ustack, sigtramp, 8))
+            goto fail;
+        return_addr = (uintptr_t)(ustack);
+    }
 
     /*
      * 16 byte alignment
      * [return addr][regs_state][ucontext][sigtramp bytes]
      */
     const uintptr_t sigtramp_addr = (uintptr_t)ustack;
-    const uintptr_t regs_frame = (sigtramp_addr - FRAME_BYTES) & ~0xFUL;
+    // [return addr][regs_state][ucontext] ... [siginfo][sigtramp bytes]
+    const uintptr_t info_frame = (sigtramp_addr - sizeof(struct user_siginfo)) & ~0xFUL;
+    const uintptr_t regs_frame = (info_frame - FRAME_BYTES) & ~0xFUL;
     const uintptr_t uc_frame = regs_frame + sizeof(struct regs_state);
+
+    if (info) {
+        struct user_siginfo si;
+        memset(&si, 0, sizeof(si));
+        si.si_signo = signo;
+        si.si_code = info->code;
+        if (signo == SIGSEGV || signo == SIGBUS || signo == SIGILL || signo == SIGFPE) {
+            si.addr = info->addr;
+        } else {
+            si.kill.pid = info->pid;
+            si.kill.status = info->status;
+        }
+        if (copy_to_user((void*)info_frame, &si, sizeof(si)))
+            goto fail;
+    }
 
     // create ucontext struct
     create_ucontext(&uc);
@@ -334,8 +368,8 @@ void arch_prepare_signal(void *pc, int signo)
     regs->ip = (uintptr_t)pc;
 #ifdef __x86_64__
     regs->di = signo;
-    regs->si = 0; // siginfo
-    regs->dx = 0; // ucontext
+    regs->si = info ? info_frame : 0; // siginfo
+    regs->dx = info ? uc_frame : 0;   // ucontext
     ustack = (uintptr_t*)(regs_frame - sizeof(uintptr_t));
 #else
     ustack = (uintptr_t*)regs_frame;

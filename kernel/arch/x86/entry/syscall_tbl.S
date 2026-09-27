@@ -95,6 +95,11 @@ syscall_table:
 	sc_tbl_entry msync		# 72
 	sc_tbl_entry pread64	# 73
 	sc_tbl_entry pwrite64	# 74
+	sc_tbl_entry tkill		# 75
+	sc_tbl_entry exit_group	# 76
+	sc_tbl_entry clock_gettime	# 77
+	sc_tbl_entry clock_getres	# 78
+	sc_tbl_entry uname		# 79
 /*
 	sc_tbl_entry chmod		# 30
 	sc_tbl_entry chown		# 31

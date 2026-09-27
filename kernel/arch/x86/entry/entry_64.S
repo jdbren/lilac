@@ -33,7 +33,7 @@ syscall_entry:
 	PUSH_REGS
 
 	mov  %rsp,%rdi
-	call x86_kernel_entry
+	call x86_syscall_entry
 
 	sti
 
@@ -43,7 +43,7 @@ syscall_entry:
 #endif
 	mov  RAX(%rsp),%rax
 	cmp  $MAX_SYSCALL,%rax
-	jle  .do_syscall
+	jbe  .do_syscall # unsigned
 
 	mov  $-ENOSYS,%rax
 	jmp  .bad_syscall

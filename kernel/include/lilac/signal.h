@@ -102,11 +102,44 @@ struct task;
 #define sigfillset(set) (*(set) = ~0UL)
 #define sigismember(set, sig) ((*(set) & sigbit(sig)) != 0)
 
+// Details for SA_SIGINFO handlers, recorded when a signal is raised
+struct ksiginfo {
+    int code;           // SI_USER, SEGV_MAPERR, CLD_EXITED, ...
+    int pid;            // sender (SI_USER) or child (SIGCHLD)
+    int status;         // SIGCHLD: exit code or signal
+    unsigned long addr; // SIGSEGV/SIGBUS: faulting address
+};
+
+// siginfo_t as laid out by the Linux x86_64 ABI (128 bytes)
+struct user_siginfo {
+    int si_signo;
+    int si_errno;
+    int si_code;
+    int __pad0;
+    union {
+        struct { int pid; unsigned int uid; int status; } kill; // also SIGCHLD
+        unsigned long addr;
+        char __pad[112];
+    };
+};
+
+#ifndef SI_USER
+#define SI_USER     0
+#define SI_KERNEL   0x80
+#define SEGV_MAPERR 1
+#define SEGV_ACCERR 2
+#define BUS_ADRERR  2
+#define CLD_EXITED  1
+#define CLD_KILLED  2
+#endif
+
 // queue a signal for delivery to a task
 int do_raise(struct task *p, int sig);
+int do_raise_info(struct task *p, int sig, const struct ksiginfo *info);
 // immediate termination of the process
 void do_kill(struct task *p, int sig);
 int handle_signal(void);
 int kill_pgrp(int pgid, int sig);
+void zap_other_threads(struct task *p, int code);
 
 #endif

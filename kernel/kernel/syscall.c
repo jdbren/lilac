@@ -26,5 +26,11 @@ int do_kernel_exit_work(void)
         }
         arch_disable_interrupts();
     }
+    current->syscall_nr = -1;
+    if (current->flags.restore_sigmask) {
+        // sigsuspend woke but no handler ran
+        current->blocked = current->saved_sigmask;
+        current->flags.restore_sigmask = 0;
+    }
     return 0;
 }

@@ -127,6 +127,58 @@ SYSCALL_DECL2(gettimeofday, struct timeval*, tv, struct timezone*, tz)
     return 0;
 }
 
+#define CLOCK_REALTIME           0
+#define CLOCK_MONOTONIC          1
+#define CLOCK_PROCESS_CPUTIME_ID 2
+#define CLOCK_THREAD_CPUTIME_ID  3
+#define CLOCK_MONOTONIC_RAW      4
+#define CLOCK_REALTIME_COARSE    5
+#define CLOCK_MONOTONIC_COARSE   6
+#define CLOCK_BOOTTIME           7
+
+SYSCALL_DECL2(clock_gettime, int, clk, struct timespec*, tp)
+{
+    u64 ns;
+    struct timespec ts;
+
+    switch (clk) {
+    case CLOCK_REALTIME:
+    case CLOCK_REALTIME_COARSE:
+        ns = get_sys_time_ns();
+        ts.tv_sec = boot_unix_time + ns / NS_PER_SEC;
+        ts.tv_nsec = ns % NS_PER_SEC;
+        break;
+    case CLOCK_MONOTONIC:
+    case CLOCK_MONOTONIC_RAW:
+    case CLOCK_MONOTONIC_COARSE:
+    case CLOCK_BOOTTIME:
+        ns = get_sys_time_ns();
+        ts.tv_sec = ns / NS_PER_SEC;
+        ts.tv_nsec = ns % NS_PER_SEC;
+        break;
+    case CLOCK_PROCESS_CPUTIME_ID: // no per-process accounting: thread time
+    case CLOCK_THREAD_CPUTIME_ID:
+        // runtime is only folded in at scheduler ticks; add the current slice
+        ns = current->runtime + ticks_to_ns(read_ticks() - current->exec_started);
+        ts.tv_sec = ns / NS_PER_SEC;
+        ts.tv_nsec = ns % NS_PER_SEC;
+        break;
+    default:
+        return -EINVAL;
+    }
+    return copy_to_user(tp, &ts, sizeof(ts)) ? -EFAULT : 0;
+}
+
+SYSCALL_DECL2(clock_getres, int, clk, struct timespec*, res)
+{
+    if (clk < CLOCK_REALTIME || clk > CLOCK_BOOTTIME)
+        return -EINVAL;
+    struct timespec ts = { .tv_sec = 0, .tv_nsec = 1 };
+    if (res && copy_to_user(res, &ts, sizeof(ts)))
+        return -EFAULT;
+    return 0;
+}
+
 static inline struct timer_event *
 timer_ev_add(struct timer_event *ev, struct rb_root_cached *tree)
 {

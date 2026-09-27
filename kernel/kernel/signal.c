@@ -7,9 +7,12 @@
 #include <lilac/uaccess.h>
 #include <lilac/wait.h>
 
-#define TERM_SIG (_SIGHUP | _SIGINT | _SIGKILL | _SIGPIPE | _SIGALRM | _SIGTERM | _SIGBUS)
-#define CORE_SIG (_SIGQUIT | _SIGILL | _SIGABRT | _SIGSEGV | _SIGFPE)
+#define TERM_SIG (_SIGHUP | _SIGINT | _SIGKILL | _SIGPIPE | _SIGALRM | _SIGTERM | _SIGUSR1 | \
+    _SIGUSR2 | _SIGSTKFLT | _SIGVTALRM | _SIGPROF | _SIGIO | _SIGPWR)
+#define CORE_SIG (_SIGQUIT | _SIGILL | _SIGABRT | _SIGSEGV | _SIGFPE | _SIGBUS | _SIGTRAP | \
+    _SIGSYS | _SIGXCPU | _SIGXFSZ)
 #define STOP_SIG (_SIGSTOP | _SIGTSTP | _SIGTTIN | _SIGTTOU)
+#define DFL_IGN_SIG (_SIGCHLD | _SIGURG | _SIGWINCH | _SIGCONT)
 static const sigset_t unblockable = _SIGKILL | _SIGSTOP;
 static const sigset_t synchronous = _SIGSEGV | _SIGFPE | _SIGILL | _SIGBUS | _SIGTRAP;
 
@@ -37,7 +40,13 @@ int handle_signal(void)
     } else if (ka->sa.sa_handler == SIG_DFL) {
         if (sig_bit & (TERM_SIG | CORE_SIG)) { // core dump not implemented
             klog(LOG_INFO, "Process %d received termination signal %d, exiting\n", p->pid, sig);
-            p->exit_status = WSIGNALED(sig);
+            if (p->group_exit) {
+                // killed as part of another thread's exit_group / fatal signal
+                p->exit_status = p->group_exit_code;
+            } else {
+                p->exit_status = WSIGNALED(sig);
+                zap_other_threads(p, p->exit_status);
+            }
             do_exit();
         } else if (sig_bit & STOP_SIG) {
             klog(LOG_INFO, "handling stop signal %d\n", sig);
@@ -54,7 +63,14 @@ int handle_signal(void)
         }
     } else {
         klog(LOG_DEBUG, "Delivering signal %d to process %d\n", sig, p->pid);
-        arch_prepare_signal(ka->sa.sa_handler, sig);
+        arch_restart_syscall(p, ka->sa.sa_flags & SA_RESTART);
+        arch_prepare_signal(ka->sa.sa_handler, sig,
+            (ka->sa.sa_flags & SA_SIGINFO) ? &p->siginfo[sig] : NULL,
+            (ka->sa.sa_flags & SA_RESTORER) ? (void*)ka->sa.sa_restorer : NULL);
+        if (ka->sa.sa_flags & SA_RESETHAND) {
+            ka->sa.sa_handler = SIG_DFL;
+            ka->sa.sa_flags &= ~SA_SIGINFO;
+        }
         p->blocked |= ka->sa.sa_mask;
         if (!(ka->sa.sa_flags & SA_NODEFER))
             p->blocked |= sig_bit;
@@ -89,6 +105,15 @@ void do_kill(struct task *p, int sig)
 
 int do_raise(struct task *p, int sig)
 {
+    struct ksiginfo info = {
+        .code = SI_USER,
+        .pid = current ? current->tgid : 0,
+    };
+    return do_raise_info(p, sig, &info);
+}
+
+int do_raise_info(struct task *p, int sig, const struct ksiginfo *info)
+{
     if (sig <= 0 || sig >= _NSIG) {
         klog(LOG_ERROR, "Invalid signal %d\n", sig);
         return -EINVAL;
@@ -111,9 +136,17 @@ int do_raise(struct task *p, int sig)
 
     if (ka->sa.sa_handler == SIG_IGN && !sigismember(&synchronous, sig)) {
         klog(LOG_DEBUG, "Signal %d ignored by process %d\n", sig, p->pid);
-        return PTR_ERR(SIG_IGN); // Ignored signal
+        return 0; // Ignored signal
     }
 
+    // Default action is to ignore: discard now so it can't interrupt
+    // pause/sigsuspend or blocking syscalls (still queued if blocked)
+    if (ka->sa.sa_handler == SIG_DFL && (sigbit(sig) & DFL_IGN_SIG) &&
+            !sigisblocked(p, sig)) {
+        return 0;
+    }
+
+    p->siginfo[sig] = *info;
     sigaddset(&p->pending, sig);
 
     if (sigisblocked(p, sig)) {
@@ -138,18 +171,32 @@ int do_raise(struct task *p, int sig)
 int kill_pgrp(int pgid, int sig)
 {
     klog(LOG_DEBUG, "kill_pgrp called with pgid=%d, sig=%d\n", pgid, sig);
-    if (sig < 0 || sig > _NSIG)
+    if (sig < 0 || sig >= _NSIG)
         return -EINVAL;
 
     if (pgid < 0)
         return -ESRCH;
 
     struct task *p;
-    bool found = false;
+    // TODO: Expand
+    pid_t targets[64];
+    int n = 0;
+    unsigned long flags;
+    acquire_lock_irqsave(&tasklist_lock, &flags);
     pgrp_for_each(p, pgid) {
-        found = true;
+        if (n < (int)(sizeof(targets) / sizeof(targets[0])))
+            targets[n++] = p->pid;
+    }
+    release_lock_irqrestore(&tasklist_lock, flags);
+
+    bool found = n > 0;
+    for (int i = 0; i < n; i++) {
+        p = get_task_by_pid(targets[i]);
+        if (!p)
+            continue;
         klog(LOG_DEBUG, "Sending signal %d to process %d in group %d\n", sig, p->pid, pgid);
-        do_raise(p, sig);
+        if (sig)
+            do_raise(p, sig);
     }
 
     if (!found) {
@@ -163,7 +210,7 @@ int kill_pgrp(int pgid, int sig)
 SYSCALL_DECL2(kill, int, pid, int, sig)
 {
     klog(LOG_DEBUG, "kill called with pid=%d, sig=%d\n", pid, sig);
-    if (sig < 0 || sig > _NSIG)
+    if (sig < 0 || sig >= _NSIG)
         return -EINVAL;
 
     if (pid == 0) {
@@ -174,9 +221,9 @@ SYSCALL_DECL2(kill, int, pid, int, sig)
         return kill_pgrp(-pid, sig);
     }
 
-    struct task *p = find_child_by_pid(current, pid);
-    if (!p) {
-        klog(LOG_DEBUG, "kill: No such child process %d\n", pid);
+    struct task *p = get_task_by_pid(pid);
+    if (!p || p->state == TASK_ZOMBIE) {
+        klog(LOG_DEBUG, "kill: No such process %d\n", pid);
         return -ESRCH;
     }
 
@@ -303,12 +350,61 @@ SYSCALL_DECL1(sigsuspend, sigset_t*, set)
         yield();
     }
 
-    current->blocked = oldmask;
+    // Keep the temporary mask until the signal is delivered; the handler's
+    // frame (or the exit path, if nothing is delivered) restores oldmask
+    current->saved_sigmask = oldmask;
+    current->flags.restore_sigmask = 1;
     return -EINTR;
 }
 
-// TODO
+static int do_tkill(int tgid, int tid, int sig)
+{
+    if (sig < 0 || sig >= _NSIG)
+        return -EINVAL;
+    struct task *p = get_task_by_pid(tid);
+    if (!p || p->state == TASK_ZOMBIE || (tgid > 0 && p->tgid != tgid))
+        return -ESRCH;
+    if (sig == 0)
+        return 0;
+    return do_raise(p, sig);
+}
+
 SYSCALL_DECL3(tgkill, int, tgid, int, tid, int, sig)
 {
-    return -ENOSYS;
+    if (tgid <= 0 || tid <= 0)
+        return -EINVAL;
+    return do_tkill(tgid, tid, sig);
+}
+
+SYSCALL_DECL2(tkill, int, tid, int, sig)
+{
+    if (tid <= 0)
+        return -EINVAL;
+    return do_tkill(0, tid, sig);
+}
+
+// SIGKILL every other thread in p's group; they exit with status code
+void zap_other_threads(struct task *p, int code)
+{
+    pid_t tids[64];
+    int n = 0, bkt;
+    struct task *t;
+    unsigned long flags;
+
+    acquire_lock_irqsave(&tasklist_lock, &flags);
+    hash_for_each(pid_table, bkt, t, pid_hash) {
+        if (t != p && t->tgid == p->tgid && t->state != TASK_ZOMBIE &&
+                n < (int)(sizeof(tids) / sizeof(tids[0])))
+            tids[n++] = t->pid;
+    }
+    release_lock_irqrestore(&tasklist_lock, flags);
+
+    for (int i = 0; i < n; i++) {
+        t = get_task_by_pid(tids[i]);
+        if (!t)
+            continue;
+        t->group_exit_code = code;
+        t->group_exit = true;
+        do_raise(t, SIGKILL);
+    }
 }

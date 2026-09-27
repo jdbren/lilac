@@ -139,6 +139,11 @@ static struct task * clone_process(struct clone_args *args)
     INIT_LIST_HEAD(&child->children);
     child->on_rq = false;
     child->on_cpu = false;
+    child->flags.mm_last_ref = 0;
+    child->syscall_nr = -1;
+    child->group_exit = false;
+    child->flags.restore_sigmask = 0;
+    child->group_exit_code = 0;
 
     child->pid = ++num_tasks;
     if (flags & CLONE_THREAD) {
@@ -170,10 +175,13 @@ static struct task * clone_process(struct clone_args *args)
         child->exit_signal = args->exit_signal;
     }
 
+    unsigned long tl_flags;
+    acquire_lock_irqsave(&tasklist_lock, &tl_flags);
     list_add_tail(&child->sibling, &parent->children);
     hash_add(pid_table, &child->pid_hash, child->pid);
-    hash_add(pgid_table, &child->pgid_hash, parent->pgid);
-    hash_add(sid_table, &child->sid_hash, parent->sid);
+    hash_add(pgid_table, &child->pgid_hash, child->pgid);
+    hash_add(sid_table, &child->sid_hash, child->sid);
+    release_lock_irqrestore(&tasklist_lock, tl_flags);
 
     child->kstack_base = alloc_kstack();
     if (!child->kstack_base) {
@@ -332,7 +340,8 @@ SYSCALL_DECL5(clone, unsigned long, flags, void*, stack, void*, ptid,
 }
 
 
-static void mm_release(struct task *p, struct mm_info *mm)
+// Returns true if this dropped the last reference to mm
+static bool mm_release(struct task *p, struct mm_info *mm)
 {
     if (p->clear_child_tid) {
         put_user(0, p->clear_child_tid);
@@ -353,14 +362,17 @@ static void mm_release(struct task *p, struct mm_info *mm)
         release_lock_irqrestore(&vfork_wq->lock, flags);
     }
 
-    if (!--mm->ref_count)
+    if (--mm->ref_count == 0) {
         arch_unmap_all_user_vm(mm);
+        return true;
+    }
+    return false;
 }
 
 void exit_mm_release(struct task *tsk, struct mm_info *mm)
 {
     // futex_exit_release(tsk);
-    mm_release(tsk, mm);
+    tsk->flags.mm_last_ref = mm_release(tsk, mm);
 }
 
 void exec_mm_release(struct task *tsk, struct mm_info *mm)
@@ -448,29 +460,62 @@ void reap_task(struct task *p)
         __pause();
     kfree(p->fp_regs);
     p->fp_regs = NULL;
+    unsigned long flags;
+    acquire_lock_irqsave(&tasklist_lock, &flags);
     list_del(&p->sibling);
     hash_del(&p->pid_hash);
     hash_del(&p->pgid_hash);
     hash_del(&p->sid_hash);
+    release_lock_irqrestore(&tasklist_lock, flags);
     kfree(p->reg_store);
     free_pages(p->kstack_base, __KERNEL_STACK_SZ / PAGE_SIZE);
-    if (p->mm->ref_count == 0) {
+    if (p->flags.mm_last_ref) {
         arch_reclaim_mem(p);
         kfree(p->mm);
     }
     kfree(p);
 }
 
+static void reparent_children(struct task *p)
+{
+    struct task *init = get_task_by_pid(1);
+    struct task *child, *tmp, *zombie = NULL;
+    unsigned long flags;
+
+    if (!init || init == p)
+        return;
+
+    acquire_lock_irqsave(&tasklist_lock, &flags);
+    list_for_each_entry_safe(child, tmp, &p->children, sibling) {
+        list_del(&child->sibling);
+        child->parent = init;
+        child->ppid = init->pid;
+        list_add_tail(&child->sibling, &init->children);
+        if (READ_ONCE(child->state) == TASK_ZOMBIE &&
+                (!zombie || zombie->exit_signal <= 0))
+            zombie = child;
+    }
+    release_lock_irqrestore(&tasklist_lock, flags);
+
+    if (zombie)
+        notify_parent(init, zombie);
+}
+
 __noreturn void do_exit(void)
 {
     struct task *parent = NULL;
+    unsigned long flags;
     if (unlikely(current->pid <= 1))
         panic("Init or kernel tried to exit!\n");
-    parent = current->parent;
+    reparent_children(current);
     cleanup_task(current);
-    current->state = TASK_ZOMBIE;
+    set_current_state(TASK_ZOMBIE);
+    // Read and notify the parent only now, under the lock
+    acquire_lock_irqsave(&tasklist_lock, &flags);
+    parent = current->parent;
     if (parent)
         notify_parent(parent, current);
+    release_lock_irqrestore(&tasklist_lock, flags);
     schedule();
     unreachable();
 }
@@ -486,6 +531,13 @@ __noreturn void exit(int status)
 
 SYSCALL_DECL1(exit, int, status)
 {
+    exit(status);
+    return -1;
+}
+
+SYSCALL_DECL1(exit_group, int, status)
+{
+    zap_other_threads(current, WEXITED(status));
     exit(status);
     return -1;
 }
