@@ -103,7 +103,7 @@ int vfs_mount(struct block_device *srcdev, const char *target,
         return -ENOTDIR;
     }
     if (!new_dentry->d_inode) {
-        klog(LOG_DEBUG, "Creating new dir %s\n", new_dentry->d_name);
+        klog(LOG_DEBUG, "Creating new dir %s\n", new_dentry->d_name.data);
         parent->d_inode->i_op->mkdir(parent->d_inode, new_dentry, 0);
     }
 

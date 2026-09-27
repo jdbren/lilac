@@ -77,6 +77,8 @@ struct __cacheline_align inode_operations {
     int (*rename)(struct inode *, struct dentry *,
                     struct inode *, struct dentry *);
     int (*readlink)(struct dentry *, char __user *, int);
+    // Shrink a regular file to size bytes
+    int (*truncate)(struct inode *, loff_t size);
 };
 
 
@@ -158,6 +160,7 @@ struct super_block {
     struct semaphore    s_umount;
     atomic_uint         s_count;
     atomic_bool         s_active;
+    dev_t               s_dev;         /* unique per mounted fs, for st_dev */
     spinlock_t          s_lock;      /* Protects the sb and inode list */
 
     struct block_device *s_bdev;
@@ -262,6 +265,7 @@ int vfs_mount(struct block_device *srcdev, const char *target,
 int vfs_umount(const char *target);
 int vfs_dupf(int fd);
 int vfs_dup(int oldfd, int newfd);
+long vfs_ftruncate(struct file *f, loff_t length);
 
 struct dentry * vfs_lookup(const char *path);
 struct dentry * vfs_lookup_flags(const char *path, int follow_final);

@@ -11,15 +11,22 @@
 
 extern struct dentry *root_dentry;
 
+static bool dname_eq_nocase(const struct dentry *d, const char *name)
+{
+    size_t i;
+    for (i = 0; i < d->d_name.len; i++) {
+        if (!name[i] || toupper(d->d_name.data[i]) != toupper(name[i]))
+            return false;
+    }
+    return name[i] == '\0';
+}
+
 struct dentry *dlookup(struct dentry *parent, char *name)
 {
     struct dentry *d = NULL;
-    if (parent->d_sb->s_type == MSDOS) {
-        for (int i = 0; name[i]; i++)
-            name[i] = toupper(name[i]);
-    }
+    bool nocase = parent->d_sb->s_type == MSDOS;
     hlist_for_each_entry(d, &parent->d_children, d_sib) {
-        if (lstrcmp_cstr(&d->d_name, name) == 0) {
+        if (nocase ? dname_eq_nocase(d, name) : lstrcmp_cstr(&d->d_name, name) == 0) {
             dget(d);
             return d;
         }
@@ -34,7 +41,7 @@ void dcache_add(struct dentry *d)
 
 void dcache_remove(struct dentry *d)
 {
-    hlist_del(&d->d_sib);
+    hlist_del_init(&d->d_sib);
 }
 
 void dget(struct dentry *d)
@@ -48,7 +55,7 @@ void dput(struct dentry *d)
     if (--d->d_count)
         return;
 
-    klog(LOG_WARN, "dput: dentry %p (%s) count is zero, but not freeing it yet\n", d, d->d_name);
+    klog(LOG_WARN, "dput: dentry %p (%s) count is zero, but not freeing it yet\n", d, d->d_name.data);
     /*
     if (hlist_empty(&d->d_children)) {
         dcache_remove(d);
@@ -198,14 +205,16 @@ static struct dentry * lookup_path_from_inner(struct dentry *parent,
 
             inode = parent->d_inode;
             if (!S_ISDIR(inode->i_mode)) {
-                klog(LOG_DEBUG, "VFS: %s is not a directory\n", parent->d_name);
+                klog(LOG_DEBUG, "VFS: %s is not a directory\n", parent->d_name.data);
                 kfree(name);
                 destroy_dentry(find);
                 mutex_unlock(&parent->d_lock);
                 return ERR_PTR(-ENOTDIR);
             }
 
-            if ((err = PTR_ERR(inode->i_op->lookup(inode, find, 0))) < 0) {
+            // lookup returns NULL or the dentry itself on success
+            struct dentry *res = inode->i_op->lookup(inode, find, 0);
+            if (IS_ERR(res) && (err = PTR_ERR(res)) < 0) {
                 kfree(name);
                 destroy_dentry(find);
                 mutex_unlock(&parent->d_lock);
@@ -217,7 +226,7 @@ static struct dentry * lookup_path_from_inner(struct dentry *parent,
             // If the inode is NULL, we've reached a dead end (negative dentry)
             if (find->d_inode == NULL) {
                 mutex_unlock(&parent->d_lock);
-                return find;
+                return path_has_component(path, n_pos) ? ERR_PTR(-ENOENT) : find;
             }
         } else {
 #ifdef DEBUG_VFS
@@ -226,7 +235,7 @@ static struct dentry * lookup_path_from_inner(struct dentry *parent,
             kfree(name);
             if (find->d_inode == NULL) {
                 mutex_unlock(&parent->d_lock);
-                return find;
+                return path_has_component(path, n_pos) ? ERR_PTR(-ENOENT) : find;
             }
 
             if (find->d_mount) {
@@ -245,6 +254,11 @@ static struct dentry * lookup_path_from_inner(struct dentry *parent,
 
         parent = find;
     }
+
+    size_t len = strlen(path);
+    if (len > 0 && path[len - 1] == '/' && parent->d_inode &&
+            !S_ISDIR(parent->d_inode->i_mode))
+        return ERR_PTR(-ENOTDIR);
     return parent;
 }
 
