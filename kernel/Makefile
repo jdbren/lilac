@@ -119,6 +119,7 @@ drivers/pci.o \
 drivers/ahci.o \
 drivers/framebuffer.o \
 drivers/kmsg.o \
+drivers/mem.o \
 drivers/vga.o \
 drivers/tty/core.o \
 drivers/tty/fbcon.o \

@@ -22,6 +22,8 @@ long labs(long i);
 int toupper(int ch);
 int tolower(int ch);
 
+int islower(int c);
+int isupper(int c);
 int isprint(int c);
 int isspace(int c);
 int isdigit(int arg);

@@ -124,8 +124,6 @@ void fs_init(void)
 
     vfs_mount(tmp_bdev, "/tmp", "tmpfs", 0, NULL);
     vfs_mount(dev_bdev, "/dev", "tmpfs", 0, NULL);
-    vfs_create("/dev/null", 0);
-    vfs_create("/dev/zero", 0);
 
 #ifdef DEBUG
     struct block_device *bd = get_bdev_by_uuid("5376933F-2B06-489B-843D-3535E656468E");
