@@ -98,6 +98,9 @@ SYSCALL_DECL2(arch_prctl, int, code, unsigned long, addr)
             return -EFAULT;
         current->tls = (void *)addr;
         wrmsr(IA32_FS_BASE, addr);
+    } else if (code == ARCH_GET_FS) {
+        if (put_user((unsigned long)current->tls, (unsigned long *)addr))
+            return -EFAULT;
     } else {
         return -EINVAL;
     }
