@@ -41,16 +41,13 @@ static int unique_ino(void)
     return ++ino;
 }
 
-static struct inode *fat_iget(struct super_block *sb, unsigned long pos)
+static struct inode *fat_iget(struct super_block *sb, u32 dir_clst, u32 dir_idx)
 {
     struct inode *tmp;
-    struct fat_file *info;
-    unsigned long i_pos;
 
     list_for_each_entry(tmp, &sb->s_inodes, i_list) {
-        info = (struct fat_file*)tmp->i_private;
-        i_pos = (u32)info->cl_low + ((u32)info->cl_high << 16);
-        if (i_pos == pos)
+        struct fat_inode *fi = (struct fat_inode*)tmp->i_private;
+        if (fi->dir_clst == dir_clst && fi->dir_idx == dir_idx)
             return tmp;
     }
 
@@ -60,13 +57,10 @@ static struct inode *fat_iget(struct super_block *sb, unsigned long pos)
 struct inode *fat_build_inode(struct super_block *sb, struct fat_inode *info)
 {
     struct inode *inode;
-    unsigned long pos = (u32)info->entry.cl_low + ((u32)info->entry.cl_high << 16);
 
-    inode = fat_iget(sb, pos);
-    if (inode) {
-        klog(LOG_WARN, "Inode already exists\n");
+    inode = fat_iget(sb, info->dir_clst, info->dir_idx);
+    if (inode)
         return inode;
-    }
 
     inode = fat_alloc_inode(sb);
     if (IS_ERR(inode)) {
@@ -91,57 +85,20 @@ struct inode *fat_build_inode(struct super_block *sb, struct fat_inode *info)
 static int fat32_find(struct inode *dir, const char *name,
     struct fat_inode *info)
 {
-    int ret = 1;
-    int bytes = 0;
-    struct fat_file *entry;
-    struct fat_disk *disk = (struct fat_disk*)dir->i_sb->s_fs_info;
-    volatile u8 *buffer = NULL;
-    char lfn[256];
-    char sfn[13];
+    struct fat_dir d;
+    struct fat_dir_pos pos;
+    int ret = fat_dir_load(dir, &d);
+    if (ret)
+        return ret;
 
-    memset(lfn, 0, sizeof(lfn));
-
-    struct fat_file *dir_entry = (struct fat_file*)dir->i_private;
-    bytes = __fat32_read_dir(disk, &buffer, fat_clst_value(dir_entry));
-    if (bytes <= 0) {
-        klog(LOG_ERROR, "Failed to read directory entries\n");
-        return bytes;
+    ret = 1;
+    if (fat_dir_find(&d, name, &pos)) {
+        memcpy(&info->entry, fat_dir_entry(&d, pos.sfn), sizeof(info->entry));
+        info->dir_clst = d.first_clst;
+        info->dir_idx = pos.sfn;
+        ret = 0;
     }
-    entry = (struct fat_file*)buffer;
-
-    while (entry < (struct fat_file*)(buffer + bytes)) {
-        if (entry->name[0] == 0x00) {
-            break;
-        }
-
-        if (entry->attributes == LONG_FNAME) {
-            fat_get_lfn_part(entry, lfn);
-        } else if (entry->name[0] != FAT_UNUSED) {
-            // Check LFN
-            if (lfn[0] != 0) {
-                if (!fat_strcasecmp(lfn, name)) {
-                    memcpy(&info->entry, entry, sizeof(info->entry));
-                    ret = 0;
-                    break;
-                }
-            }
-
-            // Check SFN
-            fat_get_sfn(entry, sfn);
-            if (!fat_strcasecmp(sfn, name)) {
-                memcpy(&info->entry, entry, sizeof(info->entry));
-                ret = 0;
-                break;
-            }
-
-            memset(lfn, 0, sizeof(lfn));
-        } else {
-            memset(lfn, 0, sizeof(lfn));
-        }
-        entry++;
-    }
-
-    kfree((void*)buffer);
+    fat_dir_put(&d);
     return ret;
 }
 
@@ -163,6 +120,8 @@ struct dentry *fat32_lookup(struct inode *parent, struct dentry *find,
             kfree(info);
             return ERR_CAST(inode);
         }
+        if (inode->i_private != info)
+            kfree(info); // already cached
         iget(inode);
         find->d_inode = inode;
     } else if (err > 0) {

@@ -8,6 +8,7 @@
 #include <lilac/fs.h>
 #include <lib/list.h>
 #include <lilac/libc.h>
+#include <lilac/timer.h>
 #include <drivers/blkdev.h>
 #include <mm/kmm.h>
 #include <mm/kmalloc.h>
@@ -31,13 +32,47 @@ const struct super_operations fat_sops = {
     .destroy_inode = fat_destroy_inode
 };
 
-// TODO: free disk space
+// Shrink or grow the recorded size
 static int fat32_truncate(struct inode *inode, loff_t size)
 {
-    struct fat_file *fat_file = (struct fat_file*)inode->i_private;
-    fat_file->file_size = size;
+    struct fat_inode *fi = (struct fat_inode*)inode->i_private;
+    struct fat_disk *disk = (struct fat_disk*)inode->i_sb->s_fs_info;
+    struct gendisk *gd = inode->i_sb->s_bdev->disk;
+    const u32 bpc = disk->bytes_per_clst;
+
+    if (size < fi->entry.file_size) {
+        u32 keep = ROUND_UP(size, bpc) / bpc;
+        u32 clst = fat_clst_value(&fi->entry);
+
+        if (keep == 0) {
+            fat_free_chain(disk, clst);
+            fi->entry.cl_low = 0;
+            fi->entry.cl_high = 0;
+        } else if (clst >= 2) {
+            for (u32 i = 1; i < keep && clst < 0x0FFFFFF8; i++)
+                clst = fat_value(clst, disk);
+            if (clst < 0x0FFFFFF8) {
+                u32 next = fat_value(clst, disk);
+                if (next < 0x0FFFFFF8) {
+                    fat_set_value(clst, 0x0FFFFFFF, disk);
+                    fat_free_chain(disk, next);
+                }
+                // clear the cut-off tail so a later extension reads zeros
+                u8 *buf = size % bpc ? kmalloc(bpc) : NULL;
+                if (buf) {
+                    __fat_read_clst(disk, gd, clst, buf);
+                    memset(buf + size % bpc, 0, bpc - size % bpc);
+                    __fat_write_clst(disk, gd, clst, buf);
+                    kfree(buf);
+                }
+            }
+        }
+        fat_write_FAT(disk, gd);
+    }
+
+    fi->entry.file_size = size;
     inode->i_size = size;
-    return 0;
+    return fat_write_inode(inode);
 }
 
 const struct inode_operations fat_iops = {
@@ -46,6 +81,9 @@ const struct inode_operations fat_iops = {
     .mkdir = fat32_mkdir,
     .create = fat32_create,
     .truncate = fat32_truncate,
+    .unlink = fat32_unlink,
+    .rmdir = fat32_rmdir,
+    .rename = fat32_rename,
 };
 
 
@@ -84,11 +122,30 @@ int fat32_write_fs_info(struct fat_disk *fat_disk, struct gendisk *gd)
         fat_disk->bpb.extended_section.fs_info, (void*)&fat_disk->fs_info, 1);
 }
 
+// With mirroring disabled (bit 7 of the extended flags) only the active FAT,
+// named by bits 0-3, is in use; otherwise all copies are kept identical
+#define FAT_NO_MIRROR 0x80
+#define FAT_ACTIVE_MASK 0x0F
+
+static void fat_copies(struct fat_disk *fat_disk, u32 *first, u32 *end)
+{
+    u16 flags = fat_disk->bpb.extended_section.extended_flags;
+    if (flags & FAT_NO_MIRROR) {
+        *first = flags & FAT_ACTIVE_MASK;
+        *end = *first + 1;
+    } else {
+        *first = 0;
+        *end = fat_disk->bpb.num_FATs;
+    }
+}
+
 __must_check
 static int fat_read_FAT(struct fat_disk *fat_disk, struct gendisk *hd)
 {
-    const u32 lba = fat_disk->fat_begin_lba + 0 * fat_disk->sect_per_clst;
     const u32 FAT_sz = fat_disk->bpb.extended_section.FAT_size_32;
+    u32 active, end;
+    fat_copies(fat_disk, &active, &end);
+    const u32 lba = fat_disk->fat_begin_lba + active * FAT_sz;
     const u32 buf_sz = fat_disk->bpb.bytes_per_sector * FAT_sz;
 
     klog(LOG_INFO, "Allocating %u bytes for FAT\n", buf_sz);
@@ -108,9 +165,15 @@ static int fat_read_FAT(struct fat_disk *fat_disk, struct gendisk *hd)
             (void*)fat_disk->FAT.FAT_buf + (i * 512), 128);
     }
 
+    volatile struct fat_BS *bpb = &fat_disk->bpb;
+    u32 data_sectors = bpb->total_sectors_32 -
+        (fat_disk->clst_begin_lba - fat_disk->base_lba);
+    u32 last = data_sectors / bpb->sectors_per_cluster + 1;
     fat_disk->FAT.first_clst = 0;
-    fat_disk->FAT.last_clst = fat_disk->bpb.total_sectors_32;
+    fat_disk->FAT.last_clst = MIN(last, buf_sz / (u32)sizeof(u32) - 1);
     fat_disk->FAT.sectors = FAT_sz;
+    fat_disk->FAT.dirty_lo = (u32)-1;
+    fat_disk->FAT.dirty_hi = 0;
 
 #ifdef DEBUG_FAT
     klog(LOG_DEBUG, "FAT first: %x\n", fat_disk->FAT.first_clst);
@@ -122,21 +185,32 @@ static int fat_read_FAT(struct fat_disk *fat_disk, struct gendisk *hd)
 __must_check
 int fat_write_FAT(struct fat_disk *fat_disk, struct gendisk *gd)
 {
-    const u32 lba = fat_disk->fat_begin_lba +
-        (fat_disk->FAT.first_clst * fat_disk->sect_per_clst);
-    u32 i = 0;
-    while (i < fat_disk->FAT.sectors) {
-        if (i + 128 > fat_disk->FAT.sectors) {
-            // Last write might be less than 128 sectors
-            gd->ops->disk_write(gd, lba + i,
-                (void*)fat_disk->FAT.FAT_buf + (i * 512), fat_disk->FAT.sectors - i);
-            break;
+    struct fat_FAT_buf *FAT = &fat_disk->FAT;
+    int ret = 0;
+
+    if (FAT->dirty_lo > FAT->dirty_hi)
+        return 0;
+
+    const u32 lo = FAT->dirty_lo;
+    const u32 count = FAT->dirty_hi - lo + 1;
+    u32 first, end;
+    fat_copies(fat_disk, &first, &end);
+    for (u32 f = first; f < end; f++) {
+        u32 lba = fat_disk->fat_begin_lba + f * FAT->sectors + lo;
+        for (u32 i = 0; i < count; i += 128) {
+            int err = gd->ops->disk_write(gd, lba + i,
+                (void*)FAT->FAT_buf + (lo + i) * BYTES_PER_SECTOR, MIN(128U, count - i));
+            if (err < 0)
+                ret = err;
         }
-        gd->ops->disk_write(gd, lba + i,
-            (void*)fat_disk->FAT.FAT_buf + (i * 512), 128);
-        i += 128;
     }
-    return 0;
+    FAT->dirty_lo = (u32)-1;
+    FAT->dirty_hi = 0;
+
+    int err = fat32_write_fs_info(fat_disk, gd);
+    if (err < 0 && !ret)
+        ret = err;
+    return ret;
 }
 
 #define LBA_ADDR(cluster_num, disk) \
@@ -157,6 +231,51 @@ void __fat_write_clst(struct fat_disk *fat_disk,
         fat_disk->sect_per_clst);
 }
 
+// Write the inode's size and first cluster back to its directory entry and
+// stamp it as modified now
+int fat_write_inode(struct inode *inode)
+{
+    struct fat_inode *fi = (struct fat_inode*)inode->i_private;
+    struct fat_disk *disk = (struct fat_disk*)inode->i_sb->s_fs_info;
+    struct gendisk *gd = inode->i_sb->s_bdev->disk;
+    const u32 per_clst = disk->bytes_per_clst / sizeof(struct fat_file);
+    struct timestamp now = get_timestamp();
+    u32 clst = fi->dir_clst;
+
+    fi->entry.last_write_date = FAT_SET_DATE(now.year, now.month, now.day);
+    fi->entry.last_write_time = FAT_SET_TIME(now.hour, now.minute, now.second);
+    fi->entry.last_access_date = fi->entry.last_write_date;
+
+    if (clst == 0)
+        return 0;
+
+    for (u32 n = fi->dir_idx / per_clst; n; n--) {
+        clst = fat_value(clst, disk);
+        if (clst < 2 || clst >= 0x0FFFFFF8)
+            return -EIO;
+    }
+
+    u32 off = (fi->dir_idx % per_clst) * sizeof(struct fat_file);
+    u32 lba = LBA_ADDR(clst, disk) + off / BYTES_PER_SECTOR;
+    u8 *sector = kmalloc(BYTES_PER_SECTOR);
+    if (!sector)
+        return -ENOMEM;
+
+    int err = gd->ops->disk_read(gd, lba, sector, 1);
+    if (err >= 0) {
+        struct fat_file *e = (struct fat_file*)(sector + off % BYTES_PER_SECTOR);
+        e->file_size = fi->entry.file_size;
+        e->cl_low = fi->entry.cl_low;
+        e->cl_high = fi->entry.cl_high;
+        e->last_write_date = fi->entry.last_write_date;
+        e->last_write_time = fi->entry.last_write_time;
+        e->last_access_date = fi->entry.last_access_date;
+        err = gd->ops->disk_write(gd, lba, sector, 1);
+    }
+    kfree(sector);
+    return err < 0 ? err : 0;
+}
+
 u32 __fat_get_clst_num(struct file *file, struct fat_disk *disk)
 {
     struct fat_file *fat_file = (struct fat_file*)file->f_dentry->d_inode->i_private;
@@ -174,18 +293,20 @@ u32 __fat_get_clst_num(struct file *file, struct fat_disk *disk)
 
 u32 __fat_find_free_clst(struct fat_disk *disk)
 {
-    u32 clst = disk->fs_info.next_free_clst;
+    const u32 last = disk->FAT.last_clst;
+    u32 start = disk->fs_info.next_free_clst;
 
     if (disk->fs_info.free_clst_cnt == 0)
         return 0;
+    if (start < 2 || start > last)
+        start = 2;
 
-    while (1) {
-        if (clst > disk->FAT.last_clst)
-            kerror("clst out of fat bounds\n");
+    u32 clst = start;
+    do {
         if (fat_value(clst, disk) == 0)
             return clst;
-        clst++;
-    }
+        clst = clst == last ? 2 : clst + 1;
+    } while (clst != start);
 
     return 0;
 }
@@ -207,6 +328,19 @@ u32 __fat_find_alloc_clst(struct fat_disk *disk, u32 prev_clst)
     if (new_clst <= 0)
         return 0;
     return __fat_add_new_clst(disk, prev_clst, new_clst);
+}
+
+void fat_free_chain(struct fat_disk *disk, u32 clst)
+{
+    while (clst >= 2 && clst < 0x0FFFFFF8) {
+        u32 next = fat_value(clst, disk);
+        fat_set_value(clst, 0, disk);
+        if (disk->fs_info.free_clst_cnt != 0xFFFFFFFF)
+            disk->fs_info.free_clst_cnt++;
+        if (clst < disk->fs_info.next_free_clst)
+            disk->fs_info.next_free_clst = clst;
+        clst = next;
+    }
 }
 
 static void disk_init(struct fat_disk *disk)
@@ -247,6 +381,7 @@ struct dentry *fat32_init(void *dev, struct super_block *sb)
     // Initialize the root inode
     root_inode = fat_alloc_inode(sb);
     root_inode->i_ino = 1;
+    root_inode->i_nlink = 1;
     root_inode->i_private = fat_inode;
     root_inode->i_mode |= S_IFDIR;
     fat_inode->entry.cl_low = fat_disk->root_start & 0xFFFF;

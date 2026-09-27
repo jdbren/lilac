@@ -44,7 +44,7 @@ int __fat32_read_all_dirent(struct file *file, struct dirent **dirents_ptr)
     struct fat_file *entry;
     struct dirent *dir_buf;
     int num_dirents = 8;
-    char lfn[256];
+    char lfn[FAT_LFN_BUF];
 
     memset(lfn, 0, sizeof(lfn));
 
@@ -128,144 +128,7 @@ int fat32_readdir(struct file *file, struct dirent *dir_buf, unsigned int count)
     return i;
 }
 
-static void mk_dot_dirs(struct fat_file *entry, struct fat_file *parent, u32 new_clst, u32 p_clst)
-{
-    struct timestamp cur_time = get_timestamp();
-    u16 fat_date = FAT_SET_DATE(cur_time.year, cur_time.month, cur_time.day);
-    u16 fat_time = FAT_SET_TIME(cur_time.hour, cur_time.minute, cur_time.second);
-
-    entry->name[0] = '.';
-    memset(entry->name + 1, ' ', 7 + 3);
-    entry->file_size = 0;
-    entry->attributes = FAT_DIR_ATTR;
-    entry->cl_low = new_clst & 0xFFFF;
-    entry->cl_high = new_clst >> 16;
-    entry->creation_date = fat_date;
-    entry->creation_time = fat_time;
-    entry->last_write_date = fat_date;
-    entry->last_write_time = fat_time;
-    entry->last_access_date = fat_date;
-
-    entry++;
-    entry->name[0] = '.'; entry->name[1] = '.';
-    memset(entry->name + 2, ' ', 6 + 3);
-    entry->file_size = 0;
-    entry->attributes = FAT_DIR_ATTR;
-    entry->cl_low = p_clst & 0xFFFF;
-    entry->cl_high = p_clst >> 16;
-    entry->creation_date = parent->creation_date;
-    entry->creation_time = parent->creation_time;
-    entry->last_write_date = parent->last_write_date;
-    entry->last_write_time = parent->last_write_time;
-    entry->last_access_date = parent->last_access_date;
-}
-
-static void mk_new_dirent(struct fat_file *entry, u32 new_clst,
-                          const unsigned char sfn[11], u8 case_flags)
-{
-    struct timestamp cur_time = get_timestamp();
-    u16 fat_date = FAT_SET_DATE(cur_time.year, cur_time.month, cur_time.day);
-    u16 fat_time = FAT_SET_TIME(cur_time.hour, cur_time.minute, cur_time.second);
-
-    memset(entry->name, ' ', 8);
-    memset(entry->ext, ' ', 3);
-    entry->attributes = FAT_DIR_ATTR;
-    entry->cl_low = new_clst & 0xFFFF;
-    entry->cl_high = new_clst >> 16;
-    entry->file_size = 0;
-    entry->creation_date = fat_date;
-    entry->creation_time = fat_time;
-    entry->last_write_date = fat_date;
-    entry->last_write_time = fat_time;
-    entry->last_access_date = fat_date;
-
-    memcpy(entry->name, sfn, 8);
-    memcpy(entry->ext, sfn + 8, 3);
-    entry->reserved = case_flags;
-}
-
-
 int fat32_mkdir(struct inode *dir, struct dentry *new_dentry, umode_t mode)
 {
-    struct fat_file *entry = NULL;
-    struct fat_disk *disk = (struct fat_disk*)dir->i_sb->s_fs_info;
-    struct gendisk *hd = dir->i_sb->s_bdev->disk;
-    struct fat_file *parent_dir = (struct fat_file*)dir->i_private;
-    int clst = parent_dir->cl_low + ((u32)parent_dir->cl_high << 16);
-    int prev_clst = clst;
-    volatile unsigned char *buffer = kzmalloc(disk->bytes_per_clst);
-    unsigned char sfn[11];
-    int ret = 0;
-
-    u8 case_flags = fat_make_sfn(new_dentry->d_name.data, sfn);
-
-    while (clst < 0x0FFFFFF8) {
-        __fat_read_clst(disk, hd, clst, (void*)buffer);
-        for (entry = (struct fat_file*)buffer;
-            entry < (struct fat_file*)(buffer + disk->bytes_per_clst) &&
-            !(entry->name[0] == 0 || (u8)entry->name[0] == FAT_UNUSED);
-            entry++)
-        {
-            if (!memcmp(entry->name, sfn, 11)) {
-                klog(LOG_INFO, "Directory %s already exists\n", new_dentry->d_name.data);
-                ret = -EEXIST;
-                goto error;
-            }
-        }
-
-        if (entry < (struct fat_file*)(buffer + disk->bytes_per_clst) &&
-         (entry->name[0] == 0 || (u8)entry->name[0] == FAT_UNUSED))
-            break;
-        else
-            entry = NULL;
-
-        prev_clst = clst;
-        clst = fat_value(clst, disk);
-    }
-
-    if (clst >= 0x0FFFFFF8) {
-        clst = __fat_find_free_clst(disk);
-        if (clst <= 0) {
-            ret = -ENOSPC;
-            goto error;
-        }
-        __fat_add_new_clst(disk, prev_clst, clst);
-        klog(LOG_DEBUG, "Added new cluster %x to dir\n", clst);
-        __fat_read_clst(disk, hd, clst, (void*)buffer);
-        memset((void*)buffer, 0, disk->bytes_per_clst);
-        entry = (struct fat_file*)buffer;
-    }
-
-    if (!entry) {
-        ret = -ENOSPC;
-        goto error;
-    }
-
-    int new_clst = __fat_find_alloc_clst(disk, 0);
-    if (new_clst <= 0) {
-        ret = -ENOSPC;
-        goto error;
-    }
-
-    mk_new_dirent(entry, new_clst, sfn, case_flags);
-    __fat_write_clst(disk, hd, clst, (void*)buffer);
-
-    struct fat_inode *fat_i = kzmalloc(sizeof(struct fat_inode));
-    if (!fat_i) {
-        ret = -ENOMEM;
-        goto error;
-    }
-    fat_i->entry = *entry;
-    new_dentry->d_inode = fat_build_inode(dir->i_sb, fat_i);
-
-    memset((void*)buffer, 0, disk->bytes_per_clst);
-    mk_dot_dirs((struct fat_file*)buffer, parent_dir, new_clst, clst);
-    __fat_write_clst(disk, hd, new_clst, (void*)buffer);
-
-    fat_write_FAT(disk, hd);
-    // fat32_write_fs_info(disk, hd);
-
-error:
-    kfree((void*)buffer);
-    return ret;
+    return fat_new_entry(dir, new_dentry, FAT_DIR_ATTR);
 }

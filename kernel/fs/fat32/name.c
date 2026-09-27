@@ -23,13 +23,10 @@ void fat_get_lfn_part(struct fat_file *entry, char *buffer)
     int offset = (order - 1) * 13;
     char *p = buffer + offset;
 
-    // Ensure we don't overflow the 256 byte buffer
-    // 13 chars per entry. Max index 255.
-    if (offset + 13 >= 256)
+    if (order == 0 || offset + 13 >= FAT_LFN_BUF)
         return;
 
     assert(lfn->attr == LONG_FNAME);
-    assert(p + 13 < buffer + 256);
 
     // UCS-2 to ASCII (simple truncation)
     for (i = 0; i < 5; i++) p[i] = lfn->name1[i * 2];

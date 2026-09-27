@@ -113,6 +113,7 @@ struct fat_FAT_buf {
     u32 first_clst;
     u32 last_clst;
     u32 sectors;
+    u32 dirty_lo, dirty_hi; // modified sector range, inclusive
     volatile u32 *FAT_buf;
 };
 
@@ -162,6 +163,11 @@ static inline int fat_set_value(u32 clst, u32 val, struct fat_disk *disk)
     if (clst < disk->FAT.first_clst || clst > disk->FAT.last_clst)
         panic("FAT: clst %u out of bounds\n", clst);
     FAT_SET_VALUE(disk->FAT, clst, val);
+    u32 sector = (clst - disk->FAT.first_clst) / (BYTES_PER_SECTOR / sizeof(u32));
+    if (sector < disk->FAT.dirty_lo)
+        disk->FAT.dirty_lo = sector;
+    if (sector > disk->FAT.dirty_hi)
+        disk->FAT.dirty_hi = sector;
     return 0;
 }
 
@@ -179,7 +185,33 @@ struct gendisk;
 struct fat_inode {
     struct fat_file entry;
     struct fat_file_buf buf;
+    u32 dir_clst;
+    u32 dir_idx;
+    u32 open_count;
+    bool unlinked;
     //struct blkio_buffer *buffer;
+};
+
+#define FAT_LFN_MAX 255
+#define FAT_LFN_BUF (20 * 13 + 1)
+
+// A directory's raw entries, loaded whole for editing
+struct fat_dir {
+    struct fat_disk *disk;
+    struct gendisk *hd;
+    u32 first_clst;
+    u8 *buf;
+    size_t size;
+    u32 dirty_lo, dirty_hi; // modified entry range [lo, hi)
+    bool fat_dirty;
+};
+
+// A name in a fat_dir: its short entry and the first of its long entries
+struct fat_dir_pos {
+    u32 next;
+    u32 first;
+    u32 sfn;
+    char lfn[FAT_LFN_BUF];
 };
 
 
@@ -205,9 +237,11 @@ u32 __fat_get_clst_num(struct file *file, struct fat_disk *disk);
 u32 __fat_find_free_clst(struct fat_disk *disk);
 u32 __fat_add_new_clst(struct fat_disk *disk, u32 prev_clst, u32 new_clst);
 u32 __fat_find_alloc_clst(struct fat_disk *disk, u32 prev_clst);
+void fat_free_chain(struct fat_disk *disk, u32 clst);
 
 int fat32_write_fs_info(struct fat_disk *fat_disk, struct gendisk *gd);
 int fat_write_FAT(struct fat_disk *fat_disk, struct gendisk *gd);
+int fat_write_inode(struct inode *inode);
 
 int __do_fat32_read(const struct file *file, u32 clst, volatile u8 *buffer, size_t num_clst);
 int __do_fat32_write(const struct file *file, u32 clst, const u8 *buffer, size_t num_clst);
@@ -216,5 +250,18 @@ int fat_strcasecmp(const char *s1, const char *s2);
 void fat_get_lfn_part(struct fat_file *entry, char *buffer);
 u8 fat_make_sfn(const char *name, unsigned char sfn[11]);
 void fat_get_sfn(struct fat_file *entry, char *buffer);
+
+int fat_dir_load(struct inode *dir, struct fat_dir *d);
+void fat_dir_put(struct fat_dir *d);
+int fat_dir_flush(struct fat_dir *d);
+struct fat_file *fat_dir_entry(struct fat_dir *d, u32 idx);
+bool fat_dir_next(struct fat_dir *d, struct fat_dir_pos *pos);
+bool fat_dir_find(struct fat_dir *d, const char *name, struct fat_dir_pos *pos);
+bool fat_dir_empty(struct fat_dir *d);
+int fat_dir_add(struct fat_dir *d, const char *name, struct fat_file *entry, u32 *idx);
+void fat_dir_remove(struct fat_dir *d, u32 first, u32 sfn);
+
+int fat_new_entry(struct inode *dir, struct dentry *dentry, u8 attr);
+void fat_release_clusters(struct inode *inode);
 
 #endif

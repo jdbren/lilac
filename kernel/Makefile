@@ -99,6 +99,7 @@ fs/fat32/dir.o \
 fs/fat32/file.o \
 fs/fat32/inode.o \
 fs/fat32/name.o \
+fs/fat32/namei.o \
 fs/fat32/open.o \
 fs/tmpfs/inode.o \
 fs/tmpfs/file.o \
