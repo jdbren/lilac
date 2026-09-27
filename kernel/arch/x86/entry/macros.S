@@ -81,8 +81,8 @@
 
 .macro RESTORE_REGS
 	movq RBX(%rax), %rbx
-	movq RCX(%rax), %rdx
-	movq RDX(%rax), %rcx
+	movq RCX(%rax), %rcx
+	movq RDX(%rax), %rdx
 	movq RSI(%rax), %rsi
 	movq RDI(%rax), %rdi
 	movq R15(%rax), %r15

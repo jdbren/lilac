@@ -53,8 +53,10 @@ pdpte_t * get_or_alloc_pdpt(pml4e_t *pml4, void *virt, u16 flags)
 #ifdef DEBUG_MM
     mm_dbg_page_table_pages_alloc++;
 #endif
-    pml4[pml4_ndx] = virt_to_phys(get_zeroed_page()) | flags | PG_WRITE |
-            PG_PRESENT;
+    void *table = get_zeroed_page();
+    if (!table)
+        return NULL;
+    pml4[pml4_ndx] = virt_to_phys(table) | flags | PG_WRITE | PG_PRESENT;
 #ifdef DEBUG_PAGING
         klog(LOG_DEBUG, "Allocated PDPT at %p for %p\n",
             (void*)ENTRY_ADDR(pml4[pml4_ndx]), virt);
@@ -70,8 +72,10 @@ pde_t * get_or_alloc_pd(pdpte_t *pdpt, void *virt, u16 flags)
 #ifdef DEBUG_MM
     mm_dbg_page_table_pages_alloc++;
 #endif
-    pdpt[pdpt_ndx] = virt_to_phys(get_zeroed_page()) | flags | PG_WRITE |
-            PG_PRESENT;
+    void *table = get_zeroed_page();
+    if (!table)
+        return NULL;
+    pdpt[pdpt_ndx] = virt_to_phys(table) | flags | PG_WRITE | PG_PRESENT;
 #ifdef DEBUG_PAGING
         klog(LOG_DEBUG, "Allocated PD at %p for %p\n",
             (void*)ENTRY_ADDR(pdpt[pdpt_ndx]), virt);
@@ -87,14 +91,28 @@ pte_t * get_or_alloc_pt(pde_t *pd, void *virt, u16 flags)
 #ifdef DEBUG_MM
     mm_dbg_page_table_pages_alloc++;
 #endif
-    pd[pd_ndx] = virt_to_phys(get_zeroed_page()) | flags | PG_WRITE |
-            PG_PRESENT;
+    void *table = get_zeroed_page();
+    if (!table)
+        return NULL;
+    pd[pd_ndx] = virt_to_phys(table) | flags | PG_WRITE | PG_PRESENT;
 #ifdef DEBUG_PAGING
         klog(LOG_DEBUG, "Allocated PT at %p for %p\n",
             (void*)ENTRY_ADDR(pd[pd_ndx]), virt);
 #endif
     }
     return (pte_t*)ENTRY_ADDR(pd[pd_ndx]);
+}
+
+// Walk to (allocating as needed) the page table covering virt
+static pte_t * get_or_alloc_pte_tables(pml4e_t *pml4, void *virt, u16 flags)
+{
+    pdpte_t *pdpt = get_or_alloc_pdpt(pml4, virt, flags);
+    if (!pdpt)
+        return NULL;
+    pde_t *pd = get_or_alloc_pd(pdpt, virt, flags);
+    if (!pd)
+        return NULL;
+    return get_or_alloc_pt(pd, virt, flags);
 }
 
 int map_pages(void *phys, void *virt, int flags, int num_pages)
@@ -104,9 +122,9 @@ int map_pages(void *phys, void *virt, int flags, int num_pages)
     for (int i = 0; i < num_pages; i++, phys = (u8*)phys + PAGE_SIZE,
             virt = (u8*)virt + PAGE_SIZE) {
         // Intentionally shorten the flags to 16 bits to ignore XD bit for tables
-        pdpte_t *pdpt = get_or_alloc_pdpt(pml4, virt, pflags & 0xFFFF);
-        pde_t *pd = get_or_alloc_pd(pdpt, virt, pflags & 0xFFFF);
-        pte_t *pt = get_or_alloc_pt(pd, virt, pflags & 0xFFFF);
+        pte_t *pt = get_or_alloc_pte_tables(pml4, virt, pflags & 0xFFFF);
+        if (!pt)
+            return -ENOMEM;
 
         u32 pt_ndx = get_pt_index(virt);
         if (ENTRY_PRESENT(pt[pt_ndx])) {
@@ -124,9 +142,9 @@ int remap_page(void *phys, void *virt, int flags)
 {
     pml4e_t *pml4 = (pml4e_t*)ENTRY_ADDR(arch_get_pgd());
     unsigned long pflags = x86_to_page_flags(flags);
-    pdpte_t *pdpt = get_or_alloc_pdpt(pml4, virt, pflags & 0xFFFF);
-    pde_t *pd = get_or_alloc_pd(pdpt, virt, pflags & 0xFFFF);
-    pte_t *pt = get_or_alloc_pt(pd, virt, pflags & 0xFFFF);
+    pte_t *pt = get_or_alloc_pte_tables(pml4, virt, pflags & 0xFFFF);
+    if (!pt)
+        return -ENOMEM;
 
     pt[get_pt_index(virt)] = (uintptr_t)phys | pflags;
     __native_flush_tlb_single(virt);
@@ -171,6 +189,8 @@ void fork_copy_vm_area(uintptr_t child_pgd, struct mm_info *parent_mm,
             src_pdpt = ENTRY_PRESENT(src_pml4[pml4_ndx]) ?
                 (pdpte_t*)ENTRY_ADDR(src_pml4[pml4_ndx]) : NULL;
             dst_pdpt = get_or_alloc_pdpt(dst_pml4, virt, flags | PG_WRITE | PG_PRESENT);
+            if (!dst_pdpt)
+                panic("Out of memory allocating page table for fork\n");
         }
         if ((int)pdpt_ndx != cur_pdpt_ndx) {
             cur_pdpt_ndx = pdpt_ndx;
@@ -178,12 +198,16 @@ void fork_copy_vm_area(uintptr_t child_pgd, struct mm_info *parent_mm,
             src_pd = (src_pdpt && ENTRY_PRESENT(src_pdpt[pdpt_ndx])) ?
                 (pde_t*)ENTRY_ADDR(src_pdpt[pdpt_ndx]) : NULL;
             dst_pd = get_or_alloc_pd(dst_pdpt, virt, flags | PG_WRITE | PG_PRESENT);
+            if (!dst_pd)
+                panic("Out of memory allocating page table for fork\n");
         }
         if ((int)pd_ndx != cur_pd_ndx) {
             cur_pd_ndx = pd_ndx;
             src_pt = (src_pd && ENTRY_PRESENT(src_pd[pd_ndx])) ?
                 (pte_t*)ENTRY_ADDR(src_pd[pd_ndx]) : NULL;
             dst_pt = get_or_alloc_pt(dst_pd, virt, flags | PG_WRITE | PG_PRESENT);
+            if (!dst_pt)
+                panic("Out of memory allocating page table for fork\n");
         }
 
         if (!src_pt || !ENTRY_PRESENT(src_pt[pt_ndx]))
@@ -705,8 +729,10 @@ int kernel_pt_init(uintptr_t start, uintptr_t end)
     assert(end == (end & ~0x3fffffffUL));
 
     if (!ENTRY_PRESENT(pml4[pml4_ndx])) {
-        pml4[pml4_ndx] = (pml4e_t)(virt_to_phys(get_zeroed_page()) | PG_WRITE |
-            PG_PRESENT);
+        void *pdpt = get_zeroed_page();
+        if (!pdpt)
+            panic("Out of memory allocating kernel heap PDPT\n");
+        pml4[pml4_ndx] = (pml4e_t)(virt_to_phys(pdpt) | PG_WRITE | PG_PRESENT);
     }
     while (start != end) {
         u32 pdpt_ndx = get_pdpt_index(start);
@@ -714,8 +740,11 @@ int kernel_pt_init(uintptr_t start, uintptr_t end)
         if (ENTRY_PRESENT(pdpt[pdpt_ndx])) {
             kerror("PDPT was already present in kheap area");
         } else {
-            pdpt[pdpt_ndx] = (pdpte_t)(virt_to_phys(get_zeroed_page())
-                | PG_WRITE | PG_GLOBAL | PG_PRESENT);
+            void *pd = get_zeroed_page();
+            if (!pd)
+                panic("Out of memory allocating kernel heap PD\n");
+            pdpt[pdpt_ndx] = (pdpte_t)(virt_to_phys(pd) | PG_WRITE | PG_GLOBAL |
+                PG_PRESENT);
         }
         start += 0x40000000UL;
     }

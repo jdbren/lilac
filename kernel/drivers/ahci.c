@@ -207,6 +207,8 @@ static void port_mem_init(int num_ports)
 
     int npages = PAGE_ROUND_UP(size) / PAGE_SIZE;
     struct page *pg = alloc_pages(npages, 0);
+    if (!pg)
+        panic("Out of memory allocating AHCI memory\n");
     ahci_base = (uintptr_t)get_free_vaddr(npages);
     ahci_phys_base = page_to_phys(pg);
     map_pages((void*)ahci_phys_base, (void*)ahci_base,

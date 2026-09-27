@@ -478,7 +478,8 @@ static void* malloc_large(size_t size)
     size = pages * PAGE_SIZE;
 
     void *block = get_free_pages(pages, 0);
-    assert(block != NULL);
+    if (block == NULL)
+        return NULL;
 #ifdef CONFIG_KMALLOC_STATS
     atomic_fetch_add(&kmalloc_large_pages, pages);
 #endif

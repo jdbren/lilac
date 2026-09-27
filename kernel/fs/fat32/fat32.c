@@ -93,6 +93,8 @@ static int fat_read_FAT(struct fat_disk *fat_disk, struct gendisk *hd)
 
     klog(LOG_INFO, "Allocating %u bytes for FAT\n", buf_sz);
     fat_disk->FAT.FAT_buf = get_zeroed_pages(PAGE_UP_COUNT(buf_sz), 0);
+    if (!fat_disk->FAT.FAT_buf)
+        return -ENOMEM;
 
     int ret = 0;
     for (u32 i = 0; i < FAT_sz; i += 128) {
