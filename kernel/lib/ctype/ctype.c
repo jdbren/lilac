@@ -13,6 +13,16 @@ int tolower(int ch)
     return ch;
 }
 
+int islower(int ch)
+{
+    return ch >= 'a' && ch <= 'z';
+}
+
+int isupper(int ch)
+{
+    return ch >= 'A' && ch <= 'Z';
+}
+
 int isprint(int ch)
 {
     return ch >= 0x20 && ch <= 0x7E;
