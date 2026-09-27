@@ -181,11 +181,151 @@ off_t vfs_lseek(struct file *file, off_t offset, int whence)
     return ret;
 }
 
+static struct dentry * get_parent_dentry(const char *path, struct dentry *start);
+
+static int vfs_rename(const char *oldpath, const char *newpath)
+{
+    char name[NAME_MAX];
+    struct dentry *old_d = vfs_lookup_flags(oldpath, 0);
+    if (IS_ERR(old_d))
+        return PTR_ERR(old_d);
+    if (!old_d->d_inode)
+        return -ENOENT;
+    if (old_d == root_dentry || !old_d->d_parent)
+        return -EBUSY;
+
+    struct dentry *new_parent = get_parent_dentry(newpath, NULL);
+    if (IS_ERR(new_parent))
+        return PTR_ERR(new_parent);
+    if (!new_parent->d_inode)
+        return -ENOENT;
+    if (!S_ISDIR(new_parent->d_inode->i_mode))
+        return -ENOTDIR;
+    int err = get_basename(name, newpath, NAME_MAX);
+    if (err)
+        return err;
+    struct dentry *new_d = lookup_path_from_flags(new_parent, name, 0);
+    if (IS_ERR(new_d))
+        return PTR_ERR(new_d);
+
+    struct inode *old_dir = old_d->d_parent->d_inode;
+    struct inode *new_dir = new_parent->d_inode;
+    struct inode *inode = old_d->d_inode;
+    if (old_dir->i_sb != new_dir->i_sb)
+        return -EXDEV;
+    if (new_d->d_inode == inode)
+        return 0;
+    if (new_d->d_inode) {
+        if (S_ISDIR(inode->i_mode) && !S_ISDIR(new_d->d_inode->i_mode))
+            return -ENOTDIR;
+        if (!S_ISDIR(inode->i_mode) && S_ISDIR(new_d->d_inode->i_mode))
+            return -EISDIR;
+    }
+    // directory can't move inside itself
+    for (struct dentry *d = new_parent; d; d = d->d_parent)
+        if (d == old_d)
+            return -EINVAL;
+    if (!old_dir->i_op->rename)
+        return -EPERM;
+
+    err = old_dir->i_op->rename(old_dir, old_d, new_dir, new_d);
+    if (err)
+        return err;
+
+    dcache_remove(old_d);
+    dcache_remove(new_d);
+    return 0;
+}
+
+SYSCALL_DECL2(rename, const char*, oldpath, const char*, newpath)
+{
+    char *old_buf = get_user_path(oldpath);
+    if (IS_ERR(old_buf))
+        return PTR_ERR(old_buf);
+    char *new_buf = get_user_path(newpath);
+    if (IS_ERR(new_buf)) {
+        kfree(old_buf);
+        return PTR_ERR(new_buf);
+    }
+    long err = vfs_rename(old_buf, new_buf);
+    kfree(old_buf);
+    kfree(new_buf);
+    return err;
+}
+
+long vfs_ftruncate(struct file *f, loff_t length)
+{
+    struct inode *inode = f->f_inode;
+    if (length < 0)
+        return -EINVAL;
+    if (!inode || S_ISDIR(inode->i_mode))
+        return -EISDIR;
+    if (!S_ISREG(inode->i_mode))
+        return -EINVAL;
+    if ((f->f_mode & O_ACCMODE) == O_RDONLY)
+        return -EBADF;
+    if (!inode->i_op || !inode->i_op->truncate)
+        return -EROFS;
+
+    if (length <= inode->i_size)
+        return inode->i_op->truncate(inode, length);
+
+    // Grow by writing zeros so the filesystem allocates and clears the space
+    const size_t chunk = 4096;
+    void *zero = kzmalloc(chunk);
+    if (!zero)
+        return -ENOMEM;
+    long err = 0;
+    for (loff_t pos = inode->i_size; pos < length; ) {
+        size_t n = MIN((loff_t)chunk, length - pos);
+        ssize_t w = vfs_write_at(f, zero, n, pos);
+        if (w <= 0) {
+            err = w < 0 ? w : -EIO;
+            break;
+        }
+        pos += w;
+    }
+    kfree(zero);
+    return err;
+}
+
+SYSCALL_DECL2(ftruncate, int, fd, off_t, length)
+{
+    struct file *file = get_file_handle(fd);
+    if (IS_ERR(file))
+        return PTR_ERR(file);
+    return vfs_ftruncate(file, length);
+}
+
+SYSCALL_DECL2(truncate, const char*, path, off_t, length)
+{
+    char *path_buf = get_user_path(path);
+    if (IS_ERR(path_buf))
+        return PTR_ERR(path_buf);
+    struct file *f = vfs_open(path_buf, O_WRONLY, 0);
+    kfree(path_buf);
+    if (IS_ERR(f))
+        return PTR_ERR(f);
+    long err = vfs_ftruncate(f, length);
+    vfs_close(f);
+    return err;
+}
+
+// Writes go straight to the block device; nothing is cached to flush
+// TODO: cache writes
+SYSCALL_DECL1(fsync, int, fd)
+{
+    struct file *file = get_file_handle(fd);
+    return IS_ERR(file) ? PTR_ERR(file) : 0;
+}
+
 SYSCALL_DECL3(lseek, int, fd, off_t, offset, int, whence)
 {
     struct file *file = get_file_handle(fd);
     if (IS_ERR(file))
         return PTR_ERR(file);
+    if (file->f_inode && S_ISFIFO(file->f_inode->i_mode))
+        return -ESPIPE;
     return vfs_lseek(file, offset, whence);
 }
 
@@ -214,8 +354,10 @@ struct dentry * vfs_lookup(const char *path)
 
 static int create_file_at(struct dentry *new_d, umode_t mode)
 {
-    klog(LOG_DEBUG, "Creating file %s with mode %o\n", new_d->d_name, mode);
+    klog(LOG_DEBUG, "Creating file %s with mode %o\n", new_d->d_name.data, mode);
     struct inode *parent_inode = new_d->d_parent->d_inode;
+    if (!parent_inode->i_op->create)
+        return -EROFS;
     return parent_inode->i_op->create(parent_inode, new_d, mode);
 }
 
@@ -270,7 +412,16 @@ struct file *vfs_open(const char *path, int flags, int mode)
         new_file->f_op = inode->i_fop;
     }
 
-    new_file->f_mode = flags | (flags & ~(O_CREAT|O_EXCL|O_NOCTTY|O_TRUNC));
+    new_file->f_mode = flags & ~(O_CREAT|O_EXCL|O_NOCTTY|O_TRUNC|O_CLOEXEC);
+
+    if ((flags & O_TRUNC) && S_ISREG(inode->i_mode) &&
+            (flags & O_ACCMODE) != O_RDONLY && inode->i_size > 0) {
+        err = vfs_ftruncate(new_file, 0);
+        if (err < 0) {
+            vfs_close(new_file);
+            return ERR_PTR(err);
+        }
+    }
 
     return new_file;
 }
@@ -386,6 +537,9 @@ SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
     if ((file->f_mode & O_ACCMODE) == O_WRONLY)
         return -EBADF;
 
+    if (count == 0)
+        return 0;
+
     kbuf = kmalloc(count);
     if (!kbuf)
         return -ENOMEM;
@@ -432,6 +586,8 @@ ssize_t vfs_write(struct file *file, const void *buf, size_t count)
     }
 
     mutex_lock(&file->f_pos_lock);
+    if ((file->f_mode & O_APPEND) && file->f_inode)
+        file->f_pos = file->f_inode->i_size;
     ssize_t bytes = file->f_op->write(file, buf, count);
     if (bytes > 0)
         file->f_pos += bytes;
@@ -460,6 +616,9 @@ SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
 
     if ((file->f_mode & O_ACCMODE) == O_RDONLY)
         return -EBADF;
+
+    if (count == 0)
+        return 0;
 
     kbuf = kmalloc(count);
     if (!kbuf)
@@ -525,7 +684,7 @@ ssize_t vfs_getdents(struct file *file, struct dirent *dirp, int buf_size)
         return -ENOTDIR;
     }
 #ifdef DEBUG_VFS
-    klog(LOG_DEBUG, "VFS: Reading directory %s\n", file->f_dentry->d_name);
+    klog(LOG_DEBUG, "VFS: Reading directory %s\n", file->f_dentry->d_name.data);
 #endif
     dir_cnt = buf_size / sizeof(struct dirent);
     dir_cnt = file->f_op->readdir(file, dirp, dir_cnt);
@@ -588,18 +747,14 @@ static int vfs_do_mkdir(struct dentry * parent_d, const char *name, umode_t mode
     if (parent_i->i_op->mkdir == NULL)
         return -EPERM;
 
-    struct dentry *new_dentry = alloc_dentry(parent_d, name);
+    // Looks up (and caches) the name in the parent directory
+    struct dentry *new_dentry = lookup_path_from_flags(parent_d, name, 0);
     if (IS_ERR(new_dentry))
         return PTR_ERR(new_dentry);
+    if (new_dentry->d_inode)
+        return -EEXIST;
 
-    int err = parent_i->i_op->mkdir(parent_i, new_dentry, mode);
-    if (err < 0) {
-        destroy_dentry(new_dentry);
-        return err;
-    }
-
-    dcache_add(new_dentry);
-    return 0;
+    return parent_i->i_op->mkdir(parent_i, new_dentry, mode);
 }
 
 int vfs_mkdir(const char *path, umode_t mode)
@@ -712,7 +867,7 @@ int vfs_create(const char *path, umode_t mode)
     struct dentry *new_dentry = alloc_dentry(parent, basename);
     dcache_add(new_dentry);
 #ifdef DEBUG_VFS
-    klog(LOG_DEBUG, "Creating %s\n", new_dentry->d_name);
+    klog(LOG_DEBUG, "Creating %s\n", new_dentry->d_name.data);
 #endif
     return parent_inode->i_op->create(parent_inode, new_dentry, mode);
 }
@@ -724,7 +879,7 @@ SYSCALL_DECL2(create, const char*, path, umode_t, mode)
     path_buf = get_user_path(path);
     if (IS_ERR(path_buf))
         return PTR_ERR(path_buf);
-    err = vfs_create(path, mode);
+    err = vfs_create(path_buf, mode);
     kfree(path_buf);
     return err;
 }
@@ -831,7 +986,10 @@ int vfs_rmdir(const char *path)
     if (!S_ISDIR(dentry->d_inode->i_mode))
         return -ENOTDIR;
 
-    return dir->i_op->rmdir(dir, dentry);
+    int err = dir->i_op->rmdir(dir, dentry);
+    if (!err)
+        dcache_remove(dentry);
+    return err;
 }
 
 SYSCALL_DECL1(rmdir, const char*, path)
@@ -863,7 +1021,10 @@ int vfs_unlink(const char *path)
     if (!dir->i_op->unlink)
         return -EPERM;
 
-    return dir->i_op->unlink(dir, dentry);
+    int err = dir->i_op->unlink(dir, dentry);
+    if (!err)
+        dcache_remove(dentry);
+    return err;
 }
 
 SYSCALL_DECL1(unlink, const char*, path)
