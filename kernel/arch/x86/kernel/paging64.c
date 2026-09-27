@@ -210,7 +210,7 @@ void fork_copy_vm_area(uintptr_t child_pgd, struct mm_info *parent_mm,
 static bool table_is_empty(u64 *table)
 {
     for (int i = 0; i < ENTRIES_PER_TABLE; i++)
-        if (ENTRY_PRESENT(table[i]))
+        if (table[i])
             return false;
     return true;
 }
@@ -341,7 +341,7 @@ static void drop_user_pt_range(pde_t *pde, uintptr_t start, uintptr_t end)
 
     for (; start < end; start += PAGE_SIZE, pte++) {
         pte_t pte_val = *pte;
-        if (ENTRY_PRESENT(pte_val)) {
+        if (ENTRY_PRESENT(pte_val) || (pte_val & PG_PROT_NONE)) {
 #ifdef DEBUG_MM
             mm_dbg_unmap_data_pages_freed++;
 #endif
@@ -461,6 +461,99 @@ void drop_user_page_range(uintptr_t start, size_t size)
         drop_user_pdpt_range(pml4e, start, end);
 }
 
+// Returns the PTE slot for virt, or NULL if a table level is missing
+static pte_t * lookup_user_pte(pml4e_t *pml4, void *virt)
+{
+    pml4e_t pml4e = pml4[get_pml4_index(virt)];
+    if (!ENTRY_PRESENT(pml4e))
+        return NULL;
+    pdpte_t pdpte = ((pdpte_t*)ENTRY_ADDR(pml4e))[get_pdpt_index(virt)];
+    if (!ENTRY_PRESENT(pdpte) || (pdpte & PG_HUGE_PAGE))
+        return NULL;
+    pde_t pde = ((pde_t*)ENTRY_ADDR(pdpte))[get_pd_index(virt)];
+    if (!ENTRY_PRESENT(pde) || (pde & PG_HUGE_PAGE))
+        return NULL;
+    return (pte_t*)ENTRY_ADDR(pde) + get_pt_index(virt);
+}
+
+static u64 * alloc_user_table(u64 *table, u32 ndx)
+{
+    if (!ENTRY_PRESENT(table[ndx])) {
+        void *page = get_zeroed_page();
+        if (!page)
+            return NULL;
+#ifdef DEBUG_MM
+        mm_dbg_page_table_pages_alloc++;
+#endif
+        table[ndx] = virt_to_phys(page) | PG_USER | PG_WRITE | PG_PRESENT;
+    }
+    return (u64*)ENTRY_ADDR(table[ndx]);
+}
+
+static pte_t * alloc_user_pte(pml4e_t *pml4, void *virt)
+{
+    u64 *pdpt = alloc_user_table(pml4, get_pml4_index(virt));
+    if (!pdpt)
+        return NULL;
+    u64 *pd = alloc_user_table(pdpt, get_pdpt_index(virt));
+    if (!pd)
+        return NULL;
+    u64 *pt = alloc_user_table(pd, get_pd_index(virt));
+    if (!pt)
+        return NULL;
+    return (pte_t*)pt + get_pt_index(virt);
+}
+
+// Move the user PTEs in [old_start, old_start + size) to new_start.
+// Returns -ENOMEM with nothing moved if a destination table can't be allocated.
+int move_user_page_range(uintptr_t old_start, uintptr_t new_start, size_t size)
+{
+    pml4e_t *pml4 = (pml4e_t*)ENTRY_ADDR(arch_get_pgd());
+    size_t num_pages = PAGE_ROUND_UP(size) / PAGE_SIZE;
+
+    if (old_start + num_pages * PAGE_SIZE > __USER_MAX_ADDR + 1 ||
+            new_start + num_pages * PAGE_SIZE > __USER_MAX_ADDR + 1)
+        panic("Tried to move kernel addr range: %p -> %p\n",
+            (void*)old_start, (void*)new_start);
+
+    // Allocate every destination table first
+    for (size_t i = 0; i < num_pages; i++) {
+        void *src = (void*)(old_start + i * PAGE_SIZE);
+        void *dst = (void*)(new_start + i * PAGE_SIZE);
+        pte_t *src_pte = lookup_user_pte(pml4, src);
+        if (!src_pte || !*src_pte)
+            continue;
+        if (!alloc_user_pte(pml4, dst)) {
+            // Destination is unmapped, so this only frees the new tables
+            unmap_pages((void*)new_start, num_pages);
+            return -ENOMEM;
+        }
+    }
+
+    for (size_t i = 0; i < num_pages; i++) {
+        void *src = (void*)(old_start + i * PAGE_SIZE);
+        void *dst = (void*)(new_start + i * PAGE_SIZE);
+        pte_t *src_pte = lookup_user_pte(pml4, src);
+        // PROT_NONE entries are not present but still own a page
+        if (!src_pte || !*src_pte)
+            continue;
+
+        pte_t *dst_pte = lookup_user_pte(pml4, dst);
+        if (!dst_pte)
+            panic("move_user_page_range: no table for %p\n", dst);
+        if (*dst_pte)
+            panic("move_user_page_range: destination %p already mapped\n", dst);
+
+        *dst_pte = *src_pte;
+        *src_pte = 0;
+        __native_flush_tlb_single(src);
+        __native_flush_tlb_single(dst);
+    }
+
+    unmap_pages((void*)old_start, num_pages);
+    return 0;
+}
+
 static void update_user_pt_range(pde_t *pde, uintptr_t start,
     uintptr_t end, unsigned long new_flags)
 {
@@ -477,8 +570,9 @@ static void update_user_pt_range(pde_t *pde, uintptr_t start,
     pte_t *pte = pt + get_pt_index(start);
 
     for (; start < end; start += PAGE_SIZE, pte++) {
-        if (ENTRY_PRESENT(*pte)) {
-            *pte = PT_ADDR(*pte) | new_flags;
+        // PROT_NONE entries are not present but still own a page
+        if (ENTRY_PRESENT(*pte) || (*pte & PG_PROT_NONE)) {
+            *pte = PT_ADDR(*pte) | (*pte & PG_DIRTY) | new_flags;
             __native_flush_tlb_single((void*)start);
         }
     }

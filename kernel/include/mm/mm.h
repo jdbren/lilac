@@ -90,7 +90,10 @@ enum fault_return {
 
 int mm_fault(struct vm_desc *vma, uintptr_t addr, unsigned long flags);
 
+int vma_flags_to_user_mem_flags(int flags);
+
 void drop_user_page_range(uintptr_t start, size_t size);
+int move_user_page_range(uintptr_t old_start, uintptr_t new_start, size_t size);
 void update_user_page_range(uintptr_t start, size_t size, int flags);
 int get_and_clear_pte_dirty(void *virt);
 int writeback_vma_range(struct vm_desc *vma, uintptr_t start, uintptr_t end);

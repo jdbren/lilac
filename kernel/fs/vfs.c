@@ -402,6 +402,27 @@ SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
 }
 
 
+ssize_t vfs_write_at(struct file *file, const void *buf, size_t count, unsigned long pos)
+{
+    if (file->f_dentry) {
+        struct inode *inode = file->f_dentry->d_inode;
+        if (S_ISDIR(inode->i_mode))
+            return -EISDIR;
+        if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode))
+            return inode->i_fop->write(file, buf, count);
+    }
+
+    mutex_lock(&file->f_pos_lock);
+    unsigned long old_pos = file->f_pos;
+    file->f_pos = pos;
+    ssize_t bytes = file->f_op->write(file, buf, count);
+    file->f_pos = old_pos;
+    mutex_unlock(&file->f_pos_lock);
+
+    return bytes;
+}
+
+
 ssize_t vfs_write(struct file *file, const void *buf, size_t count)
 {
     if (file->f_dentry) {
@@ -1096,4 +1117,67 @@ SYSCALL_DECL3(writev, int, fd, const struct iovec __user *, iov, int, iovcnt)
             break;
     }
     return total;
+}
+
+// Positional I/O only makes sense on seekable files
+static bool file_is_seekable(struct file *file)
+{
+    if (!file->f_dentry)
+        return false;
+    umode_t mode = file->f_dentry->d_inode->i_mode;
+    return !S_ISCHR(mode) && !S_ISFIFO(mode);
+}
+
+SYSCALL_DECL4(pread64, int, fd, void*, buf, size_t, count, off_t, offset)
+{
+    struct file *file = get_file_handle(fd);
+    if (IS_ERR(file))
+        return PTR_ERR(file);
+    if ((file->f_mode & O_ACCMODE) == O_WRONLY)
+        return -EBADF;
+    if (!file_is_seekable(file))
+        return -ESPIPE;
+    if (offset < 0)
+        return -EINVAL;
+    if (count == 0)
+        return 0;
+
+    unsigned char *kbuf = kmalloc(count);
+    if (!kbuf)
+        return -ENOMEM;
+
+    ssize_t bytes = vfs_read_at(file, kbuf, count, offset);
+    if (bytes > 0 && copy_to_user(buf, kbuf, bytes))
+        bytes = -EFAULT;
+
+    kfree(kbuf);
+    return bytes;
+}
+
+SYSCALL_DECL4(pwrite64, int, fd, const void*, buf, size_t, count, off_t, offset)
+{
+    struct file *file = get_file_handle(fd);
+    if (IS_ERR(file))
+        return PTR_ERR(file);
+    if ((file->f_mode & O_ACCMODE) == O_RDONLY)
+        return -EBADF;
+    if (!file_is_seekable(file))
+        return -ESPIPE;
+    if (offset < 0)
+        return -EINVAL;
+    if (count == 0)
+        return 0;
+
+    unsigned char *kbuf = kmalloc(count);
+    if (!kbuf)
+        return -ENOMEM;
+
+    if (copy_from_user(kbuf, buf, count)) {
+        kfree(kbuf);
+        return -EFAULT;
+    }
+
+    ssize_t bytes = vfs_write_at(file, kbuf, count, offset);
+    kfree(kbuf);
+    return bytes;
 }

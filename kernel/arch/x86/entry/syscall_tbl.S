@@ -93,6 +93,8 @@ syscall_table:
 	sc_tbl_entry futex		# 70
 	sc_tbl_entry lstat		# 71
 	sc_tbl_entry msync		# 72
+	sc_tbl_entry pread64	# 73
+	sc_tbl_entry pwrite64	# 74
 /*
 	sc_tbl_entry chmod		# 30
 	sc_tbl_entry chown		# 31

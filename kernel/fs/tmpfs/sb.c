@@ -2,6 +2,9 @@
 #include <lilac/log.h>
 #include <lilac/err.h>
 #include <lilac/timer.h>
+#include <lilac/libc.h>
+#include <lilac/sync.h>
+#include <fs/tmpfs.h>
 #include "tmpfs_internal.h"
 
 #include <mm/kmalloc.h>
@@ -80,3 +83,77 @@ const struct super_operations tmpfs_sops = {
     .alloc_inode = tmpfs_alloc_inode,
     .destroy_inode = tmpfs_destroy_inode
 };
+
+// Internal tmpfs instance backing files that have no path
+static struct super_block *anon_sb;
+static spinlock_t anon_sb_lock = SPINLOCK_INIT;
+
+static struct super_block * get_anon_sb(void)
+{
+    struct super_block *sb;
+
+    acquire_lock(&anon_sb_lock);
+    if (!anon_sb) {
+        sb = alloc_sb(NULL);
+        if (IS_ERR(sb))
+            goto out;
+        struct dentry *root = tmpfs_init(NULL, sb);
+        if (IS_ERR(root)) {
+            destroy_sb(sb);
+            sb = ERR_CAST(root);
+            goto out;
+        }
+        anon_sb = sb;
+    }
+    sb = anon_sb;
+out:
+    release_lock(&anon_sb_lock);
+    return sb;
+}
+
+// Create an unlinked, read-write tmpfs file
+struct file * tmpfs_anon_file(const char *name)
+{
+    struct super_block *sb = get_anon_sb();
+    if (IS_ERR(sb))
+        return ERR_CAST(sb);
+
+    struct tmpfs_file *file_info = kzmalloc(sizeof(*file_info));
+    if (!file_info)
+        return ERR_PTR(-ENOMEM);
+    file_info->data = kmalloc(4096);
+    if (!file_info->data) {
+        kfree(file_info);
+        return ERR_PTR(-ENOMEM);
+    }
+
+    struct inode *inode = tmpfs_alloc_inode(sb);
+    if (IS_ERR(inode)) {
+        kfree(file_info->data);
+        kfree(file_info);
+        return ERR_CAST(inode);
+    }
+    inode->i_private = file_info;
+    inode->i_mode = S_IFREG | S_IREAD | S_IWRITE;
+    inode->i_size = 0;
+    inode->i_nlink = 0;
+
+    char dname[NAME_MAX];
+    snprintf(dname, sizeof(dname), "memfd:%s", name);
+    // Not added to the root directory's entries, so lookups never find it
+    struct dentry *dentry = alloc_dentry(sb->s_root, dname);
+    if (IS_ERR(dentry)) {
+        iput(inode);
+        return ERR_CAST(dentry);
+    }
+    dentry->d_inode = inode;
+
+    struct file *file = alloc_file(dentry);
+    dput(dentry);
+    if (!file)
+        return ERR_PTR(-ENOMEM);
+    file->f_op = &tmpfs_fops;
+    file->f_mode = O_RDWR;
+
+    return file;
+}

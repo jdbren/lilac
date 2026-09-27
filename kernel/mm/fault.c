@@ -31,23 +31,14 @@ static bool check_access(struct vm_desc *vma, unsigned int flags)
     return true;
 }
 
-static inline void * fault_page_alloc(void)
-{
-    void *page = get_free_page();
-    if (!page)
-        panic("Out of memory allocating page for page fault\n");
-    return page;
-}
-
-// TODO flags
-static int do_file_fault(struct vm_desc *vma, uintptr_t pgaddr, unsigned long flags)
+static int do_file_fault(struct vm_desc *vma, uintptr_t pgaddr)
 {
     struct file *f = vma->vm_file;
     uintptr_t seg_vaddr  = vma->seg_vaddr;   /* exact ELF p_vaddr */
     size_t    seg_offset = vma->seg_offset;  /* exact ELF p_offset */
     size_t    fsize      = vma->vm_fsize;    /* number of bytes in file for this segment */
 
-    u8 *buf = fault_page_alloc();
+    u8 *buf = get_free_page();
     if (!buf)
         return FAULT_OOM;
 #ifdef DEBUG_MM
@@ -98,39 +89,25 @@ static int do_file_fault(struct vm_desc *vma, uintptr_t pgaddr, unsigned long fl
         memset(buf + filled, 0, PAGE_SIZE - filled);
 
 map_page_out:
-    {
-        int mem_pflags = MEM_PF_USER;
-        if (vma->vm_flags & VM_READ)
-            mem_pflags |= MEM_PF_READ;
-        if (vma->vm_flags & VM_WRITE)
-            mem_pflags |= MEM_PF_WRITE;
-        if (!(vma->vm_flags & VM_EXEC))
-            mem_pflags |= MEM_PF_NO_EXEC;
-
-        acquire_lock(&vma->mm->page_table_lock);
-        map_page((void *)virt_to_phys(buf), (void *)pgaddr, mem_pflags);
-        release_lock(&vma->mm->page_table_lock);
-    }
+    acquire_lock(&vma->mm->page_table_lock);
+    map_page((void *)virt_to_phys(buf), (void *)pgaddr,
+        vma_flags_to_user_mem_flags(vma->vm_flags));
+    release_lock(&vma->mm->page_table_lock);
 
     return FAULT_SUCCESS;
 }
 
-// TODO flags
-static int do_anon_fault(struct vm_desc *vma, uintptr_t pgaddr, unsigned long flags)
+static int do_anon_fault(struct vm_desc *vma, uintptr_t pgaddr)
 {
     void *page = get_zeroed_pages(1, ALLOC_NORMAL);
+    if (!page)
+        return FAULT_OOM;
 #ifdef DEBUG_MM
     mm_dbg_fault_anon_pages_alloc++;
 #endif
-    int mem_pflags = MEM_PF_USER;
-    if (vma->vm_flags & VM_READ)
-        mem_pflags |= MEM_PF_READ;
-    if (vma->vm_flags & VM_WRITE)
-        mem_pflags |= MEM_PF_WRITE;
-    if (!(vma->vm_flags & VM_EXEC))
-        mem_pflags |= MEM_PF_NO_EXEC;
     acquire_lock(&vma->mm->page_table_lock);
-    map_page((void*)virt_to_phys(page), (void*)pgaddr, mem_pflags);
+    map_page((void*)virt_to_phys(page), (void*)pgaddr,
+        vma_flags_to_user_mem_flags(vma->vm_flags));
     release_lock(&vma->mm->page_table_lock);
     return FAULT_SUCCESS;
 }
@@ -147,11 +124,7 @@ static int do_cow_fault(struct vm_desc *vma, uintptr_t pgaddr)
         return FAULT_OOM;
     }
 
-    int mem_pflags = MEM_PF_USER | MEM_PF_WRITE;
-    if (vma->vm_flags & VM_READ)
-        mem_pflags |= MEM_PF_READ;
-    if (!(vma->vm_flags & VM_EXEC))
-        mem_pflags |= MEM_PF_NO_EXEC;
+    int mem_pflags = vma_flags_to_user_mem_flags(vma->vm_flags) | MEM_PF_WRITE;
 
     struct page *old_page = phys_to_page(old_phys);
     if (old_page->refcount == 1) {
@@ -161,7 +134,11 @@ static int do_cow_fault(struct vm_desc *vma, uintptr_t pgaddr)
         return FAULT_SUCCESS;
     }
 
-    void *new_page = fault_page_alloc();
+    void *new_page = get_free_page();
+    if (!new_page) {
+        unlock_page_table(mm);
+        return FAULT_OOM;
+    }
     memcpy(new_page, phys_to_virt(old_phys), PAGE_SIZE);
     remap_page((void*)virt_to_phys(new_page), (void*)pgaddr, mem_pflags);
     unlock_page_table(mm);
@@ -185,7 +162,7 @@ int mm_fault(struct vm_desc *vma, uintptr_t addr, unsigned long flags)
     }
 
     if (vma->vm_file)
-        return do_file_fault(vma, page_start, flags);
+        return do_file_fault(vma, page_start);
     else
-        return do_anon_fault(vma, page_start, flags);
+        return do_anon_fault(vma, page_start);
 }

@@ -9,6 +9,9 @@
 #include <lilac/fs.h>
 #include <lilac/libc.h>
 #include <lilac/sync.h>
+#include <lilac/uaccess.h>
+#include <lilac/fdtable.h>
+#include <fs/tmpfs.h>
 #include <mm/kmm.h>
 #include <mm/page.h>
 #include <mm/tlb.h>
@@ -51,7 +54,7 @@ static int convert_mmap_flags(int prot, int flags)
     return mflags;
 }
 
-static int vma_flags_to_user_mem_flags(int flags)
+int vma_flags_to_user_mem_flags(int flags)
 {
     int pt_flags = MEM_PF_USER;
     if (flags & VM_READ) pt_flags |= MEM_PF_READ;
@@ -175,65 +178,43 @@ static struct vm_desc * create_brk_seg(struct mm_info *mm)
     return vma_list;
 }
 
-// Returns start address of a free gap after vma_prev that fits length
-static uintptr_t find_gap_after(struct vm_desc *vma_prev,
-                                uintptr_t min_addr,
-                                size_t length)
+// Find the lowest free range of length bytes at or after search_addr.
+// Returns 0 if no gap fits.
+static uintptr_t find_free_area(struct mm_info *mm, uintptr_t search_addr, size_t length)
 {
-    uintptr_t start = vma_prev ?
-        PAGE_ROUND_UP(vma_prev->end) :
-        PAGE_ROUND_UP(min_addr);
+    uintptr_t start = PAGE_ROUND_UP(search_addr);
 
-    uintptr_t end = start + length;
-    if (end < start) // overflow
+    for (struct vm_desc *vma = mm->mmap; vma; vma = vma->vm_next) {
+        if (vma->end <= start)
+            continue;
+        if (start + length <= vma->start && start + length >= start)
+            break;
+        start = PAGE_ROUND_UP(vma->end);
+    }
+
+    if (start + length < start || start + length > __USER_MAX_ADDR)
         return 0;
-
-    if (!vma_prev || !vma_prev->vm_next)
-        return start;
-
-    if (end <= vma_prev->vm_next->start)
-        return start;
-
-    return 0;
+    return start;
 }
 
 // Create a new VMA at or after search_addr (for MAP_ANON)
 static struct vm_desc * vma_create_new_after(struct mm_info *mm,
     uintptr_t search_addr, size_t length, int flags)
 {
-    struct vm_desc *iter = find_vma(mm, search_addr);
-    struct vm_desc *prev = NULL;
+    uintptr_t start = find_free_area(mm, search_addr, length);
+    if (start == 0)
+        return ERR_PTR(-ENOMEM);
 
-    // If we found a VMA containing search_addr, start after it
-    if (iter) {
-        prev = iter;
-        search_addr = PAGE_ROUND_UP(iter->end);
-    }
+    struct vm_desc *vma = kzmalloc(sizeof(*vma));
+    if (!vma)
+        return ERR_PTR(-ENOMEM);
 
-    for (;;) {
-        uintptr_t start = find_gap_after(prev, search_addr, length);
-        if (start != 0) {
-            struct vm_desc *vma = kzmalloc(sizeof(*vma));
-            if (!vma)
-                goto error;
+    vma->mm = mm;
+    vma->start = start;
+    vma->end = start + length;
+    vma->vm_flags = flags;
 
-            vma->mm = mm;
-            vma->start = start;
-            vma->end = start + length;
-            vma->vm_flags = flags;
-
-            return vma;
-        }
-
-        if (!prev || !prev->vm_next)
-            break;
-
-        prev = prev->vm_next;
-        search_addr = PAGE_ROUND_UP(prev->end);
-    }
-
-error:
-    return ERR_PTR(-ENOMEM);
+    return vma;
 }
 
 
@@ -320,8 +301,8 @@ int writeback_vma_range(struct vm_desc *vma, uintptr_t start, uintptr_t end)
         if (!phys)
             continue;
 
-        vfs_lseek(vma->vm_file, vma->seg_offset + off_in_seg, 0);
-        vfs_write(vma->vm_file, phys_to_virt(phys), bytes);
+        vfs_write_at(vma->vm_file, phys_to_virt(phys), bytes,
+            vma->seg_offset + off_in_seg);
     }
     unlock_page_table(vma->mm);
     return 0;
@@ -548,11 +529,163 @@ SYSCALL_DECL2(munmap, void*, addr, size_t, length)
     return ret;
 }
 
+// After growing a file VMA, extend the file-backed part if it was previously
+// clamped by the mapping size rather than by EOF.
+static void vma_grow_fsize(struct vm_desc *vma, uintptr_t old_end)
+{
+    if (!vma->vm_file || (vma->vm_flags & VM_IO))
+        return;
+    if (vma->vm_fsize < old_end - vma->seg_vaddr)
+        return;
+
+    struct inode *inode = vma->vm_file->f_inode;
+    loff_t fsize;
+    acquire_lock(&inode->i_lock);
+    fsize = inode->i_size;
+    release_lock(&inode->i_lock);
+
+    vma->vm_fsize = (vma->seg_offset >= (unsigned long)fsize) ? 0
+        : MIN((unsigned long)fsize - vma->seg_offset, vma->end - vma->seg_vaddr);
+}
+
+static long do_mremap(struct mm_info *mm, uintptr_t old_addr, size_t old_len,
+    size_t new_len, int flags, uintptr_t new_addr)
+{
+    uintptr_t old_end = old_addr + old_len;
+    uintptr_t dest;
+    long err;
+
+    struct vm_desc *vma = find_vma(mm, old_addr);
+    if (!vma || vma->end < old_end)
+        return -EFAULT;
+
+    if ((flags & MREMAP_FIXED) &&
+            new_addr < old_end && old_addr < new_addr + new_len)
+        return -EINVAL;
+
+    if (new_len < old_len) {
+        err = mmap_unmap_range(mm, old_addr + new_len, old_end);
+        if (err < 0)
+            return err;
+        old_len = new_len;
+        old_end = old_addr + old_len;
+        vma = find_vma(mm, old_addr);
+        if (!vma)
+            return -EFAULT;
+    }
+
+    if (!(flags & MREMAP_FIXED)) {
+        if (new_len == old_len)
+            return old_addr;
+
+        // Try to grow in place
+        if (old_end == vma->end && !(vma->vm_flags & VM_IO) &&
+                (!vma->vm_next || vma->vm_next->start >= old_addr + new_len) &&
+                old_addr + new_len <= __USER_MAX_ADDR) {
+            vma->end = old_addr + new_len;
+            mm->total_vm += new_len - old_len;
+            vma_grow_fsize(vma, old_end);
+            return old_addr;
+        }
+
+        if (!(flags & MREMAP_MAYMOVE))
+            return -ENOMEM;
+    }
+
+    if ((vma->vm_flags & VM_IO) && new_len > old_len)
+        return -EINVAL;
+
+    if (flags & MREMAP_FIXED) {
+        dest = new_addr;
+        err = mmap_unmap_range(mm, dest, dest + new_len);
+        if (err < 0)
+            return err;
+        // The unmap may have split the VMA containing the old range
+        vma = find_vma(mm, old_addr);
+        if (!vma)
+            return -EFAULT;
+    } else {
+        dest = find_free_area(mm, __USER_MMAP_START, new_len);
+        if (dest == 0)
+            return -ENOMEM;
+    }
+
+    // Isolate [old_addr, old_end) into its own VMA
+    if (vma->start < old_addr) {
+        err = vma_split(vma, old_addr, old_addr);
+        if (err < 0)
+            return err;
+        vma = vma->vm_next;
+    }
+    if (vma->end > old_end) {
+        err = vma_split(vma, old_end, old_end);
+        if (err < 0)
+            return err;
+    }
+
+    vma_list_remove(vma, &mm->mmap);
+
+    struct tlb_inval tlb = {
+        .mm = mm,
+        .start = old_addr,
+        .end = old_end,
+        .full = false,
+    };
+    lock_page_table(mm);
+    err = move_user_page_range(old_addr, dest, old_len);
+    if (err < 0) {
+        unlock_page_table(mm);
+        vma_list_insert(vma, &mm->mmap);
+        return err;
+    }
+    tlb_shootdown(&tlb, current);
+    unlock_page_table(mm);
+
+    // The file reference, if any, moves with the VMA
+    vma->seg_vaddr = vma->seg_vaddr - old_addr + dest;
+    vma->start = dest;
+    vma->end = dest + new_len;
+    vma_list_insert(vma, &mm->mmap);
+    if (new_len > old_len)
+        vma_grow_fsize(vma, dest + old_len);
+
+    return dest;
+}
+
 SYSCALL_DECL5(mremap, void*, old_addr, size_t, old_length, size_t, new_length,
     int, flags, void*, new_addr)
 {
-    // TODO
-    return -ENOSYS;
+    klog(LOG_DEBUG, "mremap (old_addr: %p, old_length: %lu, new_length: %lu, "
+        "flags: 0x%x, new_addr: %p)\n", old_addr, old_length, new_length,
+        flags, new_addr);
+
+    uintptr_t old = (uintptr_t)old_addr;
+    uintptr_t new = (uintptr_t)new_addr;
+
+    if (flags & ~(MREMAP_MAYMOVE | MREMAP_FIXED))
+        return -EINVAL; // MREMAP_DONTUNMAP is unsupported
+    if ((flags & MREMAP_FIXED) && !(flags & MREMAP_MAYMOVE))
+        return -EINVAL;
+    if (old == 0 || old % PAGE_SIZE || old_length == 0 || new_length == 0)
+        return -EINVAL;
+
+    size_t old_len = PAGE_ROUND_UP(old_length);
+    size_t new_len = PAGE_ROUND_UP(new_length);
+    if (old_len < old_length || new_len < new_length)
+        return -EINVAL;
+    if (old + old_len < old || old + old_len > __USER_MAX_ADDR)
+        return -EINVAL;
+    if (flags & MREMAP_FIXED) {
+        if (new == 0 || new % PAGE_SIZE ||
+                new + new_len < new || new + new_len > __USER_MAX_ADDR)
+            return -EINVAL;
+    }
+
+    struct mm_info *mm = current->mm;
+    mmap_write_lock(mm);
+    long ret = do_mremap(mm, old, old_len, new_len, flags, new);
+    mmap_write_unlock(mm);
+    return ret;
 }
 
 int brk(void *addr)
@@ -659,18 +792,35 @@ SYSCALL_DECL1(sbrk, intptr_t, increment)
     return (uintptr_t)_brk;
 }
 
-// TODO: flimsy HACK, not POSIX
-SYSCALL_DECL2(memfd_create, const char *, name, __unused unsigned int, flags)
+#define MFD_NAME_MAX 249
+
+SYSCALL_DECL2(memfd_create, const char *, name, unsigned int, flags)
 {
-    klog(LOG_WARN, "memfd_create is not fully implemented, using a temporary"
-        "file as a placeholder\n");
-    static int n = 0;
-    char buf[64];
-    while (*name && *name == '/')
-        name++;
-    snprintf(buf, 64, "/tmp/%s/%d", name, n);
-    struct file *f = vfs_open(buf, O_CREAT, S_IREAD|S_IWRITE);
-    return get_next_fd(current->files, f);
+    char kname[MFD_NAME_MAX + 1];
+    long fd;
+
+    if (flags & ~(MFD_CLOEXEC | MFD_ALLOW_SEALING))
+        return -EINVAL; // no hugetlb
+
+    int len = strncpy_from_user(kname, name, sizeof(kname));
+    if (len < 0)
+        return len;
+    if (len == 0 || kname[len - 1] != '\0')
+        return -EINVAL;
+
+    struct file *f = tmpfs_anon_file(kname);
+    if (IS_ERR(f))
+        return PTR_ERR(f);
+
+    fd = get_next_fd(current->files, f);
+    if (fd < 0) {
+        fput(f);
+        return fd;
+    }
+    if (flags & MFD_CLOEXEC)
+        set_cloexec(current->files, fd);
+
+    return fd;
 }
 
 static int mm_update_region(struct vm_desc *vma, uintptr_t pgaddr,
@@ -706,11 +856,20 @@ static int mm_update_region(struct vm_desc *vma, uintptr_t pgaddr,
         vma->vm_flags = (vma->vm_flags & ~VM_PROT_MASK) | prot_flags;
     }
 
+    struct mm_info *mm = vma->mm;
     int mem_flags = vma_flags_to_user_mem_flags(prot_flags);
 
-    acquire_lock(&vma->mm->page_table_lock);
-    update_user_page_range(pgaddr, end - pgaddr, mem_flags);
-    release_lock(&vma->mm->page_table_lock);
+    // Private pages may still be shared after fork, so leave them read-only
+    // and let the first write go through do_cow_fault
+    acquire_lock(&mm->page_table_lock);
+    for (vma = find_vma(mm, pgaddr); vma && vma->start < end; vma = vma->vm_next) {
+        int flags = mem_flags;
+        if ((flags & MEM_PF_WRITE) && !(vma->vm_flags & (VM_SHARED | VM_IO)))
+            flags = (flags & ~MEM_PF_WRITE) | MEM_PF_READ;
+        uintptr_t s = MAX(vma->start, pgaddr);
+        update_user_page_range(s, MIN(vma->end, end) - s, flags);
+    }
+    release_lock(&mm->page_table_lock);
 
     return 0;
 }

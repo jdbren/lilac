@@ -89,6 +89,11 @@ static int user_page_fault(long error, uintptr_t addr)
     } else if (fault_ret == FAULT_FILE_ERROR) {
         do_raise(current, SIGBUS);
         err = -1;
+    } else if (fault_ret == FAULT_OOM) {
+        klog(LOG_WARN, "Out of memory handling fault at %lx, killing pid %d\n",
+            addr, current->pid);
+        do_raise(current, SIGKILL);
+        err = -1;
     }
 
 out:
