@@ -979,12 +979,12 @@ int vfs_rmdir(const char *path)
         return PTR_ERR(dentry);
 
     struct inode *dir = dentry->d_parent->d_inode;
-    if (dir->i_op->rmdir == NULL)
-        return -EPERM;
     if (!dentry->d_inode)
         return -ENOENT;
     if (!S_ISDIR(dentry->d_inode->i_mode))
         return -ENOTDIR;
+    if (dir->i_op->rmdir == NULL)
+        return -EPERM;
 
     int err = dir->i_op->rmdir(dir, dentry);
     if (!err)

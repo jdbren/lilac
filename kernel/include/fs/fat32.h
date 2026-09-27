@@ -22,5 +22,9 @@ ssize_t fat32_read(struct file *file, void *file_buf, size_t count);
 ssize_t fat32_write(struct file *file, const void *file_buf, size_t count);
 int fat32_readdir(struct file *file, struct dirent *dirp, unsigned int count);
 int fat32_mkdir(struct inode *dir, struct dentry *new_dentry, umode_t mode);
+int fat32_unlink(struct inode *dir, struct dentry *victim);
+int fat32_rmdir(struct inode *dir, struct dentry *victim);
+int fat32_rename(struct inode *old_dir, struct dentry *old_d,
+    struct inode *new_dir, struct dentry *new_d);
 
 #endif

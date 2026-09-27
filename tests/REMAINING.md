@@ -34,6 +34,10 @@
       rescheduling, so a stopped task ran until its next kernel entry; it now loops and
       switches out first. SIGKILL now wakes a stopped task so it can die (it used to hang
       until SIGCONT).
+- [x] fat32 unlink/rmdir/rename and LFN creation (fs/fat32/namei.c), and vfs_rmdir now checks
+      ENOENT/ENOTDIR before EPERM. An unlinked file's clusters are freed on its last close.
+      Covers fs.fat32.{mkdir_rmdir, rmdir_*, unlink_*, rename_*, readdir_lists_entries,
+      long_filename, filename_case_and_dots}
 
 ### Bugs, deferred (need a page cache or sharing mechanism)
 - [ ] mem.memfd_write_read_mmap: there's no page cache, so MAP_SHARED file mappings are private
@@ -74,15 +78,6 @@ Found while fixing the above:
       uses the old frame layout.
 
 ### Missing features, deferred
-- [ ] fat32 `unlink`, `rmdir`, `rename` inode ops. There's also a small VFS bug: the VFS returns
-      EPERM for a missing op before it checks ENOENT or ENOTDIR. Covers
-      fs.fat32.{mkdir_rmdir, rmdir_nonempty, rmdir_on_file_enotdir, unlink_file,
-      unlink_open_file_readable, unlink_then_recreate, rename_file, rename_overwrites,
-      rename_across_dirs}
-- [ ] fat32 LFN entry creation on create/mkdir. Only 8.3 names are written, so mixed case, long
-      names, spaces, multiple dots and leading dots are lost. Covers
-      fs.fat32.{readdir_lists_entries ("Delta" → "DELTA"), long_filename,
-      filename_case_and_dots}
 - [ ] ext2 write support: fs.ext2_write_support (skipped in the test for now)
 - [ ] poll/ppoll syscall: pipe.poll_readable
 - [ ] setitimer/getitimer (ITIMER_REAL): signal.setitimer_real. alarm() already uses a per-task
