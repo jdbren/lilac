@@ -58,6 +58,7 @@ void start_kernel(void)
     sched_init();
     fb_init();
     kmsg_init();
+    mem_devices_init();
     kbd_init();
     tty_init();
 
