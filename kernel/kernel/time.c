@@ -312,54 +312,65 @@ void usleep(u32 micros)
     }
 }
 
-static long nanosleep_restart(struct restart_block *rb);
+#define TIMER_ABSTIME 1
 
-// Sleep to monotonic deadline
-static long nanosleep_until(ktime_t deadline, struct timespec __user *rem)
+static long do_nanosleep(int clk, int flags, const struct timespec *req,
+                         struct timespec *rem)
 {
-    struct timespec krem;
+    struct timespec kreq, krem;
+    if (copy_from_user(&kreq, req, sizeof(struct timespec)))
+        return -EFAULT;
+    if (kreq.tv_sec < 0 || kreq.tv_nsec < 0 || kreq.tv_nsec >= NS_PER_SEC)
+        return -EINVAL;
+
+    ktime_t now = ktime_get();
+    ktime_t req_ns = timespec_to_ktime(kreq);
+
+    switch (clk) {
+    case CLOCK_REALTIME:
+    case CLOCK_REALTIME_COARSE:
+        if (flags & TIMER_ABSTIME)
+            req_ns -= boot_unix_time * NS_PER_SEC;
+        break;
+    case CLOCK_MONOTONIC:
+    case CLOCK_MONOTONIC_RAW:
+    case CLOCK_MONOTONIC_COARSE:
+    case CLOCK_BOOTTIME:
+        break;
+    default:
+        return -EINVAL;
+    }
+
+    ktime_t deadline = (flags & TIMER_ABSTIME) ? req_ns : ktime_add_ns(now, req_ns);
+    if (deadline <= now)
+        return 0;
 
     sleep_until(deadline);
-    if (!task_interrupted_ack())
-        return 0;
 
-    if (rem) {
-        ktime_t left = deadline - ktime_get();
-        if (left < 0)
-            left = 0;
-        krem.tv_sec = left / NS_PER_SEC;
-        krem.tv_nsec = left % NS_PER_SEC;
-        if (copy_to_user(rem, &krem, sizeof(struct timespec)))
-            return -EFAULT;
+    if (task_interrupted_ack()) {
+        if (rem && !(flags & TIMER_ABSTIME)) {
+            ktime_t left = deadline - ktime_get();
+            if (left < 0)
+                left = 0;
+            krem.tv_sec = left / NS_PER_SEC;
+            krem.tv_nsec = left % NS_PER_SEC;
+            if (copy_to_user(rem, &krem, sizeof(struct timespec)))
+                return -EFAULT;
+        }
+        return -EINTR;
     }
-    current->restart_block = (struct restart_block){
-        .fn = nanosleep_restart,
-        .deadline = deadline,
-        .rem = rem,
-    };
-    return -ERESTART_RESTARTBLOCK;
-}
-
-static long nanosleep_restart(struct restart_block *rb)
-{
-    if (rb->deadline <= ktime_get())
-        return 0;
-    return nanosleep_until(rb->deadline, rb->rem);
+    return 0;
 }
 
 SYSCALL_DECL2(nanosleep, const struct timespec*, duration, struct timespec*, rem)
 {
-    struct timespec kduration;
-    if (copy_from_user(&kduration, duration, sizeof(struct timespec)))
-        return -EFAULT;
-    if (kduration.tv_sec < 0 || kduration.tv_nsec < 0 || kduration.tv_nsec >= NS_PER_SEC)
-        return -EINVAL;
+    return do_nanosleep(CLOCK_MONOTONIC, 0, duration, rem);
+}
 
-    ktime_t now = ktime_get();
-    ktime_t deadline = ktime_add_ns(now, timespec_to_ktime(kduration));
-    if (deadline <= now)
-        return 0;
-    return nanosleep_until(deadline, rem);
+SYSCALL_DECL4(clock_nanosleep, int, clk, int, flags,
+              const struct timespec*, req, struct timespec*, rem)
+{
+    return do_nanosleep(clk, flags, req, rem);
 }
 
 // Cancel a dead task's pending events
@@ -389,6 +400,13 @@ void timer_ev_task_exit(struct task *p)
     release_lock_irqrestore(&timer_lock, flags);
 }
 
+#define ITIMER_REAL 0
+
+struct itimerval {
+    struct timeval it_interval;
+    struct timeval it_value;
+};
+
 static void itimer_real_fn(struct timer_event *ev)
 {
     struct task *p = ev->p;
@@ -414,11 +432,13 @@ void init_itimer_real(struct task *p)
 }
 
 // Disarm p's ITIMER_REAL and return the time it had left (0 if it was unarmed)
-static ktime_t itimer_real_cancel(struct task *p)
+static ktime_t itimer_real_cancel(struct task *p, ktime_t *old_interval)
 {
     struct timer_event *ev = &p->itimer_real.ev;
     ktime_t left = 0;
 
+    if (old_interval)
+        *old_interval = READ_ONCE(p->itimer_real.interval);
     WRITE_ONCE(p->itimer_real.interval, 0);
     if (timer_ev_dequeue(ev)) {
         left = ev->expires - ktime_get();
@@ -439,13 +459,82 @@ static void itimer_real_arm(struct task *p, ktime_t value, ktime_t interval)
     timer_ev_enqueue(&p->itimer_real.ev, p);
 }
 
+static inline ktime_t timeval_to_ns(const struct timeval *tv)
+{
+    return (ktime_t)tv->tv_sec * NS_PER_SEC + (ktime_t)tv->tv_usec * NS_PER_US;
+}
+
+static inline struct timeval ns_to_timeval(ktime_t ns)
+{
+    // Round up so an armed timer never reads back as 0
+    ns += NS_PER_US - 1;
+    return (struct timeval) {
+        .tv_sec = ns / NS_PER_SEC,
+        .tv_usec = (ns % NS_PER_SEC) / NS_PER_US,
+    };
+}
+
+static bool timeval_valid(const struct timeval *tv)
+{
+    return tv->tv_sec >= 0 && tv->tv_usec >= 0 && tv->tv_usec < 1000000;
+}
+
+SYSCALL_DECL3(setitimer, int, which, const struct itimerval*, new,
+              struct itimerval*, old)
+{
+    struct itimerval knew = {0}, kold;
+    ktime_t old_interval;
+
+    if (which != ITIMER_REAL)
+        return -EINVAL;
+    if (new) {
+        if (copy_from_user(&knew, new, sizeof(knew)))
+            return -EFAULT;
+        if (!timeval_valid(&knew.it_value) || !timeval_valid(&knew.it_interval))
+            return -EINVAL;
+    }
+
+    struct task *p = current;
+    ktime_t left = itimer_real_cancel(p, &old_interval);
+    itimer_real_arm(p, timeval_to_ns(&knew.it_value),
+                    timeval_to_ns(&knew.it_interval));
+
+    if (old) {
+        kold.it_value = left ? ns_to_timeval(left) : (struct timeval){0};
+        kold.it_interval = ns_to_timeval(old_interval);
+        if (copy_to_user(old, &kold, sizeof(kold)))
+            return -EFAULT;
+    }
+    return 0;
+}
+
+SYSCALL_DECL2(getitimer, int, which, struct itimerval*, cur)
+{
+    struct itimerval kcur = {0};
+    struct task *p = current;
+    unsigned long flags;
+
+    if (which != ITIMER_REAL)
+        return -EINVAL;
+
+    acquire_lock_irqsave(&timer_lock, &flags);
+    if (timer_ev_queued(&p->itimer_real.ev)) {
+        ktime_t left = p->itimer_real.ev.expires - ktime_get();
+        kcur.it_value = ns_to_timeval(left > 0 ? left : 1);
+    }
+    kcur.it_interval = ns_to_timeval(p->itimer_real.interval);
+    release_lock_irqrestore(&timer_lock, flags);
+
+    return copy_to_user(cur, &kcur, sizeof(kcur)) ? -EFAULT : 0;
+}
+
 SYSCALL_DECL1(alarm, unsigned int, seconds)
 {
     struct task *p = current;
 
     klog(LOG_DEBUG, "Process %d set alarm for %u seconds\n", p->pid, seconds);
 
-    ktime_t left = itimer_real_cancel(p);
+    ktime_t left = itimer_real_cancel(p, NULL);
     itimer_real_arm(p, (ktime_t)seconds * NS_PER_SEC, 0);
 
     return (left + NS_PER_SEC - 1) / NS_PER_SEC;

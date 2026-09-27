@@ -70,6 +70,7 @@ kernel/panic.o \
 kernel/pipe.o \
 kernel/process.o \
 kernel/reboot.o \
+kernel/resource.o \
 kernel/rwlock.o \
 kernel/rwsem.o \
 kernel/sched.o \

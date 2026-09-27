@@ -30,7 +30,7 @@ static int __set_fdtsize(struct fdtable *files, unsigned int size)
 {
     if (size <= files->max)
         return files->max;
-    if (files->max >= 1024 || size > 1024)
+    if (files->max >= FD_MAX || size > FD_MAX)
         return -EMFILE;
 
     void *tmp = krealloc(files->fdarray, sizeof(struct file*) * size);
@@ -60,7 +60,7 @@ static int __get_fd_for(struct fdtable *files)
         }
     }
 
-    if (files->max < 256) {
+    if (files->max < FD_AUTO_MAX) {
         int new_size = __set_fdtsize(files, files->max * 2);
         if (new_size < 0)
             return new_size;
@@ -74,12 +74,12 @@ static int __get_fd_for(struct fdtable *files)
 
 int get_fd_exact_replace(struct fdtable *files, int fd, struct file *file)
 {
-    if (fd < 0 || (unsigned)fd >= 1024)
+    if (fd < 0 || (unsigned)fd >= FD_MAX)
         return -EINVAL;
 
     acquire_lock(&files->lock);
     if (fd >= (int)files->max) {
-        int new_size = __set_fdtsize(files, MIN(fd * 2, 1024));
+        int new_size = __set_fdtsize(files, MIN(fd * 2, FD_MAX));
         if (new_size < 0) {
             release_lock(&files->lock);
             return new_size;
@@ -105,7 +105,7 @@ int get_fd_start_at(struct fdtable *files, int start, struct file *file)
     acquire_lock(&files->lock);
 
     if (start >= (int)files->max) {
-        int new_size = __set_fdtsize(files, MIN(start * 2, 1024));
+        int new_size = __set_fdtsize(files, MIN(start * 2, FD_MAX));
         if (new_size < 0) {
             release_lock(&files->lock);
             return new_size;
