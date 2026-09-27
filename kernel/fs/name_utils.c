@@ -168,7 +168,7 @@ char * build_absolute_path(struct dentry *d)
     while (cur) {
 #ifdef DEBUG_VFS
         klog(LOG_DEBUG, "build_absolute_path: cur = %p, name = %s, buf = %s\n",
-            cur, cur->d_name, buf);
+            cur, cur->d_name.data, buf);
 #endif
         if (cur == current->fs->root_d) {
             // Reached root
@@ -176,7 +176,7 @@ char * build_absolute_path(struct dentry *d)
             strcpy(buf, tmp);
             break;
         } else {
-            snprintf(tmp, PATH_MAX, "%s/%s", cur->d_name, buf);
+            snprintf(tmp, PATH_MAX, "%s/%s", cur->d_name.data, buf);
             strcpy(buf, tmp);
         }
         cur = cur->d_parent;

@@ -10,6 +10,8 @@ struct super_block * alloc_sb(struct block_device *bdev)
     if (!sb)
         return ERR_PTR(-ENOMEM);
 
+    static atomic_uint next_dev = 1;
+    sb->s_dev = next_dev++;
     sb->s_blocksize = 0x1000;
     sb->s_maxbytes = __INT32_MAX__;
     sb->s_count = 1;

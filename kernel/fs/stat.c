@@ -11,8 +11,7 @@
 static int stat_inode(const struct inode *i_ptr, struct stat *st)
 {
     st->st_ino = i_ptr->i_ino;
-    // st->st_dev = i_ptr->i_sb->s_bdev->devnum;
-    st->st_dev = 0;
+    st->st_dev = i_ptr->i_sb ? i_ptr->i_sb->s_dev : 0;
     st->st_mode = i_ptr->i_mode;
     st->st_nlink = i_ptr->i_nlink;
     st->st_uid = 0;
