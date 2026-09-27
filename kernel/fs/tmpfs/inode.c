@@ -217,13 +217,78 @@ static int tmpfs_readlink(struct dentry *dentry, char __user *buf, int bufsize)
     struct inode *inode = dentry->d_inode;
     struct tmpfs_file *tmp_inode = (struct tmpfs_file*)inode->i_private;
 
-    if (bufsize < 0)
+    if (bufsize <= 0)
         return -EINVAL;
-    if (bufsize < inode->i_size + 1)
-        return -EFAULT;
+    int len = MIN((int)inode->i_size, bufsize);
 
-    return copy_to_user(buf, tmp_inode->data, inode->i_size + 1) ?
-              -EFAULT : inode->i_size;
+    return copy_to_user(buf, tmp_inode->data, len) ? -EFAULT : len;
+}
+
+static long tmpfs_dir_find(struct tmpfs_dir *dir, const char *name, struct inode *inode)
+{
+    for (unsigned long i = 0; i < dir->num_entries; i++) {
+        if (dir->children[i].inode == inode && strcmp(dir->children[i].name, name) == 0)
+            return i;
+    }
+    return -1;
+}
+
+static void tmpfs_dir_remove(struct tmpfs_dir *dir, unsigned long idx)
+{
+    for (unsigned long j = idx; j + 1 < dir->num_entries; j++)
+        dir->children[j] = dir->children[j + 1];
+    dir->num_entries--;
+}
+
+static int tmpfs_dir_append(struct tmpfs_dir *dir, const struct tmpfs_entry *e)
+{
+    struct tmpfs_entry *c = krealloc(dir->children,
+        (dir->num_entries + 1) * sizeof(struct tmpfs_entry));
+    if (!c)
+        return -ENOMEM;
+    dir->children = c;
+    dir->children[dir->num_entries++] = *e;
+    return 0;
+}
+
+static int tmpfs_rename(struct inode *old_dir, struct dentry *old_d,
+                        struct inode *new_dir, struct dentry *new_d)
+{
+    struct tmpfs_dir *od = (struct tmpfs_dir*)old_dir->i_private;
+    struct tmpfs_dir *nd = (struct tmpfs_dir*)new_dir->i_private;
+    struct inode *inode = old_d->d_inode;
+    struct inode *target = new_d->d_inode;
+
+    long idx = tmpfs_dir_find(od, old_d->d_name.data, inode);
+    if (idx < 0)
+        return -ENOENT;
+    struct tmpfs_entry moved = od->children[idx];
+
+    if (target) {
+        if (S_ISDIR(target->i_mode) &&
+                ((struct tmpfs_dir*)target->i_private)->num_entries > 0)
+            return -ENOTEMPTY;
+        long tidx = tmpfs_dir_find(nd, new_d->d_name.data, target);
+        if (tidx >= 0) {
+            tmpfs_dir_remove(nd, tidx);
+            target->i_nlink--;
+        }
+        // the old entry may have shifted if both live in the same directory
+        idx = tmpfs_dir_find(od, old_d->d_name.data, inode);
+        if (idx < 0)
+            return -ENOENT;
+    }
+
+    tmpfs_dir_remove(od, idx);
+    memset(moved.name, 0, sizeof(moved.name));
+    strncpy(moved.name, new_d->d_name.data, sizeof(moved.name) - 1);
+    return tmpfs_dir_append(nd, &moved);
+}
+
+static int tmpfs_truncate(struct inode *inode, loff_t size)
+{
+    inode->i_size = size;
+    return 0;
 }
 
 const struct inode_operations tmpfs_iops = {
@@ -236,5 +301,7 @@ const struct inode_operations tmpfs_iops = {
     .link = tmpfs_link,
     .unlink = tmpfs_unlink,
     .symlink = tmpfs_symlink,
-    .readlink = tmpfs_readlink
+    .readlink = tmpfs_readlink,
+    .truncate = tmpfs_truncate,
+    .rename = tmpfs_rename,
 };
