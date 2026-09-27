@@ -100,6 +100,10 @@ syscall_table:
 	sc_tbl_entry clock_gettime	# 77
 	sc_tbl_entry clock_getres	# 78
 	sc_tbl_entry uname		# 79
+	sc_tbl_entry fsync		# 80
+	sc_tbl_entry truncate	# 81
+	sc_tbl_entry ftruncate	# 82
+	sc_tbl_entry rename		# 83
 /*
 	sc_tbl_entry chmod		# 30
 	sc_tbl_entry chown		# 31
