@@ -46,24 +46,44 @@ static struct wq_entry *find_waiting_task(struct waitqueue *wq, int pid)
 }
 
 
+static inline bool is_thread(struct task *p)
+{
+    return p->exit_signal == -1 && p != p->tg_leader;
+}
 
-static struct task * find_exited_child(struct task *parent, int pid)
+// pgid 0 matches any child
+static inline bool child_in_pgrp(struct task *child, pid_t pgid)
+{
+    return !is_thread(child) && (pgid == 0 || child->pgid == pgid);
+}
+
+static void reap_dead_threads(struct task *parent)
+{
+    struct task *child, *tmp;
+    list_for_each_entry_safe(child, tmp, &parent->children, sibling) {
+        if (is_thread(child) && READ_ONCE(child->state) == TASK_ZOMBIE)
+            reap_task(child);
+    }
+}
+
+static struct task * find_exited_child(struct task *parent, pid_t pgid)
 {
     struct task *child;
+    reap_dead_threads(parent);
     list_for_each_entry(child, &parent->children, sibling) {
-        if (child->state == TASK_ZOMBIE && (pid == WAIT_ANY || child->pid == pid)) {
+        if (child->state == TASK_ZOMBIE && child_in_pgrp(child, pgid)) {
             return child;
         }
     }
     return NULL;
 }
 
-static struct task * find_stopped_child(struct task *parent, int pid)
+static struct task * find_stopped_child(struct task *parent, pid_t pgid)
 {
     struct task *child;
     list_for_each_entry(child, &parent->children, sibling) {
         if (child->state == TASK_STOPPED &&
-        (pid == WAIT_ANY || child->pid == pid) &&
+        child_in_pgrp(child, pgid) &&
         child->flags.state_change) {
             child->flags.state_change = 0;
             return child;
@@ -97,10 +117,12 @@ static bool child_waitable(struct task *p, bool wait_stopped)
     return state == TASK_ZOMBIE || (wait_stopped && state == TASK_STOPPED);
 }
 
-static bool any_child_waitable(struct task *parent, bool wait_stopped)
+static bool any_child_waitable(struct task *parent, bool wait_stopped, pid_t pgid)
 {
     struct task *child;
     list_for_each_entry(child, &parent->children, sibling) {
+        if (!child_in_pgrp(child, pgid))
+            continue;
         u8 state = READ_ONCE(child->state);
         if (state == TASK_ZOMBIE)
             return true;
@@ -134,14 +156,14 @@ static pid_t wait_for(struct task *p, int *status, bool nohang, bool wait_stoppe
 }
 
 
-static pid_t check_children(int *status, bool wait_stopped)
+static pid_t check_children(int *status, bool wait_stopped, pid_t pgid)
 {
-    struct task *child = find_exited_child(current, WAIT_ANY);
+    struct task *child = find_exited_child(current, pgid);
     if (child)
         return handle_exited_child(child, status);
 
     if (wait_stopped) {
-        child = find_stopped_child(current, WAIT_ANY);
+        child = find_stopped_child(current, pgid);
         if (child)
             return handle_stopped_child(child, status);
     }
@@ -149,17 +171,26 @@ static pid_t check_children(int *status, bool wait_stopped)
     return 0;
 }
 
-static pid_t wait_any(int *status, bool nohang, bool wait_stopped)
+static bool has_child_in_pgrp(pid_t pgid)
+{
+    struct task *child;
+    list_for_each_entry(child, &current->children, sibling)
+        if (child_in_pgrp(child, pgid))
+            return true;
+    return false;
+}
+
+static pid_t wait_any(int *status, bool nohang, bool wait_stopped, pid_t pgid)
 {
     pid_t result;
 
-    if (list_empty(&current->children)) {
+    if (!has_child_in_pgrp(pgid)) {
         klog(LOG_DEBUG, "Process %d has no children to wait for\n", current->pid);
         return -ECHILD;
     }
 
     // Check if any child has already exited or stopped
-    result = check_children(status, wait_stopped);
+    result = check_children(status, wait_stopped, pgid);
     if (result != 0)
         return result;
 
@@ -168,11 +199,11 @@ static pid_t wait_any(int *status, bool nohang, bool wait_stopped)
 
     for (;;) {
         int ret = wait_event_interruptible(wait_q,
-            any_child_waitable(current, wait_stopped));
+            any_child_waitable(current, wait_stopped, pgid));
         if (ret < 0)
             return ret;
 
-        result = check_children(status, wait_stopped);
+        result = check_children(status, wait_stopped, pgid);
         if (result != 0)
             return result;
     }
@@ -187,14 +218,13 @@ SYSCALL_DECL3(waitpid, int, pid, int*, status, int, options)
 
     int ret = 0;
     int status_val = 0;
-    if (pid == -1) {
-        ret = wait_any(&status_val, options & WNOHANG, options & WUNTRACED);
+    if (pid <= 0) {
+        // -1: any child; 0: our process group; < -1: process group -pid
+        pid_t pgid = pid == -1 ? 0 : pid == 0 ? current->pgid : -pid;
+        ret = wait_any(&status_val, options & WNOHANG, options & WUNTRACED, pgid);
         if (ret > 0 && status)
             return put_user(status_val, status) ? -EFAULT : ret;
         return ret;
-    } else if (pid < -1 || pid == 0) {
-        // pid_t pgid = (pid < -1) ? -pid : current->pgid;
-        return -EINVAL; // TODO: implement process group waiting
     }
 
     struct task *p = find_child_by_pid(current, pid);
@@ -298,6 +328,12 @@ void notify_parent(struct task *parent, struct task *child)
     // spurious wake is harmless and a missed one hangs waitpid
     wakeup_by_pid_on(parent->pid, &wait_q);
     if (child->exit_signal > 0) {
-        do_raise(parent, child->exit_signal);
+        int st = child->exit_status;
+        struct ksiginfo info = {
+            .code = (st & 0x7f) ? CLD_KILLED : CLD_EXITED,
+            .pid = child->pid,
+            .status = (st & 0x7f) ? (st & 0x7f) : (st >> 8) & 0xff,
+        };
+        do_raise_info(parent, child->exit_signal, &info);
     }
 }

@@ -21,6 +21,7 @@
 DEFINE_HASHTABLE(pid_table, PID_HASH_BITS);
 DEFINE_HASHTABLE(pgid_table, PID_HASH_BITS);
 DEFINE_HASHTABLE(sid_table, PID_HASH_BITS);
+spinlock_t tasklist_lock = SPINLOCK_INIT;
 
 void exit(int status);
 
@@ -31,45 +32,56 @@ static inline bool is_session_leader(struct task *p)
 
 static inline bool is_child_of(struct task *cld)
 {
-    struct task *p_itr;
-    list_for_each_entry(p_itr, &current->children, sibling) {
-        if (cld == p_itr) return true;
-    }
-    return false;
+    return cld->parent == current;
 }
 
-inline struct task * get_task_by_pid(int pid)
+struct task * get_task_by_pid(int pid)
 {
-    struct task *p;
+    struct task *p, *found = NULL;
+    unsigned long flags;
     if (pid < 1) return NULL;
+    acquire_lock_irqsave(&tasklist_lock, &flags);
     hash_for_each_possible(pid_table, p, pid_hash, pid) {
-        if (p->pid == pid)
-            return p;
+        if (p->pid == pid) {
+            found = p;
+            break;
+        }
     }
-    return NULL;
+    release_lock_irqrestore(&tasklist_lock, flags);
+    return found;
 }
 
-inline struct task * get_pgrp_leader(int pgid)
+struct task * get_pgrp_leader(int pgid)
 {
-    struct task *p;
+    struct task *p, *found = NULL;
+    unsigned long flags;
     if (pgid < 0) return NULL;
+    acquire_lock_irqsave(&tasklist_lock, &flags);
     hash_for_each_possible(pgid_table, p, pgid_hash, pgid) {
-        if (p->pgid == pgid && p->pid == pgid)
-            return p;
+        if (p->pgid == pgid && p->pid == pgid) {
+            found = p;
+            break;
+        }
     }
-    return NULL;
+    release_lock_irqrestore(&tasklist_lock, flags);
+    return found;
 }
 
-inline struct task *get_any_pgrp_member(pid_t pgid)
+struct task *get_any_pgrp_member(pid_t pgid)
 {
-    struct task *p;
+    struct task *p, *found = NULL;
+    unsigned long flags;
     if (pgid < 0)
         return NULL;
+    acquire_lock_irqsave(&tasklist_lock, &flags);
     hash_for_each_possible(pgid_table, p, pgid_hash, pgid) {
-        if (p->pgid == pgid)
-            return p;
+        if (p->pgid == pgid) {
+            found = p;
+            break;
+        }
     }
-    return NULL;
+    release_lock_irqrestore(&tasklist_lock, flags);
+    return found;
 }
 
 /*
@@ -105,6 +117,31 @@ static int will_become_orphaned_pgrp(int pgid, struct task *ignored_task)
 int is_current_pgrp_orphaned(void)
 {
     return will_become_orphaned_pgrp(current->pgid, NULL);
+}
+
+struct utsname {
+    char sysname[65];
+    char nodename[65];
+    char release[65];
+    char version[65];
+    char machine[65];
+    char domainname[65];
+};
+
+SYSCALL_DECL1(uname, struct utsname*, buf)
+{
+    struct utsname u;
+    memset(&u, 0, sizeof(u));
+    strcpy(u.sysname, "Lilac");
+    strcpy(u.nodename, "lilac");
+    strcpy(u.release, KERNEL_VERSION);
+    strcpy(u.version, __DATE__ " " __TIME__);
+#ifdef __x86_64__
+    strcpy(u.machine, "x86_64");
+#else
+    strcpy(u.machine, "i686");
+#endif
+    return copy_to_user(buf, &u, sizeof(u)) ? -EFAULT : 0;
 }
 
 SYSCALL_DECL0(getpid)
@@ -165,15 +202,21 @@ SYSCALL_DECL2(setpgid, pid_t, pid, pid_t, pgid)
     if (is_session_leader(p))
         return -EPERM;
 
+    if (pgid == 0)
+        pgid = pid;
+
     target = get_any_pgrp_member(pgid);
     if (pid != pgid && (!target || target->sid != p->sid)) {
         klog(LOG_DEBUG, "setpgid: no such process group %d in session %d\n", pgid, p->sid);
         return -EPERM;
     }
 
+    unsigned long flags;
+    acquire_lock_irqsave(&tasklist_lock, &flags);
     hash_del(&p->pgid_hash);
     p->pgid = pgid;
     hash_add(pgid_table, &p->pgid_hash, p->pgid);
+    release_lock_irqrestore(&tasklist_lock, flags);
     klog(LOG_DEBUG, "Set pgid of process %d to %d\n", p->pid, p->pgid);
     return 0;
 }
@@ -185,6 +228,8 @@ SYSCALL_DECL0(setsid)
     if (p->pgid == pid)
         return -EPERM;
 
+    unsigned long flags;
+    acquire_lock_irqsave(&tasklist_lock, &flags);
     hash_del(&p->sid_hash);
     hash_del(&p->pgid_hash);
     p->sid  = pid;
@@ -192,6 +237,7 @@ SYSCALL_DECL0(setsid)
     p->ctty = NULL;
     hash_add(sid_table, &p->sid_hash, p->sid);
     hash_add(pgid_table, &p->pgid_hash, p->pgid);
+    release_lock_irqrestore(&tasklist_lock, flags);
     klog(LOG_DEBUG, "Process %d created new session %d\n", p->pid, p->sid);
     return pid;
 }
@@ -549,15 +595,22 @@ static int do_execve(const char *path, char *const argv[], char *const envp[])
         klog(LOG_DEBUG, "file %s is not a regular file\n", path);
         vfs_close(file);
         return -EACCES;
-    } else {
-        info->exec_file = file;
     }
+
+    // Past this point exec can't fail back to the caller, so reject bad
+    // binaries while we still can
+    int err = elf_check(file);
+    if (err) {
+        vfs_close(file);
+        return err;
+    }
+    info->exec_file = file;
 
     if (info->path)
         kfree((void*)info->path);
     info->path = path;
 
-    int err = set_task_args(info, argv);
+    err = set_task_args(info, argv);
     if (err) {
         klog(LOG_ERROR, "Failed to set task arguments\n");
         vfs_close(file);

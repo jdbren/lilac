@@ -194,9 +194,35 @@ static inline bool user_mode(struct regs_state *regs)
 
 int x86_kernel_entry(struct regs_state *regs)
 {
-    if (user_mode(regs))
+    if (user_mode(regs)) {
         current->regs = (void*)regs;
+        current->syscall_nr = -1;
+    }
     return 0;
+}
+
+int x86_syscall_entry(struct regs_state *regs)
+{
+    current->regs = (void*)regs;
+    current->syscall_nr = regs->ax;
+    return 0;
+}
+
+void arch_restart_syscall(struct task *p, bool sa_restart)
+{
+    struct regs_state *regs = (struct regs_state*)p->regs;
+    if (p->syscall_nr < 0 || (long)regs->ax != -EINTR || !sa_restart)
+        return;
+    // Never restarted
+    enum { NR_sigsuspend = 42, NR_nanosleep = 46, NR_pause = 53 };
+    switch (p->syscall_nr) {
+    case NR_sigsuspend:
+    case NR_nanosleep:
+    case NR_pause:
+        return;
+    }
+    regs->ax = p->syscall_nr;
+    regs->ip -= 2; // back over the 2-byte syscall instruction
 }
 
 int x86_kernel_exit(struct regs_state *regs)

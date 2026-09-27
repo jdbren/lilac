@@ -72,7 +72,8 @@ static int user_page_fault(long error, uintptr_t addr)
 
     vma = find_vma(current->mm, addr);
     if (!vma) {
-        do_raise(current, SIGSEGV);
+        struct ksiginfo info = { .code = SEGV_MAPERR, .addr = addr };
+        do_raise_info(current, SIGSEGV, &info);
         err = -1;
         goto out;
     }
@@ -84,10 +85,12 @@ static int user_page_fault(long error, uintptr_t addr)
     int fault_ret = mm_fault(vma, addr, get_fault_flags(error));
 
     if (fault_ret == FAULT_PROT_VIOLATION) {
-        do_raise(current, SIGSEGV);
+        struct ksiginfo info = { .code = SEGV_ACCERR, .addr = addr };
+        do_raise_info(current, SIGSEGV, &info);
         err = -1;
     } else if (fault_ret == FAULT_FILE_ERROR) {
-        do_raise(current, SIGBUS);
+        struct ksiginfo info = { .code = BUS_ADRERR, .addr = addr };
+        do_raise_info(current, SIGBUS, &info);
         err = -1;
     } else if (fault_ret == FAULT_OOM) {
         klog(LOG_WARN, "Out of memory handling fault at %lx, killing pid %d\n",
@@ -189,6 +192,10 @@ void nmi_handler(struct regs_state *frame)
 
 void brkp_handler(struct regs_state *frame)
 {
+    if (frame->ip < __USER_STACK) {
+        do_raise(current, SIGTRAP);
+        return;
+    }
     x86_dump_regs(frame);
     klog(LOG_INFO, "Breakpoint at %p\n", frame->ip);
 }
