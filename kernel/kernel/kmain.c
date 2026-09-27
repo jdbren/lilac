@@ -14,6 +14,7 @@
 #include <acpi/acpi.h>
 #include <lib/icxxabi.h>
 #include <lilac/futex.h>
+#include <lilac/device.h>
 
 extern void (*__init_array_start[])(void);
 extern void (*__init_array_end[])(void);
@@ -56,6 +57,7 @@ void start_kernel(void)
     futex_init();
     sched_init();
     fb_init();
+    kmsg_init();
     kbd_init();
     tty_init();
 

@@ -91,6 +91,7 @@ static inline struct device *device_alloc(void)
 struct file_operations;
 struct inode_operations;
 int add_device(const char *, const struct file_operations *, const struct inode_operations *);
+void kmsg_init(void);
 int dev_create(const char *path, const struct file_operations *fops,
         const struct inode_operations *iops, umode_t mode, dev_t dev);
 

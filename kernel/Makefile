@@ -118,6 +118,7 @@ drivers/keyboard.o \
 drivers/pci.o \
 drivers/ahci.o \
 drivers/framebuffer.o \
+drivers/kmsg.o \
 drivers/vga.o \
 drivers/tty/core.o \
 drivers/tty/fbcon.o \

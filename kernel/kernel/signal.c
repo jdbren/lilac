@@ -26,12 +26,12 @@ int handle_signal(void)
     else if (pending & _SIGSTOP)
         sig = SIGSTOP;
     else
-        sig = __builtin_ffs(pending) - 1;
+        sig = __builtin_ffsl(pending);
 
     struct ksigaction *ka = &p->sighand->actions[sig];
     sigdelset(&p->pending, sig);
 
-    int sig_bit = (1 << sig);
+    sigset_t sig_bit = sigbit(sig);
     if (ka->sa.sa_handler == SIG_IGN) {
         klog(LOG_WARN, "handle_signal: Signal %d ignored by process %d\n", sig, p->pid);
     } else if (ka->sa.sa_handler == SIG_DFL) {
@@ -226,6 +226,7 @@ SYSCALL_DECL3(sigaction, int, signum, const struct sigaction *, act, struct siga
         klog(LOG_WARN, "sigaction: Failed to copy new action from user memory\n");
         return -EFAULT;
     }
+    ka->sa.sa_mask = SIG_APPLY_MASK(ka->sa.sa_mask, unblockable);
 #ifdef DEBUG_SIGNAL
     klog(LOG_DEBUG, "sigaction: Signal %d action is set to %p\n", signum, ka->sa.sa_handler);
 #endif

@@ -372,7 +372,6 @@ SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
     struct file *file;
     unsigned char *kbuf;
     ssize_t bytes;
-    long err = -1;
 
 #ifdef DEBUG_VFS
     klog(LOG_DEBUG, "syscall read: Reading from fd %d\n", fd);
@@ -394,11 +393,11 @@ SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
         return -ENOMEM;
 
     bytes = vfs_read(file, kbuf, count);
-    if (bytes > 0)
-        err = copy_to_user(buf, kbuf, bytes);
+    if (bytes > 0 && copy_to_user(buf, kbuf, bytes))
+        bytes = -EFAULT;
 
     kfree(kbuf);
-    return err ? err : bytes;
+    return bytes;
 }
 
 
