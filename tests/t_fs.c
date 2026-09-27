@@ -737,11 +737,20 @@ FSTEST(truncate_path)
 
 /* ================= links ================= */
 
+// FAT has no links; Linux vfat returns EPERM too
+static void skip_if_no_links(const struct fsx *fs, int r)
+{
+    if (r != 0 && errno == EPERM && !strcmp(fs->fs, "fat32"))
+        SKIP("FAT does not support links");
+}
+
 FSTEST(hard_link)
 {
     char *a = pj(dir, "orig"), *b = pj(dir, "alias");
     create_file(a, "shared", 6);
-    EXPECT_OK(link(a, b));
+    int lr = link(a, b);
+    skip_if_no_links(fs, lr);
+    EXPECT_OK(lr);
     struct stat sa, sb;
     ASSERT_OK(stat(a, &sa));
     ASSERT_OK(stat(b, &sb));
@@ -759,7 +768,9 @@ FSTEST(symlink_readlink)
 {
     char *target = pj(dir, "target"), *ln = pj(dir, "ln");
     create_file(target, "via link", 8);
-    EXPECT_OK(symlink(target, ln));
+    int sr = symlink(target, ln);
+    skip_if_no_links(fs, sr);
+    EXPECT_OK(sr);
     char buf[256] = {0};
     ssize_t n = readlink(ln, buf, sizeof(buf) - 1);
     EXPECT_EQ(n, (ssize_t)strlen(target));
@@ -778,7 +789,9 @@ FSTEST(symlink_relative_and_dangling)
 {
     create_file(pj(dir, "t"), "rel", 3);
     char *ln = pj(dir, "rel_ln");
-    EXPECT_OK(symlink("t", ln));
+    int sr = symlink("t", ln);
+    skip_if_no_links(fs, sr);
+    EXPECT_OK(sr);
     char buf[8] = {0};
     EXPECT_EQ(slurp(ln, buf, sizeof(buf)), 3);
     char *dangling = pj(dir, "dangle");
