@@ -91,7 +91,7 @@ void idt_init(void)
     idt_entry(0,  (uintptr_t)div0,     __KERNEL_CS, 0, INT_GATE);
     idt_entry(1,  (uintptr_t)debug,    __KERNEL_CS, 0, TRAP_GATE);
     idt_entry(2,  (uintptr_t)nmi,      __KERNEL_CS, 0, INT_GATE);
-    idt_entry(3,  (uintptr_t)brkp,     __KERNEL_CS, 0, TRAP_GATE);
+    idt_entry(3,  (uintptr_t)brkp,     __KERNEL_CS, 0, TRAP_GATE | DPL_3);
     idt_entry(4,  (uintptr_t)ovflw,    __KERNEL_CS, 0, INT_GATE);
     idt_entry(5,  (uintptr_t)bnd,      __KERNEL_CS, 0, INT_GATE);
     idt_entry(6,  (uintptr_t)invldop,  __KERNEL_CS, 0, INT_GATE);

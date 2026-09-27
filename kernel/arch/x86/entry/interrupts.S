@@ -23,6 +23,9 @@
 	PUSH_REGS
 	xor  %rbp,%rbp
 
+	mov  %rsp,%rdi  	# record the user frame
+	call x86_kernel_entry
+
 	mov  %rsp,%rsi  	# reg stack frame
 	mov  %gs:CPU_LOCAL_SCRATCH,%rdi 	# error code
 	call \name\()_handler
@@ -50,6 +53,9 @@
 1:
 	PUSH_REGS
 	xor  %rbp,%rbp
+
+	mov  %rsp,%rdi  	# record the user frame
+	call x86_kernel_entry
 
 	mov  %rsp, %rdi   # reg stack frame
 	call \name\()_handler
