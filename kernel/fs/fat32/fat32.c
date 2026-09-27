@@ -31,11 +31,21 @@ const struct super_operations fat_sops = {
     .destroy_inode = fat_destroy_inode
 };
 
+// TODO: free disk space
+static int fat32_truncate(struct inode *inode, loff_t size)
+{
+    struct fat_file *fat_file = (struct fat_file*)inode->i_private;
+    fat_file->file_size = size;
+    inode->i_size = size;
+    return 0;
+}
+
 const struct inode_operations fat_iops = {
     .lookup = fat32_lookup,
     .open = fat32_open,
     .mkdir = fat32_mkdir,
     .create = fat32_create,
+    .truncate = fat32_truncate,
 };
 
 

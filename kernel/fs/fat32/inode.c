@@ -80,6 +80,7 @@ struct inode *fat_build_inode(struct super_block *sb, struct fat_inode *info)
     inode->i_ctime = fat_time_to_unix(info->entry.creation_date, info->entry.creation_time);
     inode->i_private = info;
     inode->i_mode |= info->entry.attributes & FAT_DIR_ATTR ? S_IFDIR : S_IFREG;
+    inode->i_nlink = 1;
 
     list_add_tail(&inode->i_list, &sb->s_inodes);
 
