@@ -12,6 +12,7 @@
 #   KTEST_BOOT_TIMEOUT=N   max seconds per boot (default 600)
 #   KTEST_STALL=N          kill qemu if the log is silent for N seconds (default 30)
 #   KTEST_RETRIES=N        max reboots per suite after a panic/hang (default 10)
+#   KTEST_FILTER="glob.."  only run tests matching these globs (e.g. 'tmpfs.*')
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -133,7 +134,7 @@ for suite in $SUITES; do
     args=""
     for ((attempt = 1; attempt <= RETRIES + 1; attempt++)); do
         cp --sparse=always "$OUT/pristine.img" "$IMG"
-        echo "$suite $args" > "$STAGE/plan"
+        echo "$suite $args ${KTEST_FILTER:-}" > "$STAGE/plan"
         mcopy -o -i "$M" "$STAGE/plan" ::/tests/plan
         log="$OUT/log-$suite-$attempt.txt"
         printf '%-10s boot %d%s ... ' "$suite" "$attempt" "${args:+ ($args)}"
