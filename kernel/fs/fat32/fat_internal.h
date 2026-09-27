@@ -214,6 +214,7 @@ int __do_fat32_write(const struct file *file, u32 clst, const u8 *buffer, size_t
 
 int fat_strcasecmp(const char *s1, const char *s2);
 void fat_get_lfn_part(struct fat_file *entry, char *buffer);
+u8 fat_make_sfn(const char *name, unsigned char sfn[11]);
 void fat_get_sfn(struct fat_file *entry, char *buffer);
 
 #endif

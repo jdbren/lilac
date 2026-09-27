@@ -10,6 +10,21 @@
 
 #include "fat_internal.h"
 
+// Allocate a cluster after prev (0 = none) and clear it on disk, so file
+// holes and the unwritten tail of a cluster read back as zeros
+static u32 fat32_alloc_zeroed_clst(struct file *file, struct fat_disk *disk, u32 prev)
+{
+    u32 clst = __fat_find_alloc_clst(disk, prev);
+    if (clst == 0)
+        return 0;
+    void *zero = kzmalloc(disk->bytes_per_clst);
+    if (!zero)
+        return 0;
+    __fat_write_clst(disk, file->f_dentry->d_inode->i_sb->s_bdev->disk, clst, zero);
+    kfree(zero);
+    return clst;
+}
+
 static u32 fat32_get_or_alloc_clst_num(struct file *file, struct fat_disk *disk)
 {
     struct fat_file *fat_file = (struct fat_file*)file->f_dentry->d_inode->i_private;
@@ -17,7 +32,7 @@ static u32 fat32_get_or_alloc_clst_num(struct file *file, struct fat_disk *disk)
     u32 clst_off = file->f_pos / disk->bytes_per_clst;
 
     if (clst_num == 0) {
-        clst_num = __fat_find_alloc_clst(disk, 0);
+        clst_num = fat32_alloc_zeroed_clst(file, disk, 0);
         if (clst_num == 0)
             return 0;
         fat_file->cl_low = clst_num & 0xFFFF;
@@ -27,7 +42,7 @@ static u32 fat32_get_or_alloc_clst_num(struct file *file, struct fat_disk *disk)
     while (clst_off--) {
         u32 next_clst = fat_value(clst_num, disk);
         if (next_clst >= 0x0FFFFFF8U) {
-            next_clst = __fat_find_alloc_clst(disk, clst_num);
+            next_clst = fat32_alloc_zeroed_clst(file, disk, clst_num);
             if (next_clst == 0)
                 return 0;
         }
@@ -87,6 +102,7 @@ ssize_t fat32_write(struct file *file, const void *file_buf, size_t count)
     unsigned char *buffer = get_free_pages(PAGE_UP_COUNT(disk->bytes_per_clst * num_clst), 0);
     if (!buffer)
         return -ENOMEM;
+    memset(buffer, 0, disk->bytes_per_clst * num_clst);
 
     start_clst = fat32_get_or_alloc_clst_num(file, disk);
     if (start_clst == 0) {
@@ -100,6 +116,21 @@ ssize_t fat32_write(struct file *file, const void *file_buf, size_t count)
         if (__do_fat32_read(file, start_clst, buffer, 1) < 0) {
             klog(LOG_ERROR, "fat32_write: failed pre-read for partial write %s (pos=%lu)\n",
                 file->f_dentry ? file->f_dentry->d_name.data : "<unknown>", file->f_pos);
+            bytes_written = -EIO;
+            goto out;
+        }
+    }
+
+    // Preserve existing data after the write in a partially covered last cluster
+    u32 csz = disk->bytes_per_clst;
+    u32 file_clsts = ROUND_UP(fat_file->file_size, csz) / csz;
+    u32 last_idx = file->f_pos / csz + num_clst - 1;
+    if ((offset + count) % csz && last_idx < file_clsts && !(num_clst == 1 && offset)) {
+        u32 last_clst = start_clst;
+        for (u32 i = 0; i + 1 < num_clst && last_clst < 0x0FFFFFF8U; i++)
+            last_clst = fat_value(last_clst, disk);
+        if (last_clst < 0x0FFFFFF8U &&
+                __do_fat32_read(file, last_clst, buffer + (num_clst - 1) * csz, 1) < 0) {
             bytes_written = -EIO;
             goto out;
         }

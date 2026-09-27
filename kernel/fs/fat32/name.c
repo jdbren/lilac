@@ -37,17 +37,59 @@ void fat_get_lfn_part(struct fat_file *entry, char *buffer)
     for (i = 0; i < 2; i++) p[11 + i] = lfn->name3[i * 2];
 }
 
+// NT/Linux store "all lowercase" for the base and extension of a short
+// name in the reserved byte
+#define FAT_NT_LOWER_BASE 0x08
+#define FAT_NT_LOWER_EXT  0x10
+
 void fat_get_sfn(struct fat_file *entry, char *buffer)
 {
     int i, j = 0;
+    bool lower_base = entry->reserved & FAT_NT_LOWER_BASE;
+    bool lower_ext = entry->reserved & FAT_NT_LOWER_EXT;
     for (i = 0; i < 8 && entry->name[i] != ' '; i++)
-        buffer[j++] = entry->name[i];
+        buffer[j++] = lower_base ? tolower(entry->name[i]) : entry->name[i];
     if (entry->ext[0] != ' ') {
         buffer[j++] = '.';
         for (i = 0; i < 3 && entry->ext[i] != ' '; i++)
-            buffer[j++] = entry->ext[i];
+            buffer[j++] = lower_ext ? tolower(entry->ext[i]) : entry->ext[i];
     }
     buffer[j] = 0;
+}
+
+// Build the 11-byte 8.3 name (space padded, upper case) for name, split at
+// the last dot. Returns the NT case flags for the reserved byte.
+u8 fat_make_sfn(const char *name, unsigned char sfn[11])
+{
+    const char *dot = strrchr(name, '.');
+    if (dot == name)
+        dot = NULL;
+    size_t base_len = dot ? (size_t)(dot - name) : strlen(name);
+    bool base_lower = false, base_upper = false, ext_lower = false, ext_upper = false;
+
+    memset(sfn, ' ', 11);
+    for (size_t i = 0, j = 0; i < base_len && j < 8; i++) {
+        char c = name[i];
+        if (c == ' ' || c == '.')
+            continue;
+        base_lower |= islower(c);
+        base_upper |= isupper(c);
+        sfn[j++] = toupper(c);
+    }
+    if (dot) {
+        for (size_t i = 1, j = 8; dot[i] && j < 11; i++, j++) {
+            ext_lower |= islower(dot[i]);
+            ext_upper |= isupper(dot[i]);
+            sfn[j] = toupper(dot[i]);
+        }
+    }
+
+    u8 flags = 0;
+    if (base_lower && !base_upper)
+        flags |= FAT_NT_LOWER_BASE;
+    if (ext_lower && !ext_upper)
+        flags |= FAT_NT_LOWER_EXT;
+    return flags;
 }
 
 void get_fat_name(char fatname[12], const struct dentry *find)

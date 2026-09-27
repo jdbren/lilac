@@ -26,40 +26,56 @@ int fat32_create(struct inode *parent, struct dentry *new, umode_t mode)
     u32 clst = parent_dir->cl_low + (u32)(parent_dir->cl_high << 16);
     volatile unsigned char *buffer = kzmalloc(disk->bytes_per_clst);
     struct timestamp cur_time = get_timestamp();
-    char name[8];
+    unsigned char sfn[11];
     int ret = 0;
+    u32 prev_clst = 0;
 
-    memset(name, ' ', 8);
-    for (int i = 0; i < 8 && isprint(new->d_name.data[i]); i++) {
-        name[i] = new->d_name.data[i] = toupper(new->d_name.data[i]);
-    }
+    if (!buffer)
+        return -ENOMEM;
+
+    u8 case_flags = fat_make_sfn(new->d_name.data, sfn);
 
     while (clst < 0x0FFFFFF8) {
         __fat_read_clst(disk, hd, clst, (void*)buffer);
         for (entry = (struct fat_file*)buffer;
             entry < (struct fat_file*)(buffer + disk->bytes_per_clst) &&
-            !(entry->name[0] == 0 || entry->name[0] == FAT_UNUSED);
+            !(entry->name[0] == 0 || (u8)entry->name[0] == FAT_UNUSED);
             entry++)
         {
-            if (!strncmp((char*)entry->name, name, 8)) {
-                klog(LOG_INFO, "File %-8s already exists\n", name);
-                ret = -1;
+            if (!memcmp(entry->name, sfn, 11)) {
+                klog(LOG_INFO, "File %s already exists\n", new->d_name.data);
+                ret = -EEXIST;
                 goto error;
             }
         }
 
-        if (entry->name[0] == 0 || entry->name[0] == FAT_UNUSED)
+        if (entry < (struct fat_file*)(buffer + disk->bytes_per_clst))
             break;
 
+        prev_clst = clst;
         clst = fat_value(clst, disk);
     }
 
-    if (clst >= 0x0FFFFFF8)
-        kerror("Need to allocate new cluster\n");
+    if (clst >= 0x0FFFFFF8) {
+        // Directory is full
+        clst = __fat_find_alloc_clst(disk, prev_clst);
+        if (!clst) {
+            ret = -ENOSPC;
+            goto error;
+        }
+        memset((void*)buffer, 0, disk->bytes_per_clst);
+        entry = (struct fat_file*)buffer;
+    }
+    if (!entry) {
+        ret = -EIO;
+        goto error;
+    }
 
     long new_clst = __fat_find_free_clst(disk);
-    if (new_clst <= 0)
-        kerror("No free clusters\n");
+    if (new_clst <= 0) {
+        ret = -ENOSPC;
+        goto error;
+    }
     disk->FAT.FAT_buf[new_clst - disk->FAT.first_clst] |= 0x0fffffffUL;
 
     u16 fat_date = FAT_SET_DATE(cur_time.year, cur_time.month, cur_time.day);
@@ -75,8 +91,9 @@ int fat32_create(struct inode *parent, struct dentry *new, umode_t mode)
     entry->last_write_time = fat_time;
     entry->last_access_date = fat_date;
 
-    strncpy((char*)entry->name, name, 8);
-    strncpy((char*)entry->ext, "   ", 3);
+    memcpy(entry->name, sfn, 8);
+    memcpy(entry->ext, sfn + 8, 3);
+    entry->reserved = case_flags;
 
     __fat_write_clst(disk, hd, clst, (const void*)buffer);
 

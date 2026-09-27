@@ -160,7 +160,8 @@ static void mk_dot_dirs(struct fat_file *entry, struct fat_file *parent, u32 new
     entry->last_access_date = parent->last_access_date;
 }
 
-static void mk_new_dirent(struct fat_file *entry, u32 new_clst, const char *name)
+static void mk_new_dirent(struct fat_file *entry, u32 new_clst,
+                          const unsigned char sfn[11], u8 case_flags)
 {
     struct timestamp cur_time = get_timestamp();
     u16 fat_date = FAT_SET_DATE(cur_time.year, cur_time.month, cur_time.day);
@@ -178,8 +179,9 @@ static void mk_new_dirent(struct fat_file *entry, u32 new_clst, const char *name
     entry->last_write_time = fat_time;
     entry->last_access_date = fat_date;
 
-    strncpy((char*)entry->name, name, 8);
-    strncpy((char*)entry->ext, "   ", 3);
+    memcpy(entry->name, sfn, 8);
+    memcpy(entry->ext, sfn + 8, 3);
+    entry->reserved = case_flags;
 }
 
 
@@ -192,12 +194,10 @@ int fat32_mkdir(struct inode *dir, struct dentry *new_dentry, umode_t mode)
     int clst = parent_dir->cl_low + ((u32)parent_dir->cl_high << 16);
     int prev_clst = clst;
     volatile unsigned char *buffer = kzmalloc(disk->bytes_per_clst);
-    char name[8];
+    unsigned char sfn[11];
     int ret = 0;
 
-    memset(name, ' ', 8);
-    for (int i = 0; i < 8 && isprint(new_dentry->d_name.data[i]); i++)
-        name[i] = new_dentry->d_name.data[i] = toupper(new_dentry->d_name.data[i]);
+    u8 case_flags = fat_make_sfn(new_dentry->d_name.data, sfn);
 
     while (clst < 0x0FFFFFF8) {
         __fat_read_clst(disk, hd, clst, (void*)buffer);
@@ -206,9 +206,9 @@ int fat32_mkdir(struct inode *dir, struct dentry *new_dentry, umode_t mode)
             !(entry->name[0] == 0 || (u8)entry->name[0] == FAT_UNUSED);
             entry++)
         {
-            if (!strncmp((char*)entry->name, name, 8)) {
-                klog(LOG_INFO, "Directory %-8s already exists\n", name);
-                ret = -1;
+            if (!memcmp(entry->name, sfn, 11)) {
+                klog(LOG_INFO, "Directory %s already exists\n", new_dentry->d_name.data);
+                ret = -EEXIST;
                 goto error;
             }
         }
@@ -225,8 +225,10 @@ int fat32_mkdir(struct inode *dir, struct dentry *new_dentry, umode_t mode)
 
     if (clst >= 0x0FFFFFF8) {
         clst = __fat_find_free_clst(disk);
-        if (clst <= 0)
-            panic("No free clusters\n");
+        if (clst <= 0) {
+            ret = -ENOSPC;
+            goto error;
+        }
         __fat_add_new_clst(disk, prev_clst, clst);
         klog(LOG_DEBUG, "Added new cluster %x to dir\n", clst);
         __fat_read_clst(disk, hd, clst, (void*)buffer);
@@ -245,7 +247,7 @@ int fat32_mkdir(struct inode *dir, struct dentry *new_dentry, umode_t mode)
         goto error;
     }
 
-    mk_new_dirent(entry, new_clst, name);
+    mk_new_dirent(entry, new_clst, sfn, case_flags);
     __fat_write_clst(disk, hd, clst, (void*)buffer);
 
     struct fat_inode *fat_i = kzmalloc(sizeof(struct fat_inode));
