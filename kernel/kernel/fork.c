@@ -65,6 +65,8 @@ static int copy_files(struct fdtable *dst, struct fdtable *src)
             fget(dst->fdarray[i]);
         }
     }
+    memcpy(dst->close_on_exec, src->close_on_exec,
+        BITS_TO_LONGS(src->max) * sizeof(unsigned long));
     return 0;
 }
 
