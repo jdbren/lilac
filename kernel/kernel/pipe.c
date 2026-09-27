@@ -124,6 +124,8 @@ ssize_t pipe_read(struct file *f, void *buf, size_t count)
             return 0; // EOF
         }
         release_lock(&pipe->lock);
+        if (f->f_mode & O_NONBLOCK)
+            return -EAGAIN;
         if (wait_event_interruptible(pipe->read_wq,
                 READ_ONCE(pipe->data_size) != 0 || READ_ONCE(pipe->n_writers) == 0))
             return -EINTR;
@@ -162,6 +164,8 @@ ssize_t pipe_write(struct file *f, const void *buf, size_t count)
     acquire_lock(&pipe->lock);
     while (pipe->data_size == pipe->buf_size) {
         release_lock(&pipe->lock);
+        if (f->f_mode & O_NONBLOCK)
+            return -EAGAIN;
         if (wait_event_interruptible(pipe->write_wq,
                 READ_ONCE(pipe->data_size) < pipe->buf_size ||
                 READ_ONCE(pipe->n_readers) == 0))
