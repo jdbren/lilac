@@ -39,6 +39,12 @@
       Covers fs.fat32.{mkdir_rmdir, rmdir_*, unlink_*, rename_*, readdir_lists_entries,
       long_filename, filename_case_and_dots}
 
+- [x] signal.registers_preserved_across_handler: signal frames didn't save FP/SSE state, so a
+      handler using floating point corrupted the interrupted code. The frame now carries an
+      FXSAVE area, and the handler starts from the init FP state. Per-delivery signal logging is
+      now behind DEBUG_SIGNAL; it had slowed each delivery to about 1.6 ms, which hid the bug.
+      A task with no saved FP state now gets a clean SSE state rather than the previous owner's.
+
 ### Bugs, deferred (need a page cache or sharing mechanism)
 - [ ] mem.memfd_write_read_mmap: there's no page cache, so MAP_SHARED file mappings are private
       copies that only write back at munmap or msync. `pread` sees stale data.
@@ -77,13 +83,16 @@ Found while fixing the above:
       and sigaltstack isn't supported (`uc_stack` is always zero). The 32-bit signal path still
       uses the old frame layout.
 
+### Missing features, done
+- [x] setitimer/getitimer (ITIMER_REAL, with intervals): signal.setitimer_real. alarm() now
+      uses the same per-task timer (`task->itimer_real`).
+- [x] clock_nanosleep, including TIMER_ABSTIME: time.clock_nanosleep_abs
+- [x] getrlimit/setrlimit/prlimit64 (limits are stored per process but not enforced): misc.getrlimit_works
+- [x] brk/sbrk through libc: musl's sbrk now grows and shrinks the break through SYS_brk
+
 ### Missing features, deferred
 - [ ] ext2 write support: fs.ext2_write_support (skipped in the test for now)
 - [ ] poll/ppoll syscall: pipe.poll_readable
-- [ ] setitimer/getitimer (ITIMER_REAL): signal.setitimer_real. alarm() already uses a per-task
-      timer (`task->itimer_real`) that supports intervals.
-- [ ] clock_nanosleep, including TIMER_ABSTIME: time.clock_nanosleep_abs
-- [ ] getrlimit/setrlimit/prlimit64: misc.getrlimit_works and the misc.rlimit_* tests
 - [ ] sysinfo: proc.exec_no_mm_leak and proc.fork_no_leak use it to measure free memory
 - [ ] Single-step traps: zz_hazard.sigreturn_trap_flag_single_steps. `debug_handler`
       (arch/x86/entry/faults.c) ignores #DB, so user-mode single-steps never raise SIGTRAP.

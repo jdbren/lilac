@@ -100,6 +100,12 @@ syscall_table:
 	sc_tbl_entry truncate	# 81
 	sc_tbl_entry ftruncate	# 82
 	sc_tbl_entry rename		# 83
+	sc_tbl_entry getrlimit	# 84
+	sc_tbl_entry setrlimit	# 85
+	sc_tbl_entry prlimit64	# 86
+	sc_tbl_entry getitimer	# 87
+	sc_tbl_entry setitimer	# 88
+	sc_tbl_entry clock_nanosleep	# 89
 /*
 	sc_tbl_entry chmod		# 30
 	sc_tbl_entry chown		# 31

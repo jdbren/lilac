@@ -6,9 +6,10 @@
 #include <lilac/types.h>
 #include <lilac/rwlock.h>
 #include <lilac/signal.h>
-#include <lib/hashtable.h>
+#include <lilac/resource.h>
 #include <lilac/fdtable.h>
 #include <lilac/timer_event.h>
+#include <lib/hashtable.h>
 #include <lib/rbtree.h>
 
 struct regs_state;
@@ -128,6 +129,7 @@ struct task {
         struct timer_event ev;  // ITIMER_REAL
         ktime_t interval;
     } itimer_real;
+    struct rlimit rlim[RLIM_NLIMITS];
 
     struct task_info info;
     char name[32];

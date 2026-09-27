@@ -125,6 +125,7 @@ struct task *init_process(void)
     hash_add(sid_table, &this->sid_hash, this->sid);
     INIT_LIST_HEAD(&this->timer_ev_list);
     init_itimer_real(this);
+    init_rlimits(this->rlim);
 
     return this;
 }
@@ -242,6 +243,7 @@ static struct task * clone_process(struct clone_args *args)
 
     INIT_LIST_HEAD(&child->timer_ev_list);
     init_itimer_real(child);
+    memcpy(child->rlim, cur->tg_leader->rlim, sizeof(child->rlim));
 
     return child;
 }
