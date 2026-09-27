@@ -32,7 +32,7 @@
 #endif
 
 #define __KERNEL_STACK_SZ   0x4000
-#define __USER_STACK_SZ     (PAGE_SIZE * 32)
+#define __USER_STACK_SZ     (8UL << 20)
 #define __pa(X) ((X) - __KERNEL_BASE)
 
 #ifndef __packed

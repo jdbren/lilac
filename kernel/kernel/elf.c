@@ -390,6 +390,20 @@ static int elf64_load(struct elf_header *hdr, struct mm_info *mm, struct file *e
 }
 #endif
 
+int elf_check(struct file *f)
+{
+    struct elf_header elf;
+    if (vfs_read_at(f, (void*)&elf, sizeof elf, 0) != sizeof elf)
+        return -ENOEXEC;
+    if (elf.sig != ELF_MAGIC)
+        return -ENOEXEC;
+    if (elf.class == 2 && sizeof(void*) == 8 && elf.elf64.mach == X86_64)
+        return 0;
+    if (elf.class == 1 && sizeof(void*) == 4)
+        return 0;
+    return -ENOEXEC;
+}
+
 int elf_load(struct file *f, struct mm_info *mm, struct exec_info *info)
 {
     struct elf_header elf;

@@ -130,5 +130,7 @@ struct exec_info {
 #define AT_EXECFN       31
 
 int elf_load(struct file *elf_file, struct mm_info *mm, struct exec_info *info);
+// Returns 0 if the file has an ELF header this kernel can load, else -ENOEXEC
+int elf_check(struct file *elf_file);
 
 #endif

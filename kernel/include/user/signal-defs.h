@@ -32,6 +32,9 @@
 #ifndef SA_NOCLDWAIT
 #define SA_NOCLDWAIT	0x00000002
 #endif
+#ifndef SA_RESTORER
+#define SA_RESTORER	0x04000000
+#endif
 #ifndef SA_SIGINFO
 #define SA_SIGINFO	0x00000004
 #endif
