@@ -58,6 +58,7 @@ clean:
   		($(MAKE) -s -C $$PROJECT clean) \
 	done
 	rm -rf sysroot
+	rm -rf build
 
 distclean: clean
 	@$(MAKE) -C musl distclean
