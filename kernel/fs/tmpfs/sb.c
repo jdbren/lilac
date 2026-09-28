@@ -36,8 +36,16 @@ static struct inode* tmpfs_alloc_inode(struct super_block *sb)
 
 static void tmpfs_destroy_inode(struct inode *inode)
 {
-    if (inode->i_private)
+    if (inode->i_private) {
+        if (S_ISDIR(inode->i_mode)) {
+            struct tmpfs_dir *dir = inode->i_private;
+            kfree(dir->children);
+        } else {
+            struct tmpfs_file *file = inode->i_private;
+            kfree(file->data);
+        }
         kfree(inode->i_private);
+    }
     kfree(inode);
 }
 

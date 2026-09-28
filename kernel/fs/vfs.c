@@ -186,55 +186,98 @@ static struct dentry * get_parent_dentry(const char *path, struct dentry *start)
 static int vfs_rename(const char *oldpath, const char *newpath)
 {
     char name[NAME_MAX];
+    struct dentry *new_parent = NULL, *new_d = NULL;
+    int err;
     struct dentry *old_d = vfs_lookup_flags(oldpath, 0);
     if (IS_ERR(old_d))
         return PTR_ERR(old_d);
-    if (!old_d->d_inode)
-        return -ENOENT;
-    if (old_d == root_dentry || !old_d->d_parent)
-        return -EBUSY;
+    if (!old_d->d_inode) {
+        err = -ENOENT;
+        goto out;
+    }
+    if (old_d == root_dentry || !old_d->d_parent || old_d->d_mount) {
+        err = -EBUSY;
+        goto out;
+    }
 
-    struct dentry *new_parent = get_parent_dentry(newpath, NULL);
-    if (IS_ERR(new_parent))
-        return PTR_ERR(new_parent);
-    if (!new_parent->d_inode)
-        return -ENOENT;
-    if (!S_ISDIR(new_parent->d_inode->i_mode))
-        return -ENOTDIR;
-    int err = get_basename(name, newpath, NAME_MAX);
+    new_parent = get_parent_dentry(newpath, NULL);
+    if (IS_ERR(new_parent)) {
+        err = PTR_ERR(new_parent);
+        new_parent = NULL;
+        goto out;
+    }
+    if (!new_parent->d_inode) {
+        err = -ENOENT;
+        goto out;
+    }
+    if (!S_ISDIR(new_parent->d_inode->i_mode)) {
+        err = -ENOTDIR;
+        goto out;
+    }
+    err = get_basename(name, newpath, NAME_MAX);
     if (err)
-        return err;
-    struct dentry *new_d = lookup_path_from_flags(new_parent, name, 0);
-    if (IS_ERR(new_d))
-        return PTR_ERR(new_d);
+        goto out;
+    new_d = lookup_path_from_flags(new_parent, name, 0);
+    if (IS_ERR(new_d)) {
+        err = PTR_ERR(new_d);
+        new_d = NULL;
+        goto out;
+    }
 
     struct inode *old_dir = old_d->d_parent->d_inode;
     struct inode *new_dir = new_parent->d_inode;
     struct inode *inode = old_d->d_inode;
-    if (old_dir->i_sb != new_dir->i_sb)
-        return -EXDEV;
+    err = 0;
+    if (old_dir->i_sb != new_dir->i_sb) {
+        err = -EXDEV;
+        goto out;
+    }
     if (new_d->d_inode == inode)
-        return 0;
+        goto out;
+    if (new_d->d_mount) {
+        err = -EBUSY;
+        goto out;
+    }
     if (new_d->d_inode) {
-        if (S_ISDIR(inode->i_mode) && !S_ISDIR(new_d->d_inode->i_mode))
-            return -ENOTDIR;
-        if (!S_ISDIR(inode->i_mode) && S_ISDIR(new_d->d_inode->i_mode))
-            return -EISDIR;
+        if (S_ISDIR(inode->i_mode) && !S_ISDIR(new_d->d_inode->i_mode)) {
+            err = -ENOTDIR;
+            goto out;
+        }
+        if (!S_ISDIR(inode->i_mode) && S_ISDIR(new_d->d_inode->i_mode)) {
+            err = -EISDIR;
+            goto out;
+        }
     }
     // directory can't move inside itself
-    for (struct dentry *d = new_parent; d; d = d->d_parent)
-        if (d == old_d)
-            return -EINVAL;
-    if (!old_dir->i_op->rename)
-        return -EPERM;
+    for (struct dentry *d = new_parent; d; d = d->d_parent) {
+        if (d == old_d) {
+            err = -EINVAL;
+            goto out;
+        }
+    }
+    if (!old_dir->i_op->rename) {
+        err = -EPERM;
+        goto out;
+    }
 
     err = old_dir->i_op->rename(old_dir, old_d, new_dir, new_d);
     if (err)
-        return err;
+        goto out;
 
-    dcache_remove(old_d);
-    dcache_remove(new_d);
-    return 0;
+    // new_d's name now belongs to old_d: retire it and move old_d there
+    if (new_d->d_inode && S_ISDIR(new_d->d_inode->i_mode))
+        d_prune_negative(new_d);
+    d_drop(new_d);
+    err = d_move(old_d, new_parent, name);
+    if (err)
+        d_drop(old_d);
+out:
+    if (new_d)
+        dput(new_d);
+    if (new_parent)
+        dput(new_parent);
+    dput(old_d);
+    return err;
 }
 
 SYSCALL_DECL2(rename, const char*, oldpath, const char*, newpath)
@@ -338,12 +381,6 @@ struct dentry * vfs_lookup_flags(const char *path, int follow_final)
     if (path[0] != '/')
         start = current->fs->cwd_d;
 
-    if (!strcmp(path, "."))
-        return start;
-
-    if (!strcmp(path, "/"))
-        return root_dentry;
-
     return lookup_path_from_flags(start, path, follow_final);
 }
 
@@ -361,16 +398,27 @@ static int create_file_at(struct dentry *new_d, umode_t mode)
     return parent_inode->i_op->create(parent_inode, new_d, mode);
 }
 
+static struct file *vfs_open_dentry(struct dentry *dentry, const char *path,
+    int flags, int mode);
+
 struct file *vfs_open(const char *path, int flags, int mode)
 {
     klog(LOG_DEBUG, "VFS: Opening %s, flags = %x, mode = %x\n", path, flags, mode);
-    struct inode *inode;
-    struct file *new_file;
-    long err;
-
     struct dentry *dentry = vfs_lookup_flags(path, !(flags & O_NOFOLLOW));
     if (IS_ERR(dentry))
         return ERR_CAST(dentry);
+    // the file takes its own reference
+    struct file *file = vfs_open_dentry(dentry, path, flags, mode);
+    dput(dentry);
+    return file;
+}
+
+static struct file *vfs_open_dentry(struct dentry *dentry, const char *path,
+    int flags, int mode)
+{
+    struct inode *inode;
+    struct file *new_file;
+    long err;
     inode = dentry->d_inode;
     if (inode && S_ISLNK(inode->i_mode))
         return ERR_PTR(-ELOOP);
@@ -751,10 +799,11 @@ static int vfs_do_mkdir(struct dentry * parent_d, const char *name, umode_t mode
     struct dentry *new_dentry = lookup_path_from_flags(parent_d, name, 0);
     if (IS_ERR(new_dentry))
         return PTR_ERR(new_dentry);
-    if (new_dentry->d_inode)
-        return -EEXIST;
-
-    return parent_i->i_op->mkdir(parent_i, new_dentry, mode);
+    int err = -EEXIST;
+    if (!new_dentry->d_inode)
+        err = parent_i->i_op->mkdir(parent_i, new_dentry, mode);
+    dput(new_dentry);
+    return err;
 }
 
 int vfs_mkdir(const char *path, umode_t mode)
@@ -767,10 +816,8 @@ int vfs_mkdir(const char *path, umode_t mode)
 #endif
 
     struct dentry *parent_d = get_parent_dentry(path, NULL);
-    if (IS_ERR(parent_d)) {
-        err = PTR_ERR(parent_d);
-        goto error;
-    }
+    if (IS_ERR(parent_d))
+        return PTR_ERR(parent_d);
 
     if ((err = get_basename(name, path, NAME_MAX)))
         goto error;
@@ -781,6 +828,7 @@ int vfs_mkdir(const char *path, umode_t mode)
 
     klog(LOG_DEBUG, "VFS: Created directory %s\n", path);
 error:
+    dput(parent_d);
     return err;
 }
 
@@ -804,10 +852,8 @@ int vfs_mkdirat(struct file *dirf, const char *path, umode_t mode)
     char name[NAME_MAX];
 
     struct dentry *parent_d = get_parent_dentry(path, dirf->f_dentry);
-    if (IS_ERR(parent_d)) {
-        err = PTR_ERR(parent_d);
-        goto error;
-    }
+    if (IS_ERR(parent_d))
+        return PTR_ERR(parent_d);
 
     get_basename(name, path, NAME_MAX);
 
@@ -816,6 +862,7 @@ int vfs_mkdirat(struct file *dirf, const char *path, umode_t mode)
         goto error;
     klog(LOG_DEBUG, "VFS: Created directory %s\n", path);
 error:
+    dput(parent_d);
     return err;
 }
 
@@ -861,15 +908,26 @@ int vfs_create(const char *path, umode_t mode)
     parent_inode = parent->d_inode;
     if (!parent_inode) {
         klog(LOG_DEBUG, "Parent inode not found\n");
+        dput(parent);
         return -ENOENT;
     }
 
     struct dentry *new_dentry = alloc_dentry(parent, basename);
+    kfree(basename);
+    if (IS_ERR(new_dentry)) {
+        dput(parent);
+        return PTR_ERR(new_dentry);
+    }
+    mutex_lock(&parent->d_lock);
     dcache_add(new_dentry);
+    mutex_unlock(&parent->d_lock);
 #ifdef DEBUG_VFS
     klog(LOG_DEBUG, "Creating %s\n", new_dentry->d_name.data);
 #endif
-    return parent_inode->i_op->create(parent_inode, new_dentry, mode);
+    int err = parent_inode->i_op->create(parent_inode, new_dentry, mode);
+    dput(new_dentry);
+    dput(parent);
+    return err;
 }
 SYSCALL_DECL2(create, const char*, path, umode_t, mode)
 {
@@ -978,17 +1036,23 @@ int vfs_rmdir(const char *path)
     if (IS_ERR(dentry))
         return PTR_ERR(dentry);
 
-    struct inode *dir = dentry->d_parent->d_inode;
+    struct inode *dir = dentry->d_parent ? dentry->d_parent->d_inode : NULL;
+    int err;
     if (!dentry->d_inode)
-        return -ENOENT;
-    if (!S_ISDIR(dentry->d_inode->i_mode))
-        return -ENOTDIR;
-    if (dir->i_op->rmdir == NULL)
-        return -EPERM;
-
-    int err = dir->i_op->rmdir(dir, dentry);
-    if (!err)
-        dcache_remove(dentry);
+        err = -ENOENT;
+    else if (!S_ISDIR(dentry->d_inode->i_mode))
+        err = -ENOTDIR;
+    else if (!dir || dentry->d_mount)
+        err = -EBUSY;
+    else if (dir->i_op->rmdir == NULL)
+        err = -EPERM;
+    else
+        err = dir->i_op->rmdir(dir, dentry);
+    if (!err) {
+        d_prune_negative(dentry);
+        d_drop(dentry);
+    }
+    dput(dentry);
     return err;
 }
 
@@ -1012,18 +1076,22 @@ int vfs_unlink(const char *path)
     if (IS_ERR(dentry))
         return PTR_ERR(dentry);
 
-    struct inode *dir = dentry->d_parent->d_inode;
+    struct inode *dir = dentry->d_parent ? dentry->d_parent->d_inode : NULL;
     struct inode *victim_i = dentry->d_inode;
+    int err;
     if (!victim_i)
-        return -ENOENT;
-    if (S_ISDIR(victim_i->i_mode))
-        return -EISDIR;
-    if (!dir->i_op->unlink)
-        return -EPERM;
-
-    int err = dir->i_op->unlink(dir, dentry);
+        err = -ENOENT;
+    else if (S_ISDIR(victim_i->i_mode))
+        err = -EISDIR;
+    else if (!dir)
+        err = -EBUSY;
+    else if (!dir->i_op->unlink)
+        err = -EPERM;
+    else
+        err = dir->i_op->unlink(dir, dentry);
     if (!err)
-        dcache_remove(dentry);
+        d_drop(dentry);
+    dput(dentry);
     return err;
 }
 
@@ -1048,24 +1116,38 @@ int vfs_link(const char *oldpath, const char *newpath)
         return PTR_ERR(old_dentry);
 
     struct inode *old_inode = old_dentry->d_inode;
-    if (!old_inode)
-        return -ENOENT;
-    if (!S_ISREG(old_inode->i_mode)) // only link regular files currently
-        return -EPERM;
+    struct dentry *new_dentry = NULL;
+    struct inode *dir;
+    int err;
+    if (!old_inode) {
+        err = -ENOENT;
+        goto out;
+    }
+    if (!S_ISREG(old_inode->i_mode)) { // only link regular files currently
+        err = -EPERM;
+        goto out;
+    }
 
-    struct dentry *new_dentry = vfs_lookup_flags(newpath, 0);
-    if (IS_ERR(new_dentry))
-        return PTR_ERR(new_dentry);
+    new_dentry = vfs_lookup_flags(newpath, 0);
+    if (IS_ERR(new_dentry)) {
+        err = PTR_ERR(new_dentry);
+        new_dentry = NULL;
+        goto out;
+    }
+    dir = new_dentry->d_parent ? new_dentry->d_parent->d_inode : NULL;
     if (new_dentry->d_inode)
-        return -EEXIST;
-
-    struct inode *dir = new_dentry->d_parent->d_inode;
-    if (!dir)
-        return -ENOENT;
-    if (!dir->i_op->link)
-        return -EPERM;
-
-    return dir->i_op->link(old_dentry, dir, new_dentry);
+        err = -EEXIST;
+    else if (!dir)
+        err = -ENOENT;
+    else if (!dir->i_op->link)
+        err = -EPERM;
+    else
+        err = dir->i_op->link(old_dentry, dir, new_dentry);
+out:
+    if (new_dentry)
+        dput(new_dentry);
+    dput(old_dentry);
+    return err;
 }
 
 SYSCALL_DECL2(link, const char*, oldpath, const char*, newpath)
@@ -1096,13 +1178,18 @@ int vfs_symlink(const char *target, const char *linkpath)
     if (IS_ERR(link_dentry))
         return PTR_ERR(link_dentry);
 
-    struct inode *dir = link_dentry->d_parent->d_inode;
-    if (!dir)
-        return -ENOENT;
-    if (!dir->i_op->symlink)
-        return -EPERM;
-
-    return dir->i_op->symlink(dir, link_dentry, target);
+    struct inode *dir = link_dentry->d_parent ? link_dentry->d_parent->d_inode : NULL;
+    int err;
+    if (link_dentry->d_inode)
+        err = -EEXIST;
+    else if (!dir)
+        err = -ENOENT;
+    else if (!dir->i_op->symlink)
+        err = -EPERM;
+    else
+        err = dir->i_op->symlink(dir, link_dentry, target);
+    dput(link_dentry);
+    return err;
 }
 
 SYSCALL_DECL2(symlink, const char*, target, const char*, linkpath)
@@ -1129,7 +1216,7 @@ SYSCALL_DECL2(symlink, const char*, target, const char*, linkpath)
 
 SYSCALL_DECL3(readlink, const char*, path, char *, buf, int, bufsize)
 {
-    struct dentry *dentry;
+    struct dentry *dentry = NULL;
     struct inode *inode;
     char *path_buf;
     long err;
@@ -1182,6 +1269,8 @@ SYSCALL_DECL3(readlink, const char*, path, char *, buf, int, bufsize)
     }
 
 error:
+    if (!IS_ERR_OR_NULL(dentry))
+        dput(dentry);
     kfree(path_buf);
     return err;
 }

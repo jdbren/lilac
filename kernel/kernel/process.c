@@ -717,25 +717,27 @@ SYSCALL_DECL1(chdir, const char*, path)
     if (IS_ERR(path_buf))
         return PTR_ERR(path_buf);
 
-    struct dentry *d = vfs_lookup(path_buf);
+    struct dentry *d = vfs_lookup(path_buf), *old;
     if (IS_ERR(d)) {
         err = PTR_ERR(d);
         goto out;
-    } else if (!d || !d->d_inode) {
+    } else if (!d->d_inode) {
         err = -ENOENT;
+        dput(d);
         goto out;
     }
 
     if (!S_ISDIR(d->d_inode->i_mode)) {
         err = -ENOTDIR;
+        dput(d);
         goto out;
     }
 
     acquire_lock(&task->fs->lock);
-    dget(d);
-    dput(task->fs->cwd_d);
+    old = task->fs->cwd_d;
     task->fs->cwd_d = d;
     release_lock(&task->fs->lock);
+    dput(old);
 out:
     kfree(path_buf);
     return err;

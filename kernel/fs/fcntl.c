@@ -68,10 +68,10 @@ SYSCALL_DECL2(access, const char *, pathname, int, mode)
     if (IS_ERR(d))
         return PTR_ERR(d);
 
-    if (!d->d_inode)
+    bool exists = d->d_inode != NULL;
+    dput(d);
+    if (!exists)
         return -ENOENT;
-    if (mode == 0)
-        return 0;
     // TODO: full permission check
     return 0;
 }
@@ -97,10 +97,10 @@ SYSCALL_DECL3(faccessat, int, dirfd, const char *, pathname, int, mode)
     if (IS_ERR(d))
         return PTR_ERR(d);
 
-    if (!d->d_inode)
+    bool exists = d->d_inode != NULL;
+    dput(d);
+    if (!exists)
         return -ENOENT;
-    if (mode == 0)
-        return 0;
     // TODO: full permission check
     return 0;
 }

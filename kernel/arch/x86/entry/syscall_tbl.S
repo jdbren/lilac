@@ -106,6 +106,7 @@ syscall_table:
 	sc_tbl_entry getitimer	# 87
 	sc_tbl_entry setitimer	# 88
 	sc_tbl_entry clock_nanosleep	# 89
+	sc_tbl_entry sysinfo	# 90
 /*
 	sc_tbl_entry chmod		# 30
 	sc_tbl_entry chown		# 31

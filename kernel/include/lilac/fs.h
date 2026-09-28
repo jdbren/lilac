@@ -286,7 +286,9 @@ void dget(struct dentry *d);
 void dput(struct dentry *d);
 void destroy_dentry(struct dentry *d);
 void dcache_add(struct dentry *d);
-void dcache_remove(struct dentry *d);
+void d_drop(struct dentry *d);
+void d_prune_negative(struct dentry *dir);
+int d_move(struct dentry *d, struct dentry *new_parent, const char *name);
 
 struct inode * alloc_inode(struct super_block *sb);
 void destroy_inode(struct inode *inode);

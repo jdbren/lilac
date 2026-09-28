@@ -31,7 +31,7 @@ void fat_destroy_inode(struct inode *inode)
     if (inode->i_private)
         kfree(inode->i_private);
     if (inode->i_list.next)
-        list_del(&inode->i_list);
+        list_del_init(&inode->i_list);
     kfree(inode);
 }
 
@@ -41,19 +41,27 @@ static int unique_ino(void)
     return ++ino;
 }
 
+// Find a cached inode and take a reference, under the lock iput uses to
+// retire one, so a dying inode is never handed out
 static struct inode *fat_iget(struct super_block *sb, u32 dir_clst, u32 dir_idx)
 {
     struct inode *tmp;
 
+    acquire_lock(&sb->s_lock);
     list_for_each_entry(tmp, &sb->s_inodes, i_list) {
         struct fat_inode *fi = (struct fat_inode*)tmp->i_private;
-        if (fi->dir_clst == dir_clst && fi->dir_idx == dir_idx)
+        if (fi->dir_clst == dir_clst && fi->dir_idx == dir_idx && tmp->i_count > 0) {
+            tmp->i_count++;
+            release_lock(&sb->s_lock);
             return tmp;
+        }
     }
+    release_lock(&sb->s_lock);
 
     return NULL;
 }
 
+// Returns a referenced inode
 struct inode *fat_build_inode(struct super_block *sb, struct fat_inode *info)
 {
     struct inode *inode;
@@ -76,7 +84,9 @@ struct inode *fat_build_inode(struct super_block *sb, struct fat_inode *info)
     inode->i_mode |= info->entry.attributes & FAT_DIR_ATTR ? S_IFDIR : S_IFREG;
     inode->i_nlink = 1;
 
+    acquire_lock(&sb->s_lock);
     list_add_tail(&inode->i_list, &sb->s_inodes);
+    release_lock(&sb->s_lock);
 
     return inode;
 }
@@ -122,7 +132,6 @@ struct dentry *fat32_lookup(struct inode *parent, struct dentry *find,
         }
         if (inode->i_private != info)
             kfree(info); // already cached
-        iget(inode);
         find->d_inode = inode;
     } else if (err > 0) {
         kfree(info);
