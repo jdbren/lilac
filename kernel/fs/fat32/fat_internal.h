@@ -117,18 +117,6 @@ struct fat_FAT_buf {
     volatile u32 *FAT_buf;
 };
 
-struct fat_file_buf {
-    u32 cl;
-    u32 buf_sz;
-    union {
-        struct {
-            struct dirent *dirent;
-            u32 num_dirent;
-        };
-        volatile u8 *buffer;
-    };
-};
-
 struct fat_disk {
     struct block_device *bdev;
     u32 base_lba;
@@ -184,7 +172,6 @@ struct gendisk;
 
 struct fat_inode {
     struct fat_file entry;
-    struct fat_file_buf buf;
     u32 dir_clst;
     u32 dir_idx;
     u32 open_count;
@@ -228,15 +215,15 @@ void str_toupper(char *str);
 time_t fat_time_to_unix(u16 date, u16 time);
 
 ssize_t __fat32_read_dir(struct fat_disk *disk, volatile u8 **buffer, int clst);
-int __fat32_read_all_dirent(struct file *file, struct dirent **dirents_ptr);
 
-void __fat_read_clst(struct fat_disk *fat_disk, struct gendisk *hd, u32 clst, void *buf);
-void __fat_write_clst(struct fat_disk *fat_disk, struct gendisk *hd, u32 clst, const void *buf);
+int __fat_read_clst(struct fat_disk *fat_disk, struct gendisk *hd, u32 clst, void *buf);
+int __fat_write_clst(struct fat_disk *fat_disk, struct gendisk *hd, u32 clst, const void *buf);
 
 u32 __fat_get_clst_num(struct file *file, struct fat_disk *disk);
 u32 __fat_find_free_clst(struct fat_disk *disk);
 u32 __fat_add_new_clst(struct fat_disk *disk, u32 prev_clst, u32 new_clst);
 u32 __fat_find_alloc_clst(struct fat_disk *disk, u32 prev_clst);
+u32 fat_alloc_zeroed_clst(struct fat_disk *disk, struct gendisk *hd, u32 prev);
 void fat_free_chain(struct fat_disk *disk, u32 clst);
 
 int fat32_write_fs_info(struct fat_disk *fat_disk, struct gendisk *gd);

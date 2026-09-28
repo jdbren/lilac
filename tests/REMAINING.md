@@ -32,6 +32,18 @@
       resets the FP state as on Linux (it used to kill the process). A stopped child now wakes a parent blocked in waitpid(WUNTRACED). New
       `sysinfo` syscall (90) lets tests measure free memory.
 
+- [x] FAT32 review fixes (fs.*.name_length_limit, fs.*.readdir_after_rewind_sees_changes,
+      fs.*.dir_open_no_leak, fs.*.ftruncate_grow_large, fs.*.many_names_same_prefix):
+      path components longer than 127 characters (`DNAME_MAX`, what `struct dirent` holds) now
+      fail with ENAMETOOLONG on every filesystem. fat32 readdir is built on `fat_dir_next`
+      (checksum and ordinal checks) and reads the directory on each call, so it no longer lists
+      a stale copy made at open or leaks that copy. ftruncate growth goes to the filesystem:
+      fat32 allocates the clusters and zeroes them in 64 KB writes (16 MB: 0.26 s, was a 30 s+
+      hang), and tmpfs grows its buffer once. New file clusters are written once instead of
+      zeroed first. `fat_make_alias` scans the directory once, up to ~99999. Cluster I/O errors
+      now propagate, and create/mkdir report failed directory or FAT writes. fsck.fat is clean
+      on the test image after a full run.
+
 - [x] Exec/fork leaks (proc.exec_no_mm_leak, now 0 KiB with a 32 KiB limit; proc.fork_no_leak):
       a successful execve never returned to free its argv/envp pointer arrays (512 bytes per
       exec), and freeing an fd table skipped its close-on-exec bitmap. exec also dropped the
@@ -47,23 +59,11 @@
 ### Bugs, deferred (need a page cache or sharing mechanism)
 - [ ] mem.memfd_write_read_mmap: there's no page cache, so MAP_SHARED file mappings are private
       copies that only write back at munmap or msync. `pread` sees stale data.
-- [ ] mem.memfd_ftruncate_mmap: the same cause, plus `tmpfs_truncate` (fs/tmpfs/inode.c)
-      only sets `i_size`. It never grows or zeroes `tmpfs_file->data`, so a later read runs past
-      the buffer.
+- [ ] mem.memfd_ftruncate_mmap: the same cause. (`tmpfs_truncate` now grows and zeroes the
+      buffer, so reads past the old end are no longer out of bounds.)
 
 ### Known bugs, not fixed (no failing test yet)
 From the code reviews:
-- [ ] fat32: `fat_new_entry` (fs/fat32/namei.c) ignores errors from `fat_dir_flush` and
-      `fat_write_FAT`, so create/mkdir report success after a failed write and can leak clusters.
-- [ ] fat32: names up to 255 chars are accepted, but `struct dirent.d_name` is 128 bytes, so
-      getdents returns a 127-char name that open/stat can't find.
-- [ ] fat32: readdir (`__fat32_read_all_dirent`, fs/fat32/dir.c) has its own entry parser and
-      skips the LFN checksum/ordinal checks, so it can list names lookup can't find. Rebuild it on
-      `fat_dir_load`/`fat_dir_next`.
-- [ ] fat32: each new cluster in `fat32_write` is written twice (zeroed, then the data), and
-      growing a file with ftruncate (`vfs_ftruncate`, fs/vfs.c) loops 4 KB writes.
-- [ ] fat32: `fat_make_alias` tries up to 999999 `~N` suffixes, rescanning the directory each
-      time. Real FAT drivers cap the search.
 - [ ] fork: page-table allocation failures in `fork_copy_vm_area`/`make_64_bit_mmap` panic
       instead of fork returning -ENOMEM (arch/x86/kernel/paging64.c).
 - [ ] rlimits are stored but not enforced: the fd table still uses FD_MAX/FD_AUTO_MAX, and
@@ -85,6 +85,13 @@ Found while fixing the above:
       in fs/mount.c (basename 16) truncate longer paths; `vfs_create` also leaks its basename
       on early errors and `vfs_mount` leaks dentry references on its error paths (boot only).
 - [ ] `dev_mknod` (kernel/device.c) is never called; mknod returns -ENOSYS.
+- [ ] fat32 readdir gives every entry the directory's own `d_ino`; inode numbers are only
+      assigned when a name is looked up.
+- [ ] fat32 has no locking of its own: two tasks changing the same directory at once can each
+      load, edit and write it back, losing one change. The FAT and FSInfo are shared too.
+- [ ] fat32: if a write fails partway, clusters already linked past the end of the file keep
+      stale data, and a later ftruncate growth would expose it (it trusts clusters on the chain
+      to be zeroed).
 - [ ] Signal frame details: `REG_CSGSFS` holds only cs, `REG_ERR`/`REG_TRAPNO` are always 0,
       and sigaltstack isn't supported (`uc_stack` is always zero). The 32-bit signal path still
       uses the old frame layout.

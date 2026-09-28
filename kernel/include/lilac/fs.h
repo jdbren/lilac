@@ -214,6 +214,9 @@ struct dirent {
     char            d_type;
 };
 
+// The longest name getdents can return, so the longest a name may be
+#define DNAME_MAX ((int)sizeof(((struct dirent *)0)->d_name) - 1)
+
 struct file {
     spinlock_t      f_lock;
     atomic_int      f_count;

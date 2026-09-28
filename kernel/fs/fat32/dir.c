@@ -26,7 +26,9 @@ ssize_t __fat32_read_dir(struct fat_disk *disk, volatile u8 **buffer, int clst)
         *buffer = krealloc((void*)*buffer, bytes_read + disk->bytes_per_clst);
         if (!*buffer)
             return -ENOMEM;
-        __fat_read_clst(disk, disk->bdev->disk, clst, (void*)*buffer + bytes_read);
+        int err = __fat_read_clst(disk, disk->bdev->disk, clst, (void*)*buffer + bytes_read);
+        if (err)
+            return err;
         clst = fat_value(clst, disk);
         bytes_read += disk->bytes_per_clst;
     }
@@ -35,96 +37,37 @@ ssize_t __fat32_read_dir(struct fat_disk *disk, volatile u8 **buffer, int clst)
 }
 
 
-int __fat32_read_all_dirent(struct file *file, struct dirent **dirents_ptr)
+// f_pos is the raw index of the next entry to look at, so listing resumes
+// correctly even after entries before it are added or removed
+int fat32_readdir(struct file *file, struct dirent *dirp, unsigned int count)
 {
-    int i = 0;
-    int count = 0;
-    struct fat_disk *disk = (struct fat_disk*)file->f_dentry->d_inode->i_sb->s_fs_info;
-    volatile u8 *raw_buf = NULL;
-    struct fat_file *entry;
-    struct dirent *dir_buf;
-    int num_dirents = 8;
-    char lfn[FAT_LFN_BUF];
+    struct inode *inode = file->f_dentry->d_inode;
+    struct fat_dir d;
+    struct fat_dir_pos pos;
+    unsigned int i = 0;
 
-    memset(lfn, 0, sizeof(lfn));
+    int err = fat_dir_load(inode, &d);
+    if (err)
+        return err;
 
-    if ((count = __fat32_read_dir(disk, &raw_buf, __fat_get_clst_num(file, disk))) <= 0) {
-        klog(LOG_ERROR, "__fat32_read_all_dirent: Failed to read directory data\n");
-        return count;
+    pos.next = file->f_pos;
+    while (i < count && fat_dir_next(&d, &pos)) {
+        struct fat_file *e = fat_dir_entry(&d, pos.sfn);
+        struct dirent *out = &dirp[i++];
+
+        memset(out, 0, sizeof(*out));
+        if (pos.lfn[0])
+            strncpy(out->d_name, pos.lfn, sizeof(out->d_name) - 1);
+        else
+            fat_get_sfn(e, out->d_name);
+        out->d_ino = inode->i_ino;
+        out->d_off = pos.next;
+        out->d_reclen = sizeof(*out);
+        out->d_type = (e->attributes & FAT_DIR_ATTR) ? DT_DIR : DT_REG;
     }
+    file->f_pos = pos.next;
 
-    dir_buf = kzmalloc(num_dirents * sizeof(struct dirent));
-    if (!dir_buf) {
-        i = -ENOMEM;
-        goto out;
-    }
-
-    for (entry = (struct fat_file*)raw_buf;
-            entry->name[0] != 0 && (u8*)entry < (u8*)raw_buf + count;
-            entry++) {
-
-        if (entry->name[0] == FAT_UNUSED) {
-            memset(lfn, 0, sizeof(lfn));
-            continue;
-        }
-
-        if (entry->attributes == LONG_FNAME) {
-            fat_get_lfn_part(entry, lfn);
-            continue;
-        }
-
-        if (INVALID_ENTRY(entry) || entry->name[0] == 0x0) {
-            memset(lfn, 0, sizeof(lfn));
-            continue;
-        }
-
-        if (i >= num_dirents) {
-            num_dirents *= 2;
-            void *tmp = kcalloc(num_dirents, sizeof(struct dirent));
-            if (!tmp) {
-                kfree(dir_buf);
-                i = -ENOMEM;
-                goto out;
-            }
-            memcpy(tmp, dir_buf, i * sizeof(struct dirent));
-            kfree(dir_buf);
-            dir_buf = tmp;
-        }
-
-        if (lfn[0]) {
-            strncpy(dir_buf[i].d_name, lfn, sizeof(dir_buf[i].d_name) - 1);
-            dir_buf[i].d_name[sizeof(dir_buf[i].d_name) - 1] = '\0';
-        } else {
-            fat_get_sfn(entry, dir_buf[i].d_name);
-        }
-        memset(lfn, 0, sizeof(lfn));
-
-        dir_buf[i].d_ino = file->f_dentry->d_inode->i_ino;
-        dir_buf[i].d_reclen = sizeof(struct dirent);
-        dir_buf[i].d_off = file->f_pos + i;
-        dir_buf[i].d_type = (entry->attributes & FAT_DIR_ATTR) ? DT_DIR : DT_REG;
-        ++i;
-    }
-
-    *dirents_ptr = dir_buf;
-#ifdef DEBUG_FAT
-    for (int i = 0; i < num_dirents; i++)
-        klog(LOG_DEBUG, "dirent %d: %s\n", i, dir_buf[i].d_name);
-#endif
-out:
-    kfree((void*)raw_buf);
-    return i;
-}
-
-int fat32_readdir(struct file *file, struct dirent *dir_buf, unsigned int count)
-{
-    struct fat_inode *info = (struct fat_inode*)file->f_dentry->d_inode->i_private;
-    u32 i = 0;
-    while (i < count && i + file->f_pos < info->buf.num_dirent) {
-        dir_buf[i] = info->buf.dirent[i + file->f_pos];
-        i++;
-    }
-    file->f_pos += i;
+    fat_dir_put(&d);
     return i;
 }
 
