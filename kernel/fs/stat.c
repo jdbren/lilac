@@ -52,9 +52,9 @@ static long stat_path(const char *path, struct stat *st, int follow_final)
     struct dentry *dentry = vfs_lookup_flags(path, follow_final);
     if (IS_ERR(dentry))
         return PTR_ERR(dentry);
-    if (!dentry->d_inode)
-        return -ENOENT;
-    return stat_inode(dentry->d_inode, st);
+    long err = dentry->d_inode ? stat_inode(dentry->d_inode, st) : -ENOENT;
+    dput(dentry);
+    return err;
 }
 
 SYSCALL_DECL2(stat, const char*, path, struct stat*, buf)

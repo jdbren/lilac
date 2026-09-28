@@ -115,7 +115,8 @@ void iput(struct inode *inode)
         return;
     }
 
-    list_del(&inode->i_list);
+    if (inode->i_list.next)
+        list_del_init(&inode->i_list);
     release_lock(&sb->s_lock);
 
     destroy_inode(inode);

@@ -1,5 +1,6 @@
 #include <lilac/fs.h>
 #include <lilac/log.h>
+#include <lilac/panic.h>
 #include <lilac/err.h>
 #include <lilac/libc.h>
 #include <lilac/sync.h>
@@ -10,6 +11,27 @@
 #define VFS_MAX_SYMLINKS 20
 
 extern struct dentry *root_dentry;
+
+/*
+ * Reference counting rules
+ *
+ * d_count counts holders, and each holder owns exactly one reference:
+ *  - the cache: a dentry on its parent's d_children list (dcache_add takes
+ *    it, d_drop and d_prune_negative put it)
+ *  - each child: a dentry holds its parent (alloc_dentry takes it, freeing
+ *    the child or d_move puts it)
+ *  - each caller of a lookup (lookup_path*, vfs_lookup*, get_parent_dentry,
+ *    dlookup), which must dput the result
+ *  - long-lived users: open files, cwd, mounts (the mountpoint and mnt_root)
+ *
+ * When the count reaches 0 the dentry is freed and puts its parent and its
+ * inode. A cached dentry can't reach 0, since the cache holds a reference,
+ * so a dentry is freed only after it is dropped from the cache and every
+ * other holder has put it. Roots have no parent and are never freed.
+ *
+ * Inodes: each positive dentry holds one i_count reference on d_inode,
+ * taken by the filesystem's lookup/create/mkdir/link/symlink.
+ */
 
 static bool dname_eq_nocase(const struct dentry *d, const char *name)
 {
@@ -36,35 +58,96 @@ struct dentry *dlookup(struct dentry *parent, char *name)
 
 void dcache_add(struct dentry *d)
 {
+    dget(d);
     hlist_add_head(&d->d_sib, &d->d_parent->d_children);
 }
 
-void dcache_remove(struct dentry *d)
+// Remove d from the cache so lookups no longer find it, and drop the cache's
+// reference. It is freed once every other holder has put it.
+void d_drop(struct dentry *d)
 {
+    struct dentry *parent = d->d_parent;
+    bool hashed = false;
+
+    if (parent) {
+        mutex_lock(&parent->d_lock);
+        if (!hlist_unhashed(&d->d_sib)) {
+            hlist_del_init(&d->d_sib);
+            hashed = true;
+        }
+        mutex_unlock(&parent->d_lock);
+    }
+    if (hashed)
+        dput(d);
+}
+
+// Drop the cached negative children of dir
+void d_prune_negative(struct dentry *dir)
+{
+    struct dentry *child;
+    struct hlist_node *tmp;
+
+    mutex_lock(&dir->d_lock);
+    hlist_for_each_entry_safe(child, tmp, &dir->d_children, d_sib) {
+        if (!child->d_inode) {
+            hlist_del_init(&child->d_sib);
+            dput(child);
+        }
+    }
+    mutex_unlock(&dir->d_lock);
+}
+
+// Move a cached dentry to new_parent under name (after a successful rename)
+int d_move(struct dentry *d, struct dentry *new_parent, const char *name)
+{
+    struct dentry *old_parent = d->d_parent;
+    char *new_name = strdup(name);
+    if (!new_name)
+        return -ENOMEM;
+
+    mutex_lock(&old_parent->d_lock);
     hlist_del_init(&d->d_sib);
+    mutex_unlock(&old_parent->d_lock);
+
+    kfree(d->d_name.data);
+    d->d_name.data = new_name;
+    d->d_name.len = strlen(new_name);
+    dget(new_parent);
+    d->d_parent = new_parent;
+
+    mutex_lock(&new_parent->d_lock);
+    hlist_add_head(&d->d_sib, &new_parent->d_children);
+    mutex_unlock(&new_parent->d_lock);
+
+    dput(old_parent);
+    return 0;
 }
 
 void dget(struct dentry *d)
 {
-    d->d_count++;
+    atomic_fetch_add(&d->d_count, 1);
 }
 
 void dput(struct dentry *d)
 {
-    //struct inode *i = d->d_inode;
-    if (--d->d_count)
-        return;
+    while (d) {
+        unsigned int old = atomic_fetch_sub(&d->d_count, 1);
+        if (old == 0)
+            panic("dput: dentry %p (%s) count underflow\n", d, d->d_name.data);
+        if (old > 1)
+            return;
+        if (!hlist_unhashed(&d->d_sib) || !d->d_parent) {
+            klog(LOG_ERROR, "dput: freeing live dentry %p (%s)\n", d, d->d_name.data);
+            return;
+        }
 
-    klog(LOG_WARN, "dput: dentry %p (%s) count is zero, but not freeing it yet\n", d, d->d_name.data);
-    /*
-    if (hlist_empty(&d->d_children)) {
-        dcache_remove(d);
+        struct dentry *parent = d->d_parent;
+        struct inode *inode = d->d_inode;
         destroy_dentry(d);
+        if (inode)
+            iput(inode);
+        d = parent;
     }
-
-    if (i)
-        iput(i);
-    */
 }
 
 struct dentry * alloc_dentry(struct dentry *d_parent, const char *name)
@@ -74,6 +157,7 @@ struct dentry * alloc_dentry(struct dentry *d_parent, const char *name)
     if (!new_dentry)
         return ERR_PTR(-ENOMEM);
 
+    dget(d_parent);
     new_dentry->d_parent = d_parent;
     new_dentry->d_sb = i_parent->i_sb;
     new_dentry->d_name.data = strdup(name);
@@ -86,9 +170,17 @@ struct dentry * alloc_dentry(struct dentry *d_parent, const char *name)
     return new_dentry;
 }
 
+// Frees d itself; the caller puts its parent and inode (see dput)
 void destroy_dentry(struct dentry *d)
 {
-    kfree(d->d_name.data);
+    char *name = d->d_name.data;
+#ifdef DEBUG_VFS
+    // poison, so a use after free shows up as garbage instead of stale data
+    if (name)
+        memset(name, 0x6b, d->d_name.len);
+    memset(d, 0x6b, sizeof(*d));
+#endif
+    kfree(name);
     kfree(d);
 }
 
@@ -158,108 +250,111 @@ static struct dentry * resolve_symlink(struct dentry *find, const char *path,
     return resolved;
 }
 
+// Find name under parent in the cache, or ask the filesystem and cache the
+// result (possibly negative). Returns a referenced dentry.
+static struct dentry * lookup_child(struct dentry *parent, char *name)
+{
+    struct inode *dir = parent->d_inode;
+    struct dentry *find, *res;
+
+    mutex_lock(&parent->d_lock);
+    find = dlookup(parent, name);
+    if (find) {
+        if (find->d_inode && find->d_mount) {
+            res = find->d_mount->mnt_root;
+            dget(res);
+            dput(find);
+            find = res;
+        }
+        goto out;
+    }
+    if (!S_ISDIR(dir->i_mode)) {
+        find = ERR_PTR(-ENOTDIR);
+        goto out;
+    }
+    find = alloc_dentry(parent, name);
+    if (IS_ERR(find))
+        goto out;
+    res = dir->i_op->lookup(dir, find, 0);
+    if (IS_ERR(res)) {
+        dput(find);
+        find = res;
+        goto out;
+    }
+    dcache_add(find);
+out:
+    mutex_unlock(&parent->d_lock);
+    return find;
+}
+
 static struct dentry * lookup_path_from_inner(struct dentry *parent,
     const char *path, int follow_final, unsigned int link_count)
 {
     int n_pos = 0;
-    struct inode *inode;
-    struct dentry *find, *tmp;
+    struct dentry *find;
     char *name;
-    long err = 0;
 
-    while (path[n_pos] != '\0') {
-        name = next_path_component(path, &n_pos);
-        if (IS_ERR(name))
-            return ERR_CAST(name);
-        else if (!name)
-            break;
+    // the walk holds a reference on its current position
+    dget(parent);
+    while ((name = next_path_component(path, &n_pos)) != NULL) {
+        if (IS_ERR(name)) {
+            find = ERR_CAST(name);
+            goto out;
+        }
 #ifdef DEBUG_VFS
         klog(LOG_DEBUG, "VFS: Looking up %s\n", name);
 #endif
-        mutex_lock(&parent->d_lock);
-
         if (strcmp(name, ".") == 0) {
             kfree(name);
-            mutex_unlock(&parent->d_lock);
             continue;
-        } else if (strcmp(name, "..") == 0) {
+        }
+        if (strcmp(name, "..") == 0) {
             kfree(name);
-            tmp = parent;
-            if (parent->d_parent != NULL)
-                parent = parent->d_parent;
-            mutex_unlock(&tmp->d_lock);
+            if (parent->d_parent) {
+                find = parent->d_parent;
+                dget(find);
+                dput(parent);
+                parent = find;
+            }
             continue;
         }
 
-        find = dlookup(parent, name);
-        if (find == NULL) {
-#ifdef DEBUG_VFS
-            klog(LOG_DEBUG, "VFS: %s not in cache\n", name);
-#endif
-            find = alloc_dentry(parent, name);
-            if (IS_ERR_OR_NULL(find)) {
-                kfree(name);
-                mutex_unlock(&parent->d_lock);
-                return find;
-            }
+        find = lookup_child(parent, name);
+        kfree(name);
+        if (IS_ERR(find))
+            goto out;
 
-            inode = parent->d_inode;
-            if (!S_ISDIR(inode->i_mode)) {
-                klog(LOG_DEBUG, "VFS: %s is not a directory\n", parent->d_name.data);
-                kfree(name);
-                destroy_dentry(find);
-                mutex_unlock(&parent->d_lock);
-                return ERR_PTR(-ENOTDIR);
+        // a negative dentry ends the walk
+        if (!find->d_inode) {
+            if (path_has_component(path, n_pos)) {
+                dput(find);
+                find = ERR_PTR(-ENOENT);
             }
-
-            // lookup returns NULL or the dentry itself on success
-            struct dentry *res = inode->i_op->lookup(inode, find, 0);
-            if (IS_ERR(res) && (err = PTR_ERR(res)) < 0) {
-                kfree(name);
-                destroy_dentry(find);
-                mutex_unlock(&parent->d_lock);
-                return ERR_PTR(err);
-            }
-
-            dcache_add(find);
-            kfree(name);
-            // If the inode is NULL, we've reached a dead end (negative dentry)
-            if (find->d_inode == NULL) {
-                mutex_unlock(&parent->d_lock);
-                return path_has_component(path, n_pos) ? ERR_PTR(-ENOENT) : find;
-            }
-        } else {
-#ifdef DEBUG_VFS
-            klog(LOG_DEBUG, "VFS: Found %s in cache\n", name);
-#endif
-            kfree(name);
-            if (find->d_inode == NULL) {
-                mutex_unlock(&parent->d_lock);
-                return path_has_component(path, n_pos) ? ERR_PTR(-ENOENT) : find;
-            }
-
-            if (find->d_mount) {
-#ifdef DEBUG_VFS
-                klog(LOG_DEBUG, "VFS: Found mount point\n");
-#endif
-                find = find->d_mount->mnt_root;
-            }
+            goto out;
         }
-        mutex_unlock(&parent->d_lock);
 
-        if (find->d_inode && S_ISLNK(find->d_inode->i_mode) &&
+        if (S_ISLNK(find->d_inode->i_mode) &&
            (follow_final || path_has_component(path, n_pos))) {
-            return resolve_symlink(find, path, n_pos, follow_final, link_count);
+            struct dentry *res = resolve_symlink(find, path, n_pos, follow_final, link_count);
+            dput(find);
+            find = res;
+            goto out;
         }
 
+        dput(parent);
         parent = find;
     }
 
     size_t len = strlen(path);
     if (len > 0 && path[len - 1] == '/' && parent->d_inode &&
-            !S_ISDIR(parent->d_inode->i_mode))
-        return ERR_PTR(-ENOTDIR);
+            !S_ISDIR(parent->d_inode->i_mode)) {
+        find = ERR_PTR(-ENOTDIR);
+        goto out;
+    }
     return parent;
+out:
+    dput(parent);
+    return find;
 }
 
 struct dentry * lookup_path_from_flags(struct dentry *parent, const char *path,
@@ -273,9 +368,8 @@ struct dentry * lookup_path_from(struct dentry *parent, const char *path)
     return lookup_path_from_flags(parent, path, 1);
 }
 
+// Returns a referenced dentry; the caller must dput it
 struct dentry * lookup_path(const char *path)
 {
-    if (strcmp(path, "/") == 0)
-        return root_dentry;
     return lookup_path_from(root_dentry, path);
 }

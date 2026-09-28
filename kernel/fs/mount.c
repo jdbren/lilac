@@ -171,6 +171,7 @@ int vfs_umount(const char *target)
     }
 
     struct vfsmount *mnt = dentry->d_mount;
+    dput(dentry);
     if (!mnt) {
         klog(LOG_DEBUG, "No mount found for %s\n", target);
         return -EINVAL;

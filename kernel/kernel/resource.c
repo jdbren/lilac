@@ -7,6 +7,8 @@
 #include <lilac/fdtable.h>
 #include <lilac/config.h>
 #include <lilac/signal.h>
+#include <lilac/timer.h>
+#include <mm/page.h>
 
 /*
  * Defaults describe what this kernel actually allows. Infinite means the
@@ -73,4 +75,34 @@ SYSCALL_DECL4(prlimit64, pid_t, pid, unsigned int, resource,
               const struct rlimit*, new, struct rlimit*, old)
 {
     return do_prlimit(pid, resource, new, old);
+}
+
+struct sysinfo {
+    long uptime;
+    unsigned long loads[3];
+    unsigned long totalram;
+    unsigned long freeram;
+    unsigned long sharedram;
+    unsigned long bufferram;
+    unsigned long totalswap;
+    unsigned long freeswap;
+    unsigned short procs;
+    unsigned short pad;
+    unsigned long totalhigh;
+    unsigned long freehigh;
+    unsigned int mem_unit;
+};
+
+SYSCALL_DECL1(sysinfo, struct sysinfo*, info)
+{
+    struct sysinfo si = {0};
+    unsigned long free = num_free_frames();
+
+    si.uptime = ktime_get() / 1000000000ULL;
+    si.freeram = free;
+    si.totalram = free + num_used_frames();
+    si.mem_unit = PAGE_SIZE;
+    if (copy_to_user(info, &si, sizeof(si)))
+        return -EFAULT;
+    return 0;
 }

@@ -532,7 +532,9 @@ static void fat_drop_inode(struct inode *inode)
     fi->dir_clst = 0;
     inode->i_nlink = 0;
     // no longer findable by cluster, which may now be reused
+    acquire_lock(&inode->i_sb->s_lock);
     list_del_init(&inode->i_list);
+    release_lock(&inode->i_sb->s_lock);
     if (fi->open_count == 0)
         fat_release_clusters(inode);
 }
