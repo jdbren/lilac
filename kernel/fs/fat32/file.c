@@ -10,29 +10,16 @@
 
 #include "fat_internal.h"
 
-// Allocate a cluster after prev (0 = none) and clear it on disk, so file
-// holes and the unwritten tail of a cluster read back as zeros
-static u32 fat32_alloc_zeroed_clst(struct file *file, struct fat_disk *disk, u32 prev)
-{
-    u32 clst = __fat_find_alloc_clst(disk, prev);
-    if (clst == 0)
-        return 0;
-    void *zero = kzmalloc(disk->bytes_per_clst);
-    if (!zero)
-        return 0;
-    __fat_write_clst(disk, file->f_dentry->d_inode->i_sb->s_bdev->disk, clst, zero);
-    kfree(zero);
-    return clst;
-}
 
 static u32 fat32_get_or_alloc_clst_num(struct file *file, struct fat_disk *disk)
 {
     struct fat_file *fat_file = (struct fat_file*)file->f_dentry->d_inode->i_private;
+    struct gendisk *hd = file->f_dentry->d_inode->i_sb->s_bdev->disk;
     u32 clst_num = fat_clst_value(fat_file);
     u32 clst_off = file->f_pos / disk->bytes_per_clst;
 
     if (clst_num == 0) {
-        clst_num = fat32_alloc_zeroed_clst(file, disk, 0);
+        clst_num = fat_alloc_zeroed_clst(disk, hd, 0);
         if (clst_num == 0)
             return 0;
         fat_file->cl_low = clst_num & 0xFFFF;
@@ -42,7 +29,7 @@ static u32 fat32_get_or_alloc_clst_num(struct file *file, struct fat_disk *disk)
     while (clst_off--) {
         u32 next_clst = fat_value(clst_num, disk);
         if (next_clst >= 0x0FFFFFF8U) {
-            next_clst = fat32_alloc_zeroed_clst(file, disk, clst_num);
+            next_clst = fat_alloc_zeroed_clst(disk, hd, clst_num);
             if (next_clst == 0)
                 return 0;
         }
@@ -181,7 +168,9 @@ int __do_fat32_read(const struct file *file, u32 clst, volatile u8 *buffer,
     struct fat_disk *fat_disk = (struct fat_disk*)inode->i_sb->s_fs_info;
 
     while (clst < 0x0FFFFFF8 && clst_read < num_clst) {
-        __fat_read_clst(fat_disk, gd, clst, (void*)buffer);
+        int err = __fat_read_clst(fat_disk, gd, clst, (void*)buffer);
+        if (err)
+            return err;
         clst = fat_value(clst, fat_disk);
         buffer += fat_disk->bytes_per_clst;
         clst_read++;
@@ -208,7 +197,9 @@ int __do_fat32_write(const struct file *file, u32 clst, const u8 *buffer,
     }
 
     while (clst_writ < num_clst) {
-        __fat_write_clst(fat_disk, gd, clst, buffer);
+        int err = __fat_write_clst(fat_disk, gd, clst, buffer);
+        if (err)
+            return err;
         clst_writ++;
 
         u32 next_clst = fat_value(clst, fat_disk);

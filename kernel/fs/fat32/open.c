@@ -13,8 +13,6 @@ int fat32_open(struct inode *inode, struct file *file)
     struct fat_inode *info = (struct fat_inode*)inode->i_private;
     file->f_op = &fat_fops;
     info->open_count++;
-    if (info->entry.attributes & FAT_DIR_ATTR)
-        info->buf.num_dirent = __fat32_read_all_dirent(file, &info->buf.dirent);
     return 0;
 }
 

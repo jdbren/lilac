@@ -310,26 +310,7 @@ long vfs_ftruncate(struct file *f, loff_t length)
     if (!inode->i_op || !inode->i_op->truncate)
         return -EROFS;
 
-    if (length <= inode->i_size)
-        return inode->i_op->truncate(inode, length);
-
-    // Grow by writing zeros so the filesystem allocates and clears the space
-    const size_t chunk = 4096;
-    void *zero = kzmalloc(chunk);
-    if (!zero)
-        return -ENOMEM;
-    long err = 0;
-    for (loff_t pos = inode->i_size; pos < length; ) {
-        size_t n = MIN((loff_t)chunk, length - pos);
-        ssize_t w = vfs_write_at(f, zero, n, pos);
-        if (w <= 0) {
-            err = w < 0 ? w : -EIO;
-            break;
-        }
-        pos += w;
-    }
-    kfree(zero);
-    return err;
+    return inode->i_op->truncate(inode, length);
 }
 
 SYSCALL_DECL2(ftruncate, int, fd, off_t, length)

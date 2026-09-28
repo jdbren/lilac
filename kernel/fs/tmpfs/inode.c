@@ -289,8 +289,17 @@ static int tmpfs_rename(struct inode *old_dir, struct dentry *old_d,
     return tmpfs_dir_append(nd, &moved);
 }
 
+// data always holds at least i_size bytes; bytes past i_size may be stale
 static int tmpfs_truncate(struct inode *inode, loff_t size)
 {
+    struct tmpfs_file *file = (struct tmpfs_file*)inode->i_private;
+    if (size > inode->i_size) {
+        char *data = krealloc(file->data, size);
+        if (!data)
+            return -ENOMEM;
+        memset(data + inode->i_size, 0, size - inode->i_size);
+        file->data = data;
+    }
     inode->i_size = size;
     return 0;
 }

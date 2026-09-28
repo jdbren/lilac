@@ -67,19 +67,24 @@ void fat_dir_put(struct fat_dir *d)
     d->buf = NULL;
 }
 
-// Write back every cluster holding a modified entry
+// Write back every cluster holding a modified entry, then the FAT if the
+// directory grew. Returns the first error; everything is still attempted.
 int fat_dir_flush(struct fat_dir *d)
 {
     const u32 bpc = d->disk->bytes_per_clst;
     const u32 per_clst = bpc / sizeof(struct fat_file);
+    int err = 0;
 
     if (d->dirty_lo < d->dirty_hi) {
         u32 lo = d->dirty_lo / per_clst;
         u32 hi = (d->dirty_hi - 1) / per_clst;
         u32 clst = d->first_clst;
         for (u32 i = 0; i <= hi && clst < FAT_EOC; i++) {
-            if (i >= lo)
-                __fat_write_clst(d->disk, d->hd, clst, d->buf + i * bpc);
+            if (i >= lo) {
+                int e = __fat_write_clst(d->disk, d->hd, clst, d->buf + i * bpc);
+                if (e && !err)
+                    err = e;
+            }
             clst = fat_value(clst, d->disk);
         }
     }
@@ -88,9 +93,11 @@ int fat_dir_flush(struct fat_dir *d)
 
     if (d->fat_dirty) {
         d->fat_dirty = false;
-        return fat_write_FAT(d->disk, d->hd);
+        int e = fat_write_FAT(d->disk, d->hd);
+        if (e < 0 && !err)
+            err = e;
     }
-    return 0;
+    return err;
 }
 
 static void fat_entry_sfn(const struct fat_file *e, unsigned char sfn[11])
@@ -296,6 +303,36 @@ static char fat_sfn_upper(char c)
     return fat_sfn_char(c) ? toupper(c) : '_';
 }
 
+// Aliases go up to ~99999, which still leaves the basis 2 characters
+#define FAT_ALIAS_MAX 99999
+
+// If e is an alias "BASIS~N.EXT" of basis (base_len characters before the
+// tail, cut to fit), return N; otherwise 0
+static u32 fat_alias_number(const struct fat_file *e, const unsigned char basis[11],
+                            size_t base_len)
+{
+    if (memcmp(e->ext, basis + 8, 3))
+        return 0;
+    size_t at = 0, len = 1;
+    while (at < 8 && e->name[at] != '~')
+        at++;
+    if (at == 8)
+        return 0;
+    u32 n = 0;
+    while (at + len < 8 && e->name[at + len] >= '0' && e->name[at + len] <= '9') {
+        n = n * 10 + (e->name[at + len] - '0');
+        len++;
+    }
+    for (size_t i = at + len; i < 8; i++)
+        if (e->name[i] != ' ')
+            return 0;
+    if (len == 1 || e->name[at + 1] == '0' || n > FAT_ALIAS_MAX)
+        return 0;
+    if (at != MIN(base_len, 8 - len) || memcmp(e->name, basis, at))
+        return 0;
+    return n;
+}
+
 // Generate a unique "BASIS~N.EXT" short alias for a name that needs a long entry
 static int fat_make_alias(struct fat_dir *d, const char *name, unsigned char sfn[11])
 {
@@ -324,18 +361,31 @@ static int fat_make_alias(struct fat_dir *d, const char *name, unsigned char sfn
         }
     }
 
-    for (u32 n = 1; n < 1000000; n++) {
-        char tail[12];
-        size_t tail_len = snprintf(tail, sizeof(tail), "~%u", n);
-        size_t keep = MIN(base_len, 8 - tail_len);
-
-        memcpy(sfn, basis, 11);
-        memcpy(sfn + keep, tail, tail_len);
-        memset(sfn + keep + tail_len, ' ', 8 - keep - tail_len);
-        if (!fat_dir_sfn_taken(d, sfn))
-            return 0;
+    // One pass over the directory marks which ~N are taken for this basis
+    u8 *taken = kzmalloc(FAT_ALIAS_MAX / 8 + 1);
+    if (!taken)
+        return -ENOMEM;
+    struct fat_dir_pos pos = { .next = 0 };
+    while (fat_dir_next(d, &pos)) {
+        u32 n = fat_alias_number(fat_dir_entry(d, pos.sfn), basis, base_len);
+        if (n)
+            taken[n / 8] |= 1 << (n % 8);
     }
-    return -EEXIST;
+
+    u32 n = 1;
+    while (n <= FAT_ALIAS_MAX && (taken[n / 8] & (1 << (n % 8))))
+        n++;
+    kfree(taken);
+    if (n > FAT_ALIAS_MAX)
+        return -EEXIST;
+
+    char tail[8];
+    size_t tail_len = snprintf(tail, sizeof(tail), "~%u", n);
+    size_t keep = MIN(base_len, 8 - tail_len);
+    memcpy(sfn, basis, 11);
+    memcpy(sfn + keep, tail, tail_len);
+    memset(sfn + keep + tail_len, ' ', 8 - keep - tail_len);
+    return 0;
 }
 
 // Fill long entry `ord` (1-based) of name; characters are stored as UCS-2,
@@ -479,17 +529,25 @@ int fat_new_entry(struct inode *dir, struct dentry *dentry, u8 attr)
         fat_init_entry(&dots[1], FAT_DIR_ATTR, parent);
         dots[1].name[0] = '.';
         dots[1].name[1] = '.';
-        __fat_write_clst(disk, hd, clst, data);
+        err = __fat_write_clst(disk, hd, clst, data);
     }
 
-    if ((err = fat_dir_add(&d, name, &fi->entry, &fi->dir_idx))) {
+    if (err || (err = fat_dir_add(&d, name, &fi->entry, &fi->dir_idx))) {
+        // write out any cluster the directory grew by before failing, since
+        // the FAT now links it in
+        fat_dir_flush(&d);
         fat_free_chain(disk, clst);
-        fat_write_FAT(disk, hd);
+        (void)fat_write_FAT(disk, hd);
         goto out_put;
     }
     fi->dir_clst = d.first_clst;
-    fat_dir_flush(&d);
-    fat_write_FAT(disk, hd);
+    // If this fails the entry may or may not be on disk, so the new
+    // directory's cluster stays allocated: a leaked cluster is safer than an
+    // entry pointing at a free one
+    if ((err = fat_dir_flush(&d)))
+        goto out_put;
+    if ((err = fat_write_FAT(disk, hd)) < 0)
+        goto out_put;
 
     inode = fat_build_inode(dir->i_sb, fi);
     if (IS_ERR(inode)) {
@@ -516,7 +574,8 @@ void fat_release_clusters(struct inode *inode)
 
     if (clst >= 2) {
         fat_free_chain(disk, clst);
-        fat_write_FAT(disk, inode->i_sb->s_bdev->disk);
+        if (fat_write_FAT(disk, inode->i_sb->s_bdev->disk) < 0)
+            klog(LOG_WARN, "fat: failed to write the FAT after freeing clusters\n");
     }
     fi->entry.cl_low = 0;
     fi->entry.cl_high = 0;
@@ -600,23 +659,24 @@ int fat32_rmdir(struct inode *dir, struct dentry *victim)
 }
 
 // Point the ".." entry of a moved directory at its new parent
-static void fat_set_dotdot(struct inode *inode, struct inode *new_parent)
+static int fat_set_dotdot(struct inode *inode, struct inode *new_parent)
 {
     struct fat_disk *disk = (struct fat_disk*)inode->i_sb->s_fs_info;
     struct gendisk *hd = inode->i_sb->s_bdev->disk;
     u32 clst = dir_first_clst(inode);
     struct fat_file *buf = kmalloc(disk->bytes_per_clst);
     if (!buf)
-        return;
+        return -ENOMEM;
 
-    __fat_read_clst(disk, hd, clst, buf);
-    if (buf[1].name[0] == '.' && buf[1].name[1] == '.') {
+    int err = __fat_read_clst(disk, hd, clst, buf);
+    if (!err && buf[1].name[0] == '.' && buf[1].name[1] == '.') {
         u32 parent = fat_parent_ref(new_parent);
         buf[1].cl_low = parent & 0xFFFF;
         buf[1].cl_high = parent >> 16;
-        __fat_write_clst(disk, hd, clst, buf);
+        err = __fat_write_clst(disk, hd, clst, buf);
     }
     kfree(buf);
+    return err;
 }
 
 int fat32_rename(struct inode *old_dir, struct dentry *old_d,
@@ -664,10 +724,10 @@ int fat32_rename(struct inode *old_dir, struct dentry *old_d,
     fi->entry = entry;
     fi->dir_clst = nd->first_clst;
     fi->dir_idx = new_idx;
-    if (S_ISDIR(inode->i_mode) && new_dir != old_dir)
-        fat_set_dotdot(inode, new_dir);
     if (target)
         fat_drop_inode(target);
+    if (S_ISDIR(inode->i_mode) && new_dir != old_dir && fat_set_dotdot(inode, new_dir))
+        klog(LOG_WARN, "fat32_rename: failed to update '..' of %s\n", new_d->d_name.data);
 
 out:
     if (nd != &od)

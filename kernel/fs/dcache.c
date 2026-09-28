@@ -191,6 +191,8 @@ static char * next_path_component(const char *path, int *pos)
     int len = path_component_len(path, *pos);
     if (len == 0)
         return NULL;
+    if (len > DNAME_MAX)
+        return ERR_PTR(-ENAMETOOLONG);
     char *name = kzmalloc(len+1);
     if (!name)
         return ERR_PTR(-ENOMEM);

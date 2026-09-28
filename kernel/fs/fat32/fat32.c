@@ -32,15 +32,87 @@ const struct super_operations fat_sops = {
     .destroy_inode = fat_destroy_inode
 };
 
-// Shrink or grow the recorded size
+static int fat_zero_clsts(struct fat_disk *disk, struct gendisk *gd,
+    u32 first, u32 count, const void *zero);
+
+// Add zeroed clusters until the chain covers size bytes
+static int fat32_grow(struct inode *inode, loff_t size)
+{
+    struct fat_inode *fi = (struct fat_inode*)inode->i_private;
+    struct fat_disk *disk = (struct fat_disk*)inode->i_sb->s_fs_info;
+    struct gendisk *gd = inode->i_sb->s_bdev->disk;
+    const u32 bpc = disk->bytes_per_clst;
+    // one disk request moves at most 128 sectors
+    const u32 max_run = MAX(128U / disk->sect_per_clst, 1U);
+    u32 need = ROUND_UP(size, bpc) / bpc;
+    u32 have = 0, last = 0;
+    int err = 0;
+
+    for (u32 c = fat_clst_value(&fi->entry); c >= 2 && c < 0x0FFFFFF8; c = fat_value(c, disk)) {
+        last = c;
+        have++;
+    }
+    if (have >= need)
+        return 0;
+
+    void *zero = get_zeroed_pages(PAGE_UP_COUNT(max_run * bpc), 0);
+    if (!zero)
+        return -ENOMEM;
+
+    const u32 old_last = last;
+    u32 run_start = 0, run_len = 0;
+    for (; have < need; have++) {
+        u32 c = __fat_find_alloc_clst(disk, last);
+        if (c == 0) {
+            err = -ENOSPC;
+            break;
+        }
+        if (last == 0) {
+            fi->entry.cl_low = c & 0xFFFF;
+            fi->entry.cl_high = c >> 16;
+        }
+        last = c;
+        if (run_len && (c != run_start + run_len || run_len == max_run)) {
+            if ((err = fat_zero_clsts(disk, gd, run_start, run_len, zero)))
+                break;
+            run_len = 0;
+        }
+        if (run_len++ == 0)
+            run_start = c;
+    }
+    if (!err && run_len)
+        err = fat_zero_clsts(disk, gd, run_start, run_len, zero);
+    free_pages(zero, PAGE_UP_COUNT(max_run * bpc));
+
+    if (err) {
+        u32 added = old_last ? fat_value(old_last, disk) : fat_clst_value(&fi->entry);
+        if (old_last) {
+            fat_set_value(old_last, 0x0FFFFFFF, disk);
+        } else {
+            fi->entry.cl_low = 0;
+            fi->entry.cl_high = 0;
+        }
+        fat_free_chain(disk, added);
+    }
+    int ferr = fat_write_FAT(disk, gd);
+    return err ? err : ferr;
+}
+
+// Shrink or grow the file
 static int fat32_truncate(struct inode *inode, loff_t size)
 {
     struct fat_inode *fi = (struct fat_inode*)inode->i_private;
     struct fat_disk *disk = (struct fat_disk*)inode->i_sb->s_fs_info;
     struct gendisk *gd = inode->i_sb->s_bdev->disk;
     const u32 bpc = disk->bytes_per_clst;
+    int err = 0;
 
-    if (size < fi->entry.file_size) {
+    if (size > fi->entry.file_size) {
+        if ((err = fat32_grow(inode, size))) {
+            fat_write_inode(inode); // the first cluster may be back to 0
+            return err;
+        }
+    } else if (size < fi->entry.file_size) {
         u32 keep = ROUND_UP(size, bpc) / bpc;
         u32 clst = fat_clst_value(&fi->entry);
 
@@ -58,21 +130,27 @@ static int fat32_truncate(struct inode *inode, loff_t size)
                     fat_free_chain(disk, next);
                 }
                 // clear the cut-off tail so a later extension reads zeros
-                u8 *buf = size % bpc ? kmalloc(bpc) : NULL;
-                if (buf) {
-                    __fat_read_clst(disk, gd, clst, buf);
-                    memset(buf + size % bpc, 0, bpc - size % bpc);
-                    __fat_write_clst(disk, gd, clst, buf);
+                if (size % bpc) {
+                    u8 *buf = kmalloc(bpc);
+                    if (!buf)
+                        err = -ENOMEM;
+                    else if (!(err = __fat_read_clst(disk, gd, clst, buf))) {
+                        memset(buf + size % bpc, 0, bpc - size % bpc);
+                        err = __fat_write_clst(disk, gd, clst, buf);
+                    }
                     kfree(buf);
                 }
             }
         }
-        fat_write_FAT(disk, gd);
+        int ferr = fat_write_FAT(disk, gd);
+        if (!err)
+            err = ferr;
     }
 
     fi->entry.file_size = size;
     inode->i_size = size;
-    return fat_write_inode(inode);
+    int werr = fat_write_inode(inode);
+    return err ? err : werr;
 }
 
 const struct inode_operations fat_iops = {
@@ -217,18 +295,47 @@ int fat_write_FAT(struct fat_disk *fat_disk, struct gendisk *gd)
     (disk->clst_begin_lba + \
     ((cluster_num - disk->root_start) * disk->sect_per_clst))
 
-void __fat_read_clst(struct fat_disk *fat_disk,
+int __fat_read_clst(struct fat_disk *fat_disk,
     struct gendisk *hd, u32 clst, void *buf)
 {
-    hd->ops->disk_read(hd, LBA_ADDR(clst, fat_disk), buf,
+    int err = hd->ops->disk_read(hd, LBA_ADDR(clst, fat_disk), buf,
         fat_disk->sect_per_clst);
+    return err < 0 ? err : 0;
 }
 
-void __fat_write_clst(struct fat_disk *fat_disk,
+int __fat_write_clst(struct fat_disk *fat_disk,
     struct gendisk *hd, u32 clst, const void *buf)
 {
-    hd->ops->disk_write(hd, LBA_ADDR(clst, fat_disk), buf,
+    int err = hd->ops->disk_write(hd, LBA_ADDR(clst, fat_disk), buf,
         fat_disk->sect_per_clst);
+    return err < 0 ? err : 0;
+}
+
+// Clear count consecutive clusters from first; zero holds up to 128 sectors
+static int fat_zero_clsts(struct fat_disk *disk, struct gendisk *gd,
+    u32 first, u32 count, const void *zero)
+{
+    int err = gd->ops->disk_write(gd, LBA_ADDR(first, disk), zero,
+        count * disk->sect_per_clst);
+    return err < 0 ? err : 0;
+}
+
+// Allocate a cluster after prev (0 = none) and clear it on disk, so file
+// holes and space added by truncate read back as zeros
+u32 fat_alloc_zeroed_clst(struct fat_disk *disk, struct gendisk *hd, u32 prev)
+{
+    void *zero = kzmalloc(disk->bytes_per_clst);
+    if (!zero)
+        return 0;
+    u32 clst = __fat_find_alloc_clst(disk, prev);
+    if (clst && __fat_write_clst(disk, hd, clst, zero)) {
+        if (prev)
+            fat_set_value(prev, 0x0FFFFFFF, disk);
+        fat_free_chain(disk, clst);
+        clst = 0;
+    }
+    kfree(zero);
+    return clst;
 }
 
 // Write the inode's size and first cluster back to its directory entry and
