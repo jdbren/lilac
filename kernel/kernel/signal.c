@@ -453,7 +453,7 @@ SYSCALL_DECL2(tkill, int, tid, int, sig)
 void zap_other_threads(struct task *p, int code)
 {
     pid_t tids[64];
-    int n, bkt;
+    int n = 0, bkt;
     struct task *t;
     unsigned long flags;
 

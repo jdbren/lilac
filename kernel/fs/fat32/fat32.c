@@ -295,9 +295,19 @@ int fat_write_FAT(struct fat_disk *fat_disk, struct gendisk *gd)
     (disk->clst_begin_lba + \
     ((cluster_num - disk->root_start) * disk->sect_per_clst))
 
+static inline bool fat_bad_data_clst(u32 clst)
+{
+    if (clst >= 2)
+        return false;
+    klog(LOG_ERROR, "fat: I/O to reserved cluster %u refused\n", clst);
+    return true;
+}
+
 int __fat_read_clst(struct fat_disk *fat_disk,
     struct gendisk *hd, u32 clst, void *buf)
 {
+    if (fat_bad_data_clst(clst))
+        return -EIO;
     int err = hd->ops->disk_read(hd, LBA_ADDR(clst, fat_disk), buf,
         fat_disk->sect_per_clst);
     return err < 0 ? err : 0;
@@ -306,6 +316,8 @@ int __fat_read_clst(struct fat_disk *fat_disk,
 int __fat_write_clst(struct fat_disk *fat_disk,
     struct gendisk *hd, u32 clst, const void *buf)
 {
+    if (fat_bad_data_clst(clst))
+        return -EIO;
     int err = hd->ops->disk_write(hd, LBA_ADDR(clst, fat_disk), buf,
         fat_disk->sect_per_clst);
     return err < 0 ? err : 0;
@@ -315,6 +327,8 @@ int __fat_write_clst(struct fat_disk *fat_disk,
 static int fat_zero_clsts(struct fat_disk *disk, struct gendisk *gd,
     u32 first, u32 count, const void *zero)
 {
+    if (fat_bad_data_clst(first))
+        return -EIO;
     int err = gd->ops->disk_write(gd, LBA_ADDR(first, disk), zero,
         count * disk->sect_per_clst);
     return err < 0 ? err : 0;

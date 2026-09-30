@@ -314,10 +314,47 @@ void usleep(u32 micros)
 
 #define TIMER_ABSTIME 1
 
+static long nanosleep_restart(struct restart_block *rb);
+
+// Sleep to monotonic deadline
+static long nanosleep_until(ktime_t deadline, struct timespec __user *rem, bool relative)
+{
+    struct timespec krem;
+
+    sleep_until(deadline);
+    if (!task_interrupted_ack())
+        return 0;
+
+    if (!relative)
+        return -ERESTARTNOHAND;
+    if (rem) {
+        ktime_t left = deadline - ktime_get();
+        if (left < 0)
+            left = 0;
+        krem.tv_sec = left / NS_PER_SEC;
+        krem.tv_nsec = left % NS_PER_SEC;
+        if (copy_to_user(rem, &krem, sizeof(struct timespec)))
+            return -EFAULT;
+    }
+    current->restart_block = (struct restart_block){
+        .fn = nanosleep_restart,
+        .deadline = deadline,
+        .rem = rem,
+    };
+    return -ERESTART_RESTARTBLOCK;
+}
+
+static long nanosleep_restart(struct restart_block *rb)
+{
+    if (rb->deadline <= ktime_get())
+        return 0;
+    return nanosleep_until(rb->deadline, rb->rem, true);
+}
+
 static long do_nanosleep(int clk, int flags, const struct timespec *req,
                          struct timespec *rem)
 {
-    struct timespec kreq, krem;
+    struct timespec kreq;
     if (copy_from_user(&kreq, req, sizeof(struct timespec)))
         return -EFAULT;
     if (kreq.tv_sec < 0 || kreq.tv_nsec < 0 || kreq.tv_nsec >= NS_PER_SEC)
@@ -345,21 +382,7 @@ static long do_nanosleep(int clk, int flags, const struct timespec *req,
     if (deadline <= now)
         return 0;
 
-    sleep_until(deadline);
-
-    if (task_interrupted_ack()) {
-        if (rem && !(flags & TIMER_ABSTIME)) {
-            ktime_t left = deadline - ktime_get();
-            if (left < 0)
-                left = 0;
-            krem.tv_sec = left / NS_PER_SEC;
-            krem.tv_nsec = left % NS_PER_SEC;
-            if (copy_to_user(rem, &krem, sizeof(struct timespec)))
-                return -EFAULT;
-        }
-        return -EINTR;
-    }
-    return 0;
+    return nanosleep_until(deadline, rem, !(flags & TIMER_ABSTIME));
 }
 
 SYSCALL_DECL2(nanosleep, const struct timespec*, duration, struct timespec*, rem)

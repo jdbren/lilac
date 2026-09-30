@@ -74,21 +74,24 @@ Found while fixing the above:
       root, so it never sees `d_mount` and returns -EINVAL.
 - [ ] The dcache never shrinks. Only unlink/rmdir/rename remove entries, so every lookup of a
       new missing name leaves a negative dentry behind for good.
-- [ ] `d_move` briefly takes the dentry out of the cache between parents; a concurrent lookup
-      of the new name in that window can create a second dentry for the same inode.
+- [x] `d_move` briefly takes the dentry out of the cache between parents; a concurrent lookup
+      of the new name in that window could create a second dentry for the same inode. Renames
+      now hold both directories' `i_mutex`, and a lookup the dcache misses takes the directory's
+      `i_mutex` and checks the cache again.
 - [ ] tmpfs: if `tmpfs_dir_append` fails in `tmpfs_rename`, the entry is already removed from
       the old directory, so the file disappears while its dentry stays cached.
 - [ ] tmpfs: create/mkdir/symlink don't check `alloc_inode`/`kzmalloc`/`kmalloc` for failure.
 - [ ] ext2 builds a new inode on every lookup (no inode cache), so two names of one file get
       separate inodes. Harmless while ext2 is read-only.
-- [ ] Fixed-size name buffers: `vfs_create` (dirname 64, basename 16) and `get_final_dentry`
-      in fs/mount.c (basename 16) truncate longer paths; `vfs_create` also leaks its basename
-      on early errors and `vfs_mount` leaks dentry references on its error paths (boot only).
+- [ ] Fixed-size name buffers: `get_final_dentry` in fs/mount.c (basename 16) truncates longer
+      paths, and `vfs_mount` leaks dentry references on its error paths (boot only). (`vfs_create`
+      now goes through the normal lookup and create path.)
 - [ ] `dev_mknod` (kernel/device.c) is never called; mknod returns -ENOSYS.
 - [ ] fat32 readdir gives every entry the directory's own `d_ino`; inode numbers are only
       assigned when a name is looked up.
-- [ ] fat32 has no locking of its own: two tasks changing the same directory at once can each
-      load, edit and write it back, losing one change. The FAT and FSInfo are shared too.
+- [ ] fat32 has no locking of its own. Changes to one directory are serialized by the VFS
+      (the directory's `i_mutex`), but the FAT and FSInfo are shared: creates or writes in
+      different directories at once can allocate clusters concurrently.
 - [ ] fat32: if a write fails partway, clusters already linked past the end of the file keep
       stale data, and a later ftruncate growth would expose it (it trusts clusters on the chain
       to be zeroed).

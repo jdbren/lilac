@@ -96,7 +96,7 @@ struct fat_lfn {
 #define BYTES_PER_SECTOR 512
 #define FAT_BUFFER_SIZE (BYTES_PER_SECTOR * 128)
 
-#define ROUND_UP(x,bps)    ((((uintptr_t)(x)) + (u32)bps-1) & (~((u32)bps-1)))
+#define ROUND_UP(x,bps)    ((((u64)(x)) + (u64)(bps) - 1) & ~((u64)(bps) - 1))
 
 #define FAT_SIGNATURE 0xAA55
 #define FAT32_FS_INFO_SIG1 0x41615252
