@@ -12,6 +12,8 @@
 
 extern struct dentry *root_dentry;
 
+static spinlock_t rename_lock = SPINLOCK_INIT;
+
 /*
  * Reference counting rules
  *
@@ -113,7 +115,9 @@ int d_move(struct dentry *d, struct dentry *new_parent, const char *name)
     d->d_name.data = new_name;
     d->d_name.len = strlen(new_name);
     dget(new_parent);
+    acquire_lock(&rename_lock);
     d->d_parent = new_parent;
+    release_lock(&rename_lock);
 
     mutex_lock(&new_parent->d_lock);
     hlist_add_head(&d->d_sib, &new_parent->d_children);
@@ -126,6 +130,52 @@ int d_move(struct dentry *d, struct dentry *new_parent, const char *name)
 void dget(struct dentry *d)
 {
     atomic_fetch_add(&d->d_count, 1);
+}
+
+// d's current parent, referenced
+struct dentry * dget_parent(struct dentry *d)
+{
+    acquire_lock(&rename_lock);
+    struct dentry *parent = d->d_parent;
+    if (parent)
+        dget(parent);
+    release_lock(&rename_lock);
+    return parent;
+}
+
+struct dentry * lock_parent(struct dentry *d)
+{
+    if (d_unhashed(d))
+        return d->d_parent ? ERR_PTR(-ENOENT) : ERR_PTR(-EBUSY);
+    for (;;) {
+        struct dentry *parent = dget_parent(d);
+        if (!parent)
+            return ERR_PTR(-EBUSY);
+        inode_lock(parent->d_inode);
+        if (d->d_parent == parent && !d_unhashed(d))
+            return parent;
+        bool moved = d->d_parent != parent;
+        inode_unlock(parent->d_inode);
+        dput(parent);
+        if (!moved)
+            return NULL;
+    }
+}
+
+void unlock_parent(struct dentry *parent)
+{
+    inode_unlock(parent->d_inode);
+    dput(parent);
+}
+
+// Is anc a proper ancestor of d? The tree must be held still (rename_mutex).
+bool d_is_ancestor(struct dentry *anc, struct dentry *d)
+{
+    for (d = d->d_parent; d; d = d->d_parent) {
+        if (d == anc)
+            return true;
+    }
+    return false;
 }
 
 void dput(struct dentry *d)
@@ -252,26 +302,19 @@ static struct dentry * resolve_symlink(struct dentry *find, const char *path,
     return resolved;
 }
 
-// Find name under parent in the cache, or ask the filesystem and cache the
-// result (possibly negative). Returns a referenced dentry.
-static struct dentry * lookup_child(struct dentry *parent, char *name)
+// Ask the filesystem for name under parent and cache the result (possibly
+// negative). The caller holds the directory's i_mutex.
+static struct dentry * lookup_child_slow(struct dentry *parent, char *name)
 {
     struct inode *dir = parent->d_inode;
     struct dentry *find, *res;
 
     mutex_lock(&parent->d_lock);
     find = dlookup(parent, name);
-    if (find) {
-        if (find->d_inode && find->d_mount) {
-            res = find->d_mount->mnt_root;
-            dget(res);
-            dput(find);
-            find = res;
-        }
+    if (find)
         goto out;
-    }
-    if (!S_ISDIR(dir->i_mode)) {
-        find = ERR_PTR(-ENOTDIR);
+    if (IS_DEADDIR(dir)) {
+        find = ERR_PTR(-ENOENT);
         goto out;
     }
     find = alloc_dentry(parent, name);
@@ -286,6 +329,34 @@ static struct dentry * lookup_child(struct dentry *parent, char *name)
     dcache_add(find);
 out:
     mutex_unlock(&parent->d_lock);
+    return find;
+}
+
+// Find name under parent in the cache, or ask the filesystem and cache the
+// result (possibly negative). Returns a referenced dentry.
+static struct dentry * lookup_child(struct dentry *parent, char *name)
+{
+    struct inode *dir = parent->d_inode;
+    struct dentry *find, *res;
+
+    mutex_lock(&parent->d_lock);
+    find = dlookup(parent, name);
+    mutex_unlock(&parent->d_lock);
+    if (!find) {
+        if (!S_ISDIR(dir->i_mode))
+            return ERR_PTR(-ENOTDIR);
+        inode_lock(dir);
+        find = lookup_child_slow(parent, name);
+        inode_unlock(dir);
+        if (IS_ERR(find))
+            return find;
+    }
+    if (find->d_inode && find->d_mount) {
+        res = find->d_mount->mnt_root;
+        dget(res);
+        dput(find);
+        find = res;
+    }
     return find;
 }
 
