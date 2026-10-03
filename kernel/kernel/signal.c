@@ -16,6 +16,7 @@
 static const sigset_t unblockable = _SIGKILL | _SIGSTOP;
 static const sigset_t synchronous = _SIGSEGV | _SIGFPE | _SIGILL | _SIGBUS | _SIGTRAP;
 
+// Act on one pending signal. Returns 1 if a handler frame was set up.
 int handle_signal(void)
 {
     struct task *p = current;

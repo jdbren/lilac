@@ -34,6 +34,7 @@ void destroy_timer_event(struct timer_event *ev);
 void timer_ev_enqueue(struct timer_event *ev, struct task *p);
 bool timer_ev_dequeue(struct timer_event *ev);
 void timer_ev_task_exit(struct task *p);
+void init_itimer_real(struct task *p);
 
 static inline bool timer_ev_queued(struct timer_event *ev)
 {

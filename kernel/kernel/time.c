@@ -291,82 +291,75 @@ void busy_wait_usec(u32 micros)
         __pause();
 }
 
+static void sleep_until(ktime_t end)
+{
+    struct timer_event ev = TIMER_EV_INIT(ev, current, end, NULL, NULL);
+    set_task_sleeping(current);
+    timer_ev_enqueue(&ev, current);
+    schedule();
+    timer_ev_dequeue(&ev);
+}
+
 __attribute__((optimize("O0")))
 void usleep(u32 micros)
 {
     ktime_t end = ktime_add_ns(ktime_get(), (u64)micros * 1000);
     if (micros >= 1000) {
-        struct timer_event ev = TIMER_EV_INIT(ev, current, end, NULL, NULL);
-        set_task_sleeping(current);
-        timer_ev_enqueue(&ev, current);
-        schedule();
-        timer_ev_dequeue(&ev);
+        sleep_until(end);
     } else {
         while (ktime_get() < end)
             __pause();
     }
 }
 
+static long nanosleep_restart(struct restart_block *rb);
+
+// Sleep to monotonic deadline
+static long nanosleep_until(ktime_t deadline, struct timespec __user *rem)
+{
+    struct timespec krem;
+
+    sleep_until(deadline);
+    if (!task_interrupted_ack())
+        return 0;
+
+    if (rem) {
+        ktime_t left = deadline - ktime_get();
+        if (left < 0)
+            left = 0;
+        krem.tv_sec = left / NS_PER_SEC;
+        krem.tv_nsec = left % NS_PER_SEC;
+        if (copy_to_user(rem, &krem, sizeof(struct timespec)))
+            return -EFAULT;
+    }
+    current->restart_block = (struct restart_block){
+        .fn = nanosleep_restart,
+        .deadline = deadline,
+        .rem = rem,
+    };
+    return -ERESTART_RESTARTBLOCK;
+}
+
+static long nanosleep_restart(struct restart_block *rb)
+{
+    if (rb->deadline <= ktime_get())
+        return 0;
+    return nanosleep_until(rb->deadline, rb->rem);
+}
+
 SYSCALL_DECL2(nanosleep, const struct timespec*, duration, struct timespec*, rem)
 {
-    struct timespec kduration, krem;
+    struct timespec kduration;
     if (copy_from_user(&kduration, duration, sizeof(struct timespec)))
         return -EFAULT;
     if (kduration.tv_sec < 0 || kduration.tv_nsec < 0 || kduration.tv_nsec >= NS_PER_SEC)
         return -EINVAL;
 
-    ktime_t start_ns = ktime_get();
-    ktime_t total_ns = timespec_to_ktime(kduration);
-
-    usleep(total_ns / 1000);
-
-    ktime_t end_ns = ktime_get();
-    if (task_interrupted_ack()) {
-        if (rem) {
-            u64 elapsed_ns = end_ns - start_ns;
-            if (elapsed_ns < total_ns) {
-                u64 remaining_ns = total_ns - elapsed_ns;
-                krem.tv_sec = remaining_ns / NS_PER_SEC;
-                krem.tv_nsec = remaining_ns % NS_PER_SEC;
-            } else {
-                krem.tv_sec = 0;
-                krem.tv_nsec = 0;
-            }
-            if (copy_to_user(rem, &krem, sizeof(struct timespec)))
-                return -EFAULT;
-        }
-        return -EINTR;
-    }
-    return 0;
-}
-
-static void alarm_handler(struct timer_event *ev)
-{
-    do_raise(ev->p, SIGALRM);
-    kfree(ev);
-}
-
-static unsigned int alarm_cancel(struct task *p, u64 now_ns)
-{
-    unsigned int sec_remaining = 0;
-    struct timer_event *ev, *found = NULL;
-    unsigned long flags;
-
-    // Find and unqueue under one lock hold so the alarm can't fire in between
-    acquire_lock_irqsave(&timer_lock, &flags);
-    list_for_each_entry(ev, &p->timer_ev_list, task_list) {
-        if (ev->callback == alarm_handler) {
-            sec_remaining = ev->expires > now_ns ?
-                (unsigned int)((ev->expires - now_ns) / NS_PER_SEC) : 0;
-            __timer_ev_dequeue(ev);
-            found = ev;
-            break;
-        }
-    }
-    release_lock_irqrestore(&timer_lock, flags);
-
-    kfree(found);
-    return sec_remaining;
+    ktime_t now = ktime_get();
+    ktime_t deadline = ktime_add_ns(now, timespec_to_ktime(kduration));
+    if (deadline <= now)
+        return 0;
+    return nanosleep_until(deadline, rem);
 }
 
 // Cancel a dead task's pending events
@@ -374,14 +367,12 @@ void timer_ev_task_exit(struct task *p)
 {
     struct timer_event *ev, *tmp;
     unsigned long flags;
-    LIST_HEAD(dead);
+
+    WRITE_ONCE(p->itimer_real.interval, 0);
 
     acquire_lock_irqsave(&timer_lock, &flags);
-    list_for_each_entry_safe(ev, tmp, &p->timer_ev_list, task_list) {
+    list_for_each_entry_safe(ev, tmp, &p->timer_ev_list, task_list)
         __timer_ev_dequeue(ev);
-        if (ev->callback == alarm_handler)
-            list_add(&ev->task_list, &dead);
-    }
 
     // A callback already running elsewhere (e.g. an alarm raising a signal)
     // still uses p; the task must not be reaped until it finishes
@@ -393,33 +384,72 @@ void timer_ev_task_exit(struct task *p)
             acquire_lock_irqsave(&timer_lock, &flags);
         }
     }
+    // An interval timer that was firing may have re-armed itself
+    __timer_ev_dequeue(&p->itimer_real.ev);
     release_lock_irqrestore(&timer_lock, flags);
+}
 
-    list_for_each_entry_safe(ev, tmp, &dead, task_list)
-        kfree(ev);
+static void itimer_real_fn(struct timer_event *ev)
+{
+    struct task *p = ev->p;
+    ktime_t interval = READ_ONCE(p->itimer_real.interval);
+
+    do_raise(p, SIGALRM);
+    if (interval) {
+        ktime_t now = ktime_get();
+        ev->expires += interval;
+        if (ev->expires <= now)
+            ev->expires = now + interval;
+        timer_ev_enqueue(ev, p);
+    }
+}
+
+void init_itimer_real(struct task *p)
+{
+    struct timer_event *ev = &p->itimer_real.ev;
+    *ev = (struct timer_event){ .p = p, .callback = itimer_real_fn };
+    RB_CLEAR_NODE(&ev->node);
+    INIT_LIST_HEAD(&ev->task_list);
+    p->itimer_real.interval = 0;
+}
+
+// Disarm p's ITIMER_REAL and return the time it had left (0 if it was unarmed)
+static ktime_t itimer_real_cancel(struct task *p)
+{
+    struct timer_event *ev = &p->itimer_real.ev;
+    ktime_t left = 0;
+
+    WRITE_ONCE(p->itimer_real.interval, 0);
+    if (timer_ev_dequeue(ev)) {
+        left = ev->expires - ktime_get();
+        if (left <= 0)
+            left = 1;
+    }
+    // The callback may have re-armed before it saw interval == 0
+    timer_ev_dequeue(ev);
+    return left;
+}
+
+static void itimer_real_arm(struct task *p, ktime_t value, ktime_t interval)
+{
+    if (!value)
+        return;
+    p->itimer_real.interval = interval;
+    p->itimer_real.ev.expires = ktime_add_ns(ktime_get(), value);
+    timer_ev_enqueue(&p->itimer_real.ev, p);
 }
 
 SYSCALL_DECL1(alarm, unsigned int, seconds)
 {
     struct task *p = current;
-    struct timer_event *ev;
-    ktime_t now = ktime_get();
-    ktime_t exp = ktime_add_ns(now, (u64)seconds * NS_PER_SEC);
 
     klog(LOG_DEBUG, "Process %d set alarm for %u seconds\n", p->pid, seconds);
 
-    unsigned int rem = alarm_cancel(p, now);
-    if (!seconds)
-        return rem;
+    ktime_t left = itimer_real_cancel(p);
+    itimer_real_arm(p, (ktime_t)seconds * NS_PER_SEC, 0);
 
-    ev = create_timer_event(p, exp, alarm_handler, NULL);
-    if (!ev)
-        return -ENOMEM;
-
-    timer_ev_enqueue(ev, p);
-    return rem;
+    return (left + NS_PER_SEC - 1) / NS_PER_SEC;
 }
-
 
 static int is_leap_year(int year) {
     return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);

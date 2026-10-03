@@ -122,6 +122,7 @@ struct task *init_process(void)
     hash_add(pgid_table, &this->pgid_hash, this->pgid);
     hash_add(sid_table, &this->sid_hash, this->sid);
     INIT_LIST_HEAD(&this->timer_ev_list);
+    init_itimer_real(this);
 
     return this;
 }
@@ -234,6 +235,7 @@ static struct task * clone_process(struct clone_args *args)
     child->pending = 0;
 
     INIT_LIST_HEAD(&child->timer_ev_list);
+    init_itimer_real(child);
 
     return child;
 }
@@ -446,7 +448,6 @@ void cleanup_task(struct task *p)
     cleanup_task_info(&p->info);
     cleanup_fs(p->fs, p->files);
     cleanup_memory(p->mm);
-    put_sighandlers(p->sighand);
 }
 
 void reap_task(struct task *p)
@@ -469,6 +470,7 @@ void reap_task(struct task *p)
     hash_del(&p->pgid_hash);
     hash_del(&p->sid_hash);
     release_lock_irqrestore(&tasklist_lock, flags);
+    put_sighandlers(p->sighand);
     kfree(p->reg_store);
     free_pages(p->kstack_base, __KERNEL_STACK_SZ / PAGE_SIZE);
     if (p->flags.mm_last_ref) {
