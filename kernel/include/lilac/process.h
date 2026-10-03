@@ -4,11 +4,12 @@
 #define _KERNEL_PROCESS_H
 
 #include <lilac/types.h>
-#include <lilac/sync.h>
-#include <lib/rbtree.h>
+#include <lilac/rwlock.h>
 #include <lilac/signal.h>
 #include <lib/hashtable.h>
 #include <lilac/fdtable.h>
+#include <lilac/timer_event.h>
+#include <lib/rbtree.h>
 
 struct regs_state;
 struct file;
@@ -38,6 +39,12 @@ struct sighandlers {
     spinlock_t lock;
     atomic_uint ref_count;
     struct ksigaction actions[_NSIG];
+};
+
+struct restart_block {
+    long (*fn)(struct restart_block *);
+    ktime_t deadline;
+    void __user *rem;
 };
 
 struct task_flags {
@@ -120,6 +127,7 @@ struct task {
     char name[32];
 
     long syscall_nr;
+    struct restart_block restart_block;
     sigset_t saved_sigmask;
     struct ksiginfo siginfo[_NSIG];
 };
@@ -141,6 +149,7 @@ struct mm_info * arch_process_mmap(bool is_64_bit);
 struct mm_info * arch_copy_mmap(struct mm_info *parent);
 void             arch_unmap_all_user_vm(struct mm_info *info);
 void             arch_reclaim_mem(struct task *p);
+void             arch_free_old_pgd(struct mm_info *old);
 void *           arch_user_stack(void);
 void *           arch_get_user_sp(void);
 void             arch_set_user_sp(struct task *p, void *sp);
@@ -152,7 +161,7 @@ void             copy_fp_regs(struct task *dst, struct task *src);
 void             fpu_switch(struct task *prev, struct task *next);
 void             arch_prepare_signal(void *pc, int signo, const struct ksiginfo *info,
                                      void *restorer);
-void             arch_restart_syscall(struct task *p, bool sa_restart);
+void             arch_restart_syscall(struct task *p, bool has_handler, bool sa_restart);
 long             arch_restore_post_signal(void);
 
 // kernel mode jump

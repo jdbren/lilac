@@ -228,7 +228,7 @@ SYSCALL_DECL3(waitpid, int, pid, int*, status, int, options)
     }
 
     struct task *p = find_child_by_pid(current, pid);
-    if (!p)
+    if (!p || is_thread(p))
         return -ECHILD;
     if (p->ppid != current->pid)
         return -ECHILD;
@@ -315,6 +315,11 @@ void wake_all(struct waitqueue *wq)
     acquire_lock_irqsave(&wq->lock, &flags);
     __wake_all(wq);
     release_lock_irqrestore(&wq->lock, flags);
+}
+
+void wake_parent_waiter(struct task *parent)
+{
+    wakeup_by_pid_on(parent->pid, &wait_q);
 }
 
 void notify_parent(struct task *parent, struct task *child)

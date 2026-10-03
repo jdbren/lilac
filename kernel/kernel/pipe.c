@@ -25,6 +25,7 @@ struct inode * pipe_alloc_inode()
         return NULL;
     ino->i_mode = S_IFIFO|S_IREAD|S_IWRITE;
     ino->i_count = 1;
+    mutex_init(&ino->i_mutex);
     ino->i_nlink = 1;
     ino->i_atime = ino->i_ctime = ino->i_mtime = get_unix_time();
     ino->i_fop = &pipe_fops;
@@ -126,9 +127,10 @@ ssize_t pipe_read(struct file *f, void *buf, size_t count)
         release_lock(&pipe->lock);
         if (f->f_mode & O_NONBLOCK)
             return -EAGAIN;
-        if (wait_event_interruptible(pipe->read_wq,
-                READ_ONCE(pipe->data_size) != 0 || READ_ONCE(pipe->n_writers) == 0))
-            return -EINTR;
+        int err = wait_event_interruptible(pipe->read_wq,
+                READ_ONCE(pipe->data_size) != 0 || READ_ONCE(pipe->n_writers) == 0);
+        if (err)
+            return err;
         acquire_lock(&pipe->lock);
     }
 
@@ -166,10 +168,11 @@ ssize_t pipe_write(struct file *f, const void *buf, size_t count)
         release_lock(&pipe->lock);
         if (f->f_mode & O_NONBLOCK)
             return -EAGAIN;
-        if (wait_event_interruptible(pipe->write_wq,
+        int err = wait_event_interruptible(pipe->write_wq,
                 READ_ONCE(pipe->data_size) < pipe->buf_size ||
-                READ_ONCE(pipe->n_readers) == 0))
-            return -EINTR;
+                READ_ONCE(pipe->n_readers) == 0);
+        if (err)
+            return err;
         if (READ_ONCE(pipe->n_readers) == 0) {
             klog(LOG_WARN, "pipe_write: No readers after wake, raising SIGPIPE\n");
             do_raise(current, SIGPIPE);

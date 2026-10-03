@@ -2,10 +2,6 @@
 #define __ASSEMBLY__
 #include <lilac/errno.h>
 
-sys_restart_syscall:
-	mov $-ENOSYS, %eax
-	ret
-
 #ifdef __x86_64__
 .macro sc_tbl_entry name
 	.quad sys_\name

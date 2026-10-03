@@ -208,21 +208,49 @@ int x86_syscall_entry(struct regs_state *regs)
     return 0;
 }
 
-void arch_restart_syscall(struct task *p, bool sa_restart)
+/*
+ * Resolve an ERESTART* return from the interrupted syscall into -EINTR or a
+ * restart. has_handler: a handler frame is being built for the signal.
+ */
+void arch_restart_syscall(struct task *p, bool has_handler, bool sa_restart)
 {
+    enum { NR_restart_syscall = 0 };
     struct regs_state *regs = (struct regs_state*)p->regs;
-    if (p->syscall_nr < 0 || (long)regs->ax != -EINTR || !sa_restart)
+    long nr = p->syscall_nr;
+
+    if (nr < 0 || !regs || !user_mode(regs))
         return;
-    // Never restarted
-    enum { NR_sigsuspend = 42, NR_nanosleep = 46, NR_pause = 53 };
-    switch (p->syscall_nr) {
-    case NR_sigsuspend:
-    case NR_nanosleep:
-    case NR_pause:
+    switch ((long)regs->ax) {
+    case -ERESTART_RESTARTBLOCK:
+        nr = NR_restart_syscall;
+        if (has_handler) {
+            p->restart_block.fn = NULL;
+            regs->ax = -EINTR;
+            goto resolved;
+        }
+        break;
+    case -ERESTARTNOHAND:
+        if (has_handler) {
+            regs->ax = -EINTR;
+            goto resolved;
+        }
+        break;
+    case -ERESTARTSYS:
+        if (has_handler && !sa_restart) {
+            regs->ax = -EINTR;
+            goto resolved;
+        }
+        break;
+    case -ERESTARTNOINTR:
+        break;
+    default:
         return;
     }
-    regs->ax = p->syscall_nr;
+    regs->ax = nr;
     regs->ip -= 2; // back over the 2-byte syscall instruction
+resolved:
+    p->syscall_nr = -1;
+    p->flags.signaled = 1;
 }
 
 int x86_kernel_exit(struct regs_state *regs)

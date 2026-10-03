@@ -110,7 +110,7 @@ int futex_wait(int __user *uaddr, int val, ktime_t abs_to)
     release_lock(&bucket->lock);
 
     if (task_interrupted_ack())
-        ret = -EINTR;
+        ret = abs_to ? -EINTR : -ERESTARTSYS;
 
     return ret;
 }
