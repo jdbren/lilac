@@ -203,16 +203,26 @@ int kill_pgrp(int pgid, int sig)
         return -ESRCH;
 
     struct task *p;
-    // TODO: Expand
-    pid_t targets[64];
-    int n = 0;
+    pid_t *targets = NULL;
+    int n, cap = 0;
     unsigned long flags;
-    acquire_lock_irqsave(&tasklist_lock, &flags);
-    pgrp_for_each(p, pgid) {
-        if (n < (int)(sizeof(targets) / sizeof(targets[0])))
-            targets[n++] = p->pid;
+    for (;;) {
+        n = 0;
+        acquire_read_lock_irqsave(&tasklist_lock, &flags);
+        pgrp_for_each(p, pgid) {
+            if (n < cap)
+                targets[n] = p->pid;
+            n++;
+        }
+        release_read_lock_irqrestore(&tasklist_lock, flags);
+        if (n <= cap)
+            break;
+        kfree(targets);
+        cap = n + 8;
+        targets = kmalloc(cap * sizeof(*targets));
+        if (!targets)
+            return -ENOMEM;
     }
-    release_lock_irqrestore(&tasklist_lock, flags);
 
     bool found = n > 0;
     for (int i = 0; i < n; i++) {
@@ -223,6 +233,7 @@ int kill_pgrp(int pgid, int sig)
         if (sig)
             do_raise(p, sig);
     }
+    kfree(targets);
 
     if (!found) {
         klog(LOG_DEBUG, "kill_pgrp: No such process group %d\n", pgid);
@@ -436,7 +447,9 @@ SYSCALL_DECL2(tkill, int, tid, int, sig)
     return do_tkill(0, tid, sig);
 }
 
-// SIGKILL every other thread in p's group; they exit with status code
+// SIGKILL every other thread in p's group; they exit with status code.
+// Threads are marked group_exit as they are collected, so each pass only picks
+// up ones not yet signalled; repeat until a pass finds none.
 void zap_other_threads(struct task *p, int code)
 {
     pid_t tids[64];
@@ -444,20 +457,24 @@ void zap_other_threads(struct task *p, int code)
     struct task *t;
     unsigned long flags;
 
-    acquire_lock_irqsave(&tasklist_lock, &flags);
+    p->tg_leader->exit_status = code;
+    if (atomic_load(&p->tg_leader->tg_live) <= 1)
+        return;
+    // TODO: make this more efficient
+    acquire_read_lock_irqsave(&tasklist_lock, &flags);
     hash_for_each(pid_table, bkt, t, pid_hash) {
         if (t != p && t->tgid == p->tgid && t->state != TASK_ZOMBIE &&
-                n < (int)(sizeof(tids) / sizeof(tids[0])))
+                !t->group_exit && n < (int)(sizeof(tids) / sizeof(tids[0]))) {
+            t->group_exit_code = code;
+            t->group_exit = true;
             tids[n++] = t->pid;
+        }
     }
-    release_lock_irqrestore(&tasklist_lock, flags);
+    release_read_lock_irqrestore(&tasklist_lock, flags);
 
     for (int i = 0; i < n; i++) {
         t = get_task_by_pid(tids[i]);
-        if (!t)
-            continue;
-        t->group_exit_code = code;
-        t->group_exit = true;
-        do_raise(t, SIGKILL);
+        if (t)
+            do_raise(t, SIGKILL);
     }
 }
