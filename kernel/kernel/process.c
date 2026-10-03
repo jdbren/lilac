@@ -21,7 +21,7 @@
 DEFINE_HASHTABLE(pid_table, PID_HASH_BITS);
 DEFINE_HASHTABLE(pgid_table, PID_HASH_BITS);
 DEFINE_HASHTABLE(sid_table, PID_HASH_BITS);
-spinlock_t tasklist_lock = SPINLOCK_INIT;
+rwlock_t tasklist_lock = RWLOCK_INIT;
 
 void exit(int status);
 
@@ -40,14 +40,14 @@ struct task * get_task_by_pid(int pid)
     struct task *p, *found = NULL;
     unsigned long flags;
     if (pid < 1) return NULL;
-    acquire_lock_irqsave(&tasklist_lock, &flags);
+    acquire_read_lock_irqsave(&tasklist_lock, &flags);
     hash_for_each_possible(pid_table, p, pid_hash, pid) {
         if (p->pid == pid) {
             found = p;
             break;
         }
     }
-    release_lock_irqrestore(&tasklist_lock, flags);
+    release_read_lock_irqrestore(&tasklist_lock, flags);
     return found;
 }
 
@@ -56,14 +56,14 @@ struct task * get_pgrp_leader(int pgid)
     struct task *p, *found = NULL;
     unsigned long flags;
     if (pgid < 0) return NULL;
-    acquire_lock_irqsave(&tasklist_lock, &flags);
+    acquire_read_lock_irqsave(&tasklist_lock, &flags);
     hash_for_each_possible(pgid_table, p, pgid_hash, pgid) {
         if (p->pgid == pgid && p->pid == pgid) {
             found = p;
             break;
         }
     }
-    release_lock_irqrestore(&tasklist_lock, flags);
+    release_read_lock_irqrestore(&tasklist_lock, flags);
     return found;
 }
 
@@ -73,14 +73,14 @@ struct task *get_any_pgrp_member(pid_t pgid)
     unsigned long flags;
     if (pgid < 0)
         return NULL;
-    acquire_lock_irqsave(&tasklist_lock, &flags);
+    acquire_read_lock_irqsave(&tasklist_lock, &flags);
     hash_for_each_possible(pgid_table, p, pgid_hash, pgid) {
         if (p->pgid == pgid) {
             found = p;
             break;
         }
     }
-    release_lock_irqrestore(&tasklist_lock, flags);
+    release_read_lock_irqrestore(&tasklist_lock, flags);
     return found;
 }
 
@@ -212,11 +212,11 @@ SYSCALL_DECL2(setpgid, pid_t, pid, pid_t, pgid)
     }
 
     unsigned long flags;
-    acquire_lock_irqsave(&tasklist_lock, &flags);
+    acquire_write_lock_irqsave(&tasklist_lock, &flags);
     hash_del(&p->pgid_hash);
     p->pgid = pgid;
     hash_add(pgid_table, &p->pgid_hash, p->pgid);
-    release_lock_irqrestore(&tasklist_lock, flags);
+    release_write_lock_irqrestore(&tasklist_lock, flags);
     klog(LOG_DEBUG, "Set pgid of process %d to %d\n", p->pid, p->pgid);
     return 0;
 }
@@ -229,7 +229,7 @@ SYSCALL_DECL0(setsid)
         return -EPERM;
 
     unsigned long flags;
-    acquire_lock_irqsave(&tasklist_lock, &flags);
+    acquire_write_lock_irqsave(&tasklist_lock, &flags);
     hash_del(&p->sid_hash);
     hash_del(&p->pgid_hash);
     p->sid  = pid;
@@ -237,7 +237,7 @@ SYSCALL_DECL0(setsid)
     p->ctty = NULL;
     hash_add(sid_table, &p->sid_hash, p->sid);
     hash_add(pgid_table, &p->pgid_hash, p->pgid);
-    release_lock_irqrestore(&tasklist_lock, flags);
+    release_write_lock_irqrestore(&tasklist_lock, flags);
     klog(LOG_DEBUG, "Process %d created new session %d\n", p->pid, p->sid);
     return pid;
 }
@@ -270,9 +270,11 @@ static int load_executable(struct task *p, struct exec_info *info)
 }
 
 // Must be called with mm->mmap_lock held
-static void set_vm_areas(struct mm_info *mem)
+static int set_vm_areas(struct mm_info *mem)
 {
     struct vm_desc *stack_desc = kzmalloc(sizeof(*stack_desc));
+    if (!stack_desc)
+        return -ENOMEM;
     stack_desc->mm = mem;
     stack_desc->start = mem->start_stack;
     stack_desc->end = __USER_STACK;
@@ -290,6 +292,7 @@ static void set_vm_areas(struct mm_info *mem)
         desc = desc->vm_next;
     }
 #endif
+    return 0;
 }
 
 static unsigned int prepare_task_args(struct task *p, char **argv, char *argv_loc, char *argv_max)
@@ -304,7 +307,7 @@ static unsigned int prepare_task_args(struct task *p, char **argv, char *argv_lo
         // argv[argc] = argv_loc;
         put_user(argv_loc, &argv[argc]);
         argv_loc += len;
-        assert(argv_loc < argv_max);
+        assert(argv_loc <= argv_max);
     }
     p->mm->arg_end = (uintptr_t)argv_loc;
     // argv[argc] = NULL;
@@ -332,7 +335,7 @@ static int prepare_task_env(struct task *p, char **envp, char *env_loc, char *en
         // envp[envc] = env_loc;
         put_user(env_loc, &envp[envc]);
         env_loc = env_loc + len;
-        assert(env_loc < env_max);
+        assert(env_loc <= env_max);
     }
     p->mm->env_end = (uintptr_t)env_loc;
     // envp[envc] = NULL;
@@ -408,8 +411,12 @@ static void load_and_start(void)
     }
     mem->start_brk = mem->brk = desc ? desc->end : 0;
     mem->start_stack = (uintptr_t)(__USER_STACK - __USER_STACK_SZ);
-    set_vm_areas(mem);
+    int err = set_vm_areas(mem);
     mmap_write_unlock(mem);
+    if (err) {
+        klog(LOG_ERROR, "Failed to set up the stack, exiting\n");
+        exit(1);
+    }
 
     unsigned long argc = count_task_vec(current->info.argv);
     unsigned long envc = count_task_vec(current->info.envp);
@@ -528,7 +535,10 @@ static void exec_and_return(void)
         }
     }
 
-    exec_mm_release(current, old_mm);
+    if (exec_mm_release(current, old_mm)) {
+        arch_free_old_pgd(old_mm);
+        kfree(old_mm);
+    }
 
     jump_new_proc(task);
     panic("exec_and_return: Should never be reached\n");
@@ -693,7 +703,10 @@ out:
         kfree(path_buf);
     kfree(argv_buf);
     kfree(envp_buf);
-    return err;
+    if (err < 0)
+        return err;
+    exec_and_return();
+    unreachable();
 }
 
 

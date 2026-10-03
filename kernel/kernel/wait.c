@@ -57,39 +57,46 @@ static inline bool child_in_pgrp(struct task *child, pid_t pgid)
     return !is_thread(child) && (pgid == 0 || child->pgid == pgid);
 }
 
-static void reap_dead_threads(struct task *parent)
+// A zombie leader is waitable only once every thread in its group has exited
+static inline bool child_dead(struct task *child)
 {
-    struct task *child, *tmp;
-    list_for_each_entry_safe(child, tmp, &parent->children, sibling) {
-        if (is_thread(child) && READ_ONCE(child->state) == TASK_ZOMBIE)
-            reap_task(child);
-    }
+    return READ_ONCE(child->state) == TASK_ZOMBIE &&
+        (is_thread(child) || atomic_load(&child->tg_live) == 0);
 }
 
 static struct task * find_exited_child(struct task *parent, pid_t pgid)
 {
-    struct task *child;
-    reap_dead_threads(parent);
+    struct task *child, *found = NULL;
+    unsigned long flags;
+
+    acquire_read_lock_irqsave(&tasklist_lock, &flags);
     list_for_each_entry(child, &parent->children, sibling) {
-        if (child->state == TASK_ZOMBIE && child_in_pgrp(child, pgid)) {
-            return child;
+        if (child_dead(child) && child_in_pgrp(child, pgid)) {
+            found = child;
+            break;
         }
     }
-    return NULL;
+    release_read_lock_irqrestore(&tasklist_lock, flags);
+    return found;
 }
 
 static struct task * find_stopped_child(struct task *parent, pid_t pgid)
 {
-    struct task *child;
+    struct task *child, *found = NULL;
+    unsigned long flags;
+
+    acquire_read_lock_irqsave(&tasklist_lock, &flags);
     list_for_each_entry(child, &parent->children, sibling) {
         if (child->state == TASK_STOPPED &&
         child_in_pgrp(child, pgid) &&
         child->flags.state_change) {
             child->flags.state_change = 0;
-            return child;
+            found = child;
+            break;
         }
     }
-    return NULL;
+    release_read_lock_irqrestore(&tasklist_lock, flags);
+    return found;
 }
 
 static pid_t handle_exited_child(struct task *child, int *status)
@@ -99,6 +106,8 @@ static pid_t handle_exited_child(struct task *child, int *status)
         *status = child->exit_status;
         klog(LOG_DEBUG, "wait_any: Child %d exited with status %d\n", child_pid, *status);
     }
+    // a waitable leader's threads have all exited
+    reap_dead_threads();
     reap_task(child);
     return child_pid;
 }
@@ -113,33 +122,38 @@ static pid_t handle_stopped_child(struct task *child, int *status)
 
 static bool child_waitable(struct task *p, bool wait_stopped)
 {
-    u8 state = READ_ONCE(p->state);
-    return state == TASK_ZOMBIE || (wait_stopped && state == TASK_STOPPED);
+    return child_dead(p) || (wait_stopped && READ_ONCE(p->state) == TASK_STOPPED);
 }
 
 static bool any_child_waitable(struct task *parent, bool wait_stopped, pid_t pgid)
 {
     struct task *child;
+    unsigned long flags;
+    bool found = false;
+
+    acquire_read_lock_irqsave(&tasklist_lock, &flags);
     list_for_each_entry(child, &parent->children, sibling) {
         if (!child_in_pgrp(child, pgid))
             continue;
-        u8 state = READ_ONCE(child->state);
-        if (state == TASK_ZOMBIE)
-            return true;
-        if (wait_stopped && state == TASK_STOPPED && child->flags.state_change)
-            return true;
+        if (child_dead(child) ||
+                (wait_stopped && READ_ONCE(child->state) == TASK_STOPPED &&
+                child->flags.state_change)) {
+            found = true;
+            break;
+        }
     }
-    return false;
+    release_read_lock_irqrestore(&tasklist_lock, flags);
+    return found;
 }
 
 static pid_t wait_for(struct task *p, int *status, bool nohang, bool wait_stopped)
 {
     for (;;) {
-        u8 state = READ_ONCE(p->state);
+        reap_dead_threads();
 
-        if (state == TASK_ZOMBIE) {
+        if (child_dead(p)) {
             return handle_exited_child(p, status);
-        } else if (state == TASK_STOPPED && wait_stopped) {
+        } else if (READ_ONCE(p->state) == TASK_STOPPED && wait_stopped) {
             return handle_stopped_child(p, status);
         }
 
@@ -158,6 +172,7 @@ static pid_t wait_for(struct task *p, int *status, bool nohang, bool wait_stoppe
 
 static pid_t check_children(int *status, bool wait_stopped, pid_t pgid)
 {
+    reap_dead_threads();
     struct task *child = find_exited_child(current, pgid);
     if (child)
         return handle_exited_child(child, status);
@@ -174,10 +189,18 @@ static pid_t check_children(int *status, bool wait_stopped, pid_t pgid)
 static bool has_child_in_pgrp(pid_t pgid)
 {
     struct task *child;
-    list_for_each_entry(child, &current->children, sibling)
-        if (child_in_pgrp(child, pgid))
-            return true;
-    return false;
+    unsigned long flags;
+    bool found = false;
+
+    acquire_read_lock_irqsave(&tasklist_lock, &flags);
+    list_for_each_entry(child, &current->children, sibling) {
+        if (child_in_pgrp(child, pgid)) {
+            found = true;
+            break;
+        }
+    }
+    release_read_lock_irqrestore(&tasklist_lock, flags);
+    return found;
 }
 
 static pid_t wait_any(int *status, bool nohang, bool wait_stopped, pid_t pgid)

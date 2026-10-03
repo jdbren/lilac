@@ -95,6 +95,8 @@ struct task {
     struct list_head children;
     struct list_head sibling;
     struct task *tg_leader;
+    atomic_int tg_live;
+    struct list_head dead_node;
     struct hlist_node pid_hash;
 
     int pgid;
@@ -140,6 +142,7 @@ struct task {
 
 struct task *init_process(void);
 void reap_task(struct task *p);
+void reap_dead_threads(void);
 __noreturn void do_exit(void);
 struct task * get_task_by_pid(int pid);
 struct task * get_pgrp_leader(int pgid);
@@ -187,7 +190,7 @@ extern DECLARE_HASHTABLE(pgid_table, PID_HASH_BITS);
 extern DECLARE_HASHTABLE(sid_table, PID_HASH_BITS);
 
 // Protects the pid/pgid/sid hash tables and every task's children list
-extern spinlock_t tasklist_lock;
+extern rwlock_t tasklist_lock;
 
 #define pgrp_for_each(p, pgid) hash_for_each_possible(pgid_table, p, pgid_hash, pgid) \
     if (p->pgid == pgid)

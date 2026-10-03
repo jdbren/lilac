@@ -98,6 +98,7 @@ struct task *init_process(void)
     this->sid = this->pid;
     this->tgid = this->pid;
     this->tg_leader = this;
+    this->tg_live = 1;
     this->exit_signal = SIGCHLD;
     this->mm = mem;
     this->pgd = mem->pgd;
@@ -117,6 +118,7 @@ struct task *init_process(void)
     this->info.envp = kcalloc(1, sizeof(char*));
     this->sighand = alloc_sighandlers();
     INIT_LIST_HEAD(&this->children);
+    INIT_LIST_HEAD(&this->dead_node);
     INIT_LIST_HEAD(&this->sibling);
     hash_add(pid_table, &this->pid_hash, this->pid);
     hash_add(pgid_table, &this->pgid_hash, this->pgid);
@@ -138,6 +140,7 @@ static struct task * clone_process(struct clone_args *args)
 
     child->rq_node = (struct rb_node){0};
     INIT_LIST_HEAD(&child->children);
+    INIT_LIST_HEAD(&child->dead_node);
     child->on_rq = false;
     child->on_cpu = false;
     child->flags.mm_last_ref = 0;
@@ -151,9 +154,12 @@ static struct task * clone_process(struct clone_args *args)
     if (flags & CLONE_THREAD) {
         child->tgid = cur->tgid;
         child->tg_leader = cur->tg_leader;
+        child->tg_live = 0;
+        atomic_fetch_add(&cur->tg_leader->tg_live, 1);
     } else {
         child->tgid = child->pid;
         child->tg_leader = child;
+        child->tg_live = 1;
     }
 
     child->set_child_tid = (flags & CLONE_CHILD_SETTID) ? args->child_tid : NULL;
@@ -178,12 +184,12 @@ static struct task * clone_process(struct clone_args *args)
     }
 
     unsigned long tl_flags;
-    acquire_lock_irqsave(&tasklist_lock, &tl_flags);
+    acquire_write_lock_irqsave(&tasklist_lock, &tl_flags);
     list_add_tail(&child->sibling, &parent->children);
     hash_add(pid_table, &child->pid_hash, child->pid);
     hash_add(pgid_table, &child->pgid_hash, child->pgid);
     hash_add(sid_table, &child->sid_hash, child->sid);
-    release_lock_irqrestore(&tasklist_lock, tl_flags);
+    release_write_lock_irqrestore(&tasklist_lock, tl_flags);
 
     child->kstack_base = alloc_kstack();
     if (!child->kstack_base) {
@@ -276,6 +282,7 @@ int do_clone(struct clone_args *args)
         return -EFAULT;
     }
 
+    reap_dead_threads();
     struct task *child = clone_process(args);
     if (!child)
         return -ENOMEM;
@@ -464,12 +471,12 @@ void reap_task(struct task *p)
     kfree(p->fp_regs);
     p->fp_regs = NULL;
     unsigned long flags;
-    acquire_lock_irqsave(&tasklist_lock, &flags);
+    acquire_write_lock_irqsave(&tasklist_lock, &flags);
     list_del(&p->sibling);
     hash_del(&p->pid_hash);
     hash_del(&p->pgid_hash);
     hash_del(&p->sid_hash);
-    release_lock_irqrestore(&tasklist_lock, flags);
+    release_write_lock_irqrestore(&tasklist_lock, flags);
     put_sighandlers(p->sighand);
     kfree(p->reg_store);
     free_pages(p->kstack_base, __KERNEL_STACK_SZ / PAGE_SIZE);
@@ -478,6 +485,35 @@ void reap_task(struct task *p)
         kfree(p->mm);
     }
     kfree(p);
+}
+
+// TODO: kworker threads
+static LIST_HEAD(dead_threads);
+static spinlock_t dead_threads_lock = SPINLOCK_INIT;
+
+static void queue_dead_thread(struct task *p)
+{
+    unsigned long flags;
+    acquire_lock_irqsave(&dead_threads_lock, &flags);
+    list_add_tail(&p->dead_node, &dead_threads);
+    release_lock_irqrestore(&dead_threads_lock, flags);
+}
+
+void reap_dead_threads(void)
+{
+    struct task *p;
+    unsigned long flags;
+
+    for (;;) {
+        acquire_lock_irqsave(&dead_threads_lock, &flags);
+        p = list_first_entry_or_null(&dead_threads, struct task, dead_node);
+        if (p)
+            list_del_init(&p->dead_node);
+        release_lock_irqrestore(&dead_threads_lock, flags);
+        if (!p)
+            break;
+        reap_task(p);
+    }
 }
 
 static void reparent_children(struct task *p)
@@ -489,7 +525,7 @@ static void reparent_children(struct task *p)
     if (!init || init == p)
         return;
 
-    acquire_lock_irqsave(&tasklist_lock, &flags);
+    acquire_write_lock_irqsave(&tasklist_lock, &flags);
     list_for_each_entry_safe(child, tmp, &p->children, sibling) {
         list_del(&child->sibling);
         child->parent = init;
@@ -499,7 +535,7 @@ static void reparent_children(struct task *p)
                 (!zombie || zombie->exit_signal <= 0))
             zombie = child;
     }
-    release_lock_irqrestore(&tasklist_lock, flags);
+    release_write_lock_irqrestore(&tasklist_lock, flags);
 
     if (zombie)
         notify_parent(init, zombie);
@@ -511,15 +547,22 @@ __noreturn void do_exit(void)
     unsigned long flags;
     if (unlikely(current->pid <= 1))
         panic("Init or kernel tried to exit!\n");
+    reap_dead_threads();
     reparent_children(current);
     cleanup_task(current);
     set_current_state(TASK_ZOMBIE);
-    // Read and notify the parent only now, under the lock
-    acquire_lock_irqsave(&tasklist_lock, &flags);
+
+    struct task *leader = current->tg_leader;
+    if (current != leader)
+        queue_dead_thread(current);
+
+    acquire_read_lock_irqsave(&tasklist_lock, &flags);
+    bool group_dead = atomic_fetch_sub(&leader->tg_live, 1) == 1;
     parent = current->parent;
-    if (parent)
-        notify_parent(parent, current);
-    release_lock_irqrestore(&tasklist_lock, flags);
+    if (parent && group_dead)
+        notify_parent(parent, leader);
+    release_read_lock_irqrestore(&tasklist_lock, flags);
+
     schedule();
     unreachable();
 }
