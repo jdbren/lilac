@@ -62,8 +62,10 @@ int handle_signal(void)
             klog(LOG_WARN, "Unhandled signal %d in process %d\n", sig, p->pid);
         }
     } else {
+#ifdef DEBUG_SIGNAL
         klog(LOG_DEBUG, "Delivering signal %d to process %d\n", sig, p->pid);
-        arch_restart_syscall(p, ka->sa.sa_flags & SA_RESTART);
+#endif
+        arch_restart_syscall(p, true, ka->sa.sa_flags & SA_RESTART);
         arch_prepare_signal(ka->sa.sa_handler, sig,
             (ka->sa.sa_flags & SA_SIGINFO) ? &p->siginfo[sig] : NULL,
             (ka->sa.sa_flags & SA_RESTORER) ? (void*)ka->sa.sa_restorer : NULL);
@@ -75,6 +77,7 @@ int handle_signal(void)
         if (!(ka->sa.sa_flags & SA_NODEFER))
             p->blocked |= sig_bit;
         p->flags.signaled = 1;
+        return 1;
     }
 
     return 0;
@@ -86,12 +89,24 @@ SYSCALL_DECL0(pause)
     set_task_sleeping(current);
     while (!sigispending(current))
         yield();
-    return -EINTR;
+    return -ERESTARTNOHAND;
+}
+
+// Resume a syscall that returned ERESTART_RESTARTBLOCK
+SYSCALL_DECL0(restart_syscall)
+{
+    struct restart_block *rb = &current->restart_block;
+    long (*fn)(struct restart_block *) = rb->fn;
+
+    rb->fn = NULL;
+    return fn ? fn(rb) : -EINTR;
 }
 
 SYSCALL_DECL0(sigreturn)
 {
+#ifdef DEBUG_SIGNAL
     klog(LOG_DEBUG, "sigreturn called by process %d\n", current->pid);
+#endif
     current->flags.signaled = 1;
     return arch_restore_post_signal();
 }
@@ -121,16 +136,20 @@ int do_raise_info(struct task *p, int sig, const struct ksiginfo *info)
 #ifdef DEBUG_SIGNAL
     klog(LOG_DEBUG, "Raising signal %d for process %d\n", sig, p->pid);
 #endif
+    if (READ_ONCE(p->state) == TASK_ZOMBIE)
+        return 0;
     sigset_t pending = p->pending;
     struct ksigaction *ka = &p->sighand->actions[sig];
 
-    if (sig == SIGCONT && p->state == TASK_STOPPED) {
-        klog(LOG_DEBUG, "Continuing stopped process %d due to SIGCONT\n", p->pid);
+    if ((sig == SIGCONT || sig == SIGKILL) && p->state == TASK_STOPPED) {
+        klog(LOG_DEBUG, "Waking stopped process %d for signal %d\n", p->pid, sig);
         set_task_running(p);
     }
 
     if (sigismember(&pending, sig)) {
+#ifdef DEBUG_SIGNAL
         klog(LOG_DEBUG, "Signal %d already pending for process %d\n", sig, p->pid);
+#endif
         return 0; // Signal already pending
     }
 
@@ -150,7 +169,9 @@ int do_raise_info(struct task *p, int sig, const struct ksiginfo *info)
     sigaddset(&p->pending, sig);
 
     if (sigisblocked(p, sig)) {
+#ifdef DEBUG_SIGNAL
         klog(LOG_DEBUG, "Signal %d is currently blocked for process %d\n", sig, p->pid);
+#endif
         if (sigismember(&synchronous, sig) && p == current) {
             do_kill(p, sig);
         }
@@ -192,7 +213,7 @@ int kill_pgrp(int pgid, int sig)
     bool found = n > 0;
     for (int i = 0; i < n; i++) {
         p = get_task_by_pid(targets[i]);
-        if (!p)
+        if (!p || READ_ONCE(p->state) == TASK_ZOMBIE)
             continue;
         klog(LOG_DEBUG, "Sending signal %d to process %d in group %d\n", sig, p->pid, pgid);
         if (sig)
@@ -354,7 +375,7 @@ SYSCALL_DECL1(sigsuspend, sigset_t*, set)
     // frame (or the exit path, if nothing is delivered) restores oldmask
     current->saved_sigmask = oldmask;
     current->flags.restore_sigmask = 1;
-    return -EINTR;
+    return -ERESTARTNOHAND;
 }
 
 static int do_tkill(int tgid, int tid, int sig)

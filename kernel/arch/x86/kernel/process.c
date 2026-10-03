@@ -148,6 +148,15 @@ void arch_unmap_all_user_vm(struct mm_info *info)
     mmap_write_unlock(info);
 }
 
+void arch_free_old_pgd(struct mm_info *old)
+{
+    load_cr3(current->pgd);
+#ifdef DEBUG_MM
+    mm_dbg_reclaim_pgd_pages_freed++;
+#endif
+    free_page(phys_to_virt(old->pgd));
+}
+
 void arch_reclaim_mem(struct task *p)
 {
 #ifdef DEBUG_MM

@@ -12,6 +12,7 @@
  */
 int do_kernel_exit_work(void)
 {
+    bool handler = false;
     arch_disable_interrupts();
     while (current->flags.need_resched || sigispending(current)) {
         arch_enable_interrupts();
@@ -19,13 +20,17 @@ int do_kernel_exit_work(void)
             current->flags.need_resched = 0;
             schedule();
         }
-        if (sigispending(current)) {
-            handle_signal();
+        // Default actions (a stop, an ignored signal) loop again
+        if (sigispending(current) && handle_signal()) {
+            handler = true;
             arch_disable_interrupts();
             break;
         }
         arch_disable_interrupts();
     }
+    // No signal handler frame (a stop, an ignored signal): syscall simply restarts
+    if (!handler)
+        arch_restart_syscall(current, false, false);
     current->syscall_nr = -1;
     if (current->flags.restore_sigmask) {
         // sigsuspend woke but no handler ran

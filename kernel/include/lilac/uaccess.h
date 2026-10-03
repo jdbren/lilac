@@ -94,6 +94,7 @@ int strnlen_user(const char *str, int max)
         klog(LOG_WARN, "strnlen_user: str not accessible: %p\n", str);
         return -EFAULT;
     }
+    max = MIN(max, __USER_MAX_ADDR + 1 - (uintptr_t)str);
     return arch_strnlen_user(str, max);
 }
 

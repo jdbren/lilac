@@ -74,6 +74,12 @@ typedef struct mutex {
     spinlock_t wait_lock;
 } mutex_t;
 
+#define DEFINE_MUTEX(name) mutex_t name = { \
+    .owner = -1, \
+    .waiters = LIST_HEAD_INIT(name.waiters), \
+    .wait_lock = SPINLOCK_INIT, \
+}
+
 void mutex_init(mutex_t *mutex);
 void mutex_lock(mutex_t *mutex);
 void mutex_lock_r(mutex_t *mutex);

@@ -141,6 +141,7 @@ static struct task * clone_process(struct clone_args *args)
     child->on_cpu = false;
     child->flags.mm_last_ref = 0;
     child->syscall_nr = -1;
+    child->restart_block.fn = NULL;
     child->group_exit = false;
     child->flags.restore_sigmask = 0;
     child->group_exit_code = 0;
@@ -375,10 +376,10 @@ void exit_mm_release(struct task *tsk, struct mm_info *mm)
     tsk->flags.mm_last_ref = mm_release(tsk, mm);
 }
 
-void exec_mm_release(struct task *tsk, struct mm_info *mm)
+bool exec_mm_release(struct task *tsk, struct mm_info *mm)
 {
     // futex_exec_release(tsk);
-    mm_release(tsk, mm);
+    return mm_release(tsk, mm);
 }
 
 static void cleanup_fs(struct fs_info *fs, struct fdtable *files)
@@ -395,6 +396,7 @@ static void cleanup_fs(struct fs_info *fs, struct fdtable *files)
             }
         }
         kfree(files->fdarray);
+        kfree(files->close_on_exec);
         kfree(files);
     }
 

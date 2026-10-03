@@ -4,6 +4,7 @@
 #include <lilac/config.h>
 #include <lilac/sync.h>
 #include <lilac/errno.h>
+#include <lilac/err.h>
 #include <lib/list.h>
 
 #define WNOHANG 1
@@ -57,6 +58,7 @@ void wake_all(struct waitqueue *wq);
 void __wake_all(struct waitqueue *wq);
 
 void notify_parent(struct task *parent, struct task *child);
+void wake_parent_waiter(struct task *parent);
 
 /**
  * Sleep until cond is true, ignoring signals. Whoever makes cond true must
@@ -75,7 +77,7 @@ void notify_parent(struct task *parent, struct task *child);
 
 /**
  * An unblocked signal ends the wait.
- * Evaluates to 0 once cond is true, or -EINTR if a signal arrived first.
+ * Evaluates to 0 once cond is true, or -ERESTARTSYS if a signal arrived first.
  */
 #define wait_event_interruptible(wq, cond) ({ \
     struct wq_entry __wait = WQ_ENTRY_INIT(__wait, current, NULL); \
@@ -85,7 +87,7 @@ void notify_parent(struct task *parent, struct task *child);
         if (cond) \
             break; \
         if (wait_signal_pending()) { \
-            __ret = -EINTR; \
+            __ret = -ERESTARTSYS; \
             break; \
         } \
         yield(); \

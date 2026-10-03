@@ -5,7 +5,14 @@
 #include <lilac/config.h>
 #include <lilac/errno.h>
 
-#define ERESTARTSYS    512
+// restart unless a handler without SA_RESTART runs
+#define ERESTARTSYS             512
+// always restart
+#define ERESTARTNOINTR          513
+// restart only if no handler runs
+#define ERESTARTNOHAND          514
+// like ERESTARTNOHAND, resuming from current->restart
+#define ERESTART_RESTARTBLOCK   516
 
 #define MAX_ERRNO       4095
 #define IS_ERR_VALUE(x) unlikely((unsigned long)(void *)(x) >= (unsigned long)-MAX_ERRNO)

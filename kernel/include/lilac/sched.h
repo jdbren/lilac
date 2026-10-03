@@ -41,7 +41,7 @@ static inline bool task_interrupted_ack(void)
     return false;
 }
 
-void exec_mm_release(struct task *tsk, struct mm_info *mm);
+bool exec_mm_release(struct task *tsk, struct mm_info *mm);
 void exit_mm_release(struct task *tsk, struct mm_info *mm);
 
 #endif
