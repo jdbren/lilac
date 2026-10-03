@@ -122,6 +122,10 @@ struct task {
     struct tty *ctty;
 
     struct list_head timer_ev_list;
+    struct {
+        struct timer_event ev;  // ITIMER_REAL
+        ktime_t interval;
+    } itimer_real;
 
     struct task_info info;
     char name[32];
