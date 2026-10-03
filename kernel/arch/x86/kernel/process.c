@@ -304,6 +304,14 @@ void sigtramp(void)
     unreachable();
 }
 
+#ifndef __x86_64__
+/*
+ * Signal frame, from regs_frame (16-byte aligned) up:
+ * [regs_state][ucontext][pad][fxsave area] ... [siginfo][sigtramp bytes]
+ */
+#define SIGFRAME_FP_OFFSET  ((sizeof(struct regs_state) + sizeof(ucontext_t) + 15) & ~15UL)
+#define SIGFRAME_FP_BYTES   512
+
 static void create_ucontext(ucontext_t *uc)
 {
     uc->uc_link = NULL;
@@ -322,16 +330,14 @@ static void create_ucontext(ucontext_t *uc)
 void arch_prepare_signal(void *pc, int signo, const struct ksiginfo *info,
                          void *restorer)
 {
-    static const size_t FRAME_BYTES = sizeof(struct regs_state) + sizeof(ucontext_t);
+    static const size_t FRAME_BYTES = SIGFRAME_FP_OFFSET + SIGFRAME_FP_BYTES;
     struct regs_state *regs = (struct regs_state*)current->regs;
+#ifdef DEBUG_SIGNAL
     klog(LOG_DEBUG, "Pre signal orginal regs: ip=%lx sp=%lx\n", regs->ip, regs->sp);
+#endif
     uintptr_t *ustack = (uintptr_t*)regs->sp;
     uintptr_t return_addr;
     ucontext_t uc;
-#ifdef __x86_64__
-    // The interrupted code may have live data in its 128-byte red zone
-    ustack = (uintptr_t*)((uintptr_t)ustack - 128);
-#endif
 
     ustack = (uintptr_t*)((uintptr_t)ustack - 8);
     if (restorer) {
@@ -377,28 +383,20 @@ void arch_prepare_signal(void *pc, int signo, const struct ksiginfo *info,
     if (copy_to_user((void*)regs_frame, regs, sizeof(struct regs_state)))
         goto fail;
 
+    if (copy_to_user((void*)(regs_frame + SIGFRAME_FP_OFFSET),
+            fpu_sigframe_state(current), SIGFRAME_FP_BYTES))
+        goto fail;
+    fpu_sigframe_reset(current);
+
     regs->ip = (uintptr_t)pc;
-#ifdef __x86_64__
-    regs->di = signo;
-    regs->si = info ? info_frame : 0; // siginfo
-    regs->dx = info ? uc_frame : 0;   // ucontext
-    ustack = (uintptr_t*)(regs_frame - sizeof(uintptr_t));
-#else
     ustack = (uintptr_t*)regs_frame;
     *--ustack = 0; // ucontext
     *--ustack = 0; // siginfo
     *--ustack = (u32)signo; // First argument: signo
-#endif
-#ifdef __x86_64__
-    if (put_user(return_addr, ustack))
-        goto fail;
-    assert(((uintptr_t)ustack & 0xFUL) == 8);
-#else
     // x86 32-bit cdecl entry frame: [return][arg1][arg2][arg3]
     if (put_user(return_addr, --ustack))
         goto fail;
     assert(((uintptr_t)ustack & 0xFUL) == 0);
-#endif
     regs->sp = (uintptr_t)ustack;
     return;
 fail:
@@ -406,6 +404,7 @@ fail:
     current->exit_status = WSIGNALED(SIGSEGV);
     do_exit();
 }
+#endif /* !__x86_64__ */
 
 static bool validate_regs_state(struct regs_state *regs)
 {
@@ -429,21 +428,25 @@ static bool validate_regs_state(struct regs_state *regs)
     return true;
 }
 
+#ifndef __x86_64__
 long arch_restore_post_signal(void)
 {
     struct regs_state *regs = (struct regs_state*)current->regs;
     uintptr_t *stack = (uintptr_t*)regs->sp;
     ucontext_t *uc;
+    void *fpstate;
+    sigset_t mask;
 
-#ifndef __x86_64__
-    // on 32 bit, pop the signal argument
-    stack += 3; // skip args
-#endif
+    // pop the signal arguments
+    stack += 3;
+    // Not a restartable syscall
+    current->syscall_nr = -1;
     uc = (ucontext_t*)(stack + sizeof(struct regs_state) / sizeof(uintptr_t));
-    if (get_user(current->blocked, &uc->uc_sigmask)) {
+    if (get_user(mask, &uc->uc_sigmask)) {
         klog(LOG_WARN, "Failed to get signal mask from user context in signal return, SIGSEGV raised\n");
         do_kill(current, SIGSEGV);
     }
+    current->blocked = SIG_APPLY_MASK(mask, _SIGKILL | _SIGSTOP);
 
     // Restore registers from user stack
     if (copy_from_user(regs, stack, sizeof(struct regs_state))) {
@@ -456,6 +459,189 @@ long arch_restore_post_signal(void)
         do_kill(current, SIGSEGV);
     }
 
+    fpstate = fpu_sigframe_restore_buf(current);
+    if (!fpstate || copy_from_user(fpstate, (u8*)stack + SIGFRAME_FP_OFFSET, SIGFRAME_FP_BYTES)) {
+        klog(LOG_WARN, "Failed to restore FP state in signal return, SIGSEGV raised\n");
+        do_kill(current, SIGSEGV);
+    } else {
+        fpu_sigframe_restore_fixup(current);
+    }
+
+#ifdef DEBUG_SIGNAL
     klog(LOG_DEBUG, "Post signal restored regs: ip=%lx sp=%lx\n", regs->ip, regs->sp);
+#endif
     return regs->ax; // original return value
 }
+#endif /* !__x86_64__ */
+
+#ifdef __x86_64__
+/*
+ * Linux x86_64 rt_sigframe layout, which musl's ucontext_t/mcontext_t expect.
+ * From the handler's sp (sp % 16 == 8, as after a call) up:
+ * [pretcode][ucontext][siginfo] ... [fxsave area, 64-aligned][sigtramp bytes]
+ */
+enum {
+    REG_R8, REG_R9, REG_R10, REG_R11, REG_R12, REG_R13, REG_R14, REG_R15,
+    REG_RDI, REG_RSI, REG_RBP, REG_RBX, REG_RDX, REG_RAX, REG_RCX, REG_RSP,
+    REG_RIP, REG_EFL, REG_CSGSFS, REG_ERR, REG_TRAPNO, REG_OLDMASK, REG_CR2,
+    NGREG
+};
+
+struct sig_mcontext {
+    unsigned long gregs[NGREG];
+    void *fpregs;               /* -> fxsave area */
+    unsigned long __reserved1[8];
+};
+
+struct sig_ucontext {
+    unsigned long uc_flags;
+    struct sig_ucontext *uc_link;
+    stack_t uc_stack;
+    struct sig_mcontext uc_mcontext;
+    sigset_t uc_sigmask;
+};
+
+struct rt_sigframe {
+    unsigned long pretcode;
+    struct sig_ucontext uc;
+    struct user_siginfo info;
+};
+
+#define SIGFRAME_FP_BYTES   512
+// flags a signal handler may change through uc_mcontext
+#define SIGFRAME_USER_FLAGS 0x50dd5UL /* AC RF OF DF TF SF ZF AF PF CF */
+
+static void regs_to_gregs(unsigned long *g, const struct regs_state *r)
+{
+    g[REG_R8] = r->r8;   g[REG_R9] = r->r9;   g[REG_R10] = r->r10;
+    g[REG_R11] = r->r11; g[REG_R12] = r->r12; g[REG_R13] = r->r13;
+    g[REG_R14] = r->r14; g[REG_R15] = r->r15; g[REG_RDI] = r->di;
+    g[REG_RSI] = r->si;  g[REG_RBP] = r->bp;  g[REG_RBX] = r->bx;
+    g[REG_RDX] = r->dx;  g[REG_RAX] = r->ax;  g[REG_RCX] = r->cx;
+    g[REG_RSP] = r->sp;  g[REG_RIP] = r->ip;  g[REG_EFL] = r->flags;
+    g[REG_CSGSFS] = r->cs;
+}
+
+static void gregs_to_regs(struct regs_state *r, const unsigned long *g)
+{
+    r->r8 = g[REG_R8];   r->r9 = g[REG_R9];   r->r10 = g[REG_R10];
+    r->r11 = g[REG_R11]; r->r12 = g[REG_R12]; r->r13 = g[REG_R13];
+    r->r14 = g[REG_R14]; r->r15 = g[REG_R15]; r->di = g[REG_RDI];
+    r->si = g[REG_RSI];  r->bp = g[REG_RBP];  r->bx = g[REG_RBX];
+    r->dx = g[REG_RDX];  r->ax = g[REG_RAX];  r->cx = g[REG_RCX];
+    r->sp = g[REG_RSP];  r->ip = g[REG_RIP];
+    r->flags = (r->flags & ~SIGFRAME_USER_FLAGS) | (g[REG_EFL] & SIGFRAME_USER_FLAGS);
+    r->cs = __USER_CS;
+    r->ss = __USER_DS;
+}
+
+void arch_prepare_signal(void *pc, int signo, const struct ksiginfo *info,
+                         void *restorer)
+{
+    struct regs_state *regs = (struct regs_state*)current->regs;
+#ifdef DEBUG_SIGNAL
+    klog(LOG_DEBUG, "Pre signal orginal regs: ip=%lx sp=%lx\n", regs->ip, regs->sp);
+#endif
+    // The interrupted code may have live data in its 128-byte red zone
+    uintptr_t top = regs->sp - 128;
+    uintptr_t return_addr;
+    struct rt_sigframe frame;
+
+    if (restorer) {
+        return_addr = (uintptr_t)restorer;
+    } else {
+        // copy bytecode of sigtramp to user stack
+        top -= 8;
+        if (copy_to_user((void*)top, sigtramp, 8))
+            goto fail;
+        return_addr = top;
+    }
+
+    const uintptr_t fp_addr = (top - SIGFRAME_FP_BYTES) & ~63UL;
+    const uintptr_t frame_addr = ((fp_addr - sizeof(frame)) & ~15UL) - 8;
+    struct rt_sigframe *uframe = (struct rt_sigframe*)frame_addr;
+
+    memset(&frame, 0, sizeof(frame));
+    frame.pretcode = return_addr;
+    frame.info.si_signo = signo;
+    if (info) {
+        frame.info.si_code = info->code;
+        if (signo == SIGSEGV || signo == SIGBUS || signo == SIGILL || signo == SIGFPE) {
+            frame.info.addr = info->addr;
+            frame.uc.uc_mcontext.gregs[REG_CR2] = info->addr;
+        } else {
+            frame.info.kill.pid = info->pid;
+            frame.info.kill.status = info->status;
+        }
+    }
+    regs_to_gregs(frame.uc.uc_mcontext.gregs, regs);
+    frame.uc.uc_mcontext.fpregs = (void*)fp_addr;
+    // sigreturn restores this; after sigsuspend it must be the pre-suspend mask
+    if (current->flags.restore_sigmask) {
+        frame.uc.uc_sigmask = current->saved_sigmask;
+        current->flags.restore_sigmask = 0;
+    } else {
+        frame.uc.uc_sigmask = current->blocked;
+    }
+
+    if (copy_to_user(uframe, &frame, sizeof(frame)))
+        goto fail;
+    if (copy_to_user((void*)fp_addr, fpu_sigframe_state(current), SIGFRAME_FP_BYTES))
+        goto fail;
+    fpu_sigframe_reset(current);
+
+    regs->ip = (uintptr_t)pc;
+    regs->di = signo;
+    regs->si = (uintptr_t)&uframe->info;
+    regs->dx = (uintptr_t)&uframe->uc;
+    regs->ax = 0;
+    regs->sp = frame_addr;
+    assert((frame_addr & 0xFUL) == 8);
+    return;
+fail:
+    klog(LOG_WARN, "Failed to prepare signal frame for signal %d\n", signo);
+    current->exit_status = WSIGNALED(SIGSEGV);
+    do_exit();
+}
+
+long arch_restore_post_signal(void)
+{
+    struct regs_state *regs = (struct regs_state*)current->regs;
+    // the handler's ret popped pretcode, so sp is at the ucontext
+    struct sig_ucontext *uuc = (struct sig_ucontext*)regs->sp;
+    struct sig_ucontext uc;
+    void *fpstate;
+
+    current->syscall_nr = -1;
+    if (copy_from_user(&uc, uuc, sizeof(uc))) {
+        klog(LOG_WARN, "Failed to read user context in signal return, SIGSEGV raised\n");
+        do_kill(current, SIGSEGV);
+    }
+    // the frame is user memory: it can't block what sigprocmask can't
+    current->blocked = SIG_APPLY_MASK(uc.uc_sigmask, _SIGKILL | _SIGSTOP);
+    gregs_to_regs(regs, uc.uc_mcontext.gregs);
+
+    if (!validate_regs_state(regs)) {
+        klog(LOG_WARN, "Invalid regs state in signal return, SIGSEGV raised\n");
+        do_kill(current, SIGSEGV);
+    }
+
+    if (!uc.uc_mcontext.fpregs) {
+        fpu_sigframe_reset(current);
+        goto out;
+    }
+    fpstate = fpu_sigframe_restore_buf(current);
+    if (!fpstate || copy_from_user(fpstate, uc.uc_mcontext.fpregs, SIGFRAME_FP_BYTES)) {
+        klog(LOG_WARN, "Failed to restore FP state in signal return, SIGSEGV raised\n");
+        do_kill(current, SIGSEGV);
+    } else {
+        fpu_sigframe_restore_fixup(current);
+    }
+
+out:
+#ifdef DEBUG_SIGNAL
+    klog(LOG_DEBUG, "Post signal restored regs: ip=%lx sp=%lx\n", regs->ip, regs->sp);
+#endif
+    return regs->ax; // original return value
+}
+#endif /* __x86_64__ */
