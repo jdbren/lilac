@@ -453,7 +453,7 @@ SYSCALL_DECL2(tkill, int, tid, int, sig)
 void zap_other_threads(struct task *p, int code)
 {
     pid_t tids[64];
-    int n = 0, bkt;
+    int n, bkt;
     struct task *t;
     unsigned long flags;
 
@@ -461,20 +461,23 @@ void zap_other_threads(struct task *p, int code)
     if (atomic_load(&p->tg_leader->tg_live) <= 1)
         return;
     // TODO: make this more efficient
-    acquire_read_lock_irqsave(&tasklist_lock, &flags);
-    hash_for_each(pid_table, bkt, t, pid_hash) {
-        if (t != p && t->tgid == p->tgid && t->state != TASK_ZOMBIE &&
-                !t->group_exit && n < (int)(sizeof(tids) / sizeof(tids[0]))) {
-            t->group_exit_code = code;
-            t->group_exit = true;
-            tids[n++] = t->pid;
+    do {
+        n = 0;
+        acquire_read_lock_irqsave(&tasklist_lock, &flags);
+        hash_for_each(pid_table, bkt, t, pid_hash) {
+            if (t != p && t->tgid == p->tgid && t->state != TASK_ZOMBIE &&
+                    !t->group_exit && n < (int)ARRAY_SIZE(tids)) {
+                t->group_exit_code = code;
+                t->group_exit = true;
+                tids[n++] = t->pid;
+            }
         }
-    }
-    release_read_lock_irqrestore(&tasklist_lock, flags);
+        release_read_lock_irqrestore(&tasklist_lock, flags);
 
-    for (int i = 0; i < n; i++) {
-        t = get_task_by_pid(tids[i]);
-        if (t)
-            do_raise(t, SIGKILL);
-    }
+        for (int i = 0; i < n; i++) {
+            t = get_task_by_pid(tids[i]);
+            if (t)
+                do_raise(t, SIGKILL);
+        }
+    } while (n == (int)ARRAY_SIZE(tids));
 }
