@@ -295,6 +295,11 @@ static int set_vm_areas(struct mm_info *mem)
     return 0;
 }
 
+#define EXEC_ENV_BYTES  0x8000
+#define EXEC_ARG_BYTES  0x7000
+#define EXEC_STR_AREA   0x10000
+static_assert(EXEC_ENV_BYTES + EXEC_ARG_BYTES + 16 <= EXEC_STR_AREA, "exec string area");
+
 static unsigned int prepare_task_args(struct task *p, char **argv, char *argv_loc, char *argv_max)
 {
     // Write args to user stack
@@ -423,12 +428,12 @@ static void load_and_start(void)
 
     // Copy argument and environment strings into brk area
     char *env_loc = (char*)mem->brk;
-    char *arg_loc = env_loc + 0x1400;
+    char *arg_loc = env_loc + EXEC_ENV_BYTES;
     char *execfn_user = NULL;
-    sbrk(0x4000);
+    sbrk(EXEC_STR_AREA);
 
     // TODO: replace with kernel entropy when available
-    char *random_loc = arg_loc + 0xc00;
+    char *random_loc = arg_loc + EXEC_ARG_BYTES;
     static const u8 random_seed[16] = {
         0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
         0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10,
@@ -468,7 +473,7 @@ static void load_and_start(void)
         // argv_ptr[0] = NULL;
         put_user(NULL, &argv_ptr[0]);
     } else {
-        prepare_task_args(current, argv_ptr, arg_loc, arg_loc + 0xc00);
+        prepare_task_args(current, argv_ptr, arg_loc, arg_loc + EXEC_ARG_BYTES);
     }
 
     if (!current->info.envp) {
@@ -545,51 +550,44 @@ static void exec_and_return(void)
     unreachable();
 }
 
-static int set_task_args(struct task_info *info, char *const argv[])
+static void free_str_vec(char **vec)
 {
-    int i, err = 0;
-    if (info->argv) {
-        for (i = 0; info->argv[i]; i++)
-            kfree(info->argv[i]);
-        kfree(info->argv);
-        info->argv = NULL;
-    }
-    for (i = 0; argv[i] != NULL; i++) {
-        ssize_t len = strnlen_user(argv[i], 127) + 1;
-        if (len < 0)
-            return -EFAULT;
-        info->argv = krealloc(info->argv, (i + 1) * sizeof(char*));
-        info->argv[i] = kmalloc(len + 1);
-        err = strncpy_from_user(info->argv[i], argv[i], len + 1);
-        if (err < 0)
-            return err;
-    }
-    info->argv = krealloc(info->argv, (i + 1) * sizeof(char*));
-    info->argv[i] = 0;
-    return 0;
+    if (!vec)
+        return;
+    for (int i = 0; vec[i]; i++)
+        kfree(vec[i]);
+    kfree(vec);
 }
 
-static int set_task_env(struct task_info *info, char *const envp[])
+// Copy a NULL-terminated vector of user strings into a new kernel vector
+static int copy_str_vec(char ***out, char *const vec[], size_t max_bytes)
 {
-    int i, err = 0;
-    if (info->envp) {
-        for (i = 0; info->envp[i]; i++)
-            kfree(info->envp[i]);
-        kfree(info->envp);
-        info->envp = NULL;
-    }
-    for (i = 0; envp[i] != NULL; i++) {
-        ssize_t len = strnlen_user(envp[i], 127) + 1;
+    int n = 0;
+    size_t total = 0;
+    while (vec[n])
+        n++;
+    char **copy = kcalloc(n + 1, sizeof(char*));
+    if (!copy)
+        return -ENOMEM;
+    for (int i = 0; i < n; i++) {
+        // max_bytes back means no NUL within reach
+        int len = strnlen_user(vec[i], max_bytes);
+        int err = 0;
         if (len < 0)
-            return -EFAULT;
-        info->envp = krealloc(info->envp, (i + 1) * sizeof(char*));
-        info->envp[i] = kmalloc(len + 1);
-        err = strncpy_from_user(info->envp[i], envp[i], len + 1);
-        if (err < 0)
+            err = len;
+        else if ((size_t)len >= max_bytes || (total += len + 1) > max_bytes)
+            err = -E2BIG;
+        else if (!(copy[i] = kmalloc(len + 1)))
+            err = -ENOMEM;
+        else if ((err = strncpy_from_user(copy[i], vec[i], len + 1)) >= 0)
+            err = 0;
+        if (err) {
+            free_str_vec(copy);
             return err;
+        }
+        copy[i][len] = '\0';
     }
-    info->envp = krealloc(info->envp, (i + 1) * sizeof(char*));
-    info->envp[i] = 0;
+    *out = copy;
     return 0;
 }
 
@@ -614,29 +612,28 @@ static int do_execve(const char *path, char *const argv[], char *const envp[])
         vfs_close(file);
         return err;
     }
+    char **new_argv = NULL, **new_envp = NULL;
+    if ((err = copy_str_vec(&new_argv, argv, EXEC_ARG_BYTES)) ||
+            (err = copy_str_vec(&new_envp, envp, EXEC_ENV_BYTES))) {
+        klog(LOG_ERROR, "Failed to copy exec arguments or environment\n");
+        free_str_vec(new_argv);
+        vfs_close(file);
+        return err;
+    }
+
+    // Nothing can fail from here: replace the task's exec state
+    if (info->exec_file)
+        vfs_close(info->exec_file);
     info->exec_file = file;
-
-    if (info->path)
-        kfree((void*)info->path);
+    kfree((void*)info->path);
     info->path = path;
-
-    err = set_task_args(info, argv);
-    if (err) {
-        klog(LOG_ERROR, "Failed to set task arguments\n");
-        vfs_close(file);
-        return err;
-    }
-
-    err = set_task_env(info, envp);
-    if (err) {
-        klog(LOG_ERROR, "Failed to set task environment\n");
-        vfs_close(file);
-        return err;
-    }
+    free_str_vec(info->argv);
+    info->argv = new_argv;
+    free_str_vec(info->envp);
+    info->envp = new_envp;
 
     klog(LOG_INFO, "Executing %s\n", info->path);
-    exec_and_return();
-    unreachable();
+    return 0;
 }
 
 SYSCALL_DECL3(execve, const char*, path, char* const*, argv, char* const*, envp)
