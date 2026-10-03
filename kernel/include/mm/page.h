@@ -53,6 +53,8 @@ void * arch_map_frame_bitmap(size_t size);
 
 void *alloc_frames(u32 num_pages);
 void free_frames(void *frame, u32 num_pages);
+int num_free_frames(void);
+int num_used_frames(void);
 
 static inline void *alloc_frame(void)
 {

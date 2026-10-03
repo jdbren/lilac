@@ -236,7 +236,7 @@ int __tty_check_change(struct tty *tty, int sig)
         } else {
             kill_pgrp(pgrp, sig);
             // set_thread_flag(TIF_SIGPENDING);
-            ret = -ERESTART;
+            ret = -ERESTARTSYS;
         }
     }
 

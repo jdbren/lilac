@@ -1,6 +1,7 @@
 #include <mm/mm.h>
 #include <mm/kmm.h>
 #include <mm/page.h>
+#include <mm/tlb.h>
 #include <lilac/panic.h>
 #include <lilac/fs.h>
 #include <lilac/sync.h>
@@ -90,6 +91,12 @@ static int do_file_fault(struct vm_desc *vma, uintptr_t pgaddr)
 
 map_page_out:
     acquire_lock(&vma->mm->page_table_lock);
+    // Another thread sharing this mm faulted the page in first
+    if (user_page_present((void *)pgaddr)) {
+        release_lock(&vma->mm->page_table_lock);
+        free_page(buf);
+        return FAULT_SUCCESS;
+    }
     int err = map_page((void *)virt_to_phys(buf), (void *)pgaddr,
         vma_flags_to_user_mem_flags(vma->vm_flags));
     release_lock(&vma->mm->page_table_lock);
@@ -110,6 +117,11 @@ static int do_anon_fault(struct vm_desc *vma, uintptr_t pgaddr)
     mm_dbg_fault_anon_pages_alloc++;
 #endif
     acquire_lock(&vma->mm->page_table_lock);
+    if (user_page_present((void *)pgaddr)) {
+        release_lock(&vma->mm->page_table_lock);
+        free_page(page);
+        return FAULT_SUCCESS;
+    }
     int err = map_page((void*)virt_to_phys(page), (void*)pgaddr,
         vma_flags_to_user_mem_flags(vma->vm_flags));
     release_lock(&vma->mm->page_table_lock);
@@ -149,6 +161,14 @@ static int do_cow_fault(struct vm_desc *vma, uintptr_t pgaddr)
     }
     memcpy(new_page, phys_to_virt(old_phys), PAGE_SIZE);
     remap_page((void*)virt_to_phys(new_page), (void*)pgaddr, mem_pflags);
+    struct tlb_inval tlb = {
+        .mm = mm,
+        .start = pgaddr,
+        .end = pgaddr + PAGE_SIZE,
+        .full = false
+    };
+    tlb_shootdown(&tlb);
+
     unlock_page_table(mm);
 
     put_page(old_page);

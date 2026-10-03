@@ -54,9 +54,9 @@ int main(int argc, char *argv[])
     setenv("SHELL", "/bin/sh", 1);
 
     // Try to run a shell
-    execl("/bin/sh", "sh", "-lE", NULL);
-    execl("/bin/dash", "sh", "-lE", NULL);
-    execl("/usr/bin/dash", "sh", "-lE", NULL);
+    execl("/bin/sh", "sh", "-l", NULL);
+    execl("/bin/dash", "sh", "-l", NULL);
+    execl("/usr/bin/dash", "sh", "-l", NULL);
     execl("/sbin/gush", "gush", NULL); // my custom shell
     return 1;
 }

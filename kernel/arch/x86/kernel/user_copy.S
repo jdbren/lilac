@@ -77,32 +77,34 @@ x86_strncpy_from_user_asm:
 #ifdef __x86_64__
 x86_strnlen_user_asm:
 	mov     %esi, %ecx        # ECX = max length
+	mov     %esi, %eax
+	test    %ecx, %ecx
+	jz      2f
 	stac
 1:	cmpb    $0, (%rdi)
-	inc     %rdi
+	lea     1(%rdi), %rdi
 	loopnz  1b
 	clac
-	cmpl    $0, %ecx
-	je      2f                # if ECX==0, no null was found; length = max
-	inc     %ecx              # otherwise, adjust ECX since we advanced one extra byte
-2:	mov     %esi, %eax
-	sub     %ecx, %eax        # computed length = max - adjusted remaining count
-	retq
+	jnz     2f                # no NUL in max bytes: length = max
+	sub     %ecx, %eax        # max - (bytes left after the NUL)
+	dec     %eax              # don't count the NUL
+2:	retq
 .section .exception, "a"
 	.quad 1b, .fault_handler
 .text
 #else
 x86_strnlen_user_asm:
 	mov     %esi, %ecx        # ECX = max length
+	mov     %esi, %eax
+	test    %ecx, %ecx
+	jz      2f
 1:	cmpb    $0, (%edi)
-	inc     %edi
+	lea     1(%edi), %edi
 	loopnz  1b
-	cmpl    $0, %ecx
-	je      2f                # if ECX==0, no null was found; length = max
-	inc     %ecx              # otherwise, adjust ECX since we advanced one extra byte
-2:	mov     %esi, %eax
-	sub     %ecx, %eax        # computed length = max - adjusted remaining count
-	ret
+	jnz     2f                # no NUL in max bytes: length = max
+	sub     %ecx, %eax        # max - (bytes left after the NUL)
+	dec     %eax              # don't count the NUL
+2:	ret
 .section .exception, "a"
 	.long 1b, .fault_handler
 .text

@@ -13,7 +13,7 @@ struct tlb_inval {
 };
 
 void init_tlb_shootdown(void);
-void tlb_shootdown(struct tlb_inval *tlb, struct task *task);
+void tlb_shootdown(struct tlb_inval *tlb);
 
 int arch_tlb_flush_mmu(struct tlb_inval *tlb);
 

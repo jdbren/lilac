@@ -10,7 +10,6 @@
 
 struct tlb_shootdown {
     struct tlb_inval *tlb;
-    struct task *task;
     volatile atomic_long pending;
     struct list_head list;
 };
@@ -42,11 +41,10 @@ void init_tlb_shootdown(void)
     install_isr(TLB_SHOOTDOWN_VECTOR, tlb_shootdown_handler);
 }
 
-void tlb_shootdown(struct tlb_inval *tlb, struct task *task)
+void tlb_shootdown(struct tlb_inval *tlb)
 {
     struct tlb_shootdown sd = {
         .tlb = tlb,
-        .task = task,
         .pending = (1UL << boot_info.ncpus) - 1,
     };
     unsigned long flags;
