@@ -2,6 +2,7 @@
 #define RWLOCK_H
 
 #include <lilac/sync.h>
+#include <asm/native.h>
 
 typedef volatile atomic_int rwlock_t;
 #define RWLOCK_INIT 0
@@ -37,5 +38,10 @@ static inline void release_write_lock(rwlock_t *lock)
 {
     atomic_store_explicit(lock, 0, memory_order_release);
 }
+
+void acquire_read_lock_irqsave(rwlock_t *lock, unsigned long *flagp);
+void release_read_lock_irqrestore(rwlock_t *lock, unsigned long flags);
+void acquire_write_lock_irqsave(rwlock_t *lock, unsigned long *flagp);
+void release_write_lock_irqrestore(rwlock_t *lock, unsigned long flags);
 
 #endif
