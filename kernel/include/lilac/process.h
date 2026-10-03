@@ -163,6 +163,10 @@ void             save_fp_regs(struct task *p);
 void             restore_fp_regs(struct task *p);
 void             copy_fp_regs(struct task *dst, struct task *src);
 void             fpu_switch(struct task *prev, struct task *next);
+const void *     fpu_sigframe_state(struct task *p);
+void             fpu_sigframe_reset(struct task *p);
+void *           fpu_sigframe_restore_buf(struct task *p);
+void             fpu_sigframe_restore_fixup(struct task *p);
 void             arch_prepare_signal(void *pc, int signo, const struct ksiginfo *info,
                                      void *restorer);
 void             arch_restart_syscall(struct task *p, bool has_handler, bool sa_restart);
