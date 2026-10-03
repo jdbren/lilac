@@ -540,3 +540,104 @@ TEST(exit_closes_pipe_write_end)
     EXPECT_EQ(read(p[0], &c, 1), 0);
     waitpid(pid, NULL, 0);
 }
+
+static void fork_exec_helper_n(int n)
+{
+    for (int i = 0; i < n; i++) {
+        pid_t pid = fork();
+        if (pid < 0) {
+            FAIL("fork #%d failed errno=%d", i, errno);
+            ktest_abort();
+        }
+        if (pid == 0) {
+            execl(HELPER, HELPER, "exit", "0", (char *)NULL);
+            _exit(127);
+        }
+        int st = ktest_wait_timeout(pid, 5);
+        if (st == -1 || !WIFEXITED(st) || WEXITSTATUS(st) != 0) {
+            FAIL("exec #%d status %#x", i, st);
+            ktest_abort();
+        }
+    }
+}
+
+/* exec used to drop the pre-exec mm without freeing it or its pgd page,
+ * and leaked execve's argv/envp pointer arrays (512 bytes) on success */
+TEST_TIMEOUT(exec_no_mm_leak, 60)
+{
+    enum { N = 300 };
+    fork_exec_helper_n(20); /* warm up heap and caches */
+    long long before = ktest_free_bytes();
+    ASSERT_GE(before, 0);
+    fork_exec_helper_n(N);
+    long long lost = before - ktest_free_bytes();
+    ktest_log("free memory lost over %d execs: %lld KiB", N, lost / 1024);
+    EXPECT_LT(lost, 32 * 1024);
+}
+
+static void fork_exit_n(int n)
+{
+    for (int i = 0; i < n; i++) {
+        pid_t pid = fork();
+        if (pid < 0) {
+            FAIL("fork #%d failed errno=%d", i, errno);
+            ktest_abort();
+        }
+        if (pid == 0)
+            _exit(0);
+        waitpid(pid, NULL, 0);
+    }
+}
+
+/* each fork's fd table used to leave its close-on-exec bitmap behind */
+TEST_TIMEOUT(fork_no_leak, 60)
+{
+    enum { N = 3000 };
+    fork_exit_n(50);
+    long long before = ktest_free_bytes();
+    ASSERT_GE(before, 0);
+    fork_exit_n(N);
+    long long lost = before - ktest_free_bytes();
+    ktest_log("free memory lost over %d forks: %lld KiB", N, lost / 1024);
+    EXPECT_LT(lost, 12 * 1024); /* the old leak showed as 24 KiB */
+}
+
+TEST(execve_long_env_string)
+{
+    enum { LEN = 3000 };
+    char *val = malloc(LEN + 1);
+    memset(val, 'x', LEN);
+    val[LEN] = '\0';
+    setenv("KTEST_LONG", val, 1);
+    char *out = malloc(LEN + 16);
+    char *argv[] = { HELPER, "env", "KTEST_LONG", NULL };
+    int st = ktest_spawn(argv, out, LEN + 16);
+    EXPECT_TRUE(st != -1 && WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    EXPECT_EQ(strlen(out), LEN + 1);
+    EXPECT_TRUE(strncmp(out, val, LEN) == 0 && out[LEN] == '\n');
+}
+
+TEST(execve_long_arg)
+{
+    enum { LEN = 1000 };
+    char *arg = malloc(LEN + 1);
+    memset(arg, 'a', LEN);
+    arg[LEN] = '\0';
+    char *out = malloc(LEN + 16);
+    char *argv[] = { HELPER, "argv", arg, NULL };
+    int st = ktest_spawn(argv, out, LEN + 16);
+    EXPECT_TRUE(st != -1 && WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    EXPECT_EQ(strlen(out), LEN + 1);
+}
+
+TEST(execve_env_too_big_e2big)
+{
+    enum { LEN = 64 * 1024 };
+    char *big = malloc(LEN + 1);
+    memcpy(big, "BIG=", 4);
+    memset(big + 4, 'y', LEN - 4);
+    big[LEN] = '\0';
+    char *argv[] = { HELPER, "exit", "0", NULL };
+    char *envp[] = { big, NULL };
+    EXPECT_ERR(execve(HELPER, argv, envp), E2BIG);
+}

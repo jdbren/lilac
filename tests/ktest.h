@@ -149,6 +149,9 @@ int ktest_spawn(char *const argv[], char *out, size_t outsz);
 /* Nanoseconds from CLOCK_MONOTONIC (falls back to gettimeofday). */
 long long ktest_now_ns(void);
 
+/* Free physical memory in bytes (sysinfo), or -1. */
+long long ktest_free_bytes(void);
+
 extern const char *ktest_suite;
 extern const char *ktest_current;
 

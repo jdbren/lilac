@@ -1,6 +1,7 @@
 // Miscellaneous syscalls: identity, uname, errno conventions, EFAULT, tty.
 #include "ktest.h"
 #include <sys/ioctl.h>
+#include <sys/resource.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
 #include <sys/utsname.h>
@@ -176,6 +177,65 @@ TEST(getrlimit_works)
 {
     struct rlimit { unsigned long cur, max; } rl;
     EXPECT_OK(syscall(SYS_getrlimit, 7 /* RLIMIT_NOFILE */, &rl));
+}
+
+TEST(rlimit_nofile_matches_kernel)
+{
+    struct rlimit rl;
+    ASSERT_OK(getrlimit(RLIMIT_NOFILE, &rl));
+    EXPECT_LE(rl.rlim_cur, rl.rlim_max);
+    /* open() should stop exactly at the soft limit */
+    int fd, last = -1;
+    while ((fd = open("/", O_RDONLY)) >= 0)
+        last = fd;
+    EXPECT_EQ(errno, EMFILE);
+    EXPECT_EQ((rlim_t)last + 1, rl.rlim_cur);
+    /* explicit placement reaches the hard limit and no further */
+    EXPECT_EQ(dup2(0, (int)rl.rlim_max - 1), (int)rl.rlim_max - 1);
+    EXPECT_EQ(dup2(0, (int)rl.rlim_max), -1);
+}
+
+TEST(rlimit_data_matches_brk)
+{
+    struct rlimit rl;
+    ASSERT_OK(getrlimit(RLIMIT_DATA, &rl));
+    ASSERT_TRUE(rl.rlim_cur != RLIM_INFINITY);
+    long cur = syscall(SYS_brk, 0);
+    /* past the limit: brk fails and reports the unchanged break */
+    EXPECT_EQ(syscall(SYS_brk, cur + (long)rl.rlim_cur + 4096), cur);
+}
+
+TEST(rlimit_stack_matches_kernel)
+{
+    struct rlimit rl;
+    ASSERT_OK(getrlimit(RLIMIT_STACK, &rl));
+    EXPECT_EQ(rl.rlim_cur, 8UL << 20);
+    EXPECT_EQ(rl.rlim_cur, rl.rlim_max);
+}
+
+TEST(setrlimit_roundtrip)
+{
+    struct rlimit rl, got;
+    ASSERT_OK(getrlimit(RLIMIT_NOFILE, &rl));
+    struct rlimit lower = { 64, rl.rlim_max };
+    ASSERT_OK(setrlimit(RLIMIT_NOFILE, &lower));
+    ASSERT_OK(getrlimit(RLIMIT_NOFILE, &got));
+    EXPECT_EQ(got.rlim_cur, 64);
+    EXPECT_EQ(got.rlim_max, rl.rlim_max);
+
+    struct rlimit bad = { rl.rlim_max + 1, rl.rlim_max };
+    EXPECT_ERR(setrlimit(RLIMIT_NOFILE, &bad), EINVAL);
+    EXPECT_ERR(getrlimit(RLIM_NLIMITS, &got), EINVAL);
+
+    /* inherited across fork */
+    pid_t pid = ASSERT_OK(fork());
+    if (pid == 0) {
+        struct rlimit c;
+        _exit(getrlimit(RLIMIT_NOFILE, &c) == 0 && c.rlim_cur == 64 ? 0 : 1);
+    }
+    int st;
+    ASSERT_OK(waitpid(pid, &st, 0));
+    EXPECT_TRUE(WIFEXITED(st) && WEXITSTATUS(st) == 0);
 }
 
 TEST(stdio_buffered_output)

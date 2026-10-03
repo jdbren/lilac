@@ -128,6 +128,7 @@ static void check_superblock_free_list(const struct sb_header *header,
     }
 }
 
+__maybe_unused
 static void kmalloc_check_size(size_t size)
 {
     if (size == 0 || size > SUPERBLOCKSIZE / 2)

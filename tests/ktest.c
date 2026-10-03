@@ -1,5 +1,6 @@
 #include "ktest.h"
 #include <fnmatch.h>
+#include <sys/sysinfo.h>
 #include <sys/time.h>
 #include <time.h>
 
@@ -272,6 +273,14 @@ long long ktest_now_ns(void)
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return tv.tv_sec * 1000000000LL + tv.tv_usec * 1000LL;
+}
+
+long long ktest_free_bytes(void)
+{
+    struct sysinfo si;
+    if (sysinfo(&si) != 0)
+        return -1;
+    return (long long)si.freeram * si.mem_unit;
 }
 
 /* ---------------- runner ---------------- */
