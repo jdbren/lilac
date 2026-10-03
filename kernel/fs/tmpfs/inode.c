@@ -52,6 +52,7 @@ tmpfs_create(struct inode *parent, struct dentry *new_dentry, umode_t mode)
     new_inode->i_size = 0;
     new_inode->i_count = 1;
     new_inode->i_ctime = new_inode->i_mtime = new_inode->i_atime = get_unix_time();
+    iget(new_inode); // for the new dentry
     new_dentry->d_inode = new_inode;
 
     struct tmpfs_dir *parent_dir = (struct tmpfs_dir*)parent->i_private;
@@ -86,6 +87,7 @@ static int tmpfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
     new_inode->i_private = new_dir;
     new_inode->i_mode = mode | S_IFDIR;
     new_inode->i_ctime = new_inode->i_mtime = new_inode->i_atime = get_unix_time();
+    iget(new_inode); // for the dentry
     dentry->d_inode = new_inode;
 
     parent->num_entries++;
@@ -124,10 +126,8 @@ static int tmpfs_rmdir(struct inode *dir, struct dentry *dentry)
         }
     }
 
-    inode->i_nlink--;
-    if (inode->i_nlink == 0) {
-        inode->i_sb->s_op->destroy_inode(inode);
-    }
+    inode->i_nlink = 0;
+    iput(inode);
 
     return 0;
 }
@@ -141,6 +141,7 @@ tmpfs_link(struct dentry *old_d, struct inode *dir, struct dentry *new_d)
 
     iget(old_inode);
     old_inode->i_nlink++;
+    iget(old_inode); // the new dentry
     new_d->d_inode = old_inode;
 
     struct tmpfs_dir *dir_info = (struct tmpfs_dir*)dir->i_private;
@@ -177,6 +178,7 @@ static int tmpfs_unlink(struct inode *dir, struct dentry *dentry)
     }
 
     inode->i_nlink--;
+    iput(inode);
 
     return 0;
 }
@@ -195,6 +197,7 @@ tmpfs_symlink(struct inode *dir, struct dentry *link_d, const char *target)
     new_inode->i_size = target_len;
     new_inode->i_count = 1;
     new_inode->i_ctime = new_inode->i_mtime = new_inode->i_atime = get_unix_time();
+    iget(new_inode);
     link_d->d_inode = new_inode;
 
     struct tmpfs_dir *parent_dir = (struct tmpfs_dir*)dir->i_private;
@@ -272,6 +275,7 @@ static int tmpfs_rename(struct inode *old_dir, struct dentry *old_d,
         if (tidx >= 0) {
             tmpfs_dir_remove(nd, tidx);
             target->i_nlink--;
+            iput(target);
         }
         // the old entry may have shifted if both live in the same directory
         idx = tmpfs_dir_find(od, old_d->d_name.data, inode);
@@ -285,8 +289,17 @@ static int tmpfs_rename(struct inode *old_dir, struct dentry *old_d,
     return tmpfs_dir_append(nd, &moved);
 }
 
+// data always holds at least i_size bytes; bytes past i_size may be stale
 static int tmpfs_truncate(struct inode *inode, loff_t size)
 {
+    struct tmpfs_file *file = (struct tmpfs_file*)inode->i_private;
+    if (size > inode->i_size) {
+        char *data = krealloc(file->data, size);
+        if (!data)
+            return -ENOMEM;
+        memset(data + inode->i_size, 0, size - inode->i_size);
+        file->data = data;
+    }
     inode->i_size = size;
     return 0;
 }

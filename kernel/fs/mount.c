@@ -104,7 +104,10 @@ int vfs_mount(struct block_device *srcdev, const char *target,
     }
     if (!new_dentry->d_inode) {
         klog(LOG_DEBUG, "Creating new dir %s\n", new_dentry->d_name.data);
-        parent->d_inode->i_op->mkdir(parent->d_inode, new_dentry, 0);
+        inode_lock(parent->d_inode);
+        if (!new_dentry->d_inode)
+            parent->d_inode->i_op->mkdir(parent->d_inode, new_dentry, 0);
+        inode_unlock(parent->d_inode);
     }
 
     sb = alloc_sb(srcdev);
@@ -171,6 +174,7 @@ int vfs_umount(const char *target)
     }
 
     struct vfsmount *mnt = dentry->d_mount;
+    dput(dentry);
     if (!mnt) {
         klog(LOG_DEBUG, "No mount found for %s\n", target);
         return -EINVAL;

@@ -5,6 +5,9 @@
 
 struct file;
 
+#define FD_AUTO_MAX 1024
+#define FD_MAX      1024
+
 struct fdtable {
     struct file **fdarray;
     unsigned long *close_on_exec;

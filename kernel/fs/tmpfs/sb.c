@@ -25,6 +25,7 @@ static struct inode* tmpfs_alloc_inode(struct super_block *sb)
 
     inode->i_ino = unique_ino();
     inode->i_sb = sb;
+    mutex_init(&inode->i_mutex);
     inode->i_op = &tmpfs_iops;
     inode->i_count = 1;
     inode->i_atime = inode->i_mtime = inode->i_ctime = get_unix_time();
@@ -36,8 +37,16 @@ static struct inode* tmpfs_alloc_inode(struct super_block *sb)
 
 static void tmpfs_destroy_inode(struct inode *inode)
 {
-    if (inode->i_private)
+    if (inode->i_private) {
+        if (S_ISDIR(inode->i_mode)) {
+            struct tmpfs_dir *dir = inode->i_private;
+            kfree(dir->children);
+        } else {
+            struct tmpfs_file *file = inode->i_private;
+            kfree(file->data);
+        }
         kfree(inode->i_private);
+    }
     kfree(inode);
 }
 
@@ -47,7 +56,7 @@ struct dentry* tmpfs_init(void *device, struct super_block *sb)
     sb->s_type = TMPFS;
     sb->s_op = &tmpfs_sops;
     sb->s_blocksize = 0x1000;
-    sb->s_maxbytes = 0xfffff;
+    sb->s_maxbytes = __INT32_MAX__;
 
     struct dentry *root_dentry = kzmalloc(sizeof(struct dentry));
     if (!root_dentry) {

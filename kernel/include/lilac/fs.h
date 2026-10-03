@@ -24,6 +24,9 @@ struct super_block;
 struct dirent;
 struct vm_desc;
 
+/* inode i_flags */
+#define S_DEAD      0x10    /* removed directory: no lookups or new entries */
+
 struct inode {
     umode_t             i_mode;
     uid_t               i_uid;
@@ -31,10 +34,10 @@ struct inode {
     const struct inode_operations *i_op;
     struct super_block *i_sb;
 
-    spinlock_t          i_lock;    /* i_blocks, i_size */
+    spinlock_t          i_lock;  /* i_blocks, i_size */
     atomic_bool         i_dirty;
     unsigned int        i_flags;
-    mutex_t             i_mutex;
+    mutex_t             i_mutex; /* protects its entries and fs lookups */
     unsigned long       i_state;
 
     ino_t               i_ino;
@@ -214,6 +217,9 @@ struct dirent {
     char            d_type;
 };
 
+// The longest name getdents can return, so the longest a name may be
+#define DNAME_MAX ((int)sizeof(((struct dirent *)0)->d_name) - 1)
+
 struct file {
     spinlock_t      f_lock;
     atomic_int      f_count;
@@ -286,7 +292,33 @@ void dget(struct dentry *d);
 void dput(struct dentry *d);
 void destroy_dentry(struct dentry *d);
 void dcache_add(struct dentry *d);
-void dcache_remove(struct dentry *d);
+void d_drop(struct dentry *d);
+void d_prune_negative(struct dentry *dir);
+int d_move(struct dentry *d, struct dentry *new_parent, const char *name);
+struct dentry * dget_parent(struct dentry *d);
+struct dentry * lock_parent(struct dentry *d);
+void unlock_parent(struct dentry *parent);
+bool d_is_ancestor(struct dentry *anc, struct dentry *d);
+
+static inline bool d_unhashed(const struct dentry *d)
+{
+    return hlist_unhashed(&d->d_sib);
+}
+
+static inline bool IS_DEADDIR(const struct inode *inode)
+{
+    return inode->i_flags & S_DEAD;
+}
+
+static inline void inode_lock(struct inode *inode)
+{
+    mutex_lock(&inode->i_mutex);
+}
+
+static inline void inode_unlock(struct inode *inode)
+{
+    mutex_unlock(&inode->i_mutex);
+}
 
 struct inode * alloc_inode(struct super_block *sb);
 void destroy_inode(struct inode *inode);

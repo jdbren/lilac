@@ -23,6 +23,7 @@ int add_device(const char *path, const struct file_operations *fops,
         return PTR_ERR(dentry);
 
     struct inode *inode = dentry->d_inode;
+    dput(dentry);
     if (!inode)
         return -ENOENT;
     inode->i_fop = fops;
@@ -45,6 +46,7 @@ int dev_create(const char *path, const struct file_operations *fops,
         return PTR_ERR(dentry);
 
     struct inode *inode = dentry->d_inode;
+    dput(dentry);
     if (!inode)
         return -ENOENT;
     inode->i_fop = fops;
@@ -63,11 +65,11 @@ int dev_mknod(struct inode *parent_dir, struct dentry *node, umode_t mode, dev_t
     inode->i_mode = mode;
     inode->i_sb = parent_dir->i_sb;
     inode->i_count = 1;
+    mutex_init(&inode->i_mutex);
     inode->i_op = parent_dir->i_op;
 
     node->d_inode = inode;
     list_add_tail(&inode->i_list, &parent_dir->i_sb->s_inodes);
-    hlist_add_head(&node->d_sib, &node->d_parent->d_children);
 
     return 0;
 }

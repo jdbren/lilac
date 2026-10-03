@@ -39,7 +39,7 @@ static int days_in_month(int month, int year)
     if (month == 2) {
         return is_leap_year(year) ? 29 : 28;
     }
-    int days_in_months[] = { 31, 30, 31, 30, 31, 31, 31, 30, 31, 30, 31, 31 };
+    static const int days_in_months[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
     return days_in_months[month - 1]; // month is 1-12
 }
 

@@ -561,8 +561,6 @@ static void fork_exec_helper_n(int n)
     }
 }
 
-/* exec used to drop the pre-exec mm without freeing it or its pgd page,
- * and leaked execve's argv/envp pointer arrays (512 bytes) on success */
 TEST_TIMEOUT(exec_no_mm_leak, 60)
 {
     enum { N = 300 };
