@@ -6,6 +6,7 @@
 #include <lilac/sched.h>
 #include <lilac/uaccess.h>
 #include <lilac/wait.h>
+#include <mm/kmalloc.h>
 
 #define TERM_SIG (_SIGHUP | _SIGINT | _SIGKILL | _SIGPIPE | _SIGALRM | _SIGTERM | _SIGUSR1 | \
     _SIGUSR2 | _SIGSTKFLT | _SIGVTALRM | _SIGPROF | _SIGIO | _SIGPWR)
@@ -53,6 +54,8 @@ int handle_signal(void)
             klog(LOG_INFO, "handling stop signal %d\n", sig);
             set_task_stopped(p);
             p->exit_status = WSTOPPED(sig);
+            // SIGCHLD is dropped if the parent ignores it; wake waitpid directly
+            wake_parent_waiter(p->parent);
             do_raise(p->parent, SIGCHLD);
             p->flags.need_resched = 1;
         } else if (sig_bit & _SIGCONT) {
@@ -229,6 +232,32 @@ int kill_pgrp(int pgid, int sig)
     return 0;
 }
 
+/*
+ * The task that takes a signal sent to process p: p itself, or, when p is a
+ * zombie leader whose other threads still run (it called pthread_exit), one
+ * of those threads. NULL if the whole process is dead.
+ */
+static struct task * process_signal_target(struct task *p)
+{
+    struct task *t, *found = NULL;
+    unsigned long flags;
+    int bkt;
+
+    if (READ_ONCE(p->state) != TASK_ZOMBIE)
+        return p;
+    if (p != p->tg_leader || atomic_load(&p->tg_live) == 0)
+        return NULL;
+    acquire_read_lock_irqsave(&tasklist_lock, &flags);
+    hash_for_each(pid_table, bkt, t, pid_hash) {
+        if (t->tgid == p->tgid && READ_ONCE(t->state) != TASK_ZOMBIE) {
+            found = t;
+            break;
+        }
+    }
+    release_read_lock_irqrestore(&tasklist_lock, flags);
+    return found;
+}
+
 SYSCALL_DECL2(kill, int, pid, int, sig)
 {
     klog(LOG_DEBUG, "kill called with pid=%d, sig=%d\n", pid, sig);
@@ -244,7 +273,9 @@ SYSCALL_DECL2(kill, int, pid, int, sig)
     }
 
     struct task *p = get_task_by_pid(pid);
-    if (!p || p->state == TASK_ZOMBIE) {
+    if (p)
+        p = process_signal_target(p);
+    if (!p) {
         klog(LOG_DEBUG, "kill: No such process %d\n", pid);
         return -ESRCH;
     }

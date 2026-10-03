@@ -110,12 +110,17 @@ static inline struct rq *cpu_rq(int cpu)
 
 struct task * find_child_by_pid(struct task *parent, int pid)
 {
-    struct task *p = NULL;
+    struct task *p, *found = NULL;
+    unsigned long flags;
+    acquire_read_lock_irqsave(&tasklist_lock, &flags);
     list_for_each_entry(p, &parent->children, sibling) {
-        if (p->pid == pid)
-            return p;
+        if (p->pid == pid) {
+            found = p;
+            break;
+        }
     }
-    return NULL;
+    release_read_lock_irqrestore(&tasklist_lock, flags);
+    return found;
 }
 
 static bool prio_comp(struct rb_node *a, const struct rb_node *b)
