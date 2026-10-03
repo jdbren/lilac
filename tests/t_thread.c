@@ -4,6 +4,7 @@
 #include <sched.h>
 #include <stdatomic.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <sys/syscall.h>
 
 #define FUTEX_WAIT 0
@@ -318,6 +319,71 @@ TEST(kill_process_with_threads)
     EXPECT_TRUE(st != -1 && WIFSIGNALED(st) && WTERMSIG(st) == SIGKILL);
 }
 
+static void *pause_forever(void *arg)
+{
+    for (;;)
+        pause();
+    return NULL;
+}
+
+/* Child spawns nthreads paused threads that share a pipe's write end, then
+ * exit_group()s. EOF on the read end means every thread is gone. */
+static void exit_group_kills_n(int nthreads)
+{
+    int fds[2];
+    ASSERT_OK(pipe(fds));
+    pid_t pid = ASSERT_OK(fork());
+    if (pid == 0) {
+        close(fds[0]);
+        pthread_attr_t attr;
+        pthread_attr_init(&attr);
+        pthread_attr_setstacksize(&attr, 64 * 1024);
+        for (int i = 0; i < nthreads; i++) {
+            pthread_t t;
+            if (pthread_create(&t, &attr, pause_forever, NULL) != 0)
+                _exit(2);
+        }
+        usleep(50000);
+        _exit(0);
+    }
+    close(fds[1]);
+
+    int st = ktest_wait_timeout(pid, 10);
+    EXPECT_TRUE(st != -1 && WIFEXITED(st));
+    if (st != -1 && WIFEXITED(st) && WEXITSTATUS(st) == 2)
+        FAIL("pthread_create failed before %d threads", nthreads);
+
+    fcntl(fds[0], F_SETFL, O_NONBLOCK);
+    char c;
+    long long deadline = ktest_now_ns() + 5LL * 1000000000;
+    for (;;) {
+        ssize_t n = read(fds[0], &c, 1);
+        if (n == 0)
+            break;
+        if (n < 0 && errno != EAGAIN) {
+            FAIL("read: errno=%d (%s)", errno, strerror(errno));
+            break;
+        }
+        if (ktest_now_ns() > deadline) {
+            FAIL("threads outlived exit_group with %d threads", nthreads);
+            break;
+        }
+        usleep(10000);
+    }
+    close(fds[0]);
+}
+
+TEST_TIMEOUT(exit_group_kills_few_threads, 30)
+{
+    exit_group_kills_n(8);
+}
+
+/* more threads than zap_other_threads used to collect in one pass */
+TEST_TIMEOUT(exit_group_kills_many_threads, 30)
+{
+    exit_group_kills_n(100);
+}
+
 static void *segv_thread(void *arg)
 {
     *(volatile int *)0 = 1;
@@ -459,4 +525,131 @@ TEST(sched_yield_ok)
 {
     for (int i = 0; i < 100; i++)
         EXPECT_OK(sched_yield());
+}
+
+/* ---- pthread_cancel: musl delivers SIGCANCEL, and its handler reads and
+ * rewrites uc_mcontext.gregs[REG_RIP] to leave a blocking syscall ---- */
+
+static int cancel_pipe[2];
+
+static void *block_in_read(void *arg)
+{
+    char c;
+    read(cancel_pipe[0], &c, 1);
+    return (void *)1;
+}
+
+TEST_TIMEOUT(cancel_blocked_in_read, 10)
+{
+    ASSERT_OK(pipe(cancel_pipe));
+    pthread_t t;
+    ASSERT_EQ(pthread_create(&t, NULL, block_in_read, NULL), 0);
+    usleep(50000);
+    EXPECT_EQ(pthread_cancel(t), 0);
+    void *ret = NULL;
+    EXPECT_EQ(pthread_join(t, &ret), 0);
+    EXPECT_TRUE(ret == PTHREAD_CANCELED);
+}
+
+static void *spin_async(void *arg)
+{
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+    for (;;)
+        __asm__ volatile("" ::: "memory");
+    return NULL;
+}
+
+TEST_TIMEOUT(cancel_async_spin, 10)
+{
+    pthread_t t;
+    ASSERT_EQ(pthread_create(&t, NULL, spin_async, NULL), 0);
+    usleep(50000);
+    EXPECT_EQ(pthread_cancel(t), 0);
+    void *ret = NULL;
+    EXPECT_EQ(pthread_join(t, &ret), 0);
+    EXPECT_TRUE(ret == PTHREAD_CANCELED);
+}
+
+static void *poll_testcancel(void *arg)
+{
+    for (;;) {
+        pthread_testcancel();
+        sched_yield();
+    }
+    return NULL;
+}
+
+/* control: deferred cancel at a testcancel point needs no signal */
+TEST_TIMEOUT(cancel_deferred_testcancel, 10)
+{
+    pthread_t t;
+    ASSERT_EQ(pthread_create(&t, NULL, poll_testcancel, NULL), 0);
+    usleep(20000);
+    EXPECT_EQ(pthread_cancel(t), 0);
+    void *ret = NULL;
+    EXPECT_EQ(pthread_join(t, &ret), 0);
+    EXPECT_TRUE(ret == PTHREAD_CANCELED);
+}
+
+static void *spin_until_killed(void *arg)
+{
+    for (;;)
+        pause();
+    return NULL;
+}
+
+/* A process whose main thread called pthread_exit is still alive; kill(pid)
+ * used to fail with ESRCH because the leader is a zombie */
+TEST(kill_after_main_pthread_exit)
+{
+    pid_t pid = ASSERT_OK(fork());
+    if (pid == 0) {
+        pthread_t t;
+        if (pthread_create(&t, NULL, spin_until_killed, NULL) != 0)
+            _exit(2);
+        pthread_exit(NULL);
+    }
+    usleep(100000);
+    EXPECT_OK(kill(pid, 0));
+    EXPECT_OK(kill(pid, SIGTERM));
+    int st = ktest_wait_timeout(pid, 3);
+    if (st == -1) {
+        kill(-pid, SIGKILL);
+        FAIL("process survived SIGTERM");
+        return;
+    }
+    EXPECT_TRUE(WIFSIGNALED(st) && WTERMSIG(st) == SIGTERM);
+}
+
+static void *report_tid(void *arg)
+{
+    int fd = (int)(intptr_t)arg;
+    pid_t tid = syscall(SYS_gettid);
+    write(fd, &tid, sizeof(tid));
+    return NULL;
+}
+
+/* waitpid(pid) must reap the process's exited threads with it; they used to
+ * stay until a wait(-1), pointing at the freed leader */
+TEST(waitpid_pid_reaps_threads)
+{
+    int fds[2];
+    ASSERT_OK(pipe(fds));
+    pid_t pid = ASSERT_OK(fork());
+    if (pid == 0) {
+        pthread_t t;
+        if (pthread_create(&t, NULL, report_tid, (void *)(intptr_t)fds[1]) != 0)
+            _exit(2);
+        pthread_join(t, NULL);
+        _exit(0);
+    }
+    pid_t tid = 0;
+    ASSERT_EQ(read(fds[0], &tid, sizeof(tid)), (ssize_t)sizeof(tid));
+    int st = 0;
+    ASSERT_EQ(waitpid(pid, &st, 0), pid);
+    EXPECT_TRUE(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    struct rlimit rl;
+    errno = 0;
+    EXPECT_EQ(syscall(SYS_prlimit64, tid, RLIMIT_NOFILE, NULL, &rl), -1);
+    EXPECT_EQ(errno, ESRCH);
 }

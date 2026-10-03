@@ -1,6 +1,9 @@
 // Signals: delivery, masking, handlers, default actions, interruption.
 #include "ktest.h"
 #include <sys/time.h>
+#include <ucontext.h>
+#include <sys/mman.h>
+#include <sys/syscall.h>
 #include <time.h>
 
 static volatile sig_atomic_t hits;
@@ -337,6 +340,56 @@ TEST(kill_other_process_handler)
     EXPECT_TRUE(st != -1 && WIFEXITED(st) && WEXITSTATUS(st) == 42);
 }
 
+/* kill(-pgid) must reach every member, not just the first 64 */
+TEST_TIMEOUT(kill_pgrp_many, 30)
+{
+    enum { NKIDS = 100 };
+    int p[2];
+    ASSERT_OK(pipe(p));
+    pid_t leader = ASSERT_OK(fork());
+    if (leader == 0) {
+        setpgid(0, 0);
+        for (int i = 0; i < NKIDS; i++) {
+            pid_t k = fork();
+            if (k < 0)
+                _exit(2);
+            if (k == 0) {
+                write(p[1], "r", 1);
+                for (;;)
+                    pause();
+            }
+        }
+        write(p[1], "r", 1);
+        for (;;)
+            pause();
+    }
+    close(p[1]);
+    char c;
+    int ready = 0;
+    while (ready < NKIDS + 1 && read(p[0], &c, 1) == 1)
+        ready++;
+    ASSERT_EQ(ready, NKIDS + 1);
+
+    EXPECT_OK(kill(-leader, SIGTERM));
+    int st = ktest_wait_timeout(leader, 5);
+    EXPECT_TRUE(st != -1 && WIFSIGNALED(st) && WTERMSIG(st) == SIGTERM);
+
+    /* every member holds the write end; EOF means all of them died */
+    fcntl(p[0], F_SETFL, O_NONBLOCK);
+    long long deadline = ktest_now_ns() + 5LL * 1000000000;
+    for (;;) {
+        ssize_t n = read(p[0], &c, 1);
+        if (n == 0)
+            break;
+        if (ktest_now_ns() > deadline) {
+            FAIL("process group members survived kill(-pgid)");
+            break;
+        }
+        usleep(10000);
+    }
+    close(p[0]);
+}
+
 TEST(kill_esrch)
 {
     EXPECT_ERR(kill(999999, SIGTERM), ESRCH);
@@ -414,6 +467,47 @@ TEST(pause_returns_eintr)
     EXPECT_EQ(r, -1);
     EXPECT_EQ(errno, EINTR);
     EXPECT_EQ(hits, 1);
+}
+
+static volatile sig_atomic_t chain_n;
+
+static void chain_usr2(int sig)
+{
+    chain_n++;
+}
+
+static void chain_alrm(int sig)
+{
+    chain_n++;
+    raise(SIGUSR2); /* blocked by sa_mask; delivered on sigreturn's exit */
+}
+
+/* A signal delivered on the way out of sigreturn must not "restart"
+ * sigreturn itself: the restored ax is pause()'s -EINTR, and an SA_RESTART
+ * handler used to rewind ip onto pause's syscall insn with ax = sigreturn. */
+TEST(sa_restart_after_sigreturn)
+{
+    pid_t pid = ASSERT_OK(fork());
+    if (pid == 0) {
+        install(SIGUSR2, chain_usr2, SA_RESTART);
+        struct sigaction sa = {0};
+        sa.sa_handler = chain_alrm;
+        sigemptyset(&sa.sa_mask);
+        sigaddset(&sa.sa_mask, SIGUSR2);
+        if (sigaction(SIGALRM, &sa, NULL) != 0)
+            _exit(2);
+        alarm(1);
+        errno = 0;
+        int r = pause();
+        _exit(r == -1 && errno == EINTR && chain_n == 2 ? 0 : 1);
+    }
+    int st = ktest_wait_timeout(pid, 5);
+    if (st == -1)
+        FAIL("child hung");
+    else if (WIFSIGNALED(st))
+        FAIL("child killed by signal %d", WTERMSIG(st));
+    else if (!WIFEXITED(st) || WEXITSTATUS(st) != 0)
+        FAIL("child status %#x (pause result or handler count wrong)", st);
 }
 
 TEST(sigsuspend_atomic_unblock)
@@ -690,6 +784,69 @@ TEST(sigstop_sigcont)
     EXPECT_TRUE(st != -1 && WIFSIGNALED(st));
 }
 
+/* A stopped task must not run again until SIGCONT */
+TEST(sigstop_self_stops_before_returning)
+{
+    int fds[2];
+    ASSERT_OK(pipe(fds));
+    pid_t pid = ASSERT_OK(fork());
+    if (pid == 0) {
+        close(fds[0]);
+        pid_t self = getpid();
+        for (int i = 0; i < 20; i++) {
+            /* raw kill: musl's raise() makes another syscall after it */
+            syscall(SYS_kill, self, SIGSTOP);
+            if (write(fds[1], "x", 1) != 1)
+                _exit(2);
+        }
+        _exit(0);
+    }
+    close(fds[1]);
+    fcntl(fds[0], F_SETFL, O_NONBLOCK);
+    for (int i = 0; i < 20; i++) {
+        int st = 0;
+        ASSERT_EQ(waitpid(pid, &st, WUNTRACED), pid);
+        ASSERT_TRUE(WIFSTOPPED(st));
+        usleep(20000);
+        char c;
+        ssize_t n = read(fds[0], &c, 1);
+        if (n != -1 || errno != EAGAIN) {
+            FAIL("round %d: stopped child still wrote (read=%zd)", i, n);
+            kill(pid, SIGKILL);
+            ktest_wait_timeout(pid, 3);
+            return;
+        }
+        ASSERT_OK(kill(pid, SIGCONT));
+        /* the write lands once the child continues */
+        fcntl(fds[0], F_SETFL, 0);
+        EXPECT_EQ(read(fds[0], &c, 1), 1);
+        fcntl(fds[0], F_SETFL, O_NONBLOCK);
+    }
+    int st = ktest_wait_timeout(pid, 5);
+    EXPECT_TRUE(st != -1 && WIFEXITED(st) && WEXITSTATUS(st) == 0);
+}
+
+/* SIGKILL must end a stopped task without a SIGCONT first */
+TEST(sigkill_stopped_task)
+{
+    pid_t pid = ASSERT_OK(fork());
+    if (pid == 0) {
+        for (;;)
+            pause();
+    }
+    ASSERT_OK(kill(pid, SIGSTOP));
+    int st = 0;
+    ASSERT_EQ(waitpid(pid, &st, WUNTRACED), pid);
+    ASSERT_TRUE(WIFSTOPPED(st));
+    ASSERT_OK(kill(pid, SIGKILL));
+    st = ktest_wait_timeout(pid, 3);
+    EXPECT_TRUE(st != -1 && WIFSIGNALED(st) && WTERMSIG(st) == SIGKILL);
+    if (st == -1) {
+        kill(pid, SIGCONT);
+        ktest_wait_timeout(pid, 3);
+    }
+}
+
 TEST(pending_cleared_on_fork)
 {
     sigset_t s, pend;
@@ -710,4 +867,369 @@ TEST(pending_cleared_on_fork)
     EXPECT_EQ(WEXITSTATUS(st), 0);
     signal(SIGUSR1, SIG_IGN);
     sigprocmask(SIG_UNBLOCK, &s, NULL);
+}
+
+/* Faults at fault_insn (movl (%rax),%eax with rax = 0) and returns eax. */
+extern char fault_insn[], fault_insn_end[];
+__attribute__((noinline)) static int fault_at_known_rip(const void *addr)
+{
+    int eax;
+    __asm__ volatile(".globl fault_insn, fault_insn_end\n"
+                     "fault_insn: movl (%%rax), %%eax\n"
+                     "fault_insn_end:"
+                     : "=a"(eax) : "a"(addr) : "memory");
+    return eax;
+}
+
+static volatile unsigned long seen_rip, seen_cr2;
+
+static void skip_fault(int sig, siginfo_t *si, void *ucv)
+{
+    ucontext_t *uc = ucv;
+    seen_rip = uc->uc_mcontext.gregs[REG_RIP];
+    seen_cr2 = uc->uc_mcontext.gregs[REG_CR2];
+    uc->uc_mcontext.gregs[REG_RIP] = (unsigned long)fault_insn_end;
+    uc->uc_mcontext.gregs[REG_RAX] = 1234;
+}
+
+/* The third handler argument is a Linux-layout ucontext_t: gregs hold the
+ * interrupted registers, and edits to them take effect on return. */
+TEST(ucontext_gregs_read_and_write)
+{
+    struct sigaction sa = {0};
+    sa.sa_sigaction = skip_fault;
+    sa.sa_flags = SA_SIGINFO;
+    sigemptyset(&sa.sa_mask);
+    ASSERT_OK(sigaction(SIGSEGV, &sa, NULL));
+    int eax = fault_at_known_rip(NULL);
+    EXPECT_EQ(seen_rip, (unsigned long)fault_insn);
+    EXPECT_EQ(seen_cr2, 0);
+    EXPECT_EQ(eax, 1234);
+}
+
+static void block_usr2_on_return(int sig, siginfo_t *si, void *ucv)
+{
+    ucontext_t *uc = ucv;
+    sigaddset(&uc->uc_sigmask, SIGUSR2);
+}
+
+TEST(ucontext_sigmask_applied_on_return)
+{
+    struct sigaction sa = {0};
+    sa.sa_sigaction = block_usr2_on_return;
+    sa.sa_flags = SA_SIGINFO;
+    sigemptyset(&sa.sa_mask);
+    ASSERT_OK(sigaction(SIGUSR1, &sa, NULL));
+    sigset_t cur;
+    sigemptyset(&cur);
+    ASSERT_OK(sigprocmask(SIG_SETMASK, &cur, NULL));
+    raise(SIGUSR1);
+    ASSERT_OK(sigprocmask(SIG_BLOCK, NULL, &cur));
+    EXPECT_TRUE(sigismember(&cur, SIGUSR2));
+    EXPECT_TRUE(!sigismember(&cur, SIGUSR1));
+}
+
+static volatile unsigned long seen_uc_flags, seen_link;
+
+static void record_uc_header(int sig, siginfo_t *si, void *ucv)
+{
+    ucontext_t *uc = ucv;
+    seen_uc_flags = uc->uc_flags;
+    seen_link = (unsigned long)uc->uc_link;
+    hits = uc->uc_mcontext.fpregs != NULL;
+}
+
+TEST(ucontext_header_initialized)
+{
+    struct sigaction sa = {0};
+    sa.sa_sigaction = record_uc_header;
+    sa.sa_flags = SA_SIGINFO;
+    sigemptyset(&sa.sa_mask);
+    ASSERT_OK(sigaction(SIGUSR1, &sa, NULL));
+    hits = 0;
+    seen_uc_flags = seen_link = 0xdead;
+    raise(SIGUSR1);
+    EXPECT_EQ(seen_uc_flags, 0);
+    EXPECT_EQ(seen_link, 0);
+    EXPECT_EQ(hits, 1);
+}
+
+static volatile unsigned long seen_si_addr;
+
+static void skip_fault_record(int sig, siginfo_t *si, void *ucv)
+{
+    ucontext_t *uc = ucv;
+    seen_rip = uc->uc_mcontext.gregs[REG_RIP];
+    seen_cr2 = uc->uc_mcontext.gregs[REG_CR2];
+    seen_si_addr = (unsigned long)si->si_addr;
+    uc->uc_mcontext.gregs[REG_RIP] = (unsigned long)fault_insn_end;
+}
+
+/* CR2 (and si_addr) carry the faulting address. A nonzero address, since a
+ * zeroed frame would make 0 pass by accident. */
+TEST(ucontext_cr2_nonzero_fault)
+{
+    char *p = mmap(NULL, 4096, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    ASSERT_PTR(p);
+    struct sigaction sa = {0};
+    sa.sa_sigaction = skip_fault_record;
+    sa.sa_flags = SA_SIGINFO;
+    sigemptyset(&sa.sa_mask);
+    ASSERT_OK(sigaction(SIGSEGV, &sa, NULL));
+    seen_rip = seen_cr2 = seen_si_addr = 0;
+    fault_at_known_rip(p + 0x48);
+    EXPECT_EQ(seen_rip, (unsigned long)fault_insn);
+    EXPECT_EQ(seen_cr2, (unsigned long)(p + 0x48));
+    EXPECT_EQ(seen_si_addr, (unsigned long)(p + 0x48));
+    munmap(p, 4096);
+}
+
+static volatile int zero_bad;
+static volatile const char *zero_what;
+
+static bool all_zero(const void *p, size_t n)
+{
+    const unsigned char *b = p;
+    for (size_t i = 0; i < n; i++)
+        if (b[i])
+            return false;
+    return true;
+}
+
+static void check_zeroed(int sig, siginfo_t *si, void *ucv)
+{
+    ucontext_t *uc = ucv;
+    zero_bad = 1;
+    if (!all_zero(&uc->uc_stack, sizeof(uc->uc_stack)))
+        zero_what = "uc_stack";
+    else if (uc->uc_mcontext.gregs[REG_ERR] || uc->uc_mcontext.gregs[REG_TRAPNO] ||
+             uc->uc_mcontext.gregs[REG_OLDMASK] || uc->uc_mcontext.gregs[REG_CR2])
+        zero_what = "err/trapno/oldmask/cr2";
+    else if (!all_zero(uc->uc_mcontext.__reserved1, sizeof(uc->uc_mcontext.__reserved1)))
+        zero_what = "mcontext reserved";
+    else if (si->si_errno != 0)
+        zero_what = "si_errno";
+    else if (!all_zero((char *)si + 28, 128 - 28))
+        zero_what = "siginfo tail";
+    else
+        zero_bad = 0;
+}
+
+__attribute__((noinline)) static void dirty_stack(void)
+{
+    volatile char junk[16384];
+    memset((char *)junk, 0xaa, sizeof(junk));
+}
+
+/* Fields the kernel doesn't use must reach the handler as zeros: not stale
+ * kernel stack, not whatever was on the user stack. */
+TEST(ucontext_fields_zeroed)
+{
+    struct sigaction sa = {0};
+    sa.sa_sigaction = check_zeroed;
+    sa.sa_flags = SA_SIGINFO;
+    sigemptyset(&sa.sa_mask);
+    ASSERT_OK(sigaction(SIGUSR1, &sa, NULL));
+    zero_bad = -1;
+    zero_what = "handler did not run";
+    dirty_stack();
+    kill(getpid(), SIGUSR1);
+    if (zero_bad)
+        FAIL("nonzero field: %s", zero_what);
+}
+
+/* The kernel's own return trampoline (used when SA_RESTORER is absent;
+ * musl always passes one, so go around it). */
+struct raw_sigaction {
+    void (*handler)(int, siginfo_t *, void *);
+    unsigned long flags;
+    void (*restorer)(void);
+    unsigned long mask;
+};
+
+static volatile unsigned long tramp_rip;
+
+static void tramp_handler(int sig, siginfo_t *si, void *ucv)
+{
+    ucontext_t *uc = ucv;
+    hits++;
+    tramp_rip = uc->uc_mcontext.gregs[REG_RIP];
+}
+
+TEST(sigtramp_without_restorer)
+{
+    struct raw_sigaction ka = {
+        .handler = tramp_handler,
+        .flags = SA_SIGINFO,
+        .restorer = NULL,
+        .mask = 0,
+    };
+    ASSERT_OK(syscall(SYS_rt_sigaction, SIGUSR1, &ka, NULL, 8));
+    hits = 0;
+    tramp_rip = 0;
+    for (int i = 0; i < 3; i++)
+        EXPECT_OK(kill(getpid(), SIGUSR1));
+    EXPECT_EQ(hits, 3);
+    EXPECT_NE(tramp_rip, 0);
+    /* the interrupted code resumed with its stack intact */
+    volatile int canary = 0x5a5a;
+    kill(getpid(), SIGUSR1);
+    EXPECT_EQ(canary, 0x5a5a);
+    EXPECT_EQ(hits, 4);
+}
+
+static void block_everything_on_return(int sig, siginfo_t *si, void *ucv)
+{
+    ucontext_t *uc = ucv;
+    sigfillset(&uc->uc_sigmask);
+}
+
+/* sigreturn takes its mask from user memory, and used to let a handler block
+ * SIGKILL and SIGSTOP through it, leaving the process unkillable */
+TEST(sigreturn_cannot_block_sigkill)
+{
+    int fds[2];
+    ASSERT_OK(pipe(fds));
+    pid_t pid = ASSERT_OK(fork());
+    if (pid == 0) {
+        struct sigaction sa = {0};
+        sa.sa_sigaction = block_everything_on_return;
+        sa.sa_flags = SA_SIGINFO;
+        sigemptyset(&sa.sa_mask);
+        if (sigaction(SIGUSR1, &sa, NULL) != 0)
+            _exit(2);
+        raise(SIGUSR1);
+        sigset_t cur;
+        sigprocmask(SIG_BLOCK, NULL, &cur);
+        char ok = sigismember(&cur, SIGKILL) || sigismember(&cur, SIGSTOP) ? 'n' : 'y';
+        write(fds[1], &ok, 1);
+        for (;;)
+            pause();
+    }
+    close(fds[1]);
+    char ok = 0;
+    EXPECT_EQ(read(fds[0], &ok, 1), 1);
+    EXPECT_EQ(ok, 'y');
+    EXPECT_OK(kill(pid, SIGKILL));
+    int st = ktest_wait_timeout(pid, 3);
+    EXPECT_TRUE(st != -1 && WIFSIGNALED(st) && WTERMSIG(st) == SIGKILL);
+}
+
+/* A stop and continue with no handler must restart a blocking syscall, not
+ * fail it with EINTR (cat used to exit after ^Z and fg) */
+TEST(stop_cont_restarts_read)
+{
+    int fds[2];
+    ASSERT_OK(pipe(fds));
+    pid_t pid = ASSERT_OK(fork());
+    if (pid == 0) {
+        close(fds[1]);
+        char c = 0;
+        ssize_t r = read(fds[0], &c, 1);
+        _exit(r == 1 && c == 'z' ? 0 : r == -1 && errno == EINTR ? 3 : 4);
+    }
+    close(fds[0]);
+    usleep(100000);
+    ASSERT_OK(kill(pid, SIGSTOP));
+    int st = 0;
+    ASSERT_EQ(waitpid(pid, &st, WUNTRACED), pid);
+    ASSERT_TRUE(WIFSTOPPED(st));
+    ASSERT_OK(kill(pid, SIGCONT));
+    usleep(100000);
+    EXPECT_EQ(write(fds[1], "z", 1), 1);
+    st = ktest_wait_timeout(pid, 3);
+    if (st != -1 && WIFEXITED(st) && WEXITSTATUS(st) == 3)
+        FAIL("read failed with EINTR after SIGCONT");
+    EXPECT_TRUE(st != -1 && WIFEXITED(st) && WEXITSTATUS(st) == 0);
+}
+
+static double now_sec(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec + ts.tv_nsec / 1e9;
+}
+
+/* nanosleep resumes after a stop for the time left, as Linux (through
+ * restart_syscall), instead of failing or sleeping the full time again */
+TEST(stop_cont_resumes_nanosleep)
+{
+    pid_t pid = ASSERT_OK(fork());
+    if (pid == 0) {
+        struct timespec req = { 1, 500000000 };
+        double t0 = now_sec();
+        int r = nanosleep(&req, NULL);
+        double dt = now_sec() - t0;
+        if (r != 0)
+            _exit(3);
+        _exit(dt < 1.4 ? 4 : dt > 2.1 ? 5 : 0);
+    }
+    usleep(300000);
+    ASSERT_OK(kill(pid, SIGSTOP));
+    int st = 0;
+    ASSERT_EQ(waitpid(pid, &st, WUNTRACED), pid);
+    usleep(500000);
+    ASSERT_OK(kill(pid, SIGCONT));
+    st = ktest_wait_timeout(pid, 5);
+    ASSERT_TRUE(st != -1 && WIFEXITED(st));
+    switch (WEXITSTATUS(st)) {
+    case 0: break;
+    case 3: FAIL("nanosleep failed after SIGCONT"); break;
+    case 4: FAIL("nanosleep returned early"); break;
+    case 5: FAIL("nanosleep restarted from the full duration"); break;
+    default: FAIL("child status %#x", st);
+    }
+}
+
+/* pause() returns only for a handler: a stop and continue restarts it */
+TEST(pause_restarts_after_stop)
+{
+    pid_t pid = ASSERT_OK(fork());
+    if (pid == 0) {
+        hits = 0;
+        install(SIGUSR1, count_handler, 0);
+        errno = 0;
+        int r = pause();
+        _exit(r == -1 && errno == EINTR && hits == 1 ? 0 : 3);
+    }
+    usleep(100000);
+    ASSERT_OK(kill(pid, SIGSTOP));
+    int st = 0;
+    ASSERT_EQ(waitpid(pid, &st, WUNTRACED), pid);
+    ASSERT_OK(kill(pid, SIGCONT));
+    usleep(100000);
+    ASSERT_OK(kill(pid, SIGUSR1));
+    st = ktest_wait_timeout(pid, 3);
+    EXPECT_TRUE(st != -1 && WIFEXITED(st) && WEXITSTATUS(st) == 0);
+}
+
+static unsigned get_mxcsr(void)
+{
+    unsigned v;
+    __asm__ volatile ("stmxcsr %0" : "=m"(v));
+    return v;
+}
+
+static void set_mxcsr(unsigned v)
+{
+    __asm__ volatile ("ldmxcsr %0" : : "m"(v));
+}
+
+/* sigreturn used to clear MXCSR.DAZ with a hardcoded mask */
+TEST(mxcsr_daz_survives_handler)
+{
+    const unsigned DAZ = 1u << 6;
+    unsigned saved = get_mxcsr();
+    set_mxcsr(saved | DAZ);
+    if (!(get_mxcsr() & DAZ)) {
+        set_mxcsr(saved);
+        SKIP("cpu has no DAZ");
+    }
+    hits = 0;
+    install(SIGUSR1, count_handler, 0);
+    raise(SIGUSR1);
+    unsigned after = get_mxcsr();
+    set_mxcsr(saved);
+    EXPECT_EQ(hits, 1);
+    EXPECT_TRUE(after & DAZ);
 }
