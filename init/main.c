@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/wait.h>
@@ -11,9 +12,12 @@ int main(void)
         if (pid == 0) {
             execl("/bin/login", "login", NULL);
             exit(1);
-        } else {
-            wait(NULL);
         }
+
+        pid_t w;
+        do {
+            w = wait(NULL);
+        } while (w != pid && !(w < 0 && errno == ECHILD));
     }
 
     return 0;

@@ -31,6 +31,7 @@ CFLAGS:=$(CFLAGS) $(FLAGS) -std=gnu23 -fanalyzer -fstack-protector-strong \
 CXXFLAGS:=$(CXXFLAGS) $(FLAGS) -D_GLIBCXX_NO_ASSERTIONS \
 	-fno-exceptions -fno-rtti -fpermissive -std=c++23
 LDFLAGS:=$(LDFLAGS) -nostdlib
+ASFLAGS:=$(ASFLAGS) -Wa,--noexecstack
 LIBS:=$(LIBS) -lgcc -lstdc++
 
 ifdef CONFIG_x86_64
@@ -235,17 +236,17 @@ endif
 .S.o:
 ifndef VERBOSE
 	@echo "	CCAS	$<"
-	@$(CC) -MD -c $< -o $@ $(CFLAGS)
+	@$(CC) -MD -c $< -o $@ $(CFLAGS) $(ASFLAGS)
 else
-	$(CC) -MD -c $< -o $@ $(CFLAGS)
+	$(CC) -MD -c $< -o $@ $(CFLAGS) $(ASFLAGS)
 endif
 
 .s.o:
 ifndef VERBOSE
 	@echo "	AS	$<"
-	@$(AS) -c $< -o $@
+	@$(AS) --noexecstack -c $< -o $@
 else
-	$(AS) -c $< -o $@
+	$(AS) --noexecstack -c $< -o $@
 endif
 
 .cpp.o:

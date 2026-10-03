@@ -46,6 +46,7 @@ uintptr_t arch_get_pgd(void);
 void copy_kernel_mappings(uintptr_t phys_cr3);
 
 uintptr_t __walk_pages(void *vaddr);
+bool user_page_present(void *virt);
 
 int map_pages(void *physaddr, void *virtualaddr, int flags, int num_pages);
 int unmap_pages(void *virtualaddr, int num_pages);

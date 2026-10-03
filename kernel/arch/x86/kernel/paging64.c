@@ -500,6 +500,14 @@ static pte_t * lookup_user_pte(pml4e_t *pml4, void *virt)
     return (pte_t*)ENTRY_ADDR(pde) + get_pt_index(virt);
 }
 
+// Whether virt has a present mapping in the current user page table
+bool user_page_present(void *virt)
+{
+    pml4e_t *pml4 = (pml4e_t*)ENTRY_ADDR(arch_get_pgd());
+    pte_t *pte = lookup_user_pte(pml4, virt);
+    return pte && ENTRY_PRESENT(*pte);
+}
+
 static u64 * alloc_user_table(u64 *table, u32 ndx)
 {
     if (!ENTRY_PRESENT(table[ndx])) {

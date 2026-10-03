@@ -375,7 +375,7 @@ static int mmap_unmap_range(struct mm_info *mm, uintptr_t start, uintptr_t end)
 
     acquire_lock(&mm->page_table_lock);
     drop_user_page_range(start, end - start);
-    tlb_shootdown(&tlb, current);
+    tlb_shootdown(&tlb);
     release_lock(&mm->page_table_lock);
 
 error:
@@ -640,7 +640,7 @@ static long do_mremap(struct mm_info *mm, uintptr_t old_addr, size_t old_len,
         vma_list_insert(vma, &mm->mmap);
         return err;
     }
-    tlb_shootdown(&tlb, current);
+    tlb_shootdown(&tlb);
     unlock_page_table(mm);
 
     // The file reference, if any, moves with the VMA
@@ -713,7 +713,7 @@ int brk(void *addr)
         }
     }
 
-    if (addr_val < vma->start || addr_val - vma->start > 0xffffff) {
+    if (addr_val < vma->start || addr_val - vma->start > __USER_BRK_SZ) {
         mmap_write_unlock(mm);
         return -ENOMEM;
     } else if (addr_val > vma->end) {
@@ -762,7 +762,7 @@ void * sbrk(intptr_t increment)
     }
 #endif
 
-    if (increment < 0 || labs(increment) > 0xFFFFFF) {
+    if (increment < 0 || labs(increment) > (long)__USER_BRK_SZ) {
         mmap_write_unlock(mm);
         klog(LOG_WARN, "sbrk: Invalid increment: %ld\n", increment);
         return ERR_PTR(-ENOMEM); // Invalid increment

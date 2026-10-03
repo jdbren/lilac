@@ -142,7 +142,7 @@ void arch_unmap_all_user_vm(struct mm_info *info)
         kfree(desc);
         desc = next;
     }
-    tlb_shootdown(&tlb, current);
+    tlb_shootdown(&tlb);
     info->mmap = NULL;
     unlock_page_table(info);
     mmap_write_unlock(info);

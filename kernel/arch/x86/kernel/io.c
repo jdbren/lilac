@@ -64,7 +64,6 @@ void serial_init(void)
     outb(0x64, 0x20);
     i8042_wait_output();
     u8 cfg = inb(0x60);
-    klog(LOG_INFO, "PS/2 controller config: 0x%02x\n", cfg);
 
     cfg |= 0x01;     // enable IRQ1
     cfg &= ~(1 << 6); // disable translation
