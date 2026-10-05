@@ -45,10 +45,12 @@ struct fs_info * alloc_fs_info(void)
 
 static void copy_fs_info(struct fs_info *dst, struct fs_info *src)
 {
+    acquire_lock(&src->lock);
     dget(src->root_d);
     dget(src->cwd_d);
     dst->root_d = src->root_d;
     dst->cwd_d = src->cwd_d;
+    release_lock(&src->lock);
 }
 
 static int copy_files(struct fdtable *dst, struct fdtable *src)
@@ -244,7 +246,7 @@ static struct task * clone_process(struct clone_args *args)
     INIT_LIST_HEAD(&child->timer_ev_list);
     init_itimer_real(child);
     if (!(flags & CLONE_THREAD))
-        memcpy(child->rlim, cur->tg_leader->rlim, sizeof(child->rlim));
+        copy_rlimits(child->rlim, cur->tg_leader);
 
     return child;
 }
@@ -480,6 +482,8 @@ void reap_task(struct task *p)
     hash_del(&p->pgid_hash);
     hash_del(&p->sid_hash);
     release_write_lock_irqrestore(&tasklist_lock, flags);
+    if (p == p->tg_leader)
+        itimer_real_exit(p);
     put_sighandlers(p->sighand);
     kfree(p->reg_store);
     free_pages(p->kstack_base, __KERNEL_STACK_SZ / PAGE_SIZE);

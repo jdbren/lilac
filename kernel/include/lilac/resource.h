@@ -28,6 +28,9 @@ struct rlimit {
     u64 rlim_max;
 };
 
+struct task;
+
 void init_rlimits(struct rlimit *rlim);
+void copy_rlimits(struct rlimit *dst, struct task *leader);
 
 #endif

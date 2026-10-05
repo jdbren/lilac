@@ -36,6 +36,18 @@ struct dentry * get_root_dentry(void)
     return root_dentry;
 }
 
+struct dentry * get_cwd(void)
+{
+    struct fs_info *fs = current->fs;
+    struct dentry *cwd;
+
+    acquire_lock(&fs->lock);
+    cwd = fs->cwd_d;
+    dget(cwd);
+    release_lock(&fs->lock);
+    return cwd;
+}
+
 
 static void root_init(struct block_device *bdev, enum fs_type type)
 {
@@ -192,7 +204,7 @@ static DEFINE_MUTEX(rename_mutex);
  */
 static void lock_rename(struct dentry *p1, struct dentry *p2)
 {
-    if (p1 == p2) {
+    if (p1->d_inode == p2->d_inode) {
         inode_lock(p1->d_inode);
         return;
     }
@@ -209,7 +221,7 @@ static void lock_rename(struct dentry *p1, struct dentry *p2)
 static void unlock_rename(struct dentry *p1, struct dentry *p2)
 {
     inode_unlock(p1->d_inode);
-    if (p1 != p2) {
+    if (p1->d_inode != p2->d_inode) {
         inode_unlock(p2->d_inode);
         mutex_unlock(&rename_mutex);
     }
@@ -220,7 +232,8 @@ static int vfs_rename(const char *oldpath, const char *newpath)
     char name[NAME_MAX];
     struct dentry *old_d, *old_parent, *new_parent, *new_d;
     struct inode *target = NULL;
-    bool locked;
+    char *new_name = NULL;
+    bool locked = false;
     int err;
 
     err = get_basename(name, newpath, NAME_MAX);
@@ -230,7 +243,6 @@ static int vfs_rename(const char *oldpath, const char *newpath)
         return -EBUSY;
 
     old_parent = new_parent = new_d = NULL;
-    locked = false;
     old_d = vfs_lookup_flags(oldpath, 0);
     if (IS_ERR(old_d))
         return PTR_ERR(old_d);
@@ -316,6 +328,17 @@ static int vfs_rename(const char *oldpath, const char *newpath)
         goto out;
     }
 
+    if (new_d->d_inode == old_dir) {
+        err = -ENOTEMPTY;
+        goto out;
+    }
+
+    new_name = strdup(name);
+    if (!new_name) {
+        err = -ENOMEM;
+        goto out;
+    }
+
     // a directory being replaced is removed: nothing may be created in it
     if (new_d->d_inode && S_ISDIR(new_d->d_inode->i_mode)) {
         target = new_d->d_inode;
@@ -329,13 +352,14 @@ static int vfs_rename(const char *oldpath, const char *newpath)
             d_prune_negative(new_d);
         }
         d_drop(new_d);
-        err = d_move(old_d, new_parent, name);
-        if (err)
-            d_drop(old_d);
+        d_move(old_d, new_parent, new_name);
+        new_name = NULL;
     }
     if (target)
         inode_unlock(target);
 out:
+    if (new_name)
+        kfree(new_name);
     if (locked)
         unlock_rename(old_parent, new_parent);
     if (new_d)
@@ -375,12 +399,17 @@ long vfs_ftruncate(struct file *f, loff_t length)
         return -EINVAL;
     if ((f->f_mode & O_ACCMODE) == O_RDONLY)
         return -EBADF;
+    // if (inode->i_flags & S_APPEND)
+    //     return -EPERM;
     if (!inode->i_op || !inode->i_op->truncate)
         return -EROFS;
     if ((unsigned long long)length > inode->i_sb->s_maxbytes)
         return -EFBIG;
 
-    return inode->i_op->truncate(inode, length);
+    inode_lock(inode);
+    int err = inode->i_op->truncate(inode, length);
+    inode_unlock(inode);
+    return err;
 }
 
 SYSCALL_DECL2(ftruncate, int, fd, off_t, length)
@@ -425,14 +454,16 @@ SYSCALL_DECL3(lseek, int, fd, off_t, offset, int, whence)
 
 struct dentry * vfs_lookup_flags(const char *path, int follow_final)
 {
-    struct dentry *start = root_dentry;
     if (*path == '\0')
         return ERR_PTR(-ENOENT);
 
-    if (path[0] != '/')
-        start = current->fs->cwd_d;
+    if (path[0] == '/')
+        return lookup_path_from_flags(root_dentry, path, follow_final);
 
-    return lookup_path_from_flags(start, path, follow_final);
+    struct dentry *cwd = get_cwd();
+    struct dentry *res = lookup_path_from_flags(cwd, path, follow_final);
+    dput(cwd);
+    return res;
 }
 
 struct dentry * vfs_lookup(const char *path)
@@ -468,13 +499,15 @@ static struct file *vfs_open_dentry(struct dentry *dentry, const char *path,
 
 struct file *vfs_open(const char *path, int flags, int mode)
 {
+    struct file *file;
     klog(LOG_DEBUG, "VFS: Opening %s, flags = %x, mode = %x\n", path, flags, mode);
-    struct dentry *dentry = vfs_lookup_flags(path, !(flags & O_NOFOLLOW));
-    if (IS_ERR(dentry))
-        return ERR_CAST(dentry);
-    // the file takes its own reference
-    struct file *file = vfs_open_dentry(dentry, path, flags, mode);
-    dput(dentry);
+    do {
+        struct dentry *dentry = vfs_lookup_flags(path, !(flags & O_NOFOLLOW));
+        if (IS_ERR(dentry))
+            return ERR_CAST(dentry);
+        file = vfs_open_dentry(dentry, path, flags, mode);
+        dput(dentry);
+    } while (!file);
     return file;
 }
 
@@ -494,6 +527,8 @@ static struct file *vfs_open_dentry(struct dentry *dentry, const char *path,
                 klog(LOG_DEBUG, "Failed to create file %s: %d\n", path, err);
                 return ERR_PTR(err);
             }
+            if (err > 0)
+                return NULL;
             inode = dentry->d_inode;
         } else {
             return ERR_PTR(-ENOENT);
@@ -538,6 +573,7 @@ static struct file *vfs_open_dentry(struct dentry *dentry, const char *path,
 
     return new_file;
 }
+
 SYSCALL_DECL3(open, const char*, path, int, flags, int, mode)
 {
     char *path_buf;
@@ -695,7 +731,9 @@ ssize_t vfs_write_at(struct file *file, const void *buf, size_t count, unsigned 
     mutex_lock(&file->f_pos_lock);
     unsigned long old_pos = file->f_pos;
     file->f_pos = pos;
+    inode_lock(file->f_inode);
     bytes = file->f_op->write(file, buf, count);
+    inode_unlock(file->f_inode);
     file->f_pos = old_pos;
     mutex_unlock(&file->f_pos_lock);
 
@@ -718,8 +756,11 @@ ssize_t vfs_write(struct file *file, const void *buf, size_t count)
     if ((file->f_mode & O_APPEND) && file->f_inode)
         file->f_pos = file->f_inode->i_size;
     ssize_t bytes = write_limit(file, file->f_pos, count);
-    if (bytes > 0)
+    if (bytes > 0) {
+        inode_lock(file->f_inode);
         bytes = file->f_op->write(file, buf, bytes);
+        inode_unlock(file->f_inode);
+    }
     if (bytes > 0)
         file->f_pos += bytes;
     mutex_unlock(&file->f_pos_lock);
@@ -818,12 +859,12 @@ ssize_t vfs_getdents(struct file *file, struct dirent *dirp, int buf_size)
     klog(LOG_DEBUG, "VFS: Reading directory %s\n", file->f_dentry->d_name.data);
 #endif
     dir_cnt = buf_size / sizeof(struct dirent);
-    inode_lock(inode);
+    inode_lock_shared(inode);
     if (IS_DEADDIR(inode))
         dir_cnt = -ENOENT;
     else
         dir_cnt = file->f_op->readdir(file, dirp, dir_cnt);
-    inode_unlock(inode);
+    inode_unlock_shared(inode);
 #ifdef DEBUG_VFS
     klog(LOG_DEBUG, "VFS: Read %d entries\n", dir_cnt);
 #endif
@@ -1097,8 +1138,9 @@ SYSCALL_DECL2(getcwd, char*, buf, size_t, size)
     if (!buf || size == 0 || size > 4096)
         return -EINVAL;
 
-    struct dentry *cwd = current->fs->cwd_d;
+    struct dentry *cwd = get_cwd();
     char *path = build_absolute_path(cwd);
+    dput(cwd);
     if (IS_ERR(path))
         return PTR_ERR(path);
 
@@ -1419,8 +1461,8 @@ error:
 }
 
 struct iovec {
-    void *iov_base;	/* Pointer to data.  */
-    size_t iov_len;	/* Length of data.  */
+    void *iov_base; /* Pointer to data.  */
+    size_t iov_len; /* Length of data.  */
 };
 
 SYSCALL_DECL3(readv, int, fd, const struct iovec __user *, iov, int, iovcnt)

@@ -4,6 +4,7 @@
 #include <lilac/config.h>
 #include <lilac/types.h>
 #include <lilac/sync.h>
+#include <lilac/rwsem.h>
 #include <lilac/fdtable.h>
 #include <lib/list.h>
 #include <lib/lstr.h>
@@ -37,7 +38,7 @@ struct inode {
     spinlock_t          i_lock;  /* i_blocks, i_size */
     atomic_bool         i_dirty;
     unsigned int        i_flags;
-    mutex_t             i_mutex; /* protects its entries and fs lookups */
+    rwsem_t             i_rwsem;
     unsigned long       i_state;
 
     ino_t               i_ino;
@@ -294,7 +295,8 @@ void destroy_dentry(struct dentry *d);
 void dcache_add(struct dentry *d);
 void d_drop(struct dentry *d);
 void d_prune_negative(struct dentry *dir);
-int d_move(struct dentry *d, struct dentry *new_parent, const char *name);
+void d_move(struct dentry *d, struct dentry *new_parent, char *new_name);
+struct dentry * get_cwd(void);
 struct dentry * dget_parent(struct dentry *d);
 struct dentry * lock_parent(struct dentry *d);
 void unlock_parent(struct dentry *parent);
@@ -312,12 +314,32 @@ static inline bool IS_DEADDIR(const struct inode *inode)
 
 static inline void inode_lock(struct inode *inode)
 {
-    mutex_lock(&inode->i_mutex);
+	down_write(&inode->i_rwsem);
 }
 
 static inline void inode_unlock(struct inode *inode)
 {
-    mutex_unlock(&inode->i_mutex);
+	up_write(&inode->i_rwsem);
+}
+
+static inline void inode_lock_shared(struct inode *inode)
+{
+	down_read(&inode->i_rwsem);
+}
+
+static inline void inode_unlock_shared(struct inode *inode)
+{
+	up_read(&inode->i_rwsem);
+}
+
+static inline int inode_trylock(struct inode *inode)
+{
+	return down_write_trylock(&inode->i_rwsem);
+}
+
+static inline int inode_trylock_shared(struct inode *inode)
+{
+	return down_read_trylock(&inode->i_rwsem);
 }
 
 struct inode * alloc_inode(struct super_block *sb);

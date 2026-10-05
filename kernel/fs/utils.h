@@ -2,8 +2,10 @@
 #define _FS_UTILS_H
 
 #include <lilac/types.h>
+#include <lilac/sync.h>
 struct dentry;
 extern struct dentry *root_dentry;
+extern spinlock_t rename_lock;
 
 int get_basename(char *restrict dst, const char *restrict path, size_t size);
 int get_dirname(char *restrict dst, const char *restrict path, size_t size);

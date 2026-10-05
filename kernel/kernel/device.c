@@ -65,7 +65,7 @@ int dev_mknod(struct inode *parent_dir, struct dentry *node, umode_t mode, dev_t
     inode->i_mode = mode;
     inode->i_sb = parent_dir->i_sb;
     inode->i_count = 1;
-    mutex_init(&inode->i_mutex);
+    rwsem_init(&inode->i_rwsem);
     inode->i_op = parent_dir->i_op;
 
     node->d_inode = inode;

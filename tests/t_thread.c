@@ -5,6 +5,7 @@
 #include <stdatomic.h>
 #include <sys/mman.h>
 #include <sys/resource.h>
+#include <sys/time.h>
 #include <sys/syscall.h>
 
 #define FUTEX_WAIT 0
@@ -652,4 +653,63 @@ TEST(waitpid_pid_reaps_threads)
     errno = 0;
     EXPECT_EQ(syscall(SYS_prlimit64, tid, RLIMIT_NOFILE, NULL, &rl), -1);
     EXPECT_EQ(errno, ESRCH);
+}
+
+/* ITIMER_REAL belongs to the process, not the thread that set it */
+static void *read_itimer(void *arg)
+{
+    struct itimerval *out = arg;
+    getitimer(ITIMER_REAL, out);
+    return NULL;
+}
+
+static void *clear_itimer(void *arg)
+{
+    (void)arg;
+    struct itimerval off = {0};
+    setitimer(ITIMER_REAL, &off, NULL);
+    return NULL;
+}
+
+TEST(itimer_shared_by_threads)
+{
+    struct itimerval it = { .it_value = { 30, 0 } }, seen = {0}, now;
+    ASSERT_OK(setitimer(ITIMER_REAL, &it, NULL));
+    pthread_t t;
+    ASSERT_EQ(pthread_create(&t, NULL, read_itimer, &seen), 0);
+    pthread_join(t, NULL);
+    EXPECT_GE(seen.it_value.tv_sec, 28);
+
+    ASSERT_EQ(pthread_create(&t, NULL, clear_itimer, NULL), 0);
+    pthread_join(t, NULL);
+    ASSERT_OK(getitimer(ITIMER_REAL, &now));
+    EXPECT_EQ(now.it_value.tv_sec, 0);
+    EXPECT_EQ(now.it_value.tv_usec, 0);
+    alarm(KTEST_DEFAULT_TIMEOUT);
+}
+
+static volatile sig_atomic_t alrm_hits;
+static void on_alrm(int sig) { (void)sig; alrm_hits++; }
+
+static void *arm_and_exit(void *arg)
+{
+    (void)arg;
+    struct itimerval it = { .it_value = { 0, 100000 } };
+    setitimer(ITIMER_REAL, &it, NULL);
+    return NULL;
+}
+
+/* a timer armed by a thread that then exits still fires for the process */
+TEST(itimer_outlives_arming_thread)
+{
+    alrm_hits = 0;
+    signal(SIGALRM, on_alrm);
+    pthread_t t;
+    ASSERT_EQ(pthread_create(&t, NULL, arm_and_exit, NULL), 0);
+    pthread_join(t, NULL);
+    for (int i = 0; i < 100 && !alrm_hits; i++)
+        usleep(10000);
+    EXPECT_EQ(alrm_hits, 1);
+    signal(SIGALRM, SIG_DFL);
+    alarm(KTEST_DEFAULT_TIMEOUT);
 }

@@ -313,9 +313,11 @@ static u32 fat_alias_number(const struct fat_file *e, const unsigned char basis[
 {
     if (memcmp(e->ext, basis + 8, 3))
         return 0;
-    size_t at = 0, len = 1;
-    while (at < 8 && e->name[at] != '~')
-        at++;
+    // the basis may itself contain '~': the tail starts at the last one
+    size_t at = 8, len = 1;
+    for (size_t i = 0; i < 8; i++)
+        if (e->name[i] == '~')
+            at = i;
     if (at == 8)
         return 0;
     u32 n = 0;
@@ -582,7 +584,7 @@ void fat_release_clusters(struct inode *inode)
 }
 
 // The inode's last name is gone. Its data stays readable through open files
-// and is freed on the last close.
+// and is freed when the inode is destroyed (fat_destroy_inode).
 static void fat_drop_inode(struct inode *inode)
 {
     struct fat_inode *fi = (struct fat_inode*)inode->i_private;
@@ -594,8 +596,6 @@ static void fat_drop_inode(struct inode *inode)
     acquire_lock(&inode->i_sb->s_lock);
     list_del_init(&inode->i_list);
     release_lock(&inode->i_sb->s_lock);
-    if (fi->open_count == 0)
-        fat_release_clusters(inode);
 }
 
 // Locate name, returning the entry range fat_dir_remove takes
@@ -641,21 +641,17 @@ static int fat_check_dir_empty(struct inode *inode)
 int fat32_unlink(struct inode *dir, struct dentry *victim)
 {
     int err = fat_remove_name(dir, victim);
-    if (err)
-        return err;
-    fat_drop_inode(victim->d_inode);
-    return 0;
+    if (!err)
+        fat_drop_inode(victim->d_inode);
+    return err;
 }
 
 int fat32_rmdir(struct inode *dir, struct dentry *victim)
 {
     int err = fat_check_dir_empty(victim->d_inode);
-    if (err)
-        return err;
-    if ((err = fat_remove_name(dir, victim)))
-        return err;
-    fat_drop_inode(victim->d_inode);
-    return 0;
+    if (!err && !(err = fat_remove_name(dir, victim)))
+        fat_drop_inode(victim->d_inode);
+    return err;
 }
 
 // Point the ".." entry of a moved directory at its new parent

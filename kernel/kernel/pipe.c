@@ -25,7 +25,7 @@ struct inode * pipe_alloc_inode()
         return NULL;
     ino->i_mode = S_IFIFO|S_IREAD|S_IWRITE;
     ino->i_count = 1;
-    mutex_init(&ino->i_mutex);
+    rwsem_init(&ino->i_rwsem);
     ino->i_nlink = 1;
     ino->i_atime = ino->i_ctime = ino->i_mtime = get_unix_time();
     ino->i_fop = &pipe_fops;

@@ -21,7 +21,7 @@ struct inode *fat_alloc_inode(struct super_block *sb)
     new_node->i_sb = sb;
     new_node->i_op = &fat_iops;
     new_node->i_count = 1;
-    mutex_init(&new_node->i_mutex);
+    rwsem_init(&new_node->i_rwsem);
     new_node->i_mode = 0777;
 
     return new_node;
@@ -29,6 +29,11 @@ struct inode *fat_alloc_inode(struct super_block *sb)
 
 void fat_destroy_inode(struct inode *inode)
 {
+    struct fat_inode *fi = (struct fat_inode*)inode->i_private;
+    // Last reference to an unlinked file: no name and no open file (which
+    // holds its dentry, and so the inode) can reach the data anymore
+    if (fi && fi->unlinked)
+        fat_release_clusters(inode);
     if (inode->i_private)
         kfree(inode->i_private);
     if (inode->i_list.next)
@@ -133,6 +138,15 @@ struct dentry *fat32_lookup(struct inode *parent, struct dentry *find,
         }
         if (inode->i_private != info)
             kfree(info); // already cached
+
+        struct dentry *alias;
+        hlist_for_each_entry(alias, &find->d_parent->d_children, d_sib) {
+            if (alias->d_inode == inode) {
+                dget(alias);
+                iput(inode);
+                return alias;
+            }
+        }
         find->d_inode = inode;
     } else if (err > 0) {
         kfree(info);

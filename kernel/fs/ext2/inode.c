@@ -21,7 +21,7 @@ struct inode * ext2_alloc_inode(struct super_block *sb)
     inode->i_sb = sb;
     inode->i_private = ei;
     inode->i_count = 1;
-    mutex_init(&inode->i_mutex);
+    rwsem_init(&inode->i_rwsem);
     list_add_tail(&inode->i_list, &sb->s_inodes);
 
     return inode;

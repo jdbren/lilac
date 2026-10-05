@@ -4,6 +4,7 @@
 #include <pthread.h>
 #include <sys/mman.h>
 #include <sys/resource.h>
+#include <sys/time.h>
 #include <ucontext.h>
 #include <sys/syscall.h>
 
@@ -362,4 +363,28 @@ TEST(sigreturn_null_fpregs_resets_fp)
         FAIL("killed by signal %d", WTERMSIG(st));
     else if (WEXITSTATUS(st) != 0)
         FAIL("MXCSR not reset to the initial state");
+}
+
+static volatile sig_atomic_t hz_alrm;
+static void hz_on_alrm(int sig) { (void)sig; hz_alrm++; }
+
+TEST(itimer_huge_interval)
+{
+    hz_alrm = 0;
+    signal(SIGALRM, hz_on_alrm);
+    struct itimerval it = {
+        .it_interval = { 9223372037LL, 0 },
+        .it_value = { 0, 1000 },
+    }, cur;
+    ASSERT_OK(setitimer(ITIMER_REAL, &it, NULL));
+    for (int i = 0; i < 50 && !hz_alrm; i++)
+        usleep(10000);
+    usleep(50000);
+    EXPECT_EQ(hz_alrm, 1);
+    ASSERT_OK(getitimer(ITIMER_REAL, &cur));
+    EXPECT_GT(cur.it_interval.tv_sec, 9000000000LL);
+    struct itimerval off = {0};
+    setitimer(ITIMER_REAL, &off, NULL);
+    signal(SIGALRM, SIG_DFL);
+    alarm(KTEST_DEFAULT_TIMEOUT);
 }
