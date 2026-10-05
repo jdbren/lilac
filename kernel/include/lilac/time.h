@@ -174,4 +174,24 @@ static __always_inline void timespec_add_ns(struct timespec *a, u64 ns)
     a->tv_nsec = ns;
 }
 
+static inline ktime_t timeval_to_ns(const struct timeval *tv)
+{
+    if (tv->tv_sec >= KTIME_SEC_MAX)
+        return KTIME_MAX;
+    return (ktime_t)tv->tv_sec * NS_PER_SEC + (ktime_t)tv->tv_usec * NS_PER_US;
+}
+
+static inline struct timeval ns_to_timeval(ktime_t ns)
+{
+    struct timeval tv = {
+        .tv_sec = ns / NS_PER_SEC,
+        .tv_usec = (ns % NS_PER_SEC + NS_PER_US - 1) / NS_PER_US,
+    };
+    if (tv.tv_usec == 1000000) {
+        tv.tv_sec++;
+        tv.tv_usec = 0;
+    }
+    return tv;
+}
+
 #endif

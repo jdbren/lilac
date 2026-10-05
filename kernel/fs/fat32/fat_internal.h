@@ -174,7 +174,6 @@ struct fat_inode {
     struct fat_file entry;
     u32 dir_clst;
     u32 dir_idx;
-    u32 open_count;
     bool unlinked;
     //struct blkio_buffer *buffer;
 };

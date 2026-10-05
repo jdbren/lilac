@@ -1791,3 +1791,46 @@ FSTEST(ftruncate_past_max_efbig)
     EXPECT_EQ(st.st_size, 3);
     close(fd);
 }
+
+FSTEST(rename_onto_ancestor_enotempty)
+{
+    char *a = pj(dir, "a"), *b = pj(a, "b");
+    ASSERT_OK(mkdir(a, 0755));
+    ASSERT_OK(mkdir(b, 0755));
+    EXPECT_ERR(rename(b, a), ENOTEMPTY);
+    struct stat st;
+    EXPECT_OK(stat(b, &st));
+}
+
+/* A long name and its 8.3 alias are one file: removing it under either name
+ * must remove it under both */
+FSTEST(fat_alias_gone_after_unlink)
+{
+    if (strcmp(fs->fs, "fat32"))
+        SKIP("FAT only");
+    char *lng = pj(dir, "longfilename.txt"), *sfn = pj(dir, "LONGFI~1.TXT");
+    ASSERT_OK(create_file(lng, "x", 1));
+    struct stat a, b;
+    ASSERT_OK(stat(lng, &a));
+    ASSERT_OK(stat(sfn, &b));
+    EXPECT_EQ(a.st_ino, b.st_ino);
+    ASSERT_OK(unlink(lng));
+    EXPECT_ERR(stat(sfn, &b), ENOENT);
+    EXPECT_ERR(open(sfn, O_RDONLY), ENOENT);
+}
+
+/* A '~' inside the basis must not hide an existing ~N alias */
+FSTEST(fat_alias_tilde_in_basis_unique)
+{
+    if (strcmp(fs->fs, "fat32"))
+        SKIP("FAT only");
+    ASSERT_OK(create_file(pj(dir, "a~longname1.txt"), "1", 1));
+    ASSERT_OK(create_file(pj(dir, "a~longname2.txt"), "2", 1));
+    struct stat s1, s2;
+    ASSERT_OK(stat(pj(dir, "A~LONG~1.TXT"), &s1));
+    ASSERT_OK(stat(pj(dir, "A~LONG~2.TXT"), &s2));
+    EXPECT_NE(s1.st_ino, s2.st_ino);
+    char buf[4] = {0};
+    EXPECT_EQ(slurp(pj(dir, "a~longname2.txt"), buf, sizeof(buf)), 1);
+    EXPECT_STREQ(buf, "2");
+}

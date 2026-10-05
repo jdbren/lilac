@@ -25,7 +25,7 @@ static struct inode* tmpfs_alloc_inode(struct super_block *sb)
 
     inode->i_ino = unique_ino();
     inode->i_sb = sb;
-    mutex_init(&inode->i_mutex);
+    rwsem_init(&inode->i_rwsem);
     inode->i_op = &tmpfs_iops;
     inode->i_count = 1;
     inode->i_atime = inode->i_mtime = inode->i_ctime = get_unix_time();

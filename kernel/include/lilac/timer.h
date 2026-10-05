@@ -6,8 +6,14 @@
 #include <lilac/math.h>
 #include <lilac/time.h>
 
-#define CLOCK_REALTIME  0
-#define CLOCK_MONOTONIC 1
+#define CLOCK_REALTIME           0
+#define CLOCK_MONOTONIC          1
+#define CLOCK_PROCESS_CPUTIME_ID 2
+#define CLOCK_THREAD_CPUTIME_ID  3
+#define CLOCK_MONOTONIC_RAW      4
+#define CLOCK_REALTIME_COARSE    5
+#define CLOCK_MONOTONIC_COARSE   6
+#define CLOCK_BOOTTIME           7
 
 struct timestamp {
     u16 year;
@@ -136,6 +142,14 @@ static inline ktime_t ktime_set(const s64 secs, const unsigned long nsecs)
  * res = kt + nsval:
  */
 #define ktime_add_ns(kt, nsval) ((kt) + (nsval))
+
+static inline ktime_t ktime_add_sat(ktime_t a, ktime_t b)
+{
+    ktime_t res;
+    if (__builtin_add_overflow(a, b, &res))
+        return b > 0 ? KTIME_MAX : KTIME_MIN;
+    return res;
+}
 
 /*
  * Subtract a scalar nanosecod from a ktime_t variable

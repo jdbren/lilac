@@ -48,7 +48,7 @@ int inode_init(struct super_block *sb, struct inode *inode)
     // inode->i_generation = 0;
     inode->i_rdev = 0;
     spin_lock_init(&inode->i_lock);
-    mutex_init(&inode->i_mutex);
+    rwsem_init(&inode->i_rwsem);
     // inode->i_private = NULL;
 
     // this_cpu_inc(nr_inodes);

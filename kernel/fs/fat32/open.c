@@ -10,9 +10,7 @@
 
 int fat32_open(struct inode *inode, struct file *file)
 {
-    struct fat_inode *info = (struct fat_inode*)inode->i_private;
     file->f_op = &fat_fops;
-    info->open_count++;
     return 0;
 }
 
@@ -23,8 +21,5 @@ int fat32_create(struct inode *parent, struct dentry *new, umode_t mode)
 
 int fat32_close(struct inode *inode, struct file *file)
 {
-    struct fat_inode *info = (struct fat_inode*)inode->i_private;
-    if (info->open_count && --info->open_count == 0 && info->unlinked)
-        fat_release_clusters(inode);
     return 0;
 }

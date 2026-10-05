@@ -282,8 +282,11 @@ int fat_write_FAT(struct fat_disk *fat_disk, struct gendisk *gd)
                 ret = err;
         }
     }
-    FAT->dirty_lo = (u32)-1;
-    FAT->dirty_hi = 0;
+
+    if (!ret) {
+        FAT->dirty_lo = (u32)-1;
+        FAT->dirty_hi = 0;
+    }
 
     int err = fat32_write_fs_info(fat_disk, gd);
     if (err < 0 && !ret)

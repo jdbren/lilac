@@ -34,6 +34,11 @@ void init_rlimits(struct rlimit *rlim)
     rlim[RLIMIT_RTPRIO] = (struct rlimit){ 0, 0 };
 }
 
+void copy_rlimits(struct rlimit *dst, struct task *leader)
+{
+    memcpy(dst, leader->rlim, sizeof(leader->rlim));
+}
+
 static long do_prlimit(pid_t pid, unsigned int resource,
                        const struct rlimit *new, struct rlimit *old)
 {

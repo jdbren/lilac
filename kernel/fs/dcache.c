@@ -12,7 +12,7 @@
 
 extern struct dentry *root_dentry;
 
-static spinlock_t rename_lock = SPINLOCK_INIT;
+spinlock_t rename_lock = SPINLOCK_INIT;
 
 /*
  * Reference counting rules
@@ -99,32 +99,34 @@ void d_prune_negative(struct dentry *dir)
     mutex_unlock(&dir->d_lock);
 }
 
-// Move a cached dentry to new_parent under name (after a successful rename)
-int d_move(struct dentry *d, struct dentry *new_parent, const char *name)
+/*
+ * Move a cached dentry to new_parent under new_name (after a successful
+ * rename)
+ */
+void d_move(struct dentry *d, struct dentry *new_parent, char *new_name)
 {
     struct dentry *old_parent = d->d_parent;
-    char *new_name = strdup(name);
-    if (!new_name)
-        return -ENOMEM;
+    char *old_name;
 
     mutex_lock(&old_parent->d_lock);
     hlist_del_init(&d->d_sib);
     mutex_unlock(&old_parent->d_lock);
 
-    kfree(d->d_name.data);
+    dget(new_parent);
+
+    acquire_lock(&rename_lock);
+    old_name = d->d_name.data;
     d->d_name.data = new_name;
     d->d_name.len = strlen(new_name);
-    dget(new_parent);
-    acquire_lock(&rename_lock);
     d->d_parent = new_parent;
     release_lock(&rename_lock);
+    kfree(old_name);
 
     mutex_lock(&new_parent->d_lock);
     hlist_add_head(&d->d_sib, &new_parent->d_children);
     mutex_unlock(&new_parent->d_lock);
 
     dput(old_parent);
-    return 0;
 }
 
 void dget(struct dentry *d)
@@ -295,9 +297,11 @@ static struct dentry * resolve_symlink(struct dentry *find, const char *path,
     }
     expanded[target_len] = '\0';
 
-    struct dentry *base = expanded[0] == '/' ? root_dentry : find->d_parent;
+    struct dentry *base = expanded[0] == '/' ? root_dentry : dget_parent(find);
     struct dentry *resolved = lookup_path_from_inner(base, expanded,
         follow_final, link_count + 1);
+    if (base != root_dentry)
+        dput(base);
     kfree(expanded);
     return resolved;
 }
@@ -326,6 +330,11 @@ static struct dentry * lookup_child_slow(struct dentry *parent, char *name)
         find = res;
         goto out;
     }
+    if (res && res != find) {
+        dput(find);
+        find = res;
+        goto out;
+    }
     dcache_add(find);
 out:
     mutex_unlock(&parent->d_lock);
@@ -345,9 +354,9 @@ static struct dentry * lookup_child(struct dentry *parent, char *name)
     if (!find) {
         if (!S_ISDIR(dir->i_mode))
             return ERR_PTR(-ENOTDIR);
-        inode_lock(dir);
+        inode_lock_shared(dir);
         find = lookup_child_slow(parent, name);
-        inode_unlock(dir);
+        inode_unlock_shared(dir);
         if (IS_ERR(find))
             return find;
     }
@@ -383,9 +392,8 @@ static struct dentry * lookup_path_from_inner(struct dentry *parent,
         }
         if (strcmp(name, "..") == 0) {
             kfree(name);
-            if (parent->d_parent) {
-                find = parent->d_parent;
-                dget(find);
+            find = dget_parent(parent);
+            if (find) {
                 dput(parent);
                 parent = find;
             }

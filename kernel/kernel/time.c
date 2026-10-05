@@ -127,15 +127,6 @@ SYSCALL_DECL2(gettimeofday, struct timeval*, tv, struct timezone*, tz)
     return 0;
 }
 
-#define CLOCK_REALTIME           0
-#define CLOCK_MONOTONIC          1
-#define CLOCK_PROCESS_CPUTIME_ID 2
-#define CLOCK_THREAD_CPUTIME_ID  3
-#define CLOCK_MONOTONIC_RAW      4
-#define CLOCK_REALTIME_COARSE    5
-#define CLOCK_MONOTONIC_COARSE   6
-#define CLOCK_BOOTTIME           7
-
 SYSCALL_DECL2(clock_gettime, int, clk, struct timespec*, tp)
 {
     u64 ns;
@@ -219,13 +210,18 @@ void destroy_timer_event(struct timer_event *ev)
     kfree(ev);
 }
 
+static void __timer_ev_enqueue(struct timer_event *ev, struct task *p)
+{
+    ev->base = get_cpu_var(timer_bases);
+    timer_ev_add(ev, &ev->base->tree);
+    list_add_tail(&ev->task_list, &p->timer_ev_list);
+}
+
 void timer_ev_enqueue(struct timer_event *ev, struct task *p)
 {
     unsigned long flags;
     acquire_lock_irqsave(&timer_lock, &flags);
-    ev->base = get_cpu_var(timer_bases);
-    timer_ev_add(ev, &ev->base->tree);
-    list_add_tail(&ev->task_list, &p->timer_ev_list);
+    __timer_ev_enqueue(ev, p);
     release_lock_irqrestore(&timer_lock, flags);
 }
 
@@ -378,7 +374,7 @@ static long do_nanosleep(int clk, int flags, const struct timespec *req,
         return -EINVAL;
     }
 
-    ktime_t deadline = (flags & TIMER_ABSTIME) ? req_ns : ktime_add_ns(now, req_ns);
+    ktime_t deadline = (flags & TIMER_ABSTIME) ? req_ns : ktime_add_sat(now, req_ns);
     if (deadline <= now)
         return 0;
 
@@ -402,11 +398,12 @@ void timer_ev_task_exit(struct task *p)
     struct timer_event *ev, *tmp;
     unsigned long flags;
 
-    WRITE_ONCE(p->itimer_real.interval, 0);
-
     acquire_lock_irqsave(&timer_lock, &flags);
-    list_for_each_entry_safe(ev, tmp, &p->timer_ev_list, task_list)
-        __timer_ev_dequeue(ev);
+    list_for_each_entry_safe(ev, tmp, &p->timer_ev_list, task_list) {
+        // ITIMER_REAL belongs to the process
+        if (ev != &p->itimer_real.ev)
+            __timer_ev_dequeue(ev);
+    }
 
     // A callback already running elsewhere (e.g. an alarm raising a signal)
     // still uses p; the task must not be reaped until it finishes
@@ -418,8 +415,6 @@ void timer_ev_task_exit(struct task *p)
             acquire_lock_irqsave(&timer_lock, &flags);
         }
     }
-    // An interval timer that was firing may have re-armed itself
-    __timer_ev_dequeue(&p->itimer_real.ev);
     release_lock_irqrestore(&timer_lock, flags);
 }
 
@@ -435,12 +430,13 @@ static void itimer_real_fn(struct timer_event *ev)
     struct task *p = ev->p;
     ktime_t interval = READ_ONCE(p->itimer_real.interval);
 
-    do_raise(p, SIGALRM);
+    if (!do_raise(p, SIGALRM))
+        return;
     if (interval) {
         ktime_t now = ktime_get();
-        ev->expires += interval;
+        ev->expires = ktime_add_sat(ev->expires, interval);
         if (ev->expires <= now)
-            ev->expires = now + interval;
+            ev->expires = ktime_add_sat(now, interval);
         timer_ev_enqueue(ev, p);
     }
 }
@@ -454,47 +450,45 @@ void init_itimer_real(struct task *p)
     p->itimer_real.interval = 0;
 }
 
-// Disarm p's ITIMER_REAL and return the time it had left (0 if it was unarmed)
-static ktime_t itimer_real_cancel(struct task *p, ktime_t *old_interval)
+/*
+ * Replace leader p's ITIMER_REAL. A zero value disarms it. Optionally
+ * returns the time that was left (0 if unarmed) and the old interval.
+ */
+static void itimer_real_set(struct task *p, ktime_t value, ktime_t interval,
+                            ktime_t *old_left, ktime_t *old_interval)
 {
     struct timer_event *ev = &p->itimer_real.ev;
+    unsigned long flags;
     ktime_t left = 0;
 
+    acquire_lock_irqsave(&timer_lock, &flags);
+    while (ev->base && ev->base->running == ev) {
+        release_lock_irqrestore(&timer_lock, flags);
+        __pause();
+        acquire_lock_irqsave(&timer_lock, &flags);
+    }
     if (old_interval)
-        *old_interval = READ_ONCE(p->itimer_real.interval);
-    WRITE_ONCE(p->itimer_real.interval, 0);
-    if (timer_ev_dequeue(ev)) {
+        *old_interval = p->itimer_real.interval;
+    if (__timer_ev_dequeue(ev)) {
         left = ev->expires - ktime_get();
         if (left <= 0)
             left = 1;
     }
-    // The callback may have re-armed before it saw interval == 0
-    timer_ev_dequeue(ev);
-    return left;
+    WRITE_ONCE(p->itimer_real.interval, value ? interval : 0);
+    if (value) {
+        ev->expires = ktime_add_sat(ktime_get(), value);
+        __timer_ev_enqueue(ev, p);
+    }
+    release_lock_irqrestore(&timer_lock, flags);
+
+    if (old_left)
+        *old_left = left;
 }
 
-static void itimer_real_arm(struct task *p, ktime_t value, ktime_t interval)
+// Disarm process timer
+void itimer_real_exit(struct task *p)
 {
-    if (!value)
-        return;
-    p->itimer_real.interval = interval;
-    p->itimer_real.ev.expires = ktime_add_ns(ktime_get(), value);
-    timer_ev_enqueue(&p->itimer_real.ev, p);
-}
-
-static inline ktime_t timeval_to_ns(const struct timeval *tv)
-{
-    return (ktime_t)tv->tv_sec * NS_PER_SEC + (ktime_t)tv->tv_usec * NS_PER_US;
-}
-
-static inline struct timeval ns_to_timeval(ktime_t ns)
-{
-    // Round up so an armed timer never reads back as 0
-    ns += NS_PER_US - 1;
-    return (struct timeval) {
-        .tv_sec = ns / NS_PER_SEC,
-        .tv_usec = (ns % NS_PER_SEC) / NS_PER_US,
-    };
+    itimer_real_set(p, 0, 0, NULL, NULL);
 }
 
 static bool timeval_valid(const struct timeval *tv)
@@ -506,7 +500,7 @@ SYSCALL_DECL3(setitimer, int, which, const struct itimerval*, new,
               struct itimerval*, old)
 {
     struct itimerval knew = {0}, kold;
-    ktime_t old_interval;
+    ktime_t left, old_interval;
 
     if (which != ITIMER_REAL)
         return -EINVAL;
@@ -517,10 +511,8 @@ SYSCALL_DECL3(setitimer, int, which, const struct itimerval*, new,
             return -EINVAL;
     }
 
-    struct task *p = current;
-    ktime_t left = itimer_real_cancel(p, &old_interval);
-    itimer_real_arm(p, timeval_to_ns(&knew.it_value),
-                    timeval_to_ns(&knew.it_interval));
+    itimer_real_set(current->tg_leader, timeval_to_ns(&knew.it_value),
+                    timeval_to_ns(&knew.it_interval), &left, &old_interval);
 
     if (old) {
         kold.it_value = left ? ns_to_timeval(left) : (struct timeval){0};
@@ -534,7 +526,7 @@ SYSCALL_DECL3(setitimer, int, which, const struct itimerval*, new,
 SYSCALL_DECL2(getitimer, int, which, struct itimerval*, cur)
 {
     struct itimerval kcur = {0};
-    struct task *p = current;
+    struct task *p = current->tg_leader;
     unsigned long flags;
 
     if (which != ITIMER_REAL)
@@ -553,14 +545,14 @@ SYSCALL_DECL2(getitimer, int, which, struct itimerval*, cur)
 
 SYSCALL_DECL1(alarm, unsigned int, seconds)
 {
-    struct task *p = current;
+    struct task *p = current->tg_leader;
+    ktime_t left;
 
     klog(LOG_DEBUG, "Process %d set alarm for %u seconds\n", p->pid, seconds);
 
-    ktime_t left = itimer_real_cancel(p, NULL);
-    itimer_real_arm(p, (ktime_t)seconds * NS_PER_SEC, 0);
+    itimer_real_set(p, (ktime_t)seconds * NS_PER_SEC, 0, &left, NULL);
 
-    return (left + NS_PER_SEC - 1) / NS_PER_SEC;
+    return left / NS_PER_SEC + (left % NS_PER_SEC != 0);
 }
 
 static int is_leap_year(int year) {

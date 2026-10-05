@@ -160,10 +160,10 @@ char * build_absolute_path(struct dentry *d)
         strcpy(buf, "/");
         kfree(tmp);
         return buf;
-    } else {
-        strcpy(buf, d->d_name.data);
     }
 
+    acquire_lock(&rename_lock);
+    strcpy(buf, d->d_name.data);
     struct dentry *cur = d->d_parent;
     while (cur) {
 #ifdef DEBUG_VFS
@@ -181,6 +181,7 @@ char * build_absolute_path(struct dentry *d)
         }
         cur = cur->d_parent;
     }
+    release_lock(&rename_lock);
     kfree(tmp);
     return buf;
 }
