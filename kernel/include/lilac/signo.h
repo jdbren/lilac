@@ -36,6 +36,6 @@
 #define SIGSYS    31
 #define SIGUNUSED SIGSYS
 
-#define _NSIG 32
+#define _NSIG 65
 
 #endif

@@ -41,10 +41,8 @@
 #define _SIGPOLL	sigbit(SIGPOLL)
 #define _SIGPWR		sigbit(SIGPWR)
 #define _SIGSYS		sigbit(SIGSYS)
-#define _SIGUNUSED	sigbit(SIGUNUSED)
 
-#define _NSIG 32
-#define _NSIG_WORDS (_NSIG / (sizeof(unsigned long) * 8))
+#define RT_SIG (~0UL << 31)
 
 typedef unsigned long sigset_t;
 
