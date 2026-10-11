@@ -43,6 +43,8 @@
 #define _SIGSYS		sigbit(SIGSYS)
 
 #define RT_SIG (~0UL << 31)
+#define CPU_EXCEPT_SIG (_SIGILL | _SIGFPE | _SIGSEGV | _SIGBUS | _SIGTRAP)
+
 
 typedef unsigned long sigset_t;
 
@@ -127,17 +129,20 @@ struct user_siginfo {
 #define SEGV_MAPERR 1
 #define SEGV_ACCERR 2
 #define BUS_ADRERR  2
+#define TRAP_TRACE  2
+#define TRAP_UNK    5
 #define CLD_EXITED  1
 #define CLD_KILLED  2
 #endif
 
 // queue a signal for delivery to a task
 int do_raise(struct task *p, int sig);
+int do_raise_user(struct task *p, int sig);
 int do_raise_info(struct task *p, int sig, const struct ksiginfo *info);
 // immediate termination of the process
 void do_kill(struct task *p, int sig);
 int handle_signal(void);
-int kill_pgrp(int pgid, int sig);
+int kill_pgrp(int pgid, int sig, bool user);
 void zap_other_threads(struct task *p, int code);
 
 #endif

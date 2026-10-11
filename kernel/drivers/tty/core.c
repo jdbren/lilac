@@ -234,7 +234,7 @@ int __tty_check_change(struct tty *tty, int sig)
         } else if (is_current_pgrp_orphaned()) {
             ret = -EIO;
         } else {
-            kill_pgrp(pgrp, sig);
+            kill_pgrp(pgrp, sig, false);
             // set_thread_flag(TIF_SIGPENDING);
             ret = -ERESTARTSYS;
         }

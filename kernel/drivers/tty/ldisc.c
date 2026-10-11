@@ -279,7 +279,7 @@ static bool signal_char(struct tty *tty, u8 c)
 
     if (tty->ctrl.pgrp > 0) {
         klog(LOG_DEBUG, "signal_char: sending %d to pgrp %d\n", sig, tty->ctrl.pgrp);
-        kill_pgrp(tty->ctrl.pgrp, sig);
+        kill_pgrp(tty->ctrl.pgrp, sig, true);
     }
 
     if (L_ECHO(tty) && echo_str) {

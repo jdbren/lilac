@@ -566,7 +566,7 @@ void arch_prepare_signal(void *pc, int signo, const struct ksiginfo *info,
     frame.info.si_signo = signo;
     if (info) {
         frame.info.si_code = info->code;
-        if (signo == SIGSEGV || signo == SIGBUS || signo == SIGILL || signo == SIGFPE) {
+        if (sigbit(signo) & CPU_EXCEPT_SIG) {
             frame.info.addr = info->addr;
             frame.uc.uc_mcontext.gregs[REG_CR2] = info->addr;
         } else {
@@ -596,6 +596,7 @@ void arch_prepare_signal(void *pc, int signo, const struct ksiginfo *info,
     regs->dx = (uintptr_t)&uframe->uc;
     regs->ax = 0;
     regs->sp = frame_addr;
+    regs->flags &= ~(X86_FLAGS_TF | X86_FLAGS_DF | X86_FLAGS_RF);
     assert((frame_addr & 0xFUL) == 8);
     return;
 fail:

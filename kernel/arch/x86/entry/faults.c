@@ -177,11 +177,37 @@ void dblflt_handler(long error_code, struct regs_state *frame)
     kerror("Double fault detected\n");
 }
 
+#define DR6_BS      (1UL << 14) /* single-step */
+#define DR6_RESET   0xffff0ff0UL
+
+static inline unsigned long read_dr6(void)
+{
+    unsigned long v;
+    asm volatile ("mov %%db6,%0" : "=r"(v));
+    return v;
+}
+
+static inline void write_dr6(unsigned long v)
+{
+    asm volatile ("mov %0,%%db6" :: "r"(v));
+}
+
 void debug_handler(struct regs_state *frame)
 {
+    unsigned long dr6 = read_dr6();
+    write_dr6(DR6_RESET);
+
+    if (frame->ip < __USER_STACK) {
+        struct ksiginfo info = {
+            .code = (dr6 & DR6_BS) ? TRAP_TRACE : TRAP_UNK,
+            .addr = frame->ip,
+        };
+        do_raise_info(current, SIGTRAP, &info);
+        return;
+    }
     x86_dump_regs(frame);
-    klog(LOG_INFO, "Debug exception at %p\n", frame->ip);
-    // For now, just ignore it.
+    klog(LOG_WARN, "Kernel debug exception at %p, dr6 %lx\n", frame->ip, dr6);
+    frame->flags &= ~X86_FLAGS_TF;
 }
 
 void nmi_handler(struct regs_state *frame)

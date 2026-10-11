@@ -125,6 +125,15 @@ void do_kill(struct task *p, int sig)
 int do_raise(struct task *p, int sig)
 {
     struct ksiginfo info = {
+        .code = SI_KERNEL,
+        .pid = current ? current->tgid : 0,
+    };
+    return do_raise_info(p, sig, &info);
+}
+
+int do_raise_user(struct task *p, int sig)
+{
+    struct ksiginfo info = {
         .code = SI_USER,
         .pid = current ? current->tgid : 0,
     };
@@ -193,7 +202,7 @@ int do_raise_info(struct task *p, int sig, const struct ksiginfo *info)
     return 0;
 }
 
-int kill_pgrp(int pgid, int sig)
+int kill_pgrp(int pgid, int sig, bool user)
 {
     klog(LOG_DEBUG, "kill_pgrp called with pgid=%d, sig=%d\n", pgid, sig);
     if (sig < 0 || sig >= _NSIG)
@@ -231,7 +240,7 @@ int kill_pgrp(int pgid, int sig)
             continue;
         klog(LOG_DEBUG, "Sending signal %d to process %d in group %d\n", sig, p->pid, pgid);
         if (sig)
-            do_raise(p, sig);
+            user ? do_raise_user(p, sig) : do_raise(p, sig);
     }
     kfree(targets);
 
@@ -276,11 +285,11 @@ SYSCALL_DECL2(kill, int, pid, int, sig)
         return -EINVAL;
 
     if (pid == 0) {
-        return kill_pgrp(current->pgid, sig);
+        return kill_pgrp(current->pgid, sig, true);
     } else if (pid == -1) {
         return -EOPNOTSUPP;
     } else if (pid < -1) {
-        return kill_pgrp(-pid, sig);
+        return kill_pgrp(-pid, sig, true);
     }
 
     struct task *p = get_task_by_pid(pid);
@@ -297,7 +306,7 @@ SYSCALL_DECL2(kill, int, pid, int, sig)
     }
 
     klog(LOG_DEBUG, "Sending signal %d to process %d\n", sig, pid);
-    return do_raise(p, sig);
+    return do_raise_user(p, sig);
 }
 
 
@@ -430,7 +439,7 @@ static int do_tkill(int tgid, int tid, int sig)
         return -ESRCH;
     if (sig == 0)
         return 0;
-    return do_raise(p, sig);
+    return do_raise_user(p, sig);
 }
 
 SYSCALL_DECL3(tgkill, int, tgid, int, tid, int, sig)
