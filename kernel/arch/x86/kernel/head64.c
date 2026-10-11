@@ -46,6 +46,7 @@ __noreturn __no_stack_chk
 void x86_64_kernel_early(void)
 {
     set_cpuid_max();
+    fpu_init();
     parse_multiboot((uintptr_t)&mbinfo);
 
     serial_init();

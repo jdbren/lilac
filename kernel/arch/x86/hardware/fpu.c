@@ -8,11 +8,21 @@
 #define FXSAVE_MXCSR_MASK 28
 #define MXCSR_MASK_DEFAULT 0xffbf
 
+static int mxcsr_mask = MXCSR_MASK_DEFAULT;
+
 // Power-on state: x87 control word 0x37f, all exceptions masked in MXCSR
-static const u8 fx_init_state[FXSAVE_BYTES] __attribute__((aligned(16))) = {
+static const u8 fx_init_state[FXSAVE_BYTES] __align(16) = {
     [0] = 0x7f, [1] = 0x03,
     [FXSAVE_MXCSR] = 0x80, [FXSAVE_MXCSR + 1] = 0x1f,
 };
+
+void fpu_init(void)
+{
+    __asm__ ("fninit");
+    u8 fxsavea[FXSAVE_BYTES] __align(16);
+    __builtin_ia32_fxsave64(fxsavea);
+    mxcsr_mask = *(u32*)(fxsavea + FXSAVE_MXCSR_MASK);
+}
 
 void save_fp_regs(struct task *p)
 {
@@ -120,9 +130,8 @@ void *fpu_sigframe_restore_buf(struct task *p)
     return p->fp_regs;
 }
 
-// The state came from user memory; an invalid MXCSR would #GP on fxrstor
 void fpu_sigframe_restore_fixup(struct task *p)
 {
     u32 *mxcsr = (u32*)((u8*)p->fp_regs + FXSAVE_MXCSR);
-    *mxcsr &= MXCSR_MASK_DEFAULT;
+    *mxcsr &= mxcsr_mask;
 }

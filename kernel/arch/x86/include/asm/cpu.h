@@ -23,6 +23,8 @@ void * x64_memcpy_opt(void *dst, const void *src, size_t size);
 #define memcpy_wc_opt(dst, src, size) x86_memcpy_dwords(dst, src, size)
 #endif
 
+void fpu_init(void);
+
 static inline void set_cpuid_max(void)
 {
     max_cpuid_leaf = __get_cpuid_max(0, NULL);
