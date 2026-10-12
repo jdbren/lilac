@@ -612,6 +612,7 @@ int sleep_until_timeout(ktime_t *expires)
 {
     if (!expires) {
         schedule();
+        task_interrupted_ack();
         return -EINTR;
     }
 

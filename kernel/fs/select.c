@@ -8,6 +8,7 @@
 #include <lilac/uaccess.h>
 #include <mm/kmalloc.h>
 #include <user/poll.h>
+#include <asm/barrier.h>
 
 struct poll_table_entry {
     struct file *filp;
@@ -87,15 +88,7 @@ static int __pollwake(struct wq_entry *wait)
 {
     struct kpoll_cmd_struct *kpoll_cmd = wait->private;
 
-    /*
-     * Although this function is called under waitqueue lock, LOCK
-     * doesn't imply write barrier and the users expect write
-     * barrier semantics on wakeup functions.  The following
-     * smp_wmb() is equivalent to smp_wmb() in try_to_wake_up()
-     * and is paired with smp_store_mb() in poll_schedule_timeout.
-     */
-    // smp_wmb();
-    __asm__ ("" ::: "memory");
+    smp_wmb();
     WRITE_ONCE(kpoll_cmd->triggered, 1);
 
     set_task_running(kpoll_cmd->current_task);
@@ -138,23 +131,16 @@ poll_schedule_timeout(struct kpoll_cmd_struct *pwq, int state, ktime_t *expires)
     int rc = -EINTR;
 
     set_current_state(state);
-    if (!READ_ONCE(pwq->triggered))
+    // Pairs with the fence in do_raise_info
+    // TODO: update atomics and task state setting
+    atomic_thread_fence(memory_order_seq_cst);
+    if (!READ_ONCE(pwq->triggered) && !sigispending(current))
         rc = sleep_until_timeout(expires);
     __set_current_state(TASK_RUNNING);
+    task_interrupted_ack();
 
-    /*
-     * Prepare for the next iteration.
-     *
-     * The following smp_store_mb() serves two purposes.  First, it's
-     * the counterpart rmb of the wmb in pollwake() such that data
-     * written before wake up is always visible after wake up.
-     * Second, the full barrier guarantees that triggered clearing
-     * doesn't pass event check of the next iteration.  Note that
-     * this problem doesn't exist for the first iteration as
-     * add_wait_queue() has full barrier semantics.
-     */
-    WRITE_ONCE(pwq->triggered, 0);
-    __asm__ ("mfence" ::: "memory");
+    // Barrier pairs with __pollwake()
+    smp_store_mb(pwq->triggered, 0);
 
     return rc;
 }
@@ -531,9 +517,6 @@ SYSCALL_DECL5(ppoll, struct pollfd __user *, fds, unsigned int, nfds,
     ktime_t ktimeout, *expires = &ktimeout;
     sigset_t ksigmask, oldmask;
 
-    if (sigsetsize != sizeof(sigset_t))
-        return -EINVAL;
-
     if (tmo_p) {
         if (copy_from_user(&ts, tmo_p, sizeof(struct timespec)))
             return -EFAULT;
@@ -544,6 +527,8 @@ SYSCALL_DECL5(ppoll, struct pollfd __user *, fds, unsigned int, nfds,
     }
 
     if (sigmask) {
+        if (sigsetsize != sizeof(sigset_t))
+            return -EINVAL;
         if (copy_from_user(&ksigmask, sigmask, sigsetsize))
             return -EFAULT;
         oldmask = current->blocked;
