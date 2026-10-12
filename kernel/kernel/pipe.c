@@ -245,7 +245,7 @@ poll_mask_t pipe_poll(struct file *f, struct poll_request *pollreq)
 {
     poll_mask_t mask;
     struct pipe_buf *pipe = f->f_inode->i_pipe;
-    union pipe_index idx;
+    unsigned int size;
     mode_t accmode = f->f_mode & O_ACCMODE;
 
     if (accmode == O_RDONLY || accmode == O_RDWR)
@@ -253,18 +253,18 @@ poll_mask_t pipe_poll(struct file *f, struct poll_request *pollreq)
     if (accmode == O_WRONLY || accmode == O_RDWR)
         poll_wait(f, &pipe->write_wq, pollreq);
 
-    idx.read_write = READ_ONCE(pipe->idx.read_write);
+    size = READ_ONCE(pipe->data_size);
 
     mask = 0;
     if (accmode == O_RDONLY || accmode == O_RDWR) {
-        if (!pipe_empty(idx.write_pos, idx.read_pos))
+        if (size != 0)
             mask |= POLLIN | POLLRDNORM;
         if (!pipe->n_writers) // && f->f_pipe != pipe->w_counter)
             mask |= POLLHUP;
     }
 
     if (accmode == O_WRONLY || accmode == O_RDWR) {
-        if (!pipe_full(idx.write_pos, idx.read_pos, pipe->buf_size))
+        if (size < pipe->buf_size)
             mask |= POLLOUT | POLLWRNORM;
         if (!pipe->n_readers)
             mask |= POLLERR;
