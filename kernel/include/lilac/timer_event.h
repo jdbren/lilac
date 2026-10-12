@@ -42,4 +42,6 @@ static inline bool timer_ev_queued(struct timer_event *ev)
     return !RB_EMPTY_NODE(&ev->node);
 }
 
+int sleep_until_timeout(ktime_t *expires);
+
 #endif

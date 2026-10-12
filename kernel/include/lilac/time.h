@@ -48,6 +48,88 @@ struct timezone {
 #define KTIME_SEC_MAX (KTIME_MAX / NSEC_PER_SEC)
 #define KTIME_SEC_MIN (KTIME_MIN / NSEC_PER_SEC)
 
+/**
+ * ktime_set - Set a ktime_t variable from a seconds/nanoseconds value
+ * @secs:    seconds to set
+ * @nsecs:    nanoseconds to set
+ *
+ * Return: The ktime_t representation of the value.
+ */
+static inline ktime_t ktime_set(const s64 secs, const unsigned long nsecs)
+{
+    if (unlikely(secs >= KTIME_SEC_MAX))
+        return KTIME_MAX;
+
+    return secs * NSEC_PER_SEC + (s64)nsecs;
+}
+
+/* Subtract two ktime_t variables. rem = lhs -rhs: */
+#define ktime_sub(lhs, rhs) ((lhs) - (rhs))
+
+/* Add two ktime_t variables. res = lhs + rhs: */
+#define ktime_add(lhs, rhs) ((lhs) + (rhs))
+
+/*
+ * Same as ktime_add(), but avoids undefined behaviour on overflow; however,
+ * this means that you must check the result for overflow yourself.
+ */
+#define ktime_add_unsafe(lhs, rhs) ((u64) (lhs) + (rhs))
+
+/*
+ * Add a ktime_t variable and a scalar nanosecond value.
+ * res = kt + nsval:
+ */
+#define ktime_add_ns(kt, nsval) ((kt) + (nsval))
+
+#define ktime_add_ms(kt, msval) ((kt) + (s64)(msval) * 1000000L)
+
+static inline ktime_t ktime_add_sat(ktime_t a, ktime_t b)
+{
+    ktime_t res;
+    if (__builtin_add_overflow(a, b, &res))
+        return b > 0 ? KTIME_MAX : KTIME_MIN;
+    return res;
+}
+
+/*
+ * Subtract a scalar nanosecod from a ktime_t variable
+ * res = kt - nsval:
+ */
+#define ktime_sub_ns(kt, nsval) ((kt) - (nsval))
+
+/* convert a timespec64 to ktime_t format: */
+static inline ktime_t timespec_to_ktime(struct timespec ts)
+{
+    return ktime_set(ts.tv_sec, ts.tv_nsec);
+}
+
+/* Map the ktime_t to timespec conversion to ns_to_timespec function */
+#define ktime_to_timespec64(kt) ns_to_timespec((kt))
+
+/* Convert ktime_t to nanoseconds */
+static inline s64 ktime_to_ns(const ktime_t kt)
+{
+    return kt;
+}
+
+/*
+ * Add two ktime values and do a safety check for overflow:
+ */
+static inline ktime_t ktime_add_safe(const ktime_t lhs, const ktime_t rhs)
+{
+    ktime_t res = ktime_add_unsafe(lhs, rhs);
+
+    /*
+     * We use KTIME_SEC_MAX here, the maximum timeout which we can
+     * return to user space in a timespec:
+     */
+    if (res < 0 || res < lhs || res < rhs)
+        res = ktime_set(KTIME_SEC_MAX, 0);
+
+    return res;
+}
+
+
 /*
  * Limits for settimeofday():
  *

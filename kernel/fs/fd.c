@@ -160,3 +160,23 @@ struct file * get_file_handle(int fd)
         return ERR_PTR(-EBADF);
     return file;
 }
+
+struct file * get_file_inc_ref(int fd)
+{
+    struct file *file;
+    struct fdtable *files = current->files;
+
+    acquire_lock(&files->lock);
+    if (fd < 0 || (unsigned)fd >= files->max) {
+        release_lock(&files->lock);
+        return ERR_PTR(-EBADF);
+    }
+    file = files->fdarray[fd];
+    if (file)
+        file->f_count++;
+    release_lock(&files->lock);
+
+    if (!file)
+        return ERR_PTR(-EBADF);
+    return file;
+}

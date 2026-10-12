@@ -607,3 +607,25 @@ struct timestamp get_timestamp(void)
     unix_time_to_date(unix_time, &ts);
     return ts;
 }
+
+int sleep_until_timeout(ktime_t *expires)
+{
+    if (!expires) {
+        schedule();
+        return -EINTR;
+    }
+
+	if (*expires == 0) {
+		__set_current_state(TASK_RUNNING);
+		return 0;
+	}
+
+    struct timer_event ev = TIMER_EV_INIT(ev, current, *expires, NULL, NULL);
+    timer_ev_enqueue(&ev, current);
+    schedule();
+    timer_ev_dequeue(&ev);
+
+    if (task_interrupted_ack() || ktime_get() < *expires)
+        return -EINTR;
+    return 0;
+}

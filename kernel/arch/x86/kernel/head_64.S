@@ -203,7 +203,7 @@ tss_init:
 	# 56..63 base
 	add  $3, %rdx
 	shr  $8, %rax
-	movb  %al, (%rdx)
+	movb %al, (%rdx)
 
 	# 64..95 base high 32 bits
 	add $1, %rdx

@@ -34,11 +34,13 @@ struct waitqueue {
     .task_list = LIST_HEAD_INIT(name.task_list) \
 }
 
-typedef int (*wq_wake_func_t)();
+struct wq_entry;
+typedef int (*wq_wake_func_t)(struct wq_entry *wait);
 
 struct wq_entry {
     struct task *task;
     wq_wake_func_t wakeup;
+    void *private;
     struct list_head entry;
 };
 
@@ -52,6 +54,8 @@ struct wq_entry {
 
 void prepare_wait(struct waitqueue *wq, struct wq_entry *wait, u8 state);
 void end_wait(struct waitqueue *wq, struct wq_entry *wait);
+void wait_ev_queue(struct waitqueue *wq, struct wq_entry *wait);
+void wait_ev_dequeue(struct waitqueue *wq, struct wq_entry *wait);
 bool wait_signal_pending(void);
 struct task * wake_first(struct waitqueue *wq);
 void wake_all(struct waitqueue *wq);

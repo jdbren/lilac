@@ -261,11 +261,7 @@ SYSCALL_DECL3(waitpid, int, pid, int*, status, int, options)
     return ret;
 }
 
-/**
- * Queue current on wq (if not already queued) and mark it asleep in the given
- * state
- */
-void prepare_wait(struct waitqueue *wq, struct wq_entry *wait, u8 state)
+void wait_ev_queue(struct waitqueue *wq, struct wq_entry *wait)
 {
     unsigned long flags;
 
@@ -273,6 +269,20 @@ void prepare_wait(struct waitqueue *wq, struct wq_entry *wait, u8 state)
     if (list_empty(&wait->entry))
         __add_wait_entry(wait, wq);
     release_lock_irqrestore(&wq->lock, flags);
+}
+
+void wait_ev_dequeue(struct waitqueue *wq, struct wq_entry *wait)
+{
+    remove_wait_entry(wait, wq);
+}
+
+/**
+ * Queue current on wq (if not already queued) and mark it asleep in the given
+ * state
+ */
+void prepare_wait(struct waitqueue *wq, struct wq_entry *wait, u8 state)
+{
+    wait_ev_queue(wq, wait);
     set_current_state(state);
 }
 

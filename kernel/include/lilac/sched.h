@@ -30,7 +30,7 @@ void set_task_sleeping(struct task *p);
 void set_task_uninterruptible(struct task *p);
 void set_current_state(u8 state);
 
-#define __set_current_state(statev) current->state = (statev)
+#define __set_current_state(statev) WRITE_ONCE(current->state, (statev))
 
 static inline bool task_interrupted_ack(void)
 {
