@@ -8,6 +8,7 @@
 #include <termios.h>
 
 #define MS 1000000LL
+#define FUTEX_WAIT 0
 
 static volatile sig_atomic_t hits;
 
@@ -400,6 +401,26 @@ TEST(poll_restart_no_timeout)
     waitpid(pid, NULL, 0);
 }
 
+/* The signal that interrupts an untimed poll must not leave the task flagged
+ * as interrupted, or the next timed futex wait fails with EINTR. */
+TEST(poll_signal_no_stale_interrupt)
+{
+    install(SIGUSR1, 0);
+    int p[2];
+    ASSERT_OK(pipe(p));
+    pid_t pid = delayed_kill(SIGUSR1, 100);
+    ASSERT_GE(pid, 0);
+    struct pollfd pfd = { .fd = p[0], .events = POLLIN };
+    EXPECT_ERR(poll(&pfd, 1, -1), EINTR);
+    EXPECT_EQ(hits, 1);
+
+    // Before waitpid, whose own interruptible wait would clear the flag
+    int word = 0;
+    struct timespec ts = { 0, 50 * MS };
+    EXPECT_ERR(syscall(SYS_futex, &word, FUTEX_WAIT, 0, &ts, NULL, 0), ETIMEDOUT);
+    waitpid(pid, NULL, 0);
+}
+
 /* ---------------- ppoll ---------------- */
 
 TEST(ppoll_zero_timeout)
@@ -506,6 +527,14 @@ TEST(ppoll_sigmask_restored_on_timeout)
 
     ASSERT_OK(sigprocmask(SIG_BLOCK, NULL, &now));
     EXPECT_TRUE(!sigismember(&now, SIGUSR2));
+}
+
+/* sigsetsize is only checked when a mask is passed. */
+TEST(ppoll_null_sigmask_any_size)
+{
+    struct pollfd pfd = { .fd = -1 };
+    struct timespec ts = { 0, 0 };
+    EXPECT_EQ(syscall(SYS_ppoll, &pfd, 1, &ts, NULL, 0), 0);
 }
 
 /* A signal only the temporary mask unblocks is not delivered when ppoll

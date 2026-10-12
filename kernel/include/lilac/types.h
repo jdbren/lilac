@@ -46,7 +46,7 @@ typedef s64 ktime_t;
 #define unlikely(x)     __builtin_expect(!!(x), 0)
 
 #define WRITE_ONCE(var, val) \
-	(*((volatile typeof(val) *)(&(var))) = (val))
+	(*((volatile typeof(var) *)(&(var))) = (val))
 #define READ_ONCE(var) (*((volatile typeof(var) *)(&(var))))
 
 typedef int pid_t;

@@ -15,7 +15,7 @@
 #include <lib/rbtree.h>
 
 #define WRITE_ONCE(var, val) \
-	(*((volatile typeof(val) *)(&(var))) = (val))
+	(*((volatile typeof(var) *)(&(var))) = (val))
 
 #define READ_ONCE(var) (*((volatile typeof(var) *)(&(var))))
 
