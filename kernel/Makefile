@@ -116,6 +116,7 @@ fs/fcntl.o \
 fs/fd.o \
 fs/name_utils.o \
 fs/fs_type.o \
+fs/select.o \
 drivers/blkdev.o \
 drivers/console.o \
 drivers/keyboard.o \

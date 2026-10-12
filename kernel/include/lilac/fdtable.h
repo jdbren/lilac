@@ -22,6 +22,7 @@ struct fdtable {
 
 struct fdtable * alloc_fdtable(unsigned int size);
 struct file * get_file_handle(int fd);
+struct file * get_file_inc_ref(int fd);
 int get_next_fd(struct fdtable *, struct file *);
 int get_fd_exact_replace(struct fdtable *files, int fd, struct file *file);
 int get_fd_start_at(struct fdtable *files, int start, struct file *file);

@@ -11,6 +11,7 @@
 #include <fs/fs_type.h>
 #include <fs/path.h>
 #include <fs/fcntl.h>
+#include <fs/select.h>
 #include <drivers/blkdev.h>
 
 /**
@@ -238,14 +239,15 @@ struct file {
 };
 
 struct file_operations {
-    off_t   (*lseek)(struct file *, off_t, int);
-    ssize_t (*read)(struct file *, void *, size_t);
-    ssize_t (*write)(struct file *, const void *, size_t);
-    int     (*readdir)(struct file *, struct dirent *, unsigned int);
-    int     (*flush)(struct file *);
-    int     (*release)(struct inode *, struct file *);
-    int     (*ioctl)(struct file *, int op, void *args);
-    int     (*mmap)(struct file *, struct vm_desc *);
+    off_t       (*lseek)(struct file *, off_t, int);
+    ssize_t     (*read)(struct file *, void *, size_t);
+    ssize_t     (*write)(struct file *, const void *, size_t);
+    int         (*readdir)(struct file *, struct dirent *, unsigned int);
+    int         (*flush)(struct file *);
+    int         (*release)(struct inode *, struct file *);
+    int         (*ioctl)(struct file *, int op, void *args);
+    int         (*mmap)(struct file *, struct vm_desc *);
+    poll_mask_t (*poll)(struct file *, struct poll_request *);
 };
 
 
@@ -273,6 +275,7 @@ int vfs_umount(const char *target);
 int vfs_dupf(int fd);
 int vfs_dup(int oldfd, int newfd);
 long vfs_ftruncate(struct file *f, loff_t length);
+poll_mask_t vfs_poll(struct file *file, struct poll_request *pt);
 
 struct dentry * vfs_lookup(const char *path);
 struct dentry * vfs_lookup_flags(const char *path, int follow_final);
@@ -350,6 +353,12 @@ void iput(struct inode *inode);
 struct file * alloc_file(struct dentry *d);
 void fget(struct file *file);
 void fput(struct file *file);
+
+static inline struct file * get_file(struct file *filp)
+{
+    fget(filp);
+    return filp;
+}
 
 typedef struct dentry *(*fs_init_func_t)(void*, struct super_block*);
 

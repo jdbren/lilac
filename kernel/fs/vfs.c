@@ -11,6 +11,7 @@
 #include <lilac/timer.h>
 #include <lilac/uaccess.h>
 #include <drivers/blkdev.h>
+#include <fs/select.h>
 #include <fs/fcntl.h>
 #include <fs/fat32.h>
 #include <fs/tmpfs.h>
@@ -1612,4 +1613,13 @@ SYSCALL_DECL4(pwrite64, int, fd, const void*, buf, size_t, count, off_t, offset)
     ssize_t bytes = vfs_write_at(file, kbuf, count, offset);
     kfree(kbuf);
     return bytes;
+}
+
+#define DEFAULT_POLLMASK (POLLIN | POLLOUT)
+
+poll_mask_t vfs_poll(struct file *file, struct poll_request *pt)
+{
+    if (likely(file->f_op->poll))
+        return file->f_op->poll(file, pt);
+    return DEFAULT_POLLMASK;
 }
