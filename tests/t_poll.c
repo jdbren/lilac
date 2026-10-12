@@ -3,7 +3,9 @@
 #include <poll.h>
 #include <sys/select.h>
 #include <sys/syscall.h>
+#include <sys/ioctl.h>
 #include <sys/time.h>
+#include <termios.h>
 
 #define MS 1000000LL
 
@@ -699,4 +701,180 @@ TEST(pselect_sigmask_restored_on_timeout)
 
     ASSERT_OK(sigprocmask(SIG_BLOCK, NULL, &now));
     EXPECT_TRUE(!sigismember(&now, SIGUSR2));
+}
+
+/* ---------------- tty (stdin/stdout) ---------------- */
+
+static struct termios saved_tio;
+
+static void tty_inject(const char *s)
+{
+    for (; *s; s++)
+        if (ioctl(0, TIOCSTI, s) != 0) {
+            FAIL("TIOCSTI failed errno=%d", errno);
+            ktest_abort();
+        }
+}
+
+/* Read whatever is queued without blocking. */
+static void tty_drain(void)
+{
+    struct termios t = saved_tio;
+    t.c_lflag &= ~(ICANON | ECHO);
+    t.c_cc[VMIN] = 0;
+    t.c_cc[VTIME] = 0;
+    tcsetattr(0, TCSANOW, &t);
+    char buf[64];
+    while (read(0, buf, sizeof(buf)) > 0)
+        ;
+}
+
+/* stdin must be a tty we may inject into; leaves it empty, echo off,
+ * canonical or not as asked. */
+static void tty_setup(bool canon, int vmin)
+{
+    if (!isatty(0) || !isatty(1))
+        SKIP("stdin/stdout not a tty");
+    ASSERT_OK(tcgetattr(0, &saved_tio));
+    tty_drain();
+    struct termios t = saved_tio;
+    t.c_lflag &= ~ECHO;
+    if (canon) {
+        t.c_lflag |= ICANON;
+    } else {
+        t.c_lflag &= ~ICANON;
+        t.c_cc[VMIN] = vmin;
+        t.c_cc[VTIME] = 0;
+    }
+    ASSERT_OK(tcsetattr(0, TCSANOW, &t));
+    /* probe permission with a harmless byte, then drop it */
+    if (ioctl(0, TIOCSTI, "\n") != 0) {
+        tcsetattr(0, TCSANOW, &saved_tio);
+        SKIP("TIOCSTI not permitted (errno=%d)", errno);
+    }
+    tty_drain();
+    ASSERT_OK(tcsetattr(0, TCSANOW, &t));
+}
+
+static void tty_restore(void)
+{
+    tty_drain();
+    tcsetattr(0, TCSANOW, &saved_tio);
+}
+
+static int poll1(int fd, short events, int timeout)
+{
+    struct pollfd pfd = { .fd = fd, .events = events };
+    int r = poll(&pfd, 1, timeout);
+    return r < 0 ? r : pfd.revents;
+}
+
+TEST(tty_stdout_writable)
+{
+    if (!isatty(1))
+        SKIP("stdout not a tty");
+    EXPECT_TRUE(poll1(1, POLLOUT, 0) & POLLOUT);
+}
+
+TEST(tty_canon_needs_full_line)
+{
+    tty_setup(true, 0);
+    EXPECT_EQ(poll1(0, POLLIN, 0), 0);
+    tty_inject("ab");
+    EXPECT_EQ(poll1(0, POLLIN, 0), 0);
+    tty_inject("\n");
+    EXPECT_TRUE(poll1(0, POLLIN, 0) & POLLIN);
+    char buf[8] = {0};
+    EXPECT_EQ(read(0, buf, sizeof(buf)), 3);
+    EXPECT_STREQ(buf, "ab\n");
+    EXPECT_EQ(poll1(0, POLLIN, 0), 0);
+    tty_restore();
+}
+
+TEST(tty_canon_eof_readable)
+{
+    tty_setup(true, 0);
+    tty_inject("\x04");
+    EXPECT_TRUE(poll1(0, POLLIN, 0) & POLLIN);
+    char c;
+    EXPECT_EQ(read(0, &c, 1), 0);
+    tty_restore();
+}
+
+TEST(tty_noncanon_vmin0)
+{
+    tty_setup(false, 0);
+    EXPECT_EQ(poll1(0, POLLIN, 0), 0);
+    tty_inject("x");
+    EXPECT_TRUE(poll1(0, POLLIN, 0) & POLLIN);
+    tty_restore();
+}
+
+TEST(tty_noncanon_vmin3)
+{
+    tty_setup(false, 3);
+    tty_inject("ab");
+    EXPECT_EQ(poll1(0, POLLIN, 0), 0);
+    tty_inject("c");
+    EXPECT_TRUE(poll1(0, POLLIN, 0) & POLLIN);
+    char buf[4] = {0};
+    EXPECT_EQ(read(0, buf, 3), 3);
+    EXPECT_STREQ(buf, "abc");
+    tty_restore();
+}
+
+TEST(tty_poll_wakes_on_input)
+{
+    tty_setup(true, 0);
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        usleep(100000);
+        for (const char *s = "hi\n"; *s; s++)
+            ioctl(0, TIOCSTI, s);
+        _exit(0);
+    }
+    EXPECT_TRUE(poll1(0, POLLIN, 5000) & POLLIN);
+    waitpid(pid, NULL, 0);
+    tty_restore();
+}
+
+TEST(tty_select_stdin_stdout)
+{
+    tty_setup(true, 0);
+    fd_set r, w;
+    FD_ZERO(&r);
+    FD_ZERO(&w);
+    FD_SET(0, &r);
+    FD_SET(1, &w);
+    struct timeval tv = { 0, 0 };
+    EXPECT_EQ(select(2, &r, &w, NULL, &tv), 1);
+    EXPECT_TRUE(!FD_ISSET(0, &r));
+    EXPECT_TRUE(FD_ISSET(1, &w));
+
+    tty_inject("q\n");
+    FD_ZERO(&r);
+    FD_SET(0, &r);
+    tv = (struct timeval){ 0, 0 };
+    EXPECT_EQ(select(1, &r, NULL, NULL, &tv), 1);
+    EXPECT_TRUE(FD_ISSET(0, &r));
+    tty_restore();
+}
+
+/* ^S stops output, ^Q restarts it. Nothing may be printed to the tty while
+ * it is stopped, so results are checked only after ^Q. */
+TEST(tty_flow_control_pollout)
+{
+    tty_setup(true, 0);
+    struct termios t;
+    ASSERT_OK(tcgetattr(0, &t));
+    if (!(t.c_iflag & IXON))
+        SKIP("IXON off");
+    tty_inject("\x13");
+    int stopped = poll1(1, POLLOUT, 0);
+    tty_inject("\x11");
+    int started = poll1(1, POLLOUT, 0);
+    EXPECT_EQ(stopped & POLLOUT, 0);
+    EXPECT_TRUE(started & POLLOUT);
+    tty_restore();
 }

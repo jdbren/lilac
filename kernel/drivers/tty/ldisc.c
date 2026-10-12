@@ -666,10 +666,29 @@ ssize_t default_tty_write(struct tty *tty, struct file *file, const u8 *buf, siz
 }
 
 
+poll_mask_t default_tty_poll(struct tty *tty, struct file *file, struct poll_request *pr)
+{
+    struct tty_data *data = tty->data;
+    poll_mask_t mask = 0;
+
+    poll_wait(file, &tty->read_wait, pr);
+    poll_wait(file, &tty->flow_wait, pr);
+
+    data_lock(data);
+    if (has_readable_data(tty) || (L_ICANON(tty) && data->at_eof))
+        mask |= POLLIN | POLLRDNORM;
+    data_unlock(data);
+
+    if (!READ_ONCE(tty->ctrl.stopped))
+        mask |= POLLOUT | POLLWRNORM;
+
+    return mask;
+}
 
 const struct tty_ldisc_ops default_tty_ldisc_ops = {
     .read = default_tty_read,
     .write = default_tty_write,
     .set_termios = default_tty_set_termios,
-    .receive_buf = default_tty_receive_buf
+    .receive_buf = default_tty_receive_buf,
+    .poll = default_tty_poll,
 };
