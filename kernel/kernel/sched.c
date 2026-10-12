@@ -43,6 +43,7 @@ struct task __rootp = {
     .kstack_base = (void*)((uintptr_t)&stack_top - __KERNEL_STACK_SZ),
     .mm = &root_mm,
     .sighand = &root_sighand,
+    .tg_leader = &__rootp,
 };
 
 static struct mm_info __idle_mm[CONFIG_MAX_CPUS];
@@ -56,6 +57,7 @@ static struct task __idle_tasks[CONFIG_MAX_CPUS] = {
         .ppid = 0,
         .lock = SPINLOCK_INIT,
         .sighand = &root_sighand,
+        .tg_leader = &__rootp,
     }
 };
 
@@ -312,6 +314,69 @@ bool is_idle_task(struct task *p)
     return p == this_cpu_rq()->idle;
 }
 
+static void account_cpu(struct task *p, u64 now, bool user)
+{
+    u64 delta = now - p->exec_started;
+    p->exec_started = now;
+
+    u64 ns = ticks_to_ns(delta);
+    p->runtime += ns;
+    if (user)
+        p->utime += ns;
+    else
+        p->stime += ns;
+
+    struct task *leader = p->tg_leader;
+    if (user)
+        atomic_fetch_add_explicit(&leader->group_utime, ns, memory_order_relaxed);
+    else
+        atomic_fetch_add_explicit(&leader->group_stime, ns, memory_order_relaxed);
+}
+
+/*
+ * CPU time of the current thread
+ */
+u64 current_cputime_ns(void)
+{
+    struct task *p = current;
+    u64 base, ns;
+
+    do {
+        base = READ_ONCE(p->runtime);
+        ns = base + ticks_to_ns(read_ticks() - READ_ONCE(p->exec_started));
+    } while (base != READ_ONCE(p->runtime));
+    return ns;
+}
+
+u64 current_group_cputime_ns(void)
+{
+    struct task *p = current;
+    struct task *leader = p->tg_leader;
+    u64 base, ns;
+
+    do {
+        base = atomic_load(&leader->group_utime) +
+               atomic_load(&leader->group_stime);
+        ns = base + ticks_to_ns(read_ticks() - READ_ONCE(p->exec_started));
+    } while (base != (
+        atomic_load(&leader->group_utime) + atomic_load(&leader->group_stime)
+    ));
+    return ns;
+}
+
+/*
+ * Charge the exiting task's last slice before its thread group can be reaped;
+ * once it's a zombie, neither schedule() nor sched_tick() charge it.
+ */
+void sched_account_exit(struct task *p)
+{
+    unsigned long flags;
+    arch_local_irq_save(&flags);
+    arch_disable_interrupts();
+    account_cpu(p, read_ticks(), false);
+    arch_local_irq_restore(flags);
+}
+
 bool sched_running(void)
 {
     return sched_timer == 1;
@@ -419,12 +484,16 @@ void schedule(void)
     }
 
     if (next != cur) {
+        u64 now = read_ticks();
+        if (cur->state != TASK_ZOMBIE)
+            account_cpu(cur, now, false);
+        // set up accounting before switching
+        next->exec_started = now;
         rq->curr = next;
         rq->prev = cur;
         next->on_cpu = true;
         context_switch(cur, next);
         sched_post_switch_unlock();
-        cur->exec_started = read_ticks();
     } else {
         release_lock(&rq->lock);
     }
@@ -433,7 +502,7 @@ void schedule(void)
 }
 
 
-void sched_tick(void)
+void sched_tick(bool user)
 {
     struct task *cur = current;
     struct rq *rq = this_cpu_rq();
@@ -445,9 +514,8 @@ void sched_tick(void)
         u64 delta_exec = now - cur->exec_started;
 
         if (delta_exec) {
-            cur->exec_started = now;
-            cur->runtime += ticks_to_ns(delta_exec);
             cur->vruntime += delta_exec; // * nice factor / weight;
+            account_cpu(cur, now, user);
         }
     }
 

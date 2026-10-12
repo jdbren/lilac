@@ -94,9 +94,16 @@ struct task {
     bool on_cpu;
     u64 runtime;
     u64 vruntime;
-    // u64 timeslice;
     struct rb_node rq_node;
     u64 exec_started;
+
+    u64 utime;
+    u64 stime;
+
+    atomic_ullong group_utime;
+    atomic_ullong group_stime;
+    atomic_ullong child_utime;
+    atomic_ullong child_stime;
 
     // Parent-child
     struct task *parent;

@@ -220,7 +220,7 @@ isr_no_err halt_cpu
 #endif
 
 .text
-isr_device timer_handler timer_tick
+isr_device timer_handler x86_timer_tick
 isr_device kbd_handler keyboard_int
 isr_device serial_handler serial_int
 isr_device ahci_handler ahci_irq

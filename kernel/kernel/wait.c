@@ -106,7 +106,11 @@ static pid_t handle_exited_child(struct task *child, int *status)
         *status = child->exit_status;
         klog(LOG_DEBUG, "wait_any: Child %d exited with status %d\n", child_pid, *status);
     }
-    // a waitable leader's threads have all exited
+
+    struct task *self = current->tg_leader;
+    self->child_utime += child->group_utime + child->child_utime;
+    self->child_stime += child->group_stime + child->child_stime;
+
     reap_dead_threads();
     reap_task(child);
     return child_pid;

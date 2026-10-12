@@ -41,7 +41,7 @@ extern ktime_t system_time_base_ns;
 
 void timer_init(void);
 void timer_tick_init(void); // arch
-void timer_tick(void);
+void timer_tick(bool user);
 
 void busy_wait_usec(u32 micros);
 void usleep(u32 micros);

@@ -135,6 +135,11 @@ void tsc_deadline_tick(unsigned long ms)
     tsc_deadline_set(tsc_now + tpm * ms);
 }
 
+void x86_timer_tick(struct interrupt_frame *frame)
+{
+    timer_tick((frame->cs & 3) != 0);
+}
+
 void timer_tick_init(void)
 {
     if (tsc_deadline()) {

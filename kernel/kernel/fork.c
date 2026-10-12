@@ -152,6 +152,10 @@ static struct task * clone_process(struct clone_args *args)
     child->group_exit = false;
     child->flags.restore_sigmask = 0;
     child->group_exit_code = 0;
+    child->runtime = 0;
+    child->utime = child->stime = 0;
+    child->group_utime = child->group_stime = 0;
+    child->child_utime = child->child_stime = 0;
 
     child->pid = ++num_tasks;
     if (flags & CLONE_THREAD) {
@@ -558,6 +562,7 @@ __noreturn void do_exit(void)
     reparent_children(current);
     cleanup_task(current);
     set_current_state(TASK_ZOMBIE);
+    sched_account_exit(current);
 
     struct task *leader = current->tg_leader;
     if (current != leader)

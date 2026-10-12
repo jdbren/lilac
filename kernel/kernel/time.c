@@ -71,11 +71,11 @@ void timer_init(void)
     kstatus(STATUS_OK, "System clock initialized\n");
 }
 
-void timer_tick(void)
+void timer_tick(bool user)
 {
     handle_tick(1);
     timer_ev_tick();
-    sched_tick();
+    sched_tick(user);
 }
 
 s64 get_unix_time(void)
@@ -147,10 +147,13 @@ SYSCALL_DECL2(clock_gettime, int, clk, struct timespec*, tp)
         ts.tv_sec = ns / NS_PER_SEC;
         ts.tv_nsec = ns % NS_PER_SEC;
         break;
-    case CLOCK_PROCESS_CPUTIME_ID: // no per-process accounting: thread time
+    case CLOCK_PROCESS_CPUTIME_ID:
+        ns = current_group_cputime_ns();
+        ts.tv_sec = ns / NS_PER_SEC;
+        ts.tv_nsec = ns % NS_PER_SEC;
+        break;
     case CLOCK_THREAD_CPUTIME_ID:
-        // runtime is only folded in at scheduler ticks; add the current slice
-        ns = current->runtime + ticks_to_ns(read_ticks() - current->exec_started);
+        ns = current_cputime_ns();
         ts.tv_sec = ns / NS_PER_SEC;
         ts.tv_nsec = ns % NS_PER_SEC;
         break;
