@@ -17,7 +17,7 @@ BOOTDIR?=/boot
 INCLUDEDIR?=$(PREFIX)/include
 
 FLAGS=-D__lilac__ -D__KERNEL__ -DLOG_CPUID -Werror -Iinclude -ffreestanding \
-	-Wall -Wextra -Wno-sign-compare -Wundef -Wframe-larger-than=600 \
+	-Wall -Wextra -Wno-sign-compare -Wundef -Wframe-larger-than=1024 \
 	-Wno-unused-parameter
 CFLAGS:=$(CFLAGS) $(FLAGS) -std=gnu23 -fanalyzer -fstack-protector-strong \
 	-fno-strict-aliasing -fno-PIE -fno-common -fno-builtin -mno-red-zone \

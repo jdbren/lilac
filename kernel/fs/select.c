@@ -26,8 +26,8 @@ struct kpoll_cmd_struct {
     struct poll_request pollreq;
     struct poll_table_page *table;
     struct pollfd *fds;
+    struct task *current_task;
     unsigned int nfds;
-    struct task* current_task;
     int error;
     bool triggered;
 };
@@ -151,6 +151,176 @@ poll_schedule_timeout(struct kpoll_cmd_struct *pwq, int state, ktime_t *expires)
     return rc;
 }
 
+static int do_select(struct kpoll_cmd_struct *kpoll_cmd, int nfds,
+    struct fd_sets *in, struct fd_sets *out, ktime_t *expires)
+{
+    struct poll_request *pr = &kpoll_cmd->pollreq;
+    int count = 0;
+    bool timed_out = false;
+
+    if (expires && *expires == 0) {
+        pr->qproc = NULL;
+        timed_out = 1;
+    }
+
+    for (;;) {
+        for (int fd = 0; fd < nfds; fd++) {
+            bool r = FD_ISSET(fd, &in->readfds);
+            bool w = FD_ISSET(fd, &in->writefds);
+            bool e = FD_ISSET(fd, &in->exceptfds);
+            if (!(r || w || e))
+                continue;
+
+            struct file *f = get_file_handle(fd);
+            if (IS_ERR_OR_NULL(f)) {
+                count = -EBADF;
+                goto out;
+            }
+
+            pr->mask = (r ? POLLIN_SET : 0) | (w ? POLLOUT_SET : 0) | (e ? POLLEX_SET : 0);
+            poll_mask_t m = vfs_poll(f, pr);
+            if (r && (m & POLLIN_SET))  { FD_SET(fd, &out->readfds);  count++; pr->qproc = NULL; }
+            if (w && (m & POLLOUT_SET)) { FD_SET(fd, &out->writefds); count++; pr->qproc = NULL; }
+            if (e && (m & POLLEX_SET))  { FD_SET(fd, &out->exceptfds); count++; pr->qproc = NULL; }
+        }
+        pr->qproc = NULL;
+
+        if (!count) {
+            count = kpoll_cmd->error;
+            if (sigispending(current))
+                count = -ERESTARTNOHAND;
+        }
+        if (count || timed_out)
+            break;
+
+        if (!poll_schedule_timeout(kpoll_cmd, TASK_SLEEPING, expires))
+            timed_out = 1;
+    }
+
+out:
+    return count;
+}
+
+static int do_select_syscall(int nfds, fd_set __user *readfds, fd_set __user *writefds,
+    fd_set __user *exceptfds, struct timespec *ts)
+{
+    struct kpoll_cmd_struct kpoll_cmd = {
+        .error = 0,
+        .pollreq = { .qproc = __pollwait, .mask = 0 },
+        .current_task = current,
+    };
+
+    struct fd_sets *infds = NULL, *outfds = NULL;
+    ktime_t ktime;
+    long ret = -EFAULT;
+
+    if (nfds > FD_MAX || nfds < 0)
+        return -EINVAL;
+
+    infds = kzmalloc(sizeof(struct fd_sets));
+    if (!infds)
+        return -ENOMEM;
+    outfds = kzmalloc(sizeof(struct fd_sets));
+    if (!outfds) {
+        ret = -ENOMEM;
+        goto error;
+    }
+
+    if (readfds && get_user(infds->readfds, readfds))
+        goto error;
+    if (writefds && get_user(infds->writefds, writefds))
+        goto error;
+    if (exceptfds && get_user(infds->exceptfds, exceptfds))
+        goto error;
+
+    if (ts) {
+        if (!timespec_valid_strict(ts)) {
+            ret = -EINVAL;
+            goto error;
+        }
+        ktime = timespec_to_ktime(*ts);
+        if (ktime > 0)
+            ktime = ktime_add_safe(ktime_get(), ktime);
+    }
+
+    ret = do_select(&kpoll_cmd, nfds, infds, outfds, ts ? &ktime : NULL);
+    poll_freewait(&kpoll_cmd);
+
+    if (ret >= 0) {
+        if (readfds && copy_to_user(readfds, &outfds->readfds, sizeof(fd_set)))
+            ret = -EFAULT;
+        if (writefds && copy_to_user(writefds, &outfds->writefds, sizeof(fd_set)))
+            ret = -EFAULT;
+        if (exceptfds && copy_to_user(exceptfds, &outfds->exceptfds, sizeof(fd_set)))
+            ret = -EFAULT;
+    }
+
+error:
+    kfree(infds);
+    kfree(outfds);
+    return ret;
+}
+
+SYSCALL_DECL5(select, int, nfds, fd_set __user *, readfds, fd_set __user *,
+    writefds, fd_set __user *, exceptfds, struct timeval __user *, timeout)
+{
+    union {
+        struct timeval tv;
+        struct timespec ts;
+    } u;
+
+    if (timeout && copy_from_user(&u.tv, timeout, sizeof(struct timeval)))
+        return -EFAULT;
+
+    if (timeout)
+        u.ts = timeval_to_timespec(u.tv);
+
+    return do_select_syscall(nfds, readfds, writefds, exceptfds, timeout ? &u.ts : NULL);
+}
+
+struct sigset_argpack {
+    const sigset_t __user *p;
+    size_t size;
+};
+
+SYSCALL_DECL6(pselect, int, nfds, fd_set __user *, readfds, fd_set __user *,
+    writefds, fd_set __user *, exceptfds, const struct timespec __user *, timeout,
+    const struct sigset_argpack __user *, sig)
+{
+    struct timespec ts;
+    struct sigset_argpack sigargs;
+    sigset_t oldset, newset;
+
+    if (timeout && copy_from_user(&ts, timeout, sizeof(struct timespec)))
+        return -EFAULT;
+
+    if (sig && copy_from_user(&sigargs, sig, sizeof(struct sigset_argpack)))
+        return -EFAULT;
+
+    if (sig) {
+        oldset = current->blocked;
+        if (sigargs.size != sizeof(sigset_t)) {
+            klog(LOG_DEBUG, "Invalid sigset size: %lu\n", sigargs.size);
+            return -EINVAL;
+        }
+        if (sigargs.p) {
+            if (copy_from_user(&newset, sigargs.p, sizeof(sigset_t)))
+                return -EFAULT;
+            current->blocked = proc_sigmask(newset);
+        }
+    }
+
+    int ret = do_select_syscall(nfds, readfds, writefds, exceptfds, timeout ? &ts : NULL);
+
+    if (sig) {
+        current->saved_sigmask = current->blocked;
+        current->flags.restore_sigmask = 1;
+    }
+
+    return ret;
+}
+
+
 
 /*
  * Fish for pollable events on the pollfd->fd file descriptor. We're only
@@ -214,24 +384,6 @@ static int do_poll(struct kpoll_cmd_struct *kpoll_cmd, ktime_t *expires)
     }
 
     return count;
-}
-
-SYSCALL_DECL5(select, int, nfds, fd_set __user *, readfds, fd_set __user *,
-    writefds, fd_set __user *, exceptfds, struct timeval __user *, timeout)
-{
-    return -ENOSYS;
-}
-
-struct sigset_argpack {
-    const sigset_t __user *p;
-    size_t size;
-};
-
-SYSCALL_DECL6(pselect, int, nfds, fd_set __user *, readfds, fd_set __user *,
-    writefds, fd_set __user *, exceptfds, const struct timespec __user *, timeout,
-    const struct sigset_argpack __user *, sig)
-{
-    return -ENOSYS;
 }
 
 int do_poll_syscall(struct pollfd __user *fds, unsigned int nfds, ktime_t *expires)
@@ -299,11 +451,11 @@ SYSCALL_DECL5(ppoll, struct pollfd __user *, fds, unsigned int, nfds,
     if (tmo_p) {
         if (copy_from_user(&ts, tmo_p, sizeof(struct timespec)))
             return -EFAULT;
-        ktimeout = timespec_to_ktime(ts);
-        if (ktimeout < 0)
+        if (!timespec_valid_strict(&ts))
             return -EINVAL;
+        ktimeout = timespec_to_ktime(ts);
         if (ktimeout != 0)
-            ktimeout = ktime_add(ktime_get(), ktimeout);
+            ktimeout = ktime_add_safe(ktime_get(), ktimeout);
     } else {
         expires = NULL;
     }
