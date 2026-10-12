@@ -16,6 +16,7 @@ ssize_t tty_write(struct file *f, const void *buf, size_t count);
 int tty_open(struct inode *inode, struct file *file);
 int tty_release(struct inode *inode, struct file *file);
 int tty_ioctl(struct file *f, int op, void *argp);
+poll_mask_t tty_poll(struct file *f, struct poll_request *pr);
 
 const struct file_operations tty_fops = {
     .read = tty_read,
@@ -24,7 +25,8 @@ const struct file_operations tty_fops = {
     .flush = NULL,
     .lseek = NULL,
     .readdir = NULL,
-    .ioctl = tty_ioctl
+    .ioctl = tty_ioctl,
+    .poll = tty_poll,
 };
 
 const struct inode_operations tty_iops = {
@@ -261,6 +263,16 @@ ssize_t tty_read(struct file *f, void *buf, size_t count)
     return tty->ldisc_ops->read(tty, f, buf, count, f->f_pos);
 }
 
+poll_mask_t tty_poll(struct file *f, struct poll_request *pr)
+{
+    struct tty *tty = file_get_tty(f);
+
+    if (!tty || !tty->ldisc_ops->poll)
+        return POLLERR;
+
+    return tty->ldisc_ops->poll(tty, f, pr);
+}
+
 ssize_t tty_write(struct file *f, const void *buf, size_t count)
 {
     struct tty *tty = file_get_tty(f);
@@ -434,6 +446,16 @@ int tty_ioctl(struct file *f, int op, void *argp)
         if (get_user(pgrp, (pid_t*)argp))
             return -EFAULT;
         return tcsetpgrp(tty, pgrp);
+    case TIOCSTI: {
+        if (current->ctty != tty || (f->f_mode & O_ACCMODE) == O_WRONLY)
+            return -EPERM;
+        u8 c;
+        if (get_user(c, (u8*)argp))
+            return -EFAULT;
+        if (tty->ldisc_ops && tty->ldisc_ops->receive_buf)
+            tty->ldisc_ops->receive_buf(tty, &c, NULL, 1);
+        return 0;
+    }
     case TIOCGWINSZ: {
         mutex_lock(&tty->winsize_lock);
         struct winsize ws = tty->winsize;

@@ -5,6 +5,7 @@
 #include <lilac/sync.h>
 #include <lilac/wait.h>
 #include <lilac/termbits.h>
+#include <fs/select.h>
 
 /*
  * (Note: the *_driver.minor_start values 1, 64, 128, 192 are
@@ -131,6 +132,7 @@ struct tty_ldisc_ops {
     ssize_t (*write)(struct tty *tty, struct file *file, const u8 *buf, size_t nr);
     void (*set_termios)(struct tty *tty, const struct termios *old);
     void (*receive_buf)(struct tty *tty, const u8 *cp, const u8 *fp, size_t count);
+    poll_mask_t (*poll)(struct tty *tty, struct file *file, struct poll_request *pr);
 };
 
 #define INPUT_BUF_SIZE 1024
