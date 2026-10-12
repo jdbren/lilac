@@ -60,6 +60,8 @@ bool wait_signal_pending(void);
 struct task * wake_first(struct waitqueue *wq);
 void wake_all(struct waitqueue *wq);
 void __wake_all(struct waitqueue *wq);
+void wake_all_key(struct waitqueue *wq, int key);
+void __wake_all_key(struct waitqueue *wq, int key);
 
 void notify_parent(struct task *parent, struct task *child);
 void wake_parent_waiter(struct task *parent);
