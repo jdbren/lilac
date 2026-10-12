@@ -6,6 +6,10 @@
 
 #define FD_SETSIZE 1024
 
+#define POLLIN_SET  (POLLIN | POLLRDNORM | POLLRDBAND | POLLHUP | POLLERR)
+#define POLLOUT_SET (POLLOUT | POLLWRNORM | POLLWRBAND | POLLERR)
+#define POLLEX_SET  (POLLPRI)
+
 typedef unsigned long fd_mask;
 
 typedef struct {

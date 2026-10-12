@@ -14,8 +14,7 @@
     _SIGSYS | _SIGXCPU | _SIGXFSZ)
 #define STOP_SIG (_SIGSTOP | _SIGTSTP | _SIGTTIN | _SIGTTOU)
 #define DFL_IGN_SIG (_SIGCHLD | _SIGURG | _SIGWINCH | _SIGCONT)
-static const sigset_t unblockable = _SIGKILL | _SIGSTOP;
-static const sigset_t synchronous = _SIGSEGV | _SIGFPE | _SIGILL | _SIGBUS | _SIGTRAP;
+static const sigset_t synchronous = SYNC_SIGMASK;
 
 // Act on one pending signal. Returns 1 if a handler frame was set up.
 int handle_signal(void)
@@ -346,7 +345,7 @@ SYSCALL_DECL3(sigaction, int, signum, const struct sigaction *, act, struct siga
         klog(LOG_WARN, "sigaction: Failed to copy new action from user memory\n");
         return -EFAULT;
     }
-    ka->sa.sa_mask = SIG_APPLY_MASK(ka->sa.sa_mask, unblockable);
+    ka->sa.sa_mask = proc_sigmask(ka->sa.sa_mask);
 #ifdef DEBUG_SIGNAL
     klog(LOG_DEBUG, "sigaction: Signal %d action is set to %p\n", signum, ka->sa.sa_handler);
 #endif
@@ -368,7 +367,7 @@ SYSCALL_DECL3(sigprocmask, int, how, const sigset_t *, set, sigset_t *, oldset)
     if (set) {
         sigset_t sigset;
         if (get_user(sigset, set)) return -EFAULT;
-        sigset_t new_mask = SIG_APPLY_MASK(sigset, unblockable);
+        sigset_t new_mask = proc_sigmask(sigset);
         switch (how) {
             case SIG_BLOCK:
                 current->blocked |= new_mask;
@@ -412,7 +411,7 @@ SYSCALL_DECL1(sigsuspend, sigset_t*, set)
     sigset_t mask;
     if (get_user(mask, set)) return -EFAULT;
 
-    sigset_t newmask = SIG_APPLY_MASK(mask, unblockable);
+    sigset_t newmask = proc_sigmask(mask);
 
     sigset_t oldmask = current->blocked;
     klog(LOG_DEBUG, "sigsuspend: changing mask from %lx to %lx", oldmask, newmask);
