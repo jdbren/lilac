@@ -43,7 +43,7 @@
 #define _SIGSYS		sigbit(SIGSYS)
 
 #define RT_SIG (~0UL << 31)
-#define CPU_EXCEPT_SIG (_SIGILL | _SIGFPE | _SIGSEGV | _SIGBUS | _SIGTRAP)
+#define CPU_EXCEPT_SIGMASK (_SIGILL | _SIGFPE | _SIGSEGV | _SIGBUS | _SIGTRAP)
 
 
 typedef unsigned long sigset_t;
@@ -101,6 +101,14 @@ struct task;
 #define sigemptyset(set) (*(set) = 0)
 #define sigfillset(set) (*(set) = ~0UL)
 #define sigismember(set, sig) ((*(set) & sigbit(sig)) != 0)
+
+#define UNBLOCK_SIGMASK (_SIGKILL | _SIGSTOP)
+#define SYNC_SIGMASK (CPU_EXCEPT_SIGMASK)
+
+static inline sigset_t proc_sigmask(sigset_t mask)
+{
+    return SIG_APPLY_MASK(mask, UNBLOCK_SIGMASK);
+}
 
 // Details for SA_SIGINFO handlers, recorded when a signal is raised
 struct ksiginfo {

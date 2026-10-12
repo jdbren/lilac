@@ -566,7 +566,7 @@ void arch_prepare_signal(void *pc, int signo, const struct ksiginfo *info,
     frame.info.si_signo = signo;
     if (info) {
         frame.info.si_code = info->code;
-        if (sigbit(signo) & CPU_EXCEPT_SIG) {
+        if (sigbit(signo) & CPU_EXCEPT_SIGMASK) {
             frame.info.addr = info->addr;
             frame.uc.uc_mcontext.gregs[REG_CR2] = info->addr;
         } else {
