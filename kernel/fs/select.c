@@ -22,7 +22,7 @@ struct poll_table_page {
     struct poll_table_entry entries[];
 };
 
-struct kpollfd_list {
+struct kpoll_cmd_struct {
     struct poll_request pollreq;
     struct poll_table_page *table;
     struct pollfd *fds;
@@ -32,10 +32,33 @@ struct kpollfd_list {
     bool triggered;
 };
 
+static void free_poll_entry(struct poll_table_entry *entry)
+{
+    wait_ev_dequeue(entry->wait_address, &entry->wait);
+    fput(entry->filp);
+}
+
+static void poll_freewait(struct kpoll_cmd_struct *kpoll_cmd)
+{
+    struct poll_table_page *p = kpoll_cmd->table;
+
+    while (p) {
+        struct poll_table_entry *entry;
+        struct poll_table_page *old;
+
+        for (entry = p->entries; entry < p->entry; entry++)
+            free_poll_entry(entry);
+        old = p;
+        p = p->next;
+        kfree(old);
+    }
+    kpoll_cmd->table = NULL;
+}
+
 #define POLL_TABLE_FULL(table) \
     ((unsigned long)((table)->entry+1) > PAGE_SIZE + (unsigned long)(table))
 
-static struct poll_table_entry *poll_get_entry(struct kpollfd_list *p)
+static struct poll_table_entry *poll_get_entry(struct kpoll_cmd_struct *p)
 {
     struct poll_table_page *table = p->table;
 
@@ -56,14 +79,38 @@ static struct poll_table_entry *poll_get_entry(struct kpollfd_list *p)
     return table->entry++;
 }
 
-static int pollwake(struct wq_entry *wait) {
+static int __pollwake(struct wq_entry *wait)
+{
+    struct kpoll_cmd_struct *kpoll_cmd = wait->private;
+
+    /*
+     * Although this function is called under waitqueue lock, LOCK
+     * doesn't imply write barrier and the users expect write
+     * barrier semantics on wakeup functions.  The following
+     * smp_wmb() is equivalent to smp_wmb() in try_to_wake_up()
+     * and is paired with smp_store_mb() in poll_schedule_timeout.
+     */
+    // smp_wmb();
+    __asm__ ("" ::: "memory");
+    WRITE_ONCE(kpoll_cmd->triggered, 1);
+
+    set_task_running(kpoll_cmd->current_task);
     return 0;
+}
+
+static int pollwake(struct wq_entry *wait, int key) {
+    struct poll_table_entry *entry;
+
+    entry = container_of(wait, struct poll_table_entry, wait);
+    if (key && !((poll_mask_t)(key) & entry->key))
+        return 0;
+    return __pollwake(wait);
 }
 
 static void __pollwait(struct file *filp, struct waitqueue *wait_address,
                 struct poll_request *p)
 {
-    struct kpollfd_list *kpfd_list = container_of(p, struct kpollfd_list, pollreq);
+    struct kpoll_cmd_struct *kpfd_list = container_of(p, struct kpoll_cmd_struct, pollreq);
     struct poll_table_entry *entry = poll_get_entry(kpfd_list);
     if (!entry)
         return;
@@ -72,11 +119,13 @@ static void __pollwait(struct file *filp, struct waitqueue *wait_address,
     entry->key = p->mask;
     entry->wait.wakeup = pollwake;
     entry->wait.private = kpfd_list;
+    entry->wait.task = current;
+    INIT_LIST_HEAD(&entry->wait.entry);
     wait_ev_queue(wait_address, &entry->wait);
 }
 
 static int
-poll_schedule_timeout(struct kpollfd_list *pwq, int state, ktime_t *expires)
+poll_schedule_timeout(struct kpoll_cmd_struct *pwq, int state, ktime_t *expires)
 {
     int rc = -EINTR;
 
@@ -128,10 +177,9 @@ do_pollfd(struct pollfd *pollfd, struct poll_request *pollreq)
     return mask & filter;
 }
 
-static int do_poll(struct kpollfd_list *poll_list, ktime_t *expires)
+static int do_poll(struct kpoll_cmd_struct *poll_list, ktime_t *expires)
 {
     struct poll_request *pr = &poll_list->pollreq;
-    struct file *filep;
     struct pollfd *pfd;
     int count = 0;
     bool timed_out = false;
@@ -145,17 +193,14 @@ static int do_poll(struct kpollfd_list *poll_list, ktime_t *expires)
         // loop through poll_list->fds and check events
         for (unsigned int i = 0; i < poll_list->nfds; i++) {
             pfd = &poll_list->fds[i];
-            filep = get_file_handle(pfd->fd);
-            if (IS_ERR(filep))
-                continue;
-
             poll_mask_t mask = do_pollfd(pfd, pr);
             pfd->revents = mask;
             if (mask) {
                 count++;
+                pr->qproc = NULL;
             }
         }
-
+        pr->qproc = NULL;
         if (!count) {
             count = poll_list->error;
             if (sigispending(current))
@@ -191,17 +236,18 @@ SYSCALL_DECL6(pselect6, int, nfds, fd_set __user *, readfds, fd_set __user *,
 
 SYSCALL_DECL3(poll, struct pollfd __user *, fds, unsigned int, nfds, int, timeout)
 {
-    struct kpollfd_list poll_list = {
+    struct kpoll_cmd_struct poll_list = {
         .fds = NULL,
         .nfds = nfds,
         .error = 0,
         .pollreq = { .qproc = __pollwait, .mask = 0 },
+        .current_task = current,
     };
     ktime_t to, *expires = &to;
     int ret;
 
-    if (nfds == 0)
-        return 0;
+    if (nfds > FD_MAX)
+        return -EINVAL;
 
     if (timeout == 0) {
         to = 0;
@@ -211,18 +257,26 @@ SYSCALL_DECL3(poll, struct pollfd __user *, fds, unsigned int, nfds, int, timeou
         expires = NULL;
     }
 
-    poll_list.fds = kcalloc(nfds, sizeof(struct pollfd));
-    if (!poll_list.fds)
-        return -ENOMEM;
+    if (nfds) {
+        poll_list.fds = kcalloc(nfds, sizeof(struct pollfd));
+        if (!poll_list.fds)
+            return -ENOMEM;
 
-    if (copy_from_user(poll_list.fds, fds, nfds * sizeof(struct pollfd))) {
-        kfree(poll_list.fds);
-        return -EFAULT;
+        if (copy_from_user(poll_list.fds, fds, nfds * sizeof(struct pollfd))) {
+            kfree(poll_list.fds);
+            return -EFAULT;
+        }
     }
 
     ret = do_poll(&poll_list, expires);
+    poll_freewait(&poll_list);
+
+    if (nfds && copy_to_user(fds, poll_list.fds, nfds * sizeof(struct pollfd))) {
+        ret = -EFAULT;
+    }
 
     kfree(poll_list.fds);
+
     return ret;
 }
 
