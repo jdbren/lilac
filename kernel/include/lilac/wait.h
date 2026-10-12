@@ -35,7 +35,7 @@ struct waitqueue {
 }
 
 struct wq_entry;
-typedef int (*wq_wake_func_t)(struct wq_entry *wait);
+typedef int (*wq_wake_func_t)(struct wq_entry *wait, int val);
 
 struct wq_entry {
     struct task *task;
