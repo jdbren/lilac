@@ -227,7 +227,7 @@ struct sigset_argpack {
     size_t size;
 };
 
-SYSCALL_DECL6(pselect6, int, nfds, fd_set __user *, readfds, fd_set __user *,
+SYSCALL_DECL6(pselect, int, nfds, fd_set __user *, readfds, fd_set __user *,
     writefds, fd_set __user *, exceptfds, const struct timespec __user *, timeout,
     const struct sigset_argpack __user *, sig)
 {
@@ -245,6 +245,8 @@ SYSCALL_DECL3(poll, struct pollfd __user *, fds, unsigned int, nfds, int, timeou
     };
     ktime_t to, *expires = &to;
     int ret;
+
+    klog(LOG_DEBUG, "poll: Starting poll with nfds=%u, timeout=%d\n", nfds, timeout);
 
     if (nfds > FD_MAX)
         return -EINVAL;

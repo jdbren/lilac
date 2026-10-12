@@ -107,6 +107,10 @@ syscall_table:
 	sc_tbl_entry setitimer	# 88
 	sc_tbl_entry clock_nanosleep	# 89
 	sc_tbl_entry sysinfo	# 90
+	sc_tbl_entry select		# 91
+	sc_tbl_entry pselect	# 92
+	sc_tbl_entry poll		# 93
+	sc_tbl_entry ppoll		# 94
 /*
 	sc_tbl_entry chmod		# 30
 	sc_tbl_entry chown		# 31

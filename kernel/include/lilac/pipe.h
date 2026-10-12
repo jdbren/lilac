@@ -7,11 +7,18 @@
 struct file;
 struct inode;
 
+union pipe_index {
+    unsigned long read_write;
+    struct {
+        unsigned int read_pos;      // read position in buffer
+        unsigned int write_pos;     // write position in buffer
+    };
+};
+
 struct pipe_buf {
     char *buffer;               // data buffer
     unsigned int buf_size;      // size of buffer
-    unsigned int read_pos;      // read position in buffer
-    unsigned int write_pos;     // write position in buffer
+    union pipe_index idx;       // read and write positions in buffer
     unsigned int data_size;     // amount of data currently in buffer
     struct inode *p_inode;
     struct waitqueue read_wq;   // wait queue for readers
