@@ -119,6 +119,8 @@ syscall_table:
 	sc_tbl_entry linkat		# 100
 	sc_tbl_entry symlinkat	# 101
 	sc_tbl_entry readlinkat	# 102
+	sc_tbl_entry times		# 103
+	sc_tbl_entry getrusage	# 104
 /*
 	sc_tbl_entry chmod		# 30
 	sc_tbl_entry chown		# 31

@@ -40,6 +40,6 @@ int do_kernel_exit_work(void);
 
 #endif /* !__ASSEMBLY__ */
 
-#define MAX_SYSCALL 102
+#define MAX_SYSCALL 104
 
 #endif

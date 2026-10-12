@@ -111,3 +111,64 @@ SYSCALL_DECL1(sysinfo, struct sysinfo*, info)
         return -EFAULT;
     return 0;
 }
+
+#define RUSAGE_SELF     0
+#define RUSAGE_CHILDREN (-1)
+#define RUSAGE_THREAD   1
+
+struct rusage {
+    struct timeval ru_utime;
+    struct timeval ru_stime;
+    long ru_maxrss;
+    long ru_ixrss;
+    long ru_idrss;
+    long ru_isrss;
+    long ru_minflt;
+    long ru_majflt;
+    long ru_nswap;
+    long ru_inblock;
+    long ru_oublock;
+    long ru_msgsnd;
+    long ru_msgrcv;
+    long ru_nsignals;
+    long ru_nvcsw;
+    long ru_nivcsw;
+};
+
+static struct timeval cputime_to_timeval(u64 ns)
+{
+    return (struct timeval){
+        .tv_sec = ns / NS_PER_SEC,
+        .tv_usec = (ns % NS_PER_SEC) / NS_PER_US,
+    };
+}
+
+// Only the CPU times are tracked
+SYSCALL_DECL2(getrusage, int, who, struct rusage*, ru)
+{
+    struct task *leader = current->tg_leader;
+    struct rusage r = {0};
+    u64 utime, stime;
+
+    switch (who) {
+    case RUSAGE_SELF:
+        utime = atomic_load(&leader->group_utime);
+        stime = atomic_load(&leader->group_stime);
+        break;
+    case RUSAGE_CHILDREN:
+        utime = atomic_load(&leader->child_utime);
+        stime = atomic_load(&leader->child_stime);
+        break;
+    case RUSAGE_THREAD:
+        utime = current->utime;
+        stime = current->stime;
+        break;
+    default:
+        return -EINVAL;
+    }
+    r.ru_utime = cputime_to_timeval(utime);
+    r.ru_stime = cputime_to_timeval(stime);
+    if (copy_to_user(ru, &r, sizeof(r)))
+        return -EFAULT;
+    return 0;
+}

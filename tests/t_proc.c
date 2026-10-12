@@ -497,10 +497,11 @@ TEST(orphan_reparented)
     ASSERT_OK(pipe(p));
     pid_t pid = ASSERT_OK(fork());
     if (pid == 0) {
+        pid_t mid = getpid();
         pid_t g = fork();
         if (g == 0) {
             /* wait for our parent to exit */
-            for (int i = 0; i < 200 && getppid() == pid; i++)
+            for (int i = 0; i < 200 && getppid() == mid; i++)
                 usleep(5000);
             pid_t pp = getppid();
             write(p[1], &pp, sizeof(pp));

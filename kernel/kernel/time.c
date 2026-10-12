@@ -633,3 +633,35 @@ int sleep_until_timeout(ktime_t *expires)
         return -EINTR;
     return 0;
 }
+
+// Clock ticks for times(); sysconf(_SC_CLK_TCK) is 100 in musl
+#define USER_HZ 100
+
+static inline long ns_to_clock_t(u64 ns)
+{
+    return ns / (NS_PER_SEC / USER_HZ);
+}
+
+struct tms {
+    long tms_utime;
+    long tms_stime;
+    long tms_cutime;
+    long tms_cstime;
+};
+
+SYSCALL_DECL1(times, struct tms*, buf)
+{
+    if (buf) {
+        struct task *leader = current->tg_leader;
+        struct tms t = {
+            .tms_utime = ns_to_clock_t(leader->group_utime),
+            .tms_stime = ns_to_clock_t(leader->group_stime),
+            .tms_cutime = ns_to_clock_t(leader->child_utime),
+            .tms_cstime = ns_to_clock_t(leader->child_stime),
+        };
+        if (copy_to_user(buf, &t, sizeof(t)))
+            return -EFAULT;
+    }
+    // elapsed real time, from boot
+    return ns_to_clock_t(get_sys_time_ns());
+}
