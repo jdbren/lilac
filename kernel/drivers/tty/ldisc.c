@@ -313,6 +313,7 @@ static bool flow_control(struct tty *tty, u8 c)
 
     if (I_IXANY(tty) && tty->ctrl.stopped) {
         tty->ctrl.stopped = false;
+        wake_all(&tty->flow_wait);
     }
 
     return false;

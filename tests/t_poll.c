@@ -53,6 +53,24 @@ static pid_t delayed_kill(int sig, int ms)
     return pid;
 }
 
+/* Fork a child that stops and continues the parent every period_ms for
+ * total_ms. Each stop/continue restarts the parent's syscall with no handler. */
+static pid_t stop_cont_storm(int period_ms, int total_ms)
+{
+    pid_t parent = getpid();
+    pid_t pid = fork();
+    if (pid == 0) {
+        for (int t = 0; t < total_ms; t += period_ms) {
+            usleep(period_ms * 1000);
+            kill(parent, SIGSTOP);
+            usleep(10 * 1000);
+            kill(parent, SIGCONT);
+        }
+        _exit(0);
+    }
+    return pid;
+}
+
 static int open_tmpfile(void)
 {
     char path[64];
@@ -351,6 +369,37 @@ TEST(poll_eintr_despite_sa_restart)
     waitpid(pid, NULL, 0);
 }
 
+/* A restart must keep the original deadline, not re-arm the full timeout. */
+TEST(poll_restart_keeps_deadline)
+{
+    int p[2];
+    ASSERT_OK(pipe(p));
+    pid_t pid = stop_cont_storm(100, 1500);
+    ASSERT_GE(pid, 0);
+    struct pollfd pfd = { .fd = p[0], .events = POLLIN };
+    long long t0 = ktest_now_ns();
+    EXPECT_EQ(poll(&pfd, 1, 300), 0);
+    long long dt = ktest_now_ns() - t0;
+    EXPECT_GE(dt, 290 * MS);
+    EXPECT_LT(dt, 1000 * MS);
+    waitpid(pid, NULL, 0);
+}
+
+TEST(poll_restart_no_timeout)
+{
+    int p[2];
+    ASSERT_OK(pipe(p));
+    pid_t storm = stop_cont_storm(100, 500);
+    ASSERT_GE(storm, 0);
+    pid_t pid = delayed_write(p[1], 700);
+    ASSERT_GE(pid, 0);
+    struct pollfd pfd = { .fd = p[0], .events = POLLIN };
+    EXPECT_EQ(poll(&pfd, 1, -1), 1);
+    EXPECT_TRUE(pfd.revents & POLLIN);
+    waitpid(storm, NULL, 0);
+    waitpid(pid, NULL, 0);
+}
+
 /* ---------------- ppoll ---------------- */
 
 TEST(ppoll_zero_timeout)
@@ -373,6 +422,22 @@ TEST(ppoll_timeout_elapses)
     long long dt = ktest_now_ns() - t0;
     EXPECT_GE(dt, 90 * MS);
     EXPECT_LT(dt, 2000 * MS);
+}
+
+TEST(ppoll_restart_keeps_deadline)
+{
+    int p[2];
+    ASSERT_OK(pipe(p));
+    pid_t pid = stop_cont_storm(100, 1500);
+    ASSERT_GE(pid, 0);
+    struct pollfd pfd = { .fd = p[0], .events = POLLIN };
+    struct timespec ts = { 0, 300 * MS };
+    long long t0 = ktest_now_ns();
+    EXPECT_EQ(ppoll(&pfd, 1, &ts, NULL), 0);
+    long long dt = ktest_now_ns() - t0;
+    EXPECT_GE(dt, 290 * MS);
+    EXPECT_LT(dt, 1000 * MS);
+    waitpid(pid, NULL, 0);
 }
 
 TEST(ppoll_invalid_timeout)
@@ -441,6 +506,32 @@ TEST(ppoll_sigmask_restored_on_timeout)
 
     ASSERT_OK(sigprocmask(SIG_BLOCK, NULL, &now));
     EXPECT_TRUE(!sigismember(&now, SIGUSR2));
+}
+
+/* A signal only the temporary mask unblocks is not delivered when ppoll
+ * succeeds; it stays pending under the restored mask. */
+TEST(ppoll_sigmask_no_delivery_on_success)
+{
+    install(SIGUSR1, 0);
+    int p[2];
+    ASSERT_OK(pipe(p));
+    ASSERT_EQ(write(p[1], "x", 1), 1);
+    sigset_t block, empty, now;
+    sigemptyset(&block);
+    sigaddset(&block, SIGUSR1);
+    sigemptyset(&empty);
+    ASSERT_OK(sigprocmask(SIG_BLOCK, &block, NULL));
+    raise(SIGUSR1);
+
+    struct pollfd pfd = { .fd = p[0], .events = POLLIN };
+    struct timespec ts = { 5, 0 };
+    EXPECT_EQ(ppoll(&pfd, 1, &ts, &empty), 1);
+    EXPECT_EQ(hits, 0);
+
+    ASSERT_OK(sigprocmask(SIG_BLOCK, NULL, &now));
+    EXPECT_TRUE(sigismember(&now, SIGUSR1));
+    ASSERT_OK(sigpending(&now));
+    EXPECT_TRUE(sigismember(&now, SIGUSR1));
 }
 
 /* ---------------- select ---------------- */
@@ -635,6 +726,24 @@ TEST(select_interrupted_by_signal)
     waitpid(pid, NULL, 0);
 }
 
+TEST(select_restart_keeps_deadline)
+{
+    int p[2];
+    ASSERT_OK(pipe(p));
+    pid_t pid = stop_cont_storm(100, 1500);
+    ASSERT_GE(pid, 0);
+    fd_set r;
+    FD_ZERO(&r);
+    FD_SET(p[0], &r);
+    struct timeval tv = { 0, 300000 };
+    long long t0 = ktest_now_ns();
+    EXPECT_EQ(select(p[0] + 1, &r, NULL, NULL, &tv), 0);
+    long long dt = ktest_now_ns() - t0;
+    EXPECT_GE(dt, 290 * MS);
+    EXPECT_LT(dt, 1000 * MS);
+    waitpid(pid, NULL, 0);
+}
+
 /* ---------------- pselect ---------------- */
 
 TEST(pselect_timeout_elapses)
@@ -701,6 +810,32 @@ TEST(pselect_sigmask_restored_on_timeout)
 
     ASSERT_OK(sigprocmask(SIG_BLOCK, NULL, &now));
     EXPECT_TRUE(!sigismember(&now, SIGUSR2));
+}
+
+TEST(pselect_sigmask_no_delivery_on_success)
+{
+    install(SIGUSR1, 0);
+    int p[2];
+    ASSERT_OK(pipe(p));
+    ASSERT_EQ(write(p[1], "x", 1), 1);
+    sigset_t block, empty, now;
+    sigemptyset(&block);
+    sigaddset(&block, SIGUSR1);
+    sigemptyset(&empty);
+    ASSERT_OK(sigprocmask(SIG_BLOCK, &block, NULL));
+    raise(SIGUSR1);
+
+    fd_set r;
+    FD_ZERO(&r);
+    FD_SET(p[0], &r);
+    struct timespec ts = { 5, 0 };
+    EXPECT_EQ(pselect(p[0] + 1, &r, NULL, NULL, &ts, &empty), 1);
+    EXPECT_EQ(hits, 0);
+
+    ASSERT_OK(sigprocmask(SIG_BLOCK, NULL, &now));
+    EXPECT_TRUE(sigismember(&now, SIGUSR1));
+    ASSERT_OK(sigpending(&now));
+    EXPECT_TRUE(sigismember(&now, SIGUSR1));
 }
 
 /* ---------------- tty (stdin/stdout) ---------------- */

@@ -45,7 +45,14 @@ struct sighandlers {
 struct restart_block {
     long (*fn)(struct restart_block *);
     ktime_t deadline;
-    void __user *rem;
+    union {
+        void __user *rem; // nanosleep
+        struct {
+            void __user *ufds;
+            unsigned int nfds;
+            bool has_timeout;
+        } poll;
+    };
 };
 
 struct task_flags {
