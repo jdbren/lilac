@@ -121,12 +121,13 @@ syscall_table:
 	sc_tbl_entry readlinkat	# 102
 	sc_tbl_entry times		# 103
 	sc_tbl_entry getrusage	# 104
+	sc_tbl_entry utimes		# 105
+	sc_tbl_entry utimensat	# 106
 /*
 	sc_tbl_entry chmod		# 30
 	sc_tbl_entry chown		# 31
 	sc_tbl_entry lstat		# 32
 	sc_tbl_entry setuid		# 37
-	sc_tbl_entry utime		# 40
 	sc_tbl_entry mknod		# 41
 	sc_tbl_entry sync 		# 43
 	sc_tbl_entry rename		# 45

@@ -6,8 +6,10 @@
 #include <dirent.h>
 #include <strings.h>
 #include <sys/syscall.h>
+#include <sys/time.h>
 #include <sys/uio.h>
 #include <time.h>
+#include <utime.h>
 
 struct fsx {
     const char *fs;
@@ -2049,4 +2051,296 @@ FSTEST(linkat_flags)
     EXPECT_TRUE(S_ISREG(b.st_mode));
     EXPECT_EQ(a.st_ino, b.st_ino);
     close(dfd);
+}
+
+/* ================= utime / utimes ================= */
+
+static bool is_fat(const struct fsx *fs)
+{
+    return !strcmp(fs->fs, "fat32");
+}
+
+// 2009-02-13 23:31:31 and 2001-09-09 01:46:40 UTC
+#define T_MTIME 1234567891
+#define T_ATIME 1000000000
+
+// What the filesystem keeps of T_MTIME/T_ATIME: FAT stores mtime to 2
+// seconds and atime as a date only
+static time_t kept_mtime(const struct fsx *fs) { return is_fat(fs) ? 1234567890 : T_MTIME; }
+static time_t kept_atime(const struct fsx *fs) { return is_fat(fs) ? 999993600 : T_ATIME; }
+
+FSTEST(utimes_sets_times)
+{
+    char *f = pj(dir, "f");
+    create_file(f, "x", 1);
+    time_t before = time(NULL);
+    struct timeval tv[2] = { { T_ATIME, 250000 }, { T_MTIME, 999999 } };
+    ASSERT_OK(utimes(f, tv));
+    struct stat st;
+    ASSERT_OK(stat(f, &st));
+    EXPECT_EQ(st.st_mtime, kept_mtime(fs));
+    EXPECT_EQ(st.st_atime, kept_atime(fs));
+    // changing the times changes the status time
+    EXPECT_GE(st.st_ctime, before - 2);
+    EXPECT_LE(st.st_ctime, time(NULL) + 2);
+    // the data is untouched
+    char buf[4] = {0};
+    EXPECT_EQ(slurp(f, buf, sizeof(buf)), 1);
+}
+
+FSTEST(utimes_null_is_now)
+{
+    char *f = pj(dir, "f");
+    create_file(f, "x", 1);
+    struct timeval tv[2] = { { T_ATIME, 0 }, { T_MTIME, 0 } };
+    ASSERT_OK(utimes(f, tv));
+    time_t before = time(NULL);
+    ASSERT_OK(utimes(f, NULL));
+    struct stat st;
+    ASSERT_OK(stat(f, &st));
+    EXPECT_GE(st.st_mtime, before - 2);
+    EXPECT_LE(st.st_mtime, time(NULL) + 2);
+    // FAT keeps only the date of the access time
+    EXPECT_GE(st.st_atime, before - (is_fat(fs) ? 86400 : 2));
+    EXPECT_LE(st.st_atime, time(NULL) + 2);
+}
+
+FSTEST(utime_libc)
+{
+    char *f = pj(dir, "f");
+    create_file(f, "x", 1);
+    struct utimbuf ub = { .actime = T_ATIME, .modtime = T_MTIME };
+    ASSERT_OK(utime(f, &ub));
+    struct stat st;
+    ASSERT_OK(stat(f, &st));
+    EXPECT_EQ(st.st_mtime, kept_mtime(fs));
+    EXPECT_EQ(st.st_atime, kept_atime(fs));
+    time_t before = time(NULL);
+    ASSERT_OK(utime(f, NULL));
+    ASSERT_OK(stat(f, &st));
+    EXPECT_GE(st.st_mtime, before - 2);
+    EXPECT_LE(st.st_mtime, time(NULL) + 2);
+}
+
+FSTEST(utimes_directory)
+{
+    char *d = pj(dir, "d");
+    ASSERT_OK(mkdir(d, 0755));
+    struct timeval tv[2] = { { T_ATIME, 0 }, { T_MTIME, 0 } };
+    ASSERT_OK(utimes(d, tv));
+    struct stat st;
+    ASSERT_OK(stat(d, &st));
+    EXPECT_EQ(st.st_mtime, kept_mtime(fs));
+    EXPECT_TRUE(S_ISDIR(st.st_mode));
+}
+
+FSTEST(utimes_follows_symlink)
+{
+    char *f = pj(dir, "target"), *ln = pj(dir, "ln");
+    create_file(f, "x", 1);
+    int sr = symlink(f, ln);
+    skip_if_no_links(fs, sr);
+    struct stat lst0, lst1;
+    ASSERT_OK(lstat(ln, &lst0));
+    struct timeval tv[2] = { { T_ATIME, 0 }, { T_MTIME, 0 } };
+    ASSERT_OK(utimes(ln, tv));
+    struct stat st;
+    ASSERT_OK(stat(f, &st));
+    EXPECT_EQ(st.st_mtime, kept_mtime(fs));
+    ASSERT_OK(lstat(ln, &lst1));
+    EXPECT_EQ(lst1.st_mtime, lst0.st_mtime);
+}
+
+// Times FAT can't hold are clamped to its range, 1980 to 2107
+FSTEST(utimes_out_of_fat_range)
+{
+    char *f = pj(dir, "f");
+    create_file(f, "x", 1);
+    struct timeval tv[2] = { { 100000000, 0 }, { 100000000, 0 } };  // 1973
+    ASSERT_OK(utimes(f, tv));
+    struct stat st;
+    ASSERT_OK(stat(f, &st));
+    EXPECT_EQ(st.st_mtime, is_fat(fs) ? 315532800 : 100000000);
+}
+
+FSTEST(utimes_errors)
+{
+    struct timeval tv[2] = { { T_ATIME, 0 }, { T_MTIME, 0 } };
+    EXPECT_ERR(utimes(pj(dir, "missing"), tv), ENOENT);
+    EXPECT_ERR(utime(pj(dir, "missing"), NULL), ENOENT);
+    char *f = pj(dir, "f");
+    create_file(f, "x", 1);
+    EXPECT_ERR(utimes(pj(dir, "f/x"), tv), ENOTDIR);
+    // musl checks tv_usec itself; go around it to reach the kernel's checks
+    struct timeval bad[2] = { { T_ATIME, 1000000 }, { T_MTIME, 0 } };
+    EXPECT_ERR(syscall(SYS_utimes, f, bad), EINVAL);
+    bad[0].tv_usec = -1;
+    EXPECT_ERR(syscall(SYS_utimes, f, bad), EINVAL);
+    EXPECT_ERR(syscall(SYS_utimes, f, (void *)1), EFAULT);
+}
+
+// fat32 stamps a write that grows the file as a modification now
+FSTEST(write_after_utimes_sets_mtime)
+{
+    if (!is_fat(fs))
+        SKIP("tmpfs doesn't update mtime on write yet");
+    char *f = pj(dir, "f");
+    create_file(f, "x", 1);
+    struct timeval tv[2] = { { T_ATIME, 0 }, { T_MTIME, 0 } };
+    ASSERT_OK(utimes(f, tv));
+    time_t before = time(NULL);
+    int fd = open(f, O_WRONLY | O_APPEND);
+    ASSERT_GE(fd, 0);
+    EXPECT_EQ(write(fd, "more", 4), 4);
+    close(fd);
+    struct stat st;
+    ASSERT_OK(stat(f, &st));
+    EXPECT_GE(st.st_mtime, before - 2);
+}
+
+TEST(ext2_utimes_erofs)
+{
+    if (!ext2_mounted())
+        SKIP("ext2 not mounted");
+    EXPECT_ERR(utimes("/mnt/bin", NULL), EROFS);
+    EXPECT_ERR(utime("/mnt/bin/echo", NULL), EROFS);
+    int fd = open("/mnt/bin/echo", O_RDONLY);
+    ASSERT_GE(fd, 0);
+    EXPECT_ERR(futimens(fd, NULL), EROFS);
+    close(fd);
+}
+
+/* ================= utimensat / futimens ================= */
+
+static struct stat stat_of(const char *path)
+{
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        FAIL("stat %s: errno=%d", path, errno);
+        ktest_abort();
+    }
+    return st;
+}
+
+FSTEST(utimensat_omit_and_now)
+{
+    char *f = pj(dir, "f");
+    create_file(f, "x", 1);
+    struct timespec ts[2] = { { T_ATIME, 0 }, { T_MTIME, 0 } };
+    ASSERT_OK(utimensat(AT_FDCWD, f, ts, 0));
+    struct stat st = stat_of(f);
+    EXPECT_EQ(st.st_atime, kept_atime(fs));
+    EXPECT_EQ(st.st_mtime, kept_mtime(fs));
+
+    // UTIME_OMIT leaves that time alone
+    struct timespec only_m[2] = { { 0, UTIME_OMIT }, { 1300000000, 0 } };
+    ASSERT_OK(utimensat(AT_FDCWD, f, only_m, 0));
+    st = stat_of(f);
+    EXPECT_EQ(st.st_atime, kept_atime(fs));
+    EXPECT_EQ(st.st_mtime, 1300000000);
+
+    // UTIME_NOW sets it to now; tv_sec is ignored
+    time_t before = time(NULL);
+    struct timespec now_a[2] = { { 12345, UTIME_NOW }, { 0, UTIME_OMIT } };
+    ASSERT_OK(utimensat(AT_FDCWD, f, now_a, 0));
+    st = stat_of(f);
+    EXPECT_GE(st.st_atime, before - (is_fat(fs) ? 86400 : 2));
+    EXPECT_LE(st.st_atime, time(NULL) + 2);
+    EXPECT_EQ(st.st_mtime, 1300000000);
+
+    // omitting both changes nothing and still succeeds
+    struct timespec none[2] = { { T_ATIME, UTIME_OMIT }, { T_MTIME, UTIME_OMIT } };
+    EXPECT_OK(utimensat(AT_FDCWD, f, none, 0));
+    EXPECT_EQ(stat_of(f).st_mtime, 1300000000);
+}
+
+FSTEST(utimensat_dirfd)
+{
+    ASSERT_OK(mkdir(pj(dir, "d"), 0755));
+    create_file(pj(dir, "d/f"), "x", 1);
+    int dfd = open_dir(pj(dir, "d"));
+    struct timespec ts[2] = { { T_ATIME, 0 }, { T_MTIME, 0 } };
+    ASSERT_OK(utimensat(dfd, "f", ts, 0));
+    EXPECT_EQ(stat_of(pj(dir, "d/f")).st_mtime, kept_mtime(fs));
+    // AT_EMPTY_PATH: the dirfd's own file, here the directory
+    ASSERT_OK(syscall(SYS_utimensat, dfd, "", ts, AT_EMPTY_PATH));
+    EXPECT_EQ(stat_of(pj(dir, "d")).st_mtime, kept_mtime(fs));
+    EXPECT_ERR(utimensat(dfd, "", ts, 0), ENOENT);
+    close(dfd);
+}
+
+FSTEST(futimens_on_fd)
+{
+    char *f = pj(dir, "f");
+    create_file(f, "x", 1);
+    // a read-only descriptor is enough
+    int fd = open(f, O_RDONLY);
+    ASSERT_GE(fd, 0);
+    struct timespec ts[2] = { { T_ATIME, 0 }, { T_MTIME, 0 } };
+    ASSERT_OK(futimens(fd, ts));
+    struct stat st;
+    ASSERT_OK(fstat(fd, &st));
+    EXPECT_EQ(st.st_mtime, kept_mtime(fs));
+    EXPECT_EQ(stat_of(f).st_atime, kept_atime(fs));
+
+    struct timeval tv[2] = { { T_ATIME, 0 }, { 1300000000, 0 } };
+    ASSERT_OK(futimes(fd, tv));
+    EXPECT_EQ(stat_of(f).st_mtime, 1300000000);
+
+    time_t before = time(NULL);
+    ASSERT_OK(futimens(fd, NULL));
+    EXPECT_GE(stat_of(f).st_mtime, before - 2);
+    close(fd);
+}
+
+// lutimes / AT_SYMLINK_NOFOLLOW change the link itself
+FSTEST(utimensat_nofollow)
+{
+    char *f = pj(dir, "target"), *ln = pj(dir, "ln");
+    create_file(f, "x", 1);
+    int sr = symlink(f, ln);
+    skip_if_no_links(fs, sr);
+    time_t target_mtime = stat_of(f).st_mtime;
+    struct timeval tv[2] = { { T_ATIME, 0 }, { T_MTIME, 0 } };
+    ASSERT_OK(lutimes(ln, tv));
+    struct stat lst;
+    ASSERT_OK(lstat(ln, &lst));
+    EXPECT_EQ(lst.st_mtime, T_MTIME);
+    EXPECT_EQ(stat_of(f).st_mtime, target_mtime);
+}
+
+FSTEST(utimensat_errors)
+{
+    char *f = pj(dir, "f");
+    create_file(f, "x", 1);
+    struct timespec ts[2] = { { T_ATIME, 0 }, { T_MTIME, 0 } };
+    EXPECT_ERR(utimensat(AT_FDCWD, pj(dir, "missing"), ts, 0), ENOENT);
+    EXPECT_ERR(utimensat(AT_FDCWD, f, ts, 0x4000), EINVAL);
+    struct timespec bad[2] = { { T_ATIME, 1000000000 }, { T_MTIME, 0 } };
+    EXPECT_ERR(utimensat(AT_FDCWD, f, bad, 0), EINVAL);
+    bad[0].tv_nsec = -1;
+    EXPECT_ERR(utimensat(AT_FDCWD, f, bad, 0), EINVAL);
+    EXPECT_ERR(syscall(SYS_utimensat, AT_FDCWD, f, (void *)1, 0), EFAULT);
+    EXPECT_ERR(futimens(-1, ts), EBADF);
+    EXPECT_ERR(futimens(999, ts), EBADF);
+    // a NULL path names the fd, which can't be combined with NOFOLLOW
+    int fd = open(f, O_RDONLY);
+    ASSERT_GE(fd, 0);
+    EXPECT_ERR(syscall(SYS_utimensat, fd, NULL, ts, AT_SYMLINK_NOFOLLOW), EINVAL);
+    close(fd);
+}
+
+// An fd with no path, like a pipe, has times too
+TEST(futimens_pipe)
+{
+    int p[2];
+    ASSERT_OK(pipe(p));
+    struct timespec ts[2] = { { T_ATIME, 0 }, { T_MTIME, 0 } };
+    ASSERT_OK(futimens(p[0], ts));
+    struct stat st;
+    ASSERT_OK(fstat(p[0], &st));
+    EXPECT_EQ(st.st_mtime, T_MTIME);
+    EXPECT_EQ(st.st_atime, T_ATIME);
+    close(p[0]);
+    close(p[1]);
 }

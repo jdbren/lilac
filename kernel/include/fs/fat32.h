@@ -10,6 +10,7 @@ struct inode;
 struct dentry;
 struct file;
 struct dirent;
+struct iattr;
 
 
 struct dentry *fat32_lookup(struct inode *parent, struct dentry *find,
@@ -26,5 +27,6 @@ int fat32_unlink(struct inode *dir, struct dentry *victim);
 int fat32_rmdir(struct inode *dir, struct dentry *victim);
 int fat32_rename(struct inode *old_dir, struct dentry *old_d,
     struct inode *new_dir, struct dentry *new_d);
+int fat32_setattr(struct inode *inode, const struct iattr *attr);
 
 #endif

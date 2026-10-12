@@ -68,6 +68,17 @@ struct inode {
     void *i_private; /* fs or device private pointer */
 };
 
+#define ATTR_ATIME  BIT(4)
+#define ATTR_MTIME  BIT(5)
+#define ATTR_CTIME  BIT(6)
+
+struct iattr {
+    unsigned int ia_valid;
+    u64 ia_atime;
+    u64 ia_mtime;
+    u64 ia_ctime;
+};
+
 struct __cacheline_align inode_operations {
     struct dentry * (*lookup)(struct inode *, struct dentry *, unsigned int);
     const char * (*get_link)(struct dentry *, struct inode *);
@@ -82,8 +93,8 @@ struct __cacheline_align inode_operations {
     int (*rename)(struct inode *, struct dentry *,
                     struct inode *, struct dentry *);
     int (*readlink)(struct dentry *, char __user *, int);
-    // Shrink a regular file to size bytes
     int (*truncate)(struct inode *, loff_t size);
+    int (*setattr)(struct inode *, const struct iattr *attr);
 };
 
 
@@ -278,6 +289,8 @@ int vfs_dupf(int fd);
 int vfs_dup(int oldfd, int newfd);
 long vfs_ftruncate(struct file *f, loff_t length);
 poll_mask_t vfs_poll(struct file *file, struct poll_request *pt);
+void setattr_copy(struct inode *inode, const struct iattr *attr);
+int notify_change(struct inode *inode, const struct iattr *attr);
 
 struct dentry * vfs_lookup(const char *path);
 struct dentry * vfs_lookup_flags(const char *path, int follow_final);

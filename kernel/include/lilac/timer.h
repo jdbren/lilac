@@ -48,6 +48,7 @@ void usleep(u32 micros);
 ktime_t get_sys_time_ns(void);
 time_t get_unix_time(void);
 struct timestamp get_timestamp(void);
+struct timestamp unix_to_timestamp(time_t unix_time);
 
 #define ktime_get() get_sys_time_ns()
 

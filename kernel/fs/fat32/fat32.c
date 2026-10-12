@@ -159,6 +159,7 @@ const struct inode_operations fat_iops = {
     .mkdir = fat32_mkdir,
     .create = fat32_create,
     .truncate = fat32_truncate,
+    .setattr = fat32_setattr,
     .unlink = fat32_unlink,
     .rmdir = fat32_rmdir,
     .rename = fat32_rename,
@@ -355,20 +356,48 @@ u32 fat_alloc_zeroed_clst(struct fat_disk *disk, struct gendisk *hd, u32 prev)
     return clst;
 }
 
-// Write the inode's size and first cluster back to its directory entry and
-// stamp it as modified now
-int fat_write_inode(struct inode *inode)
+// FAT dates run from 1980-01-01 to 2107-12-31
+#define FAT_TIME_MIN 315532800LL     // 1980-01-01 00:00:00
+#define FAT_TIME_MAX 4354819198LL    // 2107-12-31 23:59:58
+
+static void fat_unix_to_fat(time_t t, u16 *date, u16 *time)
+{
+    if (t < FAT_TIME_MIN)
+        t = FAT_TIME_MIN;
+    else if (t > FAT_TIME_MAX)
+        t = FAT_TIME_MAX;
+    struct timestamp ts = unix_to_timestamp(t);
+    *date = FAT_SET_DATE(ts.year, ts.month, ts.day);
+    *time = FAT_SET_TIME(ts.hour, ts.minute, ts.second);
+}
+
+static void fat_set_times(struct inode *inode, unsigned int valid,
+    time_t atime, time_t mtime)
+{
+    struct fat_file *e = &((struct fat_inode*)inode->i_private)->entry;
+    u16 date, time;
+
+    if (valid & ATTR_MTIME) {
+        fat_unix_to_fat(mtime, &date, &time);
+        e->last_write_date = date;
+        e->last_write_time = time;
+        inode->i_mtime = fat_time_to_unix(date, time);
+    }
+    if (valid & ATTR_ATIME) {
+        fat_unix_to_fat(atime, &date, &time);
+        e->last_access_date = date;
+        inode->i_atime = fat_time_to_unix(date, 0);
+    }
+}
+
+// Write the inode's size, first cluster and times back to its directory entry
+static int fat_sync_entry(struct inode *inode)
 {
     struct fat_inode *fi = (struct fat_inode*)inode->i_private;
     struct fat_disk *disk = (struct fat_disk*)inode->i_sb->s_fs_info;
     struct gendisk *gd = inode->i_sb->s_bdev->disk;
     const u32 per_clst = disk->bytes_per_clst / sizeof(struct fat_file);
-    struct timestamp now = get_timestamp();
     u32 clst = fi->dir_clst;
-
-    fi->entry.last_write_date = FAT_SET_DATE(now.year, now.month, now.day);
-    fi->entry.last_write_time = FAT_SET_TIME(now.hour, now.minute, now.second);
-    fi->entry.last_access_date = fi->entry.last_write_date;
 
     if (clst == 0)
         return 0;
@@ -398,6 +427,22 @@ int fat_write_inode(struct inode *inode)
     }
     kfree(sector);
     return err < 0 ? err : 0;
+}
+
+// Write back a change to the file's size or clusters: it was modified now
+int fat_write_inode(struct inode *inode)
+{
+    time_t now = get_unix_time();
+    fat_set_times(inode, ATTR_ATIME | ATTR_MTIME, now, now);
+    inode->i_ctime = now;
+    return fat_sync_entry(inode);
+}
+
+int fat32_setattr(struct inode *inode, const struct iattr *attr)
+{
+    setattr_copy(inode, attr);
+    fat_set_times(inode, attr->ia_valid, inode->i_atime, inode->i_mtime);
+    return fat_sync_entry(inode);
 }
 
 u32 __fat_get_clst_num(struct file *file, struct fat_disk *disk)

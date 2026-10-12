@@ -603,12 +603,16 @@ static void unix_time_to_date(long long unix_time, struct timestamp *ts) {
 
 }
 
-struct timestamp get_timestamp(void)
+struct timestamp unix_to_timestamp(time_t unix_time)
 {
     struct timestamp ts;
-    long long unix_time = get_unix_time();
     unix_time_to_date(unix_time, &ts);
     return ts;
+}
+
+struct timestamp get_timestamp(void)
+{
+    return unix_to_timestamp(get_unix_time());
 }
 
 int sleep_until_timeout(ktime_t *expires)
