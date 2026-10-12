@@ -11,12 +11,24 @@
 ssize_t pipe_read(struct file *f, void *buf, size_t count);
 ssize_t pipe_write(struct file *f, const void *buf, size_t count);
 int pipe_close(struct inode *i, struct file *f);
+poll_mask_t pipe_poll(struct file *f, struct poll_request *p);
 
 static const struct file_operations pipe_fops = {
     .read = pipe_read,
     .write = pipe_write,
     .release = pipe_close,
+    .poll = pipe_poll,
 };
+
+bool pipe_empty(unsigned int wr_idx, unsigned int rd_idx)
+{
+    return wr_idx == rd_idx;
+}
+
+bool pipe_full(unsigned int wr_idx, unsigned int rd_idx, unsigned int buf_size)
+{
+    return (wr_idx + 1) % buf_size == rd_idx;
+}
 
 struct inode * pipe_alloc_inode()
 {
@@ -106,7 +118,6 @@ ssize_t pipe_read(struct file *f, void *buf, size_t count)
     if (count == 0 || !buf || !f)
         return 0;
 
-
     struct pipe_buf *pipe = f->f_inode->i_pipe;
     int pos, to_read;
     if (!pipe) {
@@ -134,10 +145,10 @@ ssize_t pipe_read(struct file *f, void *buf, size_t count)
         acquire_lock(&pipe->lock);
     }
 
-    pos = pipe->read_pos;
+    pos = pipe->idx.read_pos;
     to_read = MIN(count, pipe->data_size);
     ring_copy_out(pipe, buf, pos, to_read);
-    pipe->read_pos = (pos + to_read) % pipe->buf_size;
+    pipe->idx.read_pos = (pos + to_read) % pipe->buf_size;
     pipe->data_size -= to_read;
 
     release_lock(&pipe->lock);
@@ -180,17 +191,17 @@ ssize_t pipe_write(struct file *f, const void *buf, size_t count)
         }
         acquire_lock(&pipe->lock);
     }
-    int pos = pipe->write_pos;
+    int pos = pipe->idx.write_pos;
     unsigned int to_write = MIN(count, pipe->buf_size - pipe->data_size);
     ring_copy_in(pipe, pos, buf, to_write);
-    pipe->write_pos = (pos + to_write) % pipe->buf_size;
+    pipe->idx.write_pos = (pos + to_write) % pipe->buf_size;
     pipe->data_size += to_write;
     release_lock(&pipe->lock);
 
     wake_all(&pipe->read_wq);
 
     if (to_write != count) {
-        klog(LOG_WARN, "pipe_write: Partial write (%d of %lu bytes)\n", to_write, count);
+        klog(LOG_DEBUG, "pipe_write: Partial write (%d of %lu bytes)\n", to_write, count);
     }
 
     return to_write;
@@ -202,14 +213,15 @@ int pipe_close(struct inode *i, struct file *f)
         return -EINVAL;
 
     struct pipe_buf *p = f->f_inode->i_pipe;
+    mode_t accmode = f->f_mode & O_ACCMODE;
     acquire_lock(&p->lock);
 
-    if ((f->f_mode & O_ACCMODE) == O_WRONLY) {
+    if (accmode == O_WRONLY || accmode == O_RDWR) {
         p->n_writers--;
         // Blocked readers must see EOF
         if (p->n_writers == 0)
             wake_all(&p->read_wq);
-    } else if ((f->f_mode & O_ACCMODE) == O_RDONLY) {
+    } else if (accmode == O_RDONLY || accmode == O_RDWR) {
         p->n_readers--;
         if (p->n_readers == 0)
             wake_all(&p->write_wq);
@@ -229,6 +241,37 @@ int pipe_close(struct inode *i, struct file *f)
     return 0;
 }
 
+poll_mask_t pipe_poll(struct file *f, struct poll_request *pollreq)
+{
+    poll_mask_t mask;
+    struct pipe_buf *pipe = f->f_inode->i_pipe;
+    union pipe_index idx;
+    mode_t accmode = f->f_mode & O_ACCMODE;
+
+    if (accmode == O_RDONLY || accmode == O_RDWR)
+        poll_wait(f, &pipe->read_wq, pollreq);
+    if (accmode == O_WRONLY || accmode == O_RDWR)
+        poll_wait(f, &pipe->write_wq, pollreq);
+
+    idx.read_write = READ_ONCE(pipe->idx.read_write);
+
+    mask = 0;
+    if (accmode == O_RDONLY || accmode == O_RDWR) {
+        if (!pipe_empty(idx.write_pos, idx.read_pos))
+            mask |= POLLIN | POLLRDNORM;
+        if (!pipe->n_writers) // && f->f_pipe != pipe->w_counter)
+            mask |= POLLHUP;
+    }
+
+    if (accmode == O_WRONLY || accmode == O_RDWR) {
+        if (!pipe_full(idx.write_pos, idx.read_pos, pipe->buf_size))
+            mask |= POLLOUT | POLLWRNORM;
+        if (!pipe->n_readers)
+            mask |= POLLERR;
+    }
+
+    return mask;
+}
 
 SYSCALL_DECL1(pipe, int, pipefd[2])
 {
