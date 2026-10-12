@@ -47,9 +47,10 @@ int vfs_stat(const struct file *f, struct stat *st)
     return stat_inode(inode, st);
 }
 
-static long stat_path(const char *path, struct stat *st, int follow_final)
+static long stat_path(struct dentry *base, const char *path, struct stat *st,
+    int follow_final)
 {
-    struct dentry *dentry = vfs_lookup_flags(path, follow_final);
+    struct dentry *dentry = vfs_lookup_at(base, path, follow_final);
     if (IS_ERR(dentry))
         return PTR_ERR(dentry);
     long err = dentry->d_inode ? stat_inode(dentry->d_inode, st) : -ENOENT;
@@ -72,7 +73,7 @@ SYSCALL_DECL2(stat, const char*, path, struct stat*, buf)
         return -EFAULT;
     }
 
-    err = stat_path(path_buf, &st, 1);
+    err = stat_path(NULL, path_buf, &st, 1);
     kfree(path_buf);
 
     if (err < 0)
@@ -91,7 +92,7 @@ SYSCALL_DECL2(lstat, const char*, path, struct stat*, buf)
         return -EFAULT;
     }
 
-    long err = stat_path(path_buf, &st, 0);
+    long err = stat_path(NULL, path_buf, &st, 0);
     kfree(path_buf);
     if (err < 0)
         return err;
@@ -107,6 +108,52 @@ SYSCALL_DECL2(fstat, int, fd, struct stat*, buf)
     if (!access_ok(buf, sizeof(struct stat)))
         return -EFAULT;
     int err = vfs_stat(f, &st);
+    if (err < 0)
+        return err;
+    return copy_to_user(buf, &st, sizeof(st));
+}
+
+SYSCALL_DECL4(fstatat, int, dirfd, const char*, path, struct stat*, buf, int, flags)
+{
+    struct stat st;
+    struct dentry *base;
+    char *path_buf;
+    long err;
+
+    if (flags & ~(AT_SYMLINK_NOFOLLOW | AT_EMPTY_PATH | AT_NO_AUTOMOUNT))
+        return -EINVAL;
+    if (!access_ok(buf, sizeof(*buf)))
+        return -EFAULT;
+
+    path_buf = get_user_path(path);
+    if (IS_ERR(path_buf))
+        return PTR_ERR(path_buf);
+
+    if (*path_buf == '\0' && (flags & AT_EMPTY_PATH)) {
+        kfree(path_buf);
+        if (dirfd == AT_FDCWD) {
+            struct dentry *cwd = get_cwd();
+            err = stat_inode(cwd->d_inode, &st);
+            dput(cwd);
+        } else {
+            struct file *f = get_file_inc_ref(dirfd);
+            if (IS_ERR(f))
+                return PTR_ERR(f);
+            err = vfs_stat(f, &st);
+            fput(f);
+        }
+    } else {
+        base = dirfd_base(dirfd, path_buf);
+        if (IS_ERR(base)) {
+            err = PTR_ERR(base);
+        } else {
+            err = stat_path(base, path_buf, &st, !(flags & AT_SYMLINK_NOFOLLOW));
+            if (base)
+                dput(base);
+        }
+        kfree(path_buf);
+    }
+
     if (err < 0)
         return err;
     return copy_to_user(buf, &st, sizeof(st));

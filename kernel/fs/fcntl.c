@@ -56,14 +56,21 @@ SYSCALL_DECL3(fcntl, int, fd, int, cmd, unsigned long, arg)
     }
 }
 
-SYSCALL_DECL2(access, const char *, pathname, int, mode)
+static long do_faccessat(int dirfd, const char *pathname, int mode)
 {
     if (mode & ~7) return -EINVAL;
     const char *path = get_user_path(pathname);
     if (IS_ERR(path))
         return PTR_ERR(path);
 
-    struct dentry *d = vfs_lookup(path);
+    struct dentry *base = dirfd_base(dirfd, path);
+    if (IS_ERR(base)) {
+        kfree(path);
+        return PTR_ERR(base);
+    }
+    struct dentry *d = vfs_lookup_at(base, path, 1);
+    if (base)
+        dput(base);
     kfree(path);
     if (IS_ERR(d))
         return PTR_ERR(d);
@@ -76,31 +83,12 @@ SYSCALL_DECL2(access, const char *, pathname, int, mode)
     return 0;
 }
 
+SYSCALL_DECL2(access, const char *, pathname, int, mode)
+{
+    return do_faccessat(AT_FDCWD, pathname, mode);
+}
+
 SYSCALL_DECL3(faccessat, int, dirfd, const char *, pathname, int, mode)
 {
-    if (!access_ok(pathname, 1)) return -EFAULT;
-    if (mode & ~7) return -EINVAL;
-
-    if (dirfd == AT_FDCWD || pathname[0] == '/')
-        return sys_access(pathname, mode);
-
-    struct file *dir = get_file_handle(dirfd);
-    if (IS_ERR(dir))
-        return PTR_ERR(dir);
-
-    const char *path = get_user_path(pathname);
-    if (IS_ERR(path))
-        return PTR_ERR(path);
-
-    struct dentry *d = lookup_path_from(dir->f_dentry, path);
-    kfree(path);
-    if (IS_ERR(d))
-        return PTR_ERR(d);
-
-    bool exists = d->d_inode != NULL;
-    dput(d);
-    if (!exists)
-        return -ENOENT;
-    // TODO: full permission check
-    return 0;
+    return do_faccessat(dirfd, pathname, mode);
 }

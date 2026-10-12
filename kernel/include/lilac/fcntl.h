@@ -94,12 +94,12 @@ extern "C" {
 /* Special descriptor value to denote the cwd in calls to openat(2) etc. */
 #define AT_FDCWD -100
 
-/* Flag values for faccessat2) et al. */
-#define AT_EACCESS                 0x0001
-#define AT_SYMLINK_NOFOLLOW        0x0002
-#define AT_SYMLINK_FOLLOW          0x0004
-#define AT_REMOVEDIR               0x0008
-#define AT_EMPTY_PATH              0x0010
+#define AT_SYMLINK_NOFOLLOW        0x0100
+#define AT_EACCESS                 0x0200
+#define AT_REMOVEDIR               0x0200
+#define AT_SYMLINK_FOLLOW          0x0400
+#define AT_NO_AUTOMOUNT            0x0800
+#define AT_EMPTY_PATH              0x1000
 
 /* file segment locking set data type - information passed to system by user */
 struct flock {

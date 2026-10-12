@@ -260,6 +260,7 @@ struct vfsmount {
 
 off_t vfs_lseek(struct file *file, off_t offset, int whence);
 struct file* vfs_open(const char *path, int flags, int mode);
+struct file* vfs_openat(struct dentry *base, const char *path, int flags, int mode);
 ssize_t vfs_read_at(struct file *file, void *buf, size_t count, unsigned long pos);
 ssize_t vfs_read(struct file *file, void *buf, size_t count);
 ssize_t vfs_write(struct file *file, const void *buf, size_t count);
@@ -268,6 +269,7 @@ int vfs_close(struct file *file);
 ssize_t vfs_getdents(struct file *file, struct dirent *dirp, int buf_size);
 int vfs_create(const char *path, umode_t mode);
 int vfs_mkdir(const char *path, umode_t mode);
+int vfs_mkdirat(struct dentry *base, const char *path, umode_t mode);
 int vfs_mount(struct block_device *srcdev, const char *target,
         const char *filesystemtype, unsigned long mountflags,
         const void *data);
@@ -279,6 +281,9 @@ poll_mask_t vfs_poll(struct file *file, struct poll_request *pt);
 
 struct dentry * vfs_lookup(const char *path);
 struct dentry * vfs_lookup_flags(const char *path, int follow_final);
+struct dentry * vfs_lookup_at(struct dentry *base, const char *path,
+    int follow_final);
+struct dentry * dirfd_base(int dirfd, const char *path);
 struct dentry * lookup_path_from(struct dentry *parent, const char *path);
 struct dentry * lookup_path_from_flags(struct dentry *parent, const char *path,
     int follow_final);

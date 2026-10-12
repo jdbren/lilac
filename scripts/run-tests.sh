@@ -70,7 +70,8 @@ mcopy -i "$M" resources/EFI/BOOT/BOOTIA32.EFI ::/EFI/BOOT/
 mcopy -i "$M" resources/grub/grub-test.cfg ::/boot/grub/grub.cfg
 for entry in "$SYSROOT"/*; do
     [[ "$(basename "$entry")" == boot ]] && continue
-    mcopy -s -i "$M" "$entry" ::/
+    mcopy -s -i "$M" "$entry" ::/ ||
+        echo "warning: mcopy skipped part of $entry (symlinks?)" >&2
 done
 mcopy -i "$M" "$SYSROOT/boot/lilac.ker" ::/boot/
 mcopy -o -i "$M" "$OUT/root-manifest.txt" "$OUT/ext2-manifest.txt" ::/tests/

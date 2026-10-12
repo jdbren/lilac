@@ -5,6 +5,7 @@
 #include "ktest.h"
 #include <dirent.h>
 #include <strings.h>
+#include <sys/syscall.h>
 #include <sys/uio.h>
 #include <time.h>
 
@@ -1833,4 +1834,219 @@ FSTEST(fat_alias_tilde_in_basis_unique)
     char buf[4] = {0};
     EXPECT_EQ(slurp(pj(dir, "a~longname2.txt"), buf, sizeof(buf)), 1);
     EXPECT_STREQ(buf, "2");
+}
+
+/* ================= *at syscalls ================= */
+
+static int open_dir(const char *path)
+{
+    int fd = open(path, O_RDONLY | O_DIRECTORY);
+    if (fd < 0) {
+        FAIL("open dir %s: errno=%d (%s)", path, errno, strerror(errno));
+        ktest_abort();
+    }
+    return fd;
+}
+
+FSTEST(openat_relative_to_dirfd)
+{
+    ASSERT_OK(mkdir(pj(dir, "d"), 0755));
+    int dfd = open_dir(pj(dir, "d"));
+    int fd = openat(dfd, "f", O_CREAT | O_WRONLY | O_EXCL, 0644);
+    ASSERT_GE(fd, 0);
+    EXPECT_EQ(write(fd, "at", 2), 2);
+    close(fd);
+    char buf[4] = {0};
+    EXPECT_EQ(slurp(pj(dir, "d/f"), buf, sizeof(buf)), 2);
+    EXPECT_STREQ(buf, "at");
+    // the dirfd isn't the cwd: the name must not appear there
+    ASSERT_OK(chdir(dir));
+    EXPECT_ERR(open("f", O_RDONLY), ENOENT);
+    // ".." and nested components resolve from the dirfd
+    fd = openat(dfd, "../d/./f", O_RDONLY);
+    EXPECT_GE(fd, 0);
+    close(fd);
+    // AT_FDCWD is the cwd
+    fd = openat(AT_FDCWD, "d/f", O_RDONLY);
+    EXPECT_GE(fd, 0);
+    close(fd);
+    // an absolute path ignores the dirfd, even an invalid one
+    fd = openat(-1, pj(dir, "d/f"), O_RDONLY);
+    EXPECT_GE(fd, 0);
+    close(fd);
+    close(dfd);
+}
+
+FSTEST(at_dirfd_errors)
+{
+    create_file(pj(dir, "plain"), "x", 1);
+    int ffd = open(pj(dir, "plain"), O_RDONLY);
+    ASSERT_GE(ffd, 0);
+    int dfd = open_dir(dir);
+    struct stat st;
+    EXPECT_ERR(openat(ffd, "x", O_RDONLY), ENOTDIR);
+    EXPECT_ERR(openat(-1, "x", O_RDONLY), EBADF);
+    EXPECT_ERR(openat(999, "x", O_RDONLY), EBADF);
+    EXPECT_ERR(fstatat(ffd, "x", &st, 0), ENOTDIR);
+    EXPECT_ERR(mkdirat(ffd, "x", 0755), ENOTDIR);
+    EXPECT_ERR(unlinkat(ffd, "x", 0), ENOTDIR);
+    EXPECT_ERR(faccessat(ffd, "x", F_OK, 0), ENOTDIR);
+    EXPECT_ERR(openat(dfd, "", O_RDONLY), ENOENT);
+    EXPECT_ERR(openat(dfd, "missing", O_RDONLY), ENOENT);
+    EXPECT_ERR(openat(dfd, "plain/x", O_RDONLY), ENOTDIR);
+    close(ffd);
+    close(dfd);
+}
+
+FSTEST(mkdirat_unlinkat)
+{
+    int dfd = open_dir(dir);
+    ASSERT_OK(mkdirat(dfd, "sub", 0755));
+    EXPECT_ERR(mkdirat(dfd, "sub", 0755), EEXIST);
+    struct stat st;
+    ASSERT_OK(stat(pj(dir, "sub"), &st));
+    EXPECT_TRUE(S_ISDIR(st.st_mode));
+    ASSERT_OK(mkdirat(dfd, "sub/inner", 0755));
+    EXPECT_ERR(unlinkat(dfd, "sub", AT_REMOVEDIR), ENOTEMPTY);
+    EXPECT_OK(unlinkat(dfd, "sub/inner", AT_REMOVEDIR));
+    EXPECT_ERR(unlinkat(dfd, "sub", 0), EISDIR);
+    EXPECT_OK(unlinkat(dfd, "sub", AT_REMOVEDIR));
+    EXPECT_ERR(stat(pj(dir, "sub"), &st), ENOENT);
+
+    create_file(pj(dir, "file"), "x", 1);
+    EXPECT_ERR(unlinkat(dfd, "file", AT_REMOVEDIR), ENOTDIR);
+    EXPECT_ERR(unlinkat(dfd, "file", 0x4000), EINVAL);
+    EXPECT_OK(unlinkat(dfd, "file", 0));
+    EXPECT_ERR(stat(pj(dir, "file"), &st), ENOENT);
+    EXPECT_ERR(unlinkat(dfd, "file", 0), ENOENT);
+
+    // AT_FDCWD resolves against the cwd
+    ASSERT_OK(chdir(dir));
+    EXPECT_OK(mkdirat(AT_FDCWD, "cwdsub", 0755));
+    EXPECT_OK(stat(pj(dir, "cwdsub"), &st));
+    EXPECT_OK(unlinkat(AT_FDCWD, "cwdsub", AT_REMOVEDIR));
+    close(dfd);
+}
+
+FSTEST(fstatat_flags)
+{
+    create_file(pj(dir, "f"), "hello", 5);
+    int dfd = open_dir(dir);
+    struct stat st, ref;
+    ASSERT_OK(stat(pj(dir, "f"), &ref));
+    ASSERT_OK(fstatat(dfd, "f", &st, 0));
+    EXPECT_EQ(st.st_ino, ref.st_ino);
+    EXPECT_EQ(st.st_size, 5);
+    EXPECT_ERR(fstatat(dfd, "nope", &st, 0), ENOENT);
+    EXPECT_ERR(fstatat(dfd, "", &st, 0), ENOENT);
+    EXPECT_ERR(fstatat(dfd, "f", &st, 0x4000), EINVAL);
+
+    // AT_EMPTY_PATH stats the fd itself; call the syscall directly, since
+    // musl turns it into fstat for fd >= 0
+    int ffd = open(pj(dir, "f"), O_RDONLY);
+    ASSERT_GE(ffd, 0);
+    memset(&st, 0, sizeof(st));
+    ASSERT_OK(syscall(SYS_newfstatat, ffd, "", &st, AT_EMPTY_PATH));
+    EXPECT_EQ(st.st_ino, ref.st_ino);
+    EXPECT_EQ(st.st_size, 5);
+    close(ffd);
+
+    // AT_EMPTY_PATH with AT_FDCWD stats the cwd
+    ASSERT_OK(chdir(dir));
+    ASSERT_OK(stat(".", &ref));
+    ASSERT_OK(fstatat(AT_FDCWD, "", &st, AT_EMPTY_PATH));
+    EXPECT_EQ(st.st_ino, ref.st_ino);
+    EXPECT_TRUE(S_ISDIR(st.st_mode));
+    close(dfd);
+}
+
+FSTEST(renameat_across_dirfds)
+{
+    ASSERT_OK(mkdir(pj(dir, "src"), 0755));
+    ASSERT_OK(mkdir(pj(dir, "dst"), 0755));
+    create_file(pj(dir, "src/a"), "moved", 5);
+    int sfd = open_dir(pj(dir, "src"));
+    int dfd = open_dir(pj(dir, "dst"));
+    ASSERT_OK(renameat(sfd, "a", dfd, "b"));
+    struct stat st;
+    EXPECT_ERR(stat(pj(dir, "src/a"), &st), ENOENT);
+    char buf[8] = {0};
+    EXPECT_EQ(slurp(pj(dir, "dst/b"), buf, sizeof(buf)), 5);
+    EXPECT_STREQ(buf, "moved");
+    // one side relative to the cwd
+    ASSERT_OK(chdir(dir));
+    EXPECT_OK(renameat(dfd, "b", AT_FDCWD, "c"));
+    EXPECT_OK(stat(pj(dir, "c"), &st));
+    EXPECT_ERR(renameat(sfd, "missing", dfd, "x"), ENOENT);
+    close(sfd);
+    close(dfd);
+}
+
+// A dirfd names the directory, not the path it was opened by
+FSTEST(dirfd_follows_renamed_dir)
+{
+    ASSERT_OK(mkdir(pj(dir, "old"), 0755));
+    int dfd = open_dir(pj(dir, "old"));
+    ASSERT_OK(rename(pj(dir, "old"), pj(dir, "new")));
+    int fd = openat(dfd, "f", O_CREAT | O_WRONLY, 0644);
+    ASSERT_GE(fd, 0);
+    close(fd);
+    struct stat st;
+    EXPECT_OK(stat(pj(dir, "new/f"), &st));
+    close(dfd);
+}
+
+FSTEST(faccessat_dirfd)
+{
+    create_file(pj(dir, "f"), "x", 1);
+    int dfd = open_dir(dir);
+    EXPECT_OK(faccessat(dfd, "f", F_OK, 0));
+    EXPECT_OK(faccessat(dfd, "f", R_OK | W_OK, 0));
+    EXPECT_ERR(faccessat(dfd, "nope", F_OK, 0), ENOENT);
+    close(dfd);
+}
+
+FSTEST(symlinkat_readlinkat)
+{
+    create_file(pj(dir, "target"), "via at", 6);
+    int dfd = open_dir(dir);
+    int sr = symlinkat("target", dfd, "ln");
+    skip_if_no_links(fs, sr);
+    EXPECT_OK(sr);
+    char buf[64] = {0};
+    EXPECT_EQ(readlinkat(dfd, "ln", buf, sizeof(buf) - 1), 6);
+    EXPECT_STREQ(buf, "target");
+    struct stat st;
+    ASSERT_OK(fstatat(dfd, "ln", &st, AT_SYMLINK_NOFOLLOW));
+    EXPECT_TRUE(S_ISLNK(st.st_mode));
+    ASSERT_OK(fstatat(dfd, "ln", &st, 0));
+    EXPECT_TRUE(S_ISREG(st.st_mode));
+    EXPECT_EQ(st.st_size, 6);
+    EXPECT_ERR(readlinkat(dfd, "target", buf, sizeof(buf)), EINVAL);
+    EXPECT_ERR(symlinkat("target", dfd, "ln"), EEXIST);
+    close(dfd);
+}
+
+FSTEST(linkat_flags)
+{
+    create_file(pj(dir, "orig"), "data", 4);
+    int dfd = open_dir(dir);
+    int lr = linkat(dfd, "orig", dfd, "hl", 0);
+    skip_if_no_links(fs, lr);
+    EXPECT_OK(lr);
+    struct stat a, b;
+    ASSERT_OK(fstatat(dfd, "orig", &a, 0));
+    ASSERT_OK(fstatat(dfd, "hl", &b, 0));
+    EXPECT_EQ(a.st_ino, b.st_ino);
+    EXPECT_EQ(b.st_nlink, 2);
+    EXPECT_ERR(linkat(dfd, "orig", dfd, "hl", 0), EEXIST);
+    EXPECT_ERR(linkat(dfd, "orig", dfd, "x", 0x4000), EINVAL);
+
+    // AT_SYMLINK_FOLLOW links the symlink's target
+    ASSERT_OK(symlinkat("orig", dfd, "sl"));
+    EXPECT_OK(linkat(dfd, "sl", dfd, "via_sl", AT_SYMLINK_FOLLOW));
+    ASSERT_OK(fstatat(dfd, "via_sl", &b, AT_SYMLINK_NOFOLLOW));
+    EXPECT_TRUE(S_ISREG(b.st_mode));
+    EXPECT_EQ(a.st_ino, b.st_ino);
+    close(dfd);
 }

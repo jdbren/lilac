@@ -194,7 +194,31 @@ off_t vfs_lseek(struct file *file, off_t offset, int whence)
     return ret;
 }
 
-static struct dentry * get_parent_dentry(const char *path, struct dentry *start);
+static struct dentry * get_parent_dentry(const char *path, struct dentry *base);
+
+struct dentry * dirfd_base(int dirfd, const char *path)
+{
+    if (dirfd == AT_FDCWD || *path == '\0' || is_absolute_path(path))
+        return NULL;
+
+    struct file *f = get_file_inc_ref(dirfd);
+    if (IS_ERR(f))
+        return ERR_CAST(f);
+    struct dentry *d = f->f_dentry;
+    if (!d || !d->d_inode || !S_ISDIR(d->d_inode->i_mode)) {
+        fput(f);
+        return ERR_PTR(-ENOTDIR);
+    }
+    dget(d);
+    fput(f);
+    return d;
+}
+
+static inline void put_base(struct dentry *base)
+{
+    if (base)
+        dput(base);
+}
 
 static DEFINE_MUTEX(rename_mutex);
 
@@ -228,7 +252,8 @@ static void unlock_rename(struct dentry *p1, struct dentry *p2)
     }
 }
 
-static int vfs_rename(const char *oldpath, const char *newpath)
+static int vfs_renameat(struct dentry *old_base, const char *oldpath,
+    struct dentry *new_base, const char *newpath)
 {
     char name[NAME_MAX];
     struct dentry *old_d, *old_parent, *new_parent, *new_d;
@@ -244,7 +269,7 @@ static int vfs_rename(const char *oldpath, const char *newpath)
         return -EBUSY;
 
     old_parent = new_parent = new_d = NULL;
-    old_d = vfs_lookup_flags(oldpath, 0);
+    old_d = vfs_lookup_at(old_base, oldpath, 0);
     if (IS_ERR(old_d))
         return PTR_ERR(old_d);
     if (!old_d->d_inode) {
@@ -262,7 +287,7 @@ static int vfs_rename(const char *oldpath, const char *newpath)
     }
     old_parent = dget_parent(old_d);
 
-    new_parent = get_parent_dentry(newpath, NULL);
+    new_parent = get_parent_dentry(newpath, new_base);
     if (IS_ERR(new_parent)) {
         err = PTR_ERR(new_parent);
         new_parent = NULL;
@@ -383,7 +408,42 @@ SYSCALL_DECL2(rename, const char*, oldpath, const char*, newpath)
         kfree(old_buf);
         return PTR_ERR(new_buf);
     }
-    long err = vfs_rename(old_buf, new_buf);
+    long err = vfs_renameat(NULL, old_buf, NULL, new_buf);
+    kfree(old_buf);
+    kfree(new_buf);
+    return err;
+}
+
+SYSCALL_DECL4(renameat, int, olddirfd, const char*, oldpath,
+              int, newdirfd, const char*, newpath)
+{
+    struct dentry *old_base = NULL, *new_base = NULL;
+    long err;
+    char *old_buf = get_user_path(oldpath);
+    if (IS_ERR(old_buf))
+        return PTR_ERR(old_buf);
+    char *new_buf = get_user_path(newpath);
+    if (IS_ERR(new_buf)) {
+        kfree(old_buf);
+        return PTR_ERR(new_buf);
+    }
+
+    old_base = dirfd_base(olddirfd, old_buf);
+    if (IS_ERR(old_base)) {
+        err = PTR_ERR(old_base);
+        old_base = NULL;
+        goto out;
+    }
+    new_base = dirfd_base(newdirfd, new_buf);
+    if (IS_ERR(new_base)) {
+        err = PTR_ERR(new_base);
+        new_base = NULL;
+        goto out;
+    }
+    err = vfs_renameat(old_base, old_buf, new_base, new_buf);
+out:
+    put_base(old_base);
+    put_base(new_base);
     kfree(old_buf);
     kfree(new_buf);
     return err;
@@ -453,18 +513,30 @@ SYSCALL_DECL3(lseek, int, fd, off_t, offset, int, whence)
     return vfs_lseek(file, offset, whence);
 }
 
-struct dentry * vfs_lookup_flags(const char *path, int follow_final)
+/*
+ * Look up path relative to base, or relative to the cwd if base is NULL.
+ * An absolute path ignores base.
+ */
+struct dentry * vfs_lookup_at(struct dentry *base, const char *path,
+    int follow_final)
 {
     if (*path == '\0')
         return ERR_PTR(-ENOENT);
 
-    if (path[0] == '/')
+    if (is_absolute_path(path))
         return lookup_path_from_flags(root_dentry, path, follow_final);
+    if (base)
+        return lookup_path_from_flags(base, path, follow_final);
 
     struct dentry *cwd = get_cwd();
     struct dentry *res = lookup_path_from_flags(cwd, path, follow_final);
     dput(cwd);
     return res;
+}
+
+struct dentry * vfs_lookup_flags(const char *path, int follow_final)
+{
+    return vfs_lookup_at(NULL, path, follow_final);
 }
 
 struct dentry * vfs_lookup(const char *path)
@@ -500,10 +572,15 @@ static struct file *vfs_open_dentry(struct dentry *dentry, const char *path,
 
 struct file *vfs_open(const char *path, int flags, int mode)
 {
+    return vfs_openat(NULL, path, flags, mode);
+}
+
+struct file *vfs_openat(struct dentry *base, const char *path, int flags, int mode)
+{
     struct file *file;
     klog(LOG_DEBUG, "VFS: Opening %s, flags = %x, mode = %x\n", path, flags, mode);
     do {
-        struct dentry *dentry = vfs_lookup_flags(path, !(flags & O_NOFOLLOW));
+        struct dentry *dentry = vfs_lookup_at(base, path, !(flags & O_NOFOLLOW));
         if (IS_ERR(dentry))
             return ERR_CAST(dentry);
         file = vfs_open_dentry(dentry, path, flags, mode);
@@ -575,9 +652,10 @@ static struct file *vfs_open_dentry(struct dentry *dentry, const char *path,
     return new_file;
 }
 
-SYSCALL_DECL3(open, const char*, path, int, flags, int, mode)
+static long do_openat(int dirfd, const char *path, int flags, int mode)
 {
     char *path_buf;
+    struct dentry *base;
     struct file *f;
     long fd;
 
@@ -585,7 +663,13 @@ SYSCALL_DECL3(open, const char*, path, int, flags, int, mode)
     if (IS_ERR(path_buf))
         return PTR_ERR(path_buf);
 
-    f = vfs_open(path_buf, flags, mode);
+    base = dirfd_base(dirfd, path_buf);
+    if (IS_ERR(base)) {
+        fd = PTR_ERR(base);
+        goto error;
+    }
+    f = vfs_openat(base, path_buf, flags, mode);
+    put_base(base);
     if (IS_ERR(f)) {
         klog(LOG_DEBUG, "Failed to open %s\n", path_buf);
         fd = PTR_ERR(f);
@@ -608,6 +692,16 @@ SYSCALL_DECL3(open, const char*, path, int, flags, int, mode)
 error:
     kfree(path_buf);
     return fd;
+}
+
+SYSCALL_DECL3(open, const char*, path, int, flags, int, mode)
+{
+    return do_openat(AT_FDCWD, path, flags, mode);
+}
+
+SYSCALL_DECL4(openat, int, dirfd, const char*, path, int, flags, int, mode)
+{
+    return do_openat(dirfd, path, flags, mode);
 }
 
 ssize_t vfs_read_at(struct file *file, void *buf, size_t count, unsigned long pos)
@@ -901,7 +995,7 @@ SYSCALL_DECL3(getdents, int, fd, struct dirent*, dirp, int, buf_size)
     return bytes;
 }
 
-static struct dentry * get_parent_dentry(const char *path, struct dentry *start)
+static struct dentry * get_parent_dentry(const char *path, struct dentry *base)
 {
     char *dir_path = kmalloc(PATH_MAX);
     if (!dir_path)
@@ -909,8 +1003,7 @@ static struct dentry * get_parent_dentry(const char *path, struct dentry *start)
 
     get_dirname(dir_path, path, PATH_MAX);
 
-    struct dentry *parent_dentry = (start != NULL) ?
-        lookup_path_from(start, dir_path) : vfs_lookup(dir_path);
+    struct dentry *parent_dentry = vfs_lookup_at(base, dir_path, 1);
     kfree(dir_path);
     return parent_dentry;
 }
@@ -959,6 +1052,11 @@ again:
 
 int vfs_mkdir(const char *path, umode_t mode)
 {
+    return vfs_mkdirat(NULL, path, mode);
+}
+
+int vfs_mkdirat(struct dentry *base, const char *path, umode_t mode)
+{
     int err = 0;
     char name[NAME_MAX];
 
@@ -966,7 +1064,9 @@ int vfs_mkdir(const char *path, umode_t mode)
     klog(LOG_DEBUG, "VFS: Creating directory %s with mode %o\n", path, mode);
 #endif
 
-    struct dentry *parent_d = get_parent_dentry(path, NULL);
+    if (*path == '\0')
+        return -ENOENT;
+    struct dentry *parent_d = get_parent_dentry(path, base);
     if (IS_ERR(parent_d))
         return PTR_ERR(parent_d);
 
@@ -983,62 +1083,35 @@ error:
     return err;
 }
 
-SYSCALL_DECL2(mkdir, const char*, path, umode_t, mode)
+static long do_mkdirat(int dirfd, const char *path, umode_t mode)
 {
     char *path_buf;
+    struct dentry *base;
     long err;
 
     path_buf = get_user_path(path);
     if (IS_ERR(path_buf))
         return PTR_ERR(path_buf);
 
-    err = vfs_mkdir(path_buf, mode);
+    base = dirfd_base(dirfd, path_buf);
+    if (IS_ERR(base)) {
+        err = PTR_ERR(base);
+    } else {
+        err = vfs_mkdirat(base, path_buf, mode);
+        put_base(base);
+    }
     kfree(path_buf);
     return err;
 }
 
-int vfs_mkdirat(struct file *dirf, const char *path, umode_t mode)
+SYSCALL_DECL2(mkdir, const char*, path, umode_t, mode)
 {
-    int err = 0;
-    char name[NAME_MAX];
-
-    struct dentry *parent_d = get_parent_dentry(path, dirf->f_dentry);
-    if (IS_ERR(parent_d))
-        return PTR_ERR(parent_d);
-
-    get_basename(name, path, NAME_MAX);
-
-    err = vfs_do_mkdir(parent_d, name, mode);
-    if (err < 0)
-        goto error;
-    klog(LOG_DEBUG, "VFS: Created directory %s\n", path);
-error:
-    dput(parent_d);
-    return err;
+    return do_mkdirat(AT_FDCWD, path, mode);
 }
 
 SYSCALL_DECL3(mkdirat, int, dirfd, const char*, path, umode_t, mode)
 {
-    char *path_buf;
-    long err;
-
-    path_buf = get_user_path(path);
-    if (IS_ERR(path_buf))
-        return PTR_ERR(path_buf);
-
-    if (is_absolute_path(path_buf)) {
-        err = vfs_mkdir(path_buf, mode);
-    } else {
-        struct file *dirf = get_file_handle(dirfd);
-        if (IS_ERR(dirf)) {
-            kfree(path_buf);
-            return PTR_ERR(dirf);
-        }
-        err = vfs_mkdirat(dirf, path_buf, mode);
-    }
-
-    kfree(path_buf);
-    return err;
+    return do_mkdirat(dirfd, path, mode);
 }
 
 // Create a regular file at the absolute path, which must not exist yet
@@ -1156,13 +1229,13 @@ SYSCALL_DECL2(getcwd, char*, buf, size_t, size)
     return ret != 0 ? ret : len+1;
 }
 
-int vfs_rmdir(const char *path)
+static int vfs_rmdirat(struct dentry *base, const char *path)
 {
     struct dentry *dentry, *parent;
     struct inode *victim;
     int err;
 again:
-    dentry = vfs_lookup_flags(path, 0);
+    dentry = vfs_lookup_at(base, path, 0);
     if (IS_ERR(dentry))
         return PTR_ERR(dentry);
     if (!dentry->d_inode) {
@@ -1200,26 +1273,12 @@ again:
     return err;
 }
 
-SYSCALL_DECL1(rmdir, const char*, path)
-{
-    char *path_buf;
-    long err;
-
-    path_buf = get_user_path(path);
-    if (IS_ERR(path_buf))
-        return PTR_ERR(path_buf);
-
-    err = vfs_rmdir(path_buf);
-    kfree(path_buf);
-    return err;
-}
-
-int vfs_unlink(const char *path)
+static int vfs_unlinkat(struct dentry *base, const char *path)
 {
     struct dentry *dentry, *parent;
     int err;
 again:
-    dentry = vfs_lookup_flags(path, 0);
+    dentry = vfs_lookup_at(base, path, 0);
     if (IS_ERR(dentry))
         return PTR_ERR(dentry);
     if (!dentry->d_inode) {
@@ -1251,23 +1310,52 @@ again:
     return err;
 }
 
-SYSCALL_DECL1(unlink, const char*, path)
+static long do_unlinkat(int dirfd, const char *path, int flags)
 {
     char *path_buf;
+    struct dentry *base;
     long err;
+
+    if (flags & ~AT_REMOVEDIR)
+        return -EINVAL;
 
     path_buf = get_user_path(path);
     if (IS_ERR(path_buf))
         return PTR_ERR(path_buf);
 
-    err = vfs_unlink(path_buf);
+    base = dirfd_base(dirfd, path_buf);
+    if (IS_ERR(base)) {
+        err = PTR_ERR(base);
+    } else {
+        if (flags & AT_REMOVEDIR)
+            err = vfs_rmdirat(base, path_buf);
+        else
+            err = vfs_unlinkat(base, path_buf);
+        put_base(base);
+    }
     kfree(path_buf);
     return err;
 }
 
-int vfs_link(const char *oldpath, const char *newpath)
+SYSCALL_DECL1(rmdir, const char*, path)
 {
-    struct dentry *old_dentry = vfs_lookup(oldpath);
+    return do_unlinkat(AT_FDCWD, path, AT_REMOVEDIR);
+}
+
+SYSCALL_DECL1(unlink, const char*, path)
+{
+    return do_unlinkat(AT_FDCWD, path, 0);
+}
+
+SYSCALL_DECL3(unlinkat, int, dirfd, const char*, path, int, flags)
+{
+    return do_unlinkat(dirfd, path, flags);
+}
+
+static int vfs_linkat(struct dentry *old_base, const char *oldpath,
+    struct dentry *new_base, const char *newpath, int follow)
+{
+    struct dentry *old_dentry = vfs_lookup_at(old_base, oldpath, follow);
     if (IS_ERR(old_dentry))
         return PTR_ERR(old_dentry);
 
@@ -1285,7 +1373,7 @@ int vfs_link(const char *oldpath, const char *newpath)
     }
 
 again:
-    new_dentry = vfs_lookup_flags(newpath, 0);
+    new_dentry = vfs_lookup_at(new_base, newpath, 0);
     if (IS_ERR(new_dentry)) {
         err = PTR_ERR(new_dentry);
         new_dentry = NULL;
@@ -1321,8 +1409,10 @@ out:
     return err;
 }
 
-SYSCALL_DECL2(link, const char*, oldpath, const char*, newpath)
+static long do_linkat(int olddirfd, const char *oldpath,
+    int newdirfd, const char *newpath, int follow)
 {
+    struct dentry *old_base = NULL, *new_base = NULL;
     char *oldpath_buf;
     char *newpath_buf;
     long err;
@@ -1337,18 +1427,48 @@ SYSCALL_DECL2(link, const char*, oldpath, const char*, newpath)
         return PTR_ERR(newpath_buf);
     }
 
-    err = vfs_link(oldpath_buf, newpath_buf);
+    old_base = dirfd_base(olddirfd, oldpath_buf);
+    if (IS_ERR(old_base)) {
+        err = PTR_ERR(old_base);
+        old_base = NULL;
+        goto out;
+    }
+    new_base = dirfd_base(newdirfd, newpath_buf);
+    if (IS_ERR(new_base)) {
+        err = PTR_ERR(new_base);
+        new_base = NULL;
+        goto out;
+    }
+    err = vfs_linkat(old_base, oldpath_buf, new_base, newpath_buf, follow);
+out:
+    put_base(old_base);
+    put_base(new_base);
     kfree(oldpath_buf);
     kfree(newpath_buf);
     return err;
 }
 
-int vfs_symlink(const char *target, const char *linkpath)
+SYSCALL_DECL2(link, const char*, oldpath, const char*, newpath)
+{
+    return do_linkat(AT_FDCWD, oldpath, AT_FDCWD, newpath, 1);
+}
+
+SYSCALL_DECL5(linkat, int, olddirfd, const char*, oldpath,
+              int, newdirfd, const char*, newpath, int, flags)
+{
+    if (flags & ~AT_SYMLINK_FOLLOW)
+        return -EINVAL;
+    return do_linkat(olddirfd, oldpath, newdirfd, newpath,
+                     !!(flags & AT_SYMLINK_FOLLOW));
+}
+
+static int vfs_symlinkat(const char *target, struct dentry *base,
+    const char *linkpath)
 {
     struct dentry *link_dentry, *parent;
     int err;
 again:
-    link_dentry = vfs_lookup_flags(linkpath, 0);
+    link_dentry = vfs_lookup_at(base, linkpath, 0);
     if (IS_ERR(link_dentry))
         return PTR_ERR(link_dentry);
     if (link_dentry->d_inode) {
@@ -1378,8 +1498,9 @@ again:
     return err;
 }
 
-SYSCALL_DECL2(symlink, const char*, target, const char*, linkpath)
+static long do_symlinkat(const char *target, int newdirfd, const char *linkpath)
 {
+    struct dentry *base;
     char *target_buf;
     char *linkpath_buf;
     long err;
@@ -1394,15 +1515,32 @@ SYSCALL_DECL2(symlink, const char*, target, const char*, linkpath)
         return PTR_ERR(linkpath_buf);
     }
 
-    err = vfs_symlink(target_buf, linkpath_buf);
+    base = dirfd_base(newdirfd, linkpath_buf);
+    if (IS_ERR(base)) {
+        err = PTR_ERR(base);
+    } else {
+        err = vfs_symlinkat(target_buf, base, linkpath_buf);
+        put_base(base);
+    }
     kfree(target_buf);
     kfree(linkpath_buf);
     return err;
 }
 
-SYSCALL_DECL3(readlink, const char*, path, char *, buf, int, bufsize)
+SYSCALL_DECL2(symlink, const char*, target, const char*, linkpath)
+{
+    return do_symlinkat(target, AT_FDCWD, linkpath);
+}
+
+SYSCALL_DECL3(symlinkat, const char*, target, int, newdirfd, const char*, linkpath)
+{
+    return do_symlinkat(target, newdirfd, linkpath);
+}
+
+static long do_readlinkat(int dirfd, const char *path, char *buf, int bufsize)
 {
     struct dentry *dentry = NULL;
+    struct dentry *base;
     struct inode *inode;
     char *path_buf;
     long err;
@@ -1416,7 +1554,13 @@ SYSCALL_DECL3(readlink, const char*, path, char *, buf, int, bufsize)
     if (IS_ERR(path_buf))
         return PTR_ERR(path_buf);
 
-    dentry = vfs_lookup_flags(path_buf, 0);
+    base = dirfd_base(dirfd, path_buf);
+    if (IS_ERR(base)) {
+        err = PTR_ERR(base);
+        goto error;
+    }
+    dentry = vfs_lookup_at(base, path_buf, 0);
+    put_base(base);
     if (IS_ERR(dentry)) {
         err = PTR_ERR(dentry);
         goto error;
@@ -1459,6 +1603,16 @@ error:
         dput(dentry);
     kfree(path_buf);
     return err;
+}
+
+SYSCALL_DECL3(readlink, const char*, path, char *, buf, int, bufsize)
+{
+    return do_readlinkat(AT_FDCWD, path, buf, bufsize);
+}
+
+SYSCALL_DECL4(readlinkat, int, dirfd, const char*, path, char *, buf, int, bufsize)
+{
+    return do_readlinkat(dirfd, path, buf, bufsize);
 }
 
 struct iovec {

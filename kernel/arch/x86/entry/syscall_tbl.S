@@ -111,6 +111,14 @@ syscall_table:
 	sc_tbl_entry pselect	# 92
 	sc_tbl_entry poll		# 93
 	sc_tbl_entry ppoll		# 94
+	sc_tbl_entry openat		# 95
+	sc_tbl_entry mkdirat	# 96
+	sc_tbl_entry fstatat	# 97
+	sc_tbl_entry unlinkat	# 98
+	sc_tbl_entry renameat	# 99
+	sc_tbl_entry linkat		# 100
+	sc_tbl_entry symlinkat	# 101
+	sc_tbl_entry readlinkat	# 102
 /*
 	sc_tbl_entry chmod		# 30
 	sc_tbl_entry chown		# 31
