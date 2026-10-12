@@ -615,10 +615,10 @@ int sleep_until_timeout(ktime_t *expires)
         return -EINTR;
     }
 
-	if (*expires == 0) {
-		__set_current_state(TASK_RUNNING);
-		return 0;
-	}
+    if (*expires == 0) {
+        __set_current_state(TASK_RUNNING);
+        return 0;
+    }
 
     struct timer_event ev = TIMER_EV_INIT(ev, current, *expires, NULL, NULL);
     timer_ev_enqueue(&ev, current);

@@ -20,16 +20,6 @@ static const struct file_operations pipe_fops = {
     .poll = pipe_poll,
 };
 
-bool pipe_empty(unsigned int wr_idx, unsigned int rd_idx)
-{
-    return wr_idx == rd_idx;
-}
-
-bool pipe_full(unsigned int wr_idx, unsigned int rd_idx, unsigned int buf_size)
-{
-    return (wr_idx + 1) % buf_size == rd_idx;
-}
-
 struct inode * pipe_alloc_inode()
 {
     struct inode *ino = kzmalloc(sizeof(*ino));
@@ -221,12 +211,11 @@ int pipe_close(struct inode *i, struct file *f)
         // Blocked readers must see EOF
         if (p->n_writers == 0)
             wake_all(&p->read_wq);
-    } else if (accmode == O_RDONLY || accmode == O_RDWR) {
+    }
+    if (accmode == O_RDONLY || accmode == O_RDWR) {
         p->n_readers--;
         if (p->n_readers == 0)
             wake_all(&p->write_wq);
-    } else {
-        klog(LOG_ERROR, "pipe_close: Unknown pipe mode %o\n", f->f_mode);
     }
 
     p->files--;

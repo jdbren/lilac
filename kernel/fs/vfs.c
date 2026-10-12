@@ -1615,7 +1615,7 @@ SYSCALL_DECL4(pwrite64, int, fd, const void*, buf, size_t, count, off_t, offset)
     return bytes;
 }
 
-#define DEFAULT_POLLMASK (POLLIN | POLLOUT)
+#define DEFAULT_POLLMASK (POLLIN|POLLOUT|POLLRDNORM|POLLWRNORM)
 
 poll_mask_t vfs_poll(struct file *file, struct poll_request *pt)
 {
