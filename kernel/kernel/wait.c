@@ -298,56 +298,81 @@ bool wait_signal_pending(void)
     return sig_get_active(current) != 0;
 }
 
+int default_wake_function(struct wq_entry *wait, int key)
+{
+    struct task *task = wait->task;
+    __remove_wait_entry(wait);
+    set_task_running(task);
+    return 1;
+}
+
+/*
+ * Caller holds wq->lock with interrupts off
+ */
+static inline int __wake_entry(struct wq_entry *wait, int key)
+{
+    if (wait->wakeup)
+        return wait->wakeup(wait, key);
+    return default_wake_function(wait, key);
+}
+
 static void wakeup_by_pid_on(int pid, struct waitqueue *wq)
 {
     unsigned long flags;
 
     acquire_lock_irqsave(&wq->lock, &flags);
     struct wq_entry *wq_ent = find_waiting_task(wq, pid);
-    if (wq_ent) {
-        struct task *task = wq_ent->task;
-        __remove_wait_entry(wq_ent);
-        set_task_running(task);
-    }
+    if (wq_ent)
+        __wake_entry(wq_ent, 0);
     release_lock_irqrestore(&wq->lock, flags);
 }
 
 struct task * wake_first(struct waitqueue *wq)
 {
+    struct wq_entry *wait, *tmp;
     struct task *task = NULL;
     unsigned long flags;
 
     acquire_lock_irqsave(&wq->lock, &flags);
-    if (!list_empty(&wq->task_list)) {
-        struct wq_entry *wait =
-            list_first_entry(&wq->task_list, struct wq_entry, entry);
+    list_for_each_entry_safe(wait, tmp, &wq->task_list, entry) {
+        if (wait->wakeup) {
+            wait->wakeup(wait, 0);
+            continue;
+        }
         task = wait->task;
-        __remove_wait_entry(wait);
-        set_task_running(task);
+        default_wake_function(wait, 0);
+        break;
     }
     release_lock_irqrestore(&wq->lock, flags);
 
     return task;
 }
 
+// Caller holds wq->lock. key: 0 for any event or poll_mask
+void __wake_all_key(struct waitqueue *wq, int key)
+{
+    struct wq_entry *wait, *tmp;
+    list_for_each_entry_safe(wait, tmp, &wq->task_list, entry)
+        __wake_entry(wait, key);
+}
+
 // Caller holds wq->lock
 void __wake_all(struct waitqueue *wq)
 {
-    struct wq_entry *wait, *tmp;
+    __wake_all_key(wq, 0);
+}
 
-    list_for_each_entry_safe(wait, tmp, &wq->task_list, entry) {
-        struct task *task = wait->task;
-        __remove_wait_entry(wait);
-        set_task_running(task);
-    }
+void wake_all_key(struct waitqueue *wq, int key)
+{
+    unsigned long flags;
+    acquire_lock_irqsave(&wq->lock, &flags);
+    __wake_all_key(wq, key);
+    release_lock_irqrestore(&wq->lock, flags);
 }
 
 void wake_all(struct waitqueue *wq)
 {
-    unsigned long flags;
-    acquire_lock_irqsave(&wq->lock, &flags);
-    __wake_all(wq);
-    release_lock_irqrestore(&wq->lock, flags);
+    wake_all_key(wq, 0);
 }
 
 void wake_parent_waiter(struct task *parent)
