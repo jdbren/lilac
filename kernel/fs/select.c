@@ -313,7 +313,7 @@ SYSCALL_DECL6(pselect, int, nfds, fd_set __user *, readfds, fd_set __user *,
     int ret = do_select_syscall(nfds, readfds, writefds, exceptfds, timeout ? &ts : NULL);
 
     if (sig) {
-        current->saved_sigmask = current->blocked;
+        current->saved_sigmask = oldset;
         current->flags.restore_sigmask = 1;
     }
 
