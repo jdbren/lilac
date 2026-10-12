@@ -103,6 +103,11 @@ static inline ktime_t timespec_to_ktime(struct timespec ts)
     return ktime_set(ts.tv_sec, ts.tv_nsec);
 }
 
+static inline ktime_t timeval_to_ktime(const struct timeval *tv)
+{
+    return ktime_set(tv->tv_sec, tv->tv_usec * NS_PER_US);
+}
+
 /* Map the ktime_t to timespec conversion to ns_to_timespec function */
 #define ktime_to_timespec64(kt) ns_to_timespec((kt))
 
@@ -274,6 +279,15 @@ static inline struct timeval ns_to_timeval(ktime_t ns)
         tv.tv_usec = 0;
     }
     return tv;
+}
+
+static inline struct timespec timeval_to_timespec(const struct timeval tv)
+{
+    struct timespec ts = {
+        .tv_sec = tv.tv_sec,
+        .tv_nsec = (ktime_t)tv.tv_usec * NS_PER_US,
+    };
+    return ts;
 }
 
 #endif
