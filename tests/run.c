@@ -23,6 +23,7 @@ static const char *suites[] = {
     "signal",
     "fs",
     "pipe",
+    "poll",
     "thread",
     "time",
     "misc",
