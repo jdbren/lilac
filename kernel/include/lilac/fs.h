@@ -53,8 +53,8 @@ struct inode {
     u32                 i_blocks;
     dev_t               i_rdev;
 
-    struct hlist_node   i_hash;
-    struct hlist_head   i_dentry;
+    // struct hlist_node   i_hash;
+    // struct hlist_head   i_dentry;
 
     const struct file_operations *i_fop;
 
@@ -108,8 +108,8 @@ struct dentry {
 
     const struct dentry_operations *d_op;
     struct super_block *d_sb;       /* The root of the dentry tree */
-    unsigned long d_time;           /* used by d_revalidate */
-    void *d_fsdata;                 /* fs-specific data */
+    // unsigned long d_time;        /* used by d_revalidate */
+    // void *d_fsdata;              /* fs-specific data */
 
     struct hlist_node d_sib;        /* child of parent list */
     struct hlist_head d_children;   /* our children */
@@ -165,19 +165,19 @@ struct __cacheline_align dentry_operations {
 
 struct super_block {
     struct list_head    s_list;        /* Keep this first */
-    unsigned long       s_blocksize;
-    unsigned char       s_blocksize_bits;
     unsigned long long  s_maxbytes;    /* Max file size */
+    unsigned long       s_blocksize;
     enum fs_type        s_type;
 
     const struct super_operations *s_op;
     unsigned long       s_flags;
-    struct dentry       *s_root;
+    struct dentry      *s_root;
     struct semaphore    s_umount;
     atomic_uint         s_count;
     atomic_bool         s_active;
-    dev_t               s_dev;         /* unique per mounted fs, for st_dev */
     spinlock_t          s_lock;      /* Protects the sb and inode list */
+    unsigned char       s_blocksize_bits;
+    dev_t               s_dev;       /* unique per mounted fs, for st_dev */
 
     struct block_device *s_bdev;
     struct file         *s_bdev_file;
@@ -237,9 +237,9 @@ struct file {
     spinlock_t      f_lock;
     atomic_int      f_count;
     mode_t          f_mode;
-    atomic_uint     f_owner;
+    // atomic_uint  f_owner;
     off_t           f_pos;
-    struct mutex    f_pos_lock;
+    mutex_t         f_pos_lock;
     struct dentry  *f_dentry;
     struct inode   *f_inode;
     u64             f_version;
@@ -304,7 +304,6 @@ struct dentry * lookup_path(const char *path);
 struct dentry * dlookup(struct dentry *parent, char *name);
 
 void fs_init(void);
-struct dentry *mount_bdev(struct block_device *bdev, int (*fill_super)(struct super_block*));
 
 struct super_block * alloc_sb(struct block_device *bdev);
 void destroy_sb(struct super_block *sb);

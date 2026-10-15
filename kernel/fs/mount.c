@@ -67,6 +67,8 @@ static struct dentry * get_final_dentry(struct dentry * parent, const char *path
     return lookup_path_from_flags(parent, basename, 0);
 }
 
+// TODO: Implement mount/umount correctly
+
 // TODO: Implement device layer in fs
 int vfs_mount(struct block_device *srcdev, const char *target,
         const char *filesystemtype, unsigned long mountflags,

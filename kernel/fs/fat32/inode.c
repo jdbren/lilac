@@ -47,8 +47,7 @@ static int unique_ino(void)
     return ++ino;
 }
 
-// Find a cached inode and take a reference, under the lock iput uses to
-// retire one, so a dying inode is never handed out
+// Find a cached inode and take a reference
 static struct inode *fat_iget(struct super_block *sb, u32 dir_clst, u32 dir_idx)
 {
     struct inode *tmp;
@@ -56,7 +55,7 @@ static struct inode *fat_iget(struct super_block *sb, u32 dir_clst, u32 dir_idx)
     acquire_lock(&sb->s_lock);
     list_for_each_entry(tmp, &sb->s_inodes, i_list) {
         struct fat_inode *fi = (struct fat_inode*)tmp->i_private;
-        if (fi->dir_clst == dir_clst && fi->dir_idx == dir_idx && tmp->i_count > 0) {
+        if (fi->dir_clst == dir_clst && fi->dir_idx == dir_idx) {
             tmp->i_count++;
             release_lock(&sb->s_lock);
             return tmp;

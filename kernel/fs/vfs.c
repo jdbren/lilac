@@ -257,9 +257,9 @@ static int vfs_renameat(struct dentry *old_base, const char *oldpath,
 {
     char name[NAME_MAX];
     struct dentry *old_d, *old_parent, *new_parent, *new_d;
-    struct inode *target = NULL;
-    char *new_name = NULL;
-    bool locked = false;
+    struct inode *target;
+    char *new_name;
+    bool locked, retry;
     int err;
 
     err = get_basename(name, newpath, NAME_MAX);
@@ -268,7 +268,11 @@ static int vfs_renameat(struct dentry *old_base, const char *oldpath,
     if (!strcmp(name, ".") || !strcmp(name, "..") || !strcmp(name, "/"))
         return -EBUSY;
 
+again:
     old_parent = new_parent = new_d = NULL;
+    target = NULL;
+    new_name = NULL;
+    locked = retry = false;
     old_d = vfs_lookup_at(old_base, oldpath, 0);
     if (IS_ERR(old_d))
         return PTR_ERR(old_d);
@@ -315,6 +319,13 @@ static int vfs_renameat(struct dentry *old_base, const char *oldpath,
 
     lock_rename(old_parent, new_parent);
     locked = true;
+
+    // Another unlink, rename or create may have changed either name
+    if (old_d->d_parent != old_parent || d_unhashed(old_d) ||
+            new_d->d_parent != new_parent || d_unhashed(new_d)) {
+        retry = true;
+        goto out;
+    }
 
     struct inode *old_dir = old_parent->d_inode;
     struct inode *new_dir = new_parent->d_inode;
@@ -395,6 +406,8 @@ out:
     if (old_parent)
         dput(old_parent);
     dput(old_d);
+    if (retry)
+        goto again;
     return err;
 }
 
@@ -848,16 +861,15 @@ ssize_t vfs_write(struct file *file, const void *buf, size_t count)
     }
 
     mutex_lock(&file->f_pos_lock);
-    if ((file->f_mode & O_APPEND) && file->f_inode)
+    inode_lock(file->f_inode);
+    if ((file->f_mode & O_APPEND))
         file->f_pos = file->f_inode->i_size;
     ssize_t bytes = write_limit(file, file->f_pos, count);
-    if (bytes > 0) {
-        inode_lock(file->f_inode);
+    if (bytes > 0)
         bytes = file->f_op->write(file, buf, bytes);
-        inode_unlock(file->f_inode);
-    }
     if (bytes > 0)
         file->f_pos += bytes;
+    inode_unlock(file->f_inode);
     mutex_unlock(&file->f_pos_lock);
     return bytes;
 }

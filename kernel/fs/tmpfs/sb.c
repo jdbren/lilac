@@ -30,7 +30,9 @@ static struct inode* tmpfs_alloc_inode(struct super_block *sb)
     inode->i_count = 1;
     inode->i_atime = inode->i_mtime = inode->i_ctime = get_unix_time();
     inode->i_nlink = 1;
+    acquire_lock(&sb->s_lock);
     list_add_tail(&inode->i_list, &sb->s_inodes);
+    release_lock(&sb->s_lock);
 
     return inode;
 }
