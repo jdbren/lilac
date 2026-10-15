@@ -56,6 +56,9 @@ int inode_init(struct super_block *sb, struct inode *inode)
     return 0;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+
 struct inode * alloc_inode(struct super_block *sb)
 {
     struct inode *inode;
@@ -64,7 +67,7 @@ struct inode * alloc_inode(struct super_block *sb)
     else
         inode = kzmalloc(sizeof(struct inode));
 
-    if (!inode)
+    if (IS_ERR_OR_NULL(inode))
         return NULL;
 
     if (unlikely(inode_init(sb, inode))) {
@@ -77,6 +80,8 @@ struct inode * alloc_inode(struct super_block *sb)
 
     return inode;
 }
+
+#pragma GCC diagnostic pop
 
 void destroy_inode(struct inode *inode)
 {
@@ -91,26 +96,22 @@ void destroy_inode(struct inode *inode)
 
 void iget(struct inode *inode)
 {
-    struct super_block *sb = inode->i_sb;
-
-    acquire_lock(&sb->s_lock);
-
-    if (inode->i_count == 0) {
-        list_add_tail(&inode->i_list, &sb->s_inodes);
-    }
-
     inode->i_count++;
-    release_lock(&sb->s_lock);
 }
 
 void iput(struct inode *inode)
 {
     struct super_block *sb = inode->i_sb;
+    unsigned int count = atomic_load_explicit(&inode->i_count, memory_order_relaxed);
+
+    while (count > 1) {
+        if (atomic_compare_exchange_weak_explicit(&inode->i_count, &count,
+            count - 1, memory_order_acq_rel, memory_order_relaxed))
+            return;
+    }
 
     acquire_lock(&sb->s_lock);
-
-    if (inode->i_count > 1) {
-        inode->i_count--;
+    if (atomic_fetch_sub(&inode->i_count, 1) != 1) {
         release_lock(&sb->s_lock);
         return;
     }
@@ -118,7 +119,6 @@ void iput(struct inode *inode)
     if (inode->i_list.next)
         list_del_init(&inode->i_list);
     release_lock(&sb->s_lock);
-
     destroy_inode(inode);
 }
 

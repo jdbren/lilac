@@ -74,6 +74,7 @@ static int __get_fd_for(struct fdtable *files)
 
 int get_fd_exact_replace(struct fdtable *files, int fd, struct file *file)
 {
+    struct file *oldf = NULL;
     if (fd < 0 || (unsigned)fd >= FD_MAX)
         return -EINVAL;
 
@@ -86,14 +87,16 @@ int get_fd_exact_replace(struct fdtable *files, int fd, struct file *file)
         }
     }
 
-    if (files->fdarray[fd]) {
-        vfs_close(files->fdarray[fd]);
-        files->fdarray[fd] = NULL;
-    }
+    if (files->fdarray[fd])
+        oldf = files->fdarray[fd];
 
     files->fdarray[fd] = file;
     clear_cloexec(files, fd);
     release_lock(&files->lock);
+
+    if (oldf)
+        vfs_close(oldf);
+
     return fd;
 }
 

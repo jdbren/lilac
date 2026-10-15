@@ -57,9 +57,27 @@ static int copy_files(struct fdtable *dst, struct fdtable *src)
 {
     if (dst->fdarray)
         kfree(dst->fdarray);
+    if (dst->close_on_exec)
+        kfree(dst->close_on_exec);
+    dst->fdarray = NULL;
+    dst->close_on_exec = NULL;
+
+    acquire_lock(&src->lock);
+
     dst->fdarray = kcalloc(src->max, sizeof(struct file*));
-    if (dst->fdarray == NULL)
+    if (dst->fdarray == NULL) {
+        release_lock(&src->lock);
         return -ENOMEM;
+    }
+
+    dst->close_on_exec = kcalloc(BITS_TO_LONGS(src->max), sizeof(unsigned long));
+    if (dst->close_on_exec == NULL) {
+        kfree(dst->fdarray);
+        dst->fdarray = NULL;
+        release_lock(&src->lock);
+        return -ENOMEM;
+    }
+
     dst->max = src->max;
     for (size_t i = 0; i < src->max; i++) {
         dst->fdarray[i] = src->fdarray[i];
@@ -67,8 +85,11 @@ static int copy_files(struct fdtable *dst, struct fdtable *src)
             fget(dst->fdarray[i]);
         }
     }
+
     memcpy(dst->close_on_exec, src->close_on_exec,
         BITS_TO_LONGS(src->max) * sizeof(unsigned long));
+
+    release_lock(&src->lock);
     return 0;
 }
 
