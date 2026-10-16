@@ -217,7 +217,7 @@ static int do_select(struct kpoll_cmd_struct *kpoll_cmd, int nfds,
             if (!(r || w || e))
                 continue;
 
-            struct file *f = get_file_inc_ref(fd);
+            struct file *f = fget_handle(fd);
             if (IS_ERR_OR_NULL(f)) {
                 count = -EBADF;
                 goto out;
@@ -379,7 +379,7 @@ do_pollfd(struct pollfd *pollfd, struct poll_request *pollreq)
     if (unlikely(fd < 0))
         return 0;
 
-    struct file *f = get_file_inc_ref(fd);
+    struct file *f = fget_handle(fd);
     if (IS_ERR_OR_NULL(f))
         return POLLNVAL;
 

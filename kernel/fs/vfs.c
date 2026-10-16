@@ -201,7 +201,7 @@ struct dentry * dirfd_base(int dirfd, const char *path)
     if (dirfd == AT_FDCWD || *path == '\0' || is_absolute_path(path))
         return NULL;
 
-    struct file *f = get_file_inc_ref(dirfd);
+    struct file *f = fget_handle(dirfd);
     if (IS_ERR(f))
         return ERR_CAST(f);
     struct dentry *d = f->f_dentry;
@@ -488,10 +488,12 @@ long vfs_ftruncate(struct file *f, loff_t length)
 
 SYSCALL_DECL2(ftruncate, int, fd, off_t, length)
 {
-    struct file *file = get_file_handle(fd);
+    struct file *file = fget_handle(fd);
     if (IS_ERR(file))
         return PTR_ERR(file);
-    return vfs_ftruncate(file, length);
+    long ret = vfs_ftruncate(file, length);
+    fput(file);
+    return ret;
 }
 
 SYSCALL_DECL2(truncate, const char*, path, off_t, length)
@@ -512,18 +514,26 @@ SYSCALL_DECL2(truncate, const char*, path, off_t, length)
 // TODO: cache writes
 SYSCALL_DECL1(fsync, int, fd)
 {
-    struct file *file = get_file_handle(fd);
-    return IS_ERR(file) ? PTR_ERR(file) : 0;
+    struct file *file = fget_handle(fd);
+    if (IS_ERR(file))
+        return PTR_ERR(file);
+    long ret = 0;
+    fput(file);
+    return ret;
 }
 
 SYSCALL_DECL3(lseek, int, fd, off_t, offset, int, whence)
 {
-    struct file *file = get_file_handle(fd);
+    struct file *file = fget_handle(fd);
     if (IS_ERR(file))
         return PTR_ERR(file);
-    if (file->f_inode && S_ISFIFO(file->f_inode->i_mode))
+    if (file->f_inode && S_ISFIFO(file->f_inode->i_mode)) {
+        fput(file);
         return -ESPIPE;
-    return vfs_lseek(file, offset, whence);
+    }
+    long ret = vfs_lseek(file, offset, whence);
+    fput(file);
+    return ret;
 }
 
 /*
@@ -783,7 +793,7 @@ SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
     klog(LOG_DEBUG, "syscall read: Reading from fd %d\n", fd);
 #endif
 
-    file = get_file_handle(fd);
+    file = fget_handle(fd);
     if (IS_ERR(file)) {
 #ifdef DEBUG_VFS
         klog(LOG_DEBUG, "syscall read: Invalid fd %d\n", fd);
@@ -791,21 +801,28 @@ SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
         return PTR_ERR(file);
     }
 
-    if ((file->f_mode & O_ACCMODE) == O_WRONLY)
+    if ((file->f_mode & O_ACCMODE) == O_WRONLY) {
+        fput(file);
         return -EBADF;
+    }
 
-    if (count == 0)
+    if (count == 0) {
+        fput(file);
         return 0;
+    }
 
     kbuf = kmalloc(count);
-    if (!kbuf)
+    if (!kbuf) {
+        fput(file);
         return -ENOMEM;
+    }
 
     bytes = vfs_read(file, kbuf, count);
     if (bytes > 0 && copy_to_user(buf, kbuf, bytes))
         bytes = -EFAULT;
 
     kfree(kbuf);
+    fput(file);
     return bytes;
 }
 
@@ -885,7 +902,7 @@ SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
     klog(LOG_DEBUG, "syscall write: Writing to fd %d\n", fd);
 #endif
 
-    file = get_file_handle(fd);
+    file = fget_handle(fd);
     if (IS_ERR(file)) {
 #ifdef DEBUG_VFS
         klog(LOG_DEBUG, "syscall write: Invalid fd %d\n", fd);
@@ -893,24 +910,32 @@ SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
         return PTR_ERR(file);
     }
 
-    if ((file->f_mode & O_ACCMODE) == O_RDONLY)
+    if ((file->f_mode & O_ACCMODE) == O_RDONLY) {
+        fput(file);
         return -EBADF;
+    }
 
-    if (count == 0)
+    if (count == 0) {
+        fput(file);
         return 0;
+    }
 
     kbuf = kmalloc(count);
-    if (!kbuf)
+    if (!kbuf) {
+        fput(file);
         return -ENOMEM;
+    }
 
     err = copy_from_user(kbuf, buf, count);
     if (err) {
         kfree(kbuf);
+        fput(file);
         return err;
     }
 
     bytes = vfs_write(file, kbuf, count);
     kfree(kbuf);
+    fput(file);
     return bytes;
 }
 
@@ -936,7 +961,7 @@ SYSCALL_DECL1(close, int, fd)
     struct file *file;
     long err;
 
-    file = get_file_handle(fd);
+    file = fd_remove(current->files, fd);
     if (IS_ERR(file))
         return PTR_ERR(file);
 
@@ -945,9 +970,6 @@ SYSCALL_DECL1(close, int, fd)
         fd, file, file->f_dentry);
 #endif
     err = vfs_close(file);
-    acquire_lock(&current->files->lock);
-    current->files->fdarray[fd] = NULL;
-    release_lock(&current->files->lock);
     return err;
 }
 
@@ -980,7 +1002,7 @@ ssize_t vfs_getdents(struct file *file, struct dirent *dirp, int buf_size)
 
 SYSCALL_DECL3(getdents, int, fd, struct dirent*, dirp, int, buf_size)
 {
-    struct file *file = get_file_handle(fd);
+    struct file *file = fget_handle(fd);
     unsigned char *buf;
     ssize_t bytes;
 #ifdef DEBUG_VFS
@@ -989,12 +1011,16 @@ SYSCALL_DECL3(getdents, int, fd, struct dirent*, dirp, int, buf_size)
     if (IS_ERR(file))
         return PTR_ERR(file);
 
-    if (buf_size > 0x8000)
+    if (buf_size > 0x8000) {
+        fput(file);
         return -EINVAL;
+    }
 
     buf = kzmalloc(buf_size);
-    if (!buf)
+    if (!buf) {
+        fput(file);
         return -ENOMEM;
+    }
 
     bytes = vfs_getdents(file, (struct dirent *)buf, buf_size);
     long err = 0;
@@ -1004,6 +1030,7 @@ SYSCALL_DECL3(getdents, int, fd, struct dirent*, dirp, int, buf_size)
         bytes = err;
 
     kfree(buf);
+    fput(file);
     return bytes;
 }
 
@@ -1171,11 +1198,9 @@ int vfs_dup(int oldfd, int newfd)
     if (oldfd == newfd)
         return newfd;
 
-    struct file *f = get_file_handle(oldfd);
+    struct file *f = fget_handle(oldfd);
     if (IS_ERR(f))
         return PTR_ERR(f);
-
-    fget(f);
 
 #ifdef DEBUG_VFS
     klog(LOG_DEBUG, "vfs_dup: file %p, dentry %p, oldfd %d, newfd %d\n",
@@ -1197,10 +1222,9 @@ int vfs_dup(int oldfd, int newfd)
 
 int vfs_dupf(int fd)
 {
-    struct file *f = get_file_handle(fd);
+    struct file *f = fget_handle(fd);
     if (IS_ERR(f))
         return PTR_ERR(f);
-    fget(f);
     int new_fd = get_next_fd(current->files, f);
     if (new_fd < 0) {
         klog(LOG_ERROR, "VFS: vfs_dupf failed to get new fd\n");
@@ -1641,37 +1665,47 @@ SYSCALL_DECL3(readv, int, fd, const struct iovec __user *, iov, int, iovcnt)
     if (iovcnt < 0 || iovcnt > 1024)
         return -EINVAL;
 
-    file = get_file_handle(fd);
+    file = fget_handle(fd);
     if (IS_ERR(file))
         return PTR_ERR(file);
 
-    if ((file->f_mode & O_ACCMODE) == O_WRONLY)
+    if ((file->f_mode & O_ACCMODE) == O_WRONLY) {
+        fput(file);
         return -EBADF;
+    }
 
     for (int i = 0; i < iovcnt; i++) {
-        if (copy_from_user(&kiov, &iov[i], sizeof(kiov)))
+        if (copy_from_user(&kiov, &iov[i], sizeof(kiov))) {
+            fput(file);
             return -EFAULT;
+        }
         if (!kiov.iov_len)
             continue;
 
         unsigned char *kbuf = kmalloc(kiov.iov_len);
-        if (!kbuf)
+        if (!kbuf) {
+            fput(file);
             return total > 0 ? total : -ENOMEM;
+        }
 
         ssize_t bytes = vfs_read(file, kbuf, kiov.iov_len);
         if (bytes > 0) {
             if (copy_to_user(kiov.iov_base, kbuf, bytes)) {
                 kfree(kbuf);
+                fput(file);
                 return total > 0 ? total : -EFAULT;
             }
             total += bytes;
         }
         kfree(kbuf);
-        if (bytes < 0)
+        if (bytes < 0) {
+            fput(file);
             return total > 0 ? total : bytes;
+        }
         if ((size_t)bytes < kiov.iov_len)
             break;
     }
+    fput(file);
     return total;
 }
 
@@ -1684,25 +1718,32 @@ SYSCALL_DECL3(writev, int, fd, const struct iovec __user *, iov, int, iovcnt)
     if (iovcnt < 0 || iovcnt > 1024)
         return -EINVAL;
 
-    file = get_file_handle(fd);
+    file = fget_handle(fd);
     if (IS_ERR(file))
         return PTR_ERR(file);
 
-    if ((file->f_mode & O_ACCMODE) == O_RDONLY)
+    if ((file->f_mode & O_ACCMODE) == O_RDONLY) {
+        fput(file);
         return -EBADF;
+    }
 
     for (int i = 0; i < iovcnt; i++) {
-        if (copy_from_user(&kiov, &iov[i], sizeof(kiov)))
+        if (copy_from_user(&kiov, &iov[i], sizeof(kiov))) {
+            fput(file);
             return -EFAULT;
+        }
         if (!kiov.iov_len)
             continue;
 
         unsigned char *kbuf = kmalloc(kiov.iov_len);
-        if (!kbuf)
+        if (!kbuf) {
+            fput(file);
             return total > 0 ? total : -ENOMEM;
+        }
 
         if (copy_from_user(kbuf, kiov.iov_base, kiov.iov_len)) {
             kfree(kbuf);
+            fput(file);
             return total > 0 ? total : -EFAULT;
         }
 
@@ -1710,11 +1751,14 @@ SYSCALL_DECL3(writev, int, fd, const struct iovec __user *, iov, int, iovcnt)
         kfree(kbuf);
         if (bytes > 0)
             total += bytes;
-        if (bytes < 0)
+        if (bytes < 0) {
+            fput(file);
             return total > 0 ? total : bytes;
+        }
         if ((size_t)bytes < kiov.iov_len)
             break;
     }
+    fput(file);
     return total;
 }
 
@@ -1729,56 +1773,73 @@ static bool file_is_seekable(struct file *file)
 
 SYSCALL_DECL4(pread64, int, fd, void*, buf, size_t, count, off_t, offset)
 {
-    struct file *file = get_file_handle(fd);
+    ssize_t ret = 0;
+    struct file *file = fget_handle(fd);
     if (IS_ERR(file))
         return PTR_ERR(file);
     if ((file->f_mode & O_ACCMODE) == O_WRONLY)
-        return -EBADF;
-    if (!file_is_seekable(file))
-        return -ESPIPE;
-    if (offset < 0)
-        return -EINVAL;
-    if (count == 0)
-        return 0;
+        ret = -EBADF;
+    else if (!file_is_seekable(file))
+        ret = -ESPIPE;
+    else if (offset < 0)
+        ret = -EINVAL;
+    else if (count == 0)
+        goto done;
+
+    if (ret < 0)
+        goto done;
 
     unsigned char *kbuf = kmalloc(count);
-    if (!kbuf)
-        return -ENOMEM;
+    if (!kbuf) {
+        ret = -ENOMEM;
+        goto done;
+    }
 
-    ssize_t bytes = vfs_read_at(file, kbuf, count, offset);
-    if (bytes > 0 && copy_to_user(buf, kbuf, bytes))
-        bytes = -EFAULT;
+    ret = vfs_read_at(file, kbuf, count, offset);
+    if (ret > 0 && copy_to_user(buf, kbuf, ret))
+        ret = -EFAULT;
 
     kfree(kbuf);
-    return bytes;
+done:
+    fput(file);
+    return ret;
 }
 
 SYSCALL_DECL4(pwrite64, int, fd, const void*, buf, size_t, count, off_t, offset)
 {
-    struct file *file = get_file_handle(fd);
+    ssize_t ret = 0;
+    struct file *file = fget_handle(fd);
     if (IS_ERR(file))
         return PTR_ERR(file);
     if ((file->f_mode & O_ACCMODE) == O_RDONLY)
-        return -EBADF;
-    if (!file_is_seekable(file))
-        return -ESPIPE;
-    if (offset < 0)
-        return -EINVAL;
-    if (count == 0)
-        return 0;
+        ret = -EBADF;
+    else if (!file_is_seekable(file))
+        ret = -ESPIPE;
+    else if (offset < 0)
+        ret = -EINVAL;
+    else if (count == 0)
+        goto done;
+
+    if (ret < 0)
+        goto done;
 
     unsigned char *kbuf = kmalloc(count);
-    if (!kbuf)
-        return -ENOMEM;
+    if (!kbuf) {
+        ret = -ENOMEM;
+        goto done;
+    }
 
     if (copy_from_user(kbuf, buf, count)) {
         kfree(kbuf);
+        fput(file);
         return -EFAULT;
     }
 
-    ssize_t bytes = vfs_write_at(file, kbuf, count, offset);
+    ret = vfs_write_at(file, kbuf, count, offset);
     kfree(kbuf);
-    return bytes;
+done:
+    fput(file);
+    return ret;
 }
 
 #define DEFAULT_POLLMASK (POLLIN|POLLOUT|POLLRDNORM|POLLWRNORM)

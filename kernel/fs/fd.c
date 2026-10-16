@@ -146,17 +146,15 @@ unlock:
     return fd;
 }
 
-struct file * get_file_handle(int fd)
+struct file * fd_remove(struct fdtable *files, int fd)
 {
-    struct file *file;
-    struct fdtable *files = current->files;
+    struct file *file = NULL;
 
     acquire_lock(&files->lock);
-    if (fd < 0 || (unsigned)fd >= files->max) {
-        release_lock(&files->lock);
-        return ERR_PTR(-EBADF);
+    if (fd >= 0 && (unsigned)fd < files->max) {
+        file = files->fdarray[fd];
+        files->fdarray[fd] = NULL;
     }
-    file = files->fdarray[fd];
     release_lock(&files->lock);
 
     if (!file)
@@ -164,7 +162,7 @@ struct file * get_file_handle(int fd)
     return file;
 }
 
-struct file * get_file_inc_ref(int fd)
+struct file * fget_handle(int fd)
 {
     struct file *file;
     struct fdtable *files = current->files;
