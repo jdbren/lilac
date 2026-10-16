@@ -152,7 +152,7 @@ void fs_init(void)
 #define SEEK_CUR 1
 #define SEEK_END 2
 
-off_t vfs_lseek_unlocked(struct file *file, off_t offset, int whence)
+static off_t do_vfs_lseek(struct file *file, off_t offset, int whence)
 {
     struct inode *inode = file->f_dentry->d_inode;
 
@@ -188,10 +188,7 @@ off_t vfs_lseek(struct file *file, off_t offset, int whence)
     if (file->f_op->lseek)
         return file->f_op->lseek(file, offset, whence);
 
-    mutex_lock(&file->f_pos_lock);
-    off_t ret = vfs_lseek_unlocked(file, offset, whence);
-    mutex_unlock(&file->f_pos_lock);
-    return ret;
+    return do_vfs_lseek(file, offset, whence);
 }
 
 static struct dentry * get_parent_dentry(const char *path, struct dentry *base);
@@ -524,15 +521,16 @@ SYSCALL_DECL1(fsync, int, fd)
 
 SYSCALL_DECL3(lseek, int, fd, off_t, offset, int, whence)
 {
-    struct file *file = fget_handle(fd);
+    bool pos_locked;
+    struct file *file = fget_pos(fd, &pos_locked);
     if (IS_ERR(file))
         return PTR_ERR(file);
     if (file->f_inode && S_ISFIFO(file->f_inode->i_mode)) {
-        fput(file);
+        fput_pos(file, pos_locked);
         return -ESPIPE;
     }
     long ret = vfs_lseek(file, offset, whence);
-    fput(file);
+    fput_pos(file, pos_locked);
     return ret;
 }
 
@@ -772,11 +770,9 @@ ssize_t vfs_read(struct file *file, void *buf, size_t count)
         count, file->f_dentry ? file->f_dentry->d_name : "unknown", file->f_pos);
 #endif
 
-    mutex_lock(&file->f_pos_lock);
     ssize_t bytes = file->f_op->read(file, buf, count);
     if (bytes > 0)
         file->f_pos += bytes;
-    mutex_unlock(&file->f_pos_lock);
 #ifdef DEBUG_VFS
     klog(LOG_DEBUG, "vfs_read: Read %ld bytes from file %s at pos %lu\n",
         bytes, file->f_dentry ? file->f_dentry->d_name : "unknown", file->f_pos);
@@ -785,6 +781,7 @@ ssize_t vfs_read(struct file *file, void *buf, size_t count)
 }
 SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
 {
+    bool pos_locked;
     struct file *file;
     unsigned char *kbuf;
     ssize_t bytes;
@@ -793,7 +790,7 @@ SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
     klog(LOG_DEBUG, "syscall read: Reading from fd %d\n", fd);
 #endif
 
-    file = fget_handle(fd);
+    file = fget_pos(fd, &pos_locked);
     if (IS_ERR(file)) {
 #ifdef DEBUG_VFS
         klog(LOG_DEBUG, "syscall read: Invalid fd %d\n", fd);
@@ -802,18 +799,18 @@ SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
     }
 
     if ((file->f_mode & O_ACCMODE) == O_WRONLY) {
-        fput(file);
+        fput_pos(file, pos_locked);
         return -EBADF;
     }
 
     if (count == 0) {
-        fput(file);
+        fput_pos(file, pos_locked);
         return 0;
     }
 
     kbuf = kmalloc(count);
     if (!kbuf) {
-        fput(file);
+        fput_pos(file, pos_locked);
         return -ENOMEM;
     }
 
@@ -822,7 +819,7 @@ SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
         bytes = -EFAULT;
 
     kfree(kbuf);
-    fput(file);
+    fput_pos(file, pos_locked);
     return bytes;
 }
 
@@ -877,7 +874,6 @@ ssize_t vfs_write(struct file *file, const void *buf, size_t count)
         }
     }
 
-    mutex_lock(&file->f_pos_lock);
     inode_lock(file->f_inode);
     if ((file->f_mode & O_APPEND))
         file->f_pos = file->f_inode->i_size;
@@ -887,12 +883,12 @@ ssize_t vfs_write(struct file *file, const void *buf, size_t count)
     if (bytes > 0)
         file->f_pos += bytes;
     inode_unlock(file->f_inode);
-    mutex_unlock(&file->f_pos_lock);
     return bytes;
 }
 
 SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
 {
+    bool pos_locked;
     struct file *file;
     unsigned char *kbuf;
     ssize_t bytes;
@@ -902,7 +898,7 @@ SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
     klog(LOG_DEBUG, "syscall write: Writing to fd %d\n", fd);
 #endif
 
-    file = fget_handle(fd);
+    file = fget_pos(fd, &pos_locked);
     if (IS_ERR(file)) {
 #ifdef DEBUG_VFS
         klog(LOG_DEBUG, "syscall write: Invalid fd %d\n", fd);
@@ -911,31 +907,31 @@ SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
     }
 
     if ((file->f_mode & O_ACCMODE) == O_RDONLY) {
-        fput(file);
+        fput_pos(file, pos_locked);
         return -EBADF;
     }
 
     if (count == 0) {
-        fput(file);
+        fput_pos(file, pos_locked);
         return 0;
     }
 
     kbuf = kmalloc(count);
     if (!kbuf) {
-        fput(file);
+        fput_pos(file, pos_locked);
         return -ENOMEM;
     }
 
     err = copy_from_user(kbuf, buf, count);
     if (err) {
         kfree(kbuf);
-        fput(file);
+        fput_pos(file, pos_locked);
         return err;
     }
 
     bytes = vfs_write(file, kbuf, count);
     kfree(kbuf);
-    fput(file);
+    fput_pos(file, pos_locked);
     return bytes;
 }
 
@@ -1002,7 +998,8 @@ ssize_t vfs_getdents(struct file *file, struct dirent *dirp, int buf_size)
 
 SYSCALL_DECL3(getdents, int, fd, struct dirent*, dirp, int, buf_size)
 {
-    struct file *file = fget_handle(fd);
+    bool pos_locked;
+    struct file *file = fget_pos(fd, &pos_locked);
     unsigned char *buf;
     ssize_t bytes;
 #ifdef DEBUG_VFS
@@ -1012,13 +1009,13 @@ SYSCALL_DECL3(getdents, int, fd, struct dirent*, dirp, int, buf_size)
         return PTR_ERR(file);
 
     if (buf_size > 0x8000) {
-        fput(file);
+        fput_pos(file, pos_locked);
         return -EINVAL;
     }
 
     buf = kzmalloc(buf_size);
     if (!buf) {
-        fput(file);
+        fput_pos(file, pos_locked);
         return -ENOMEM;
     }
 
@@ -1030,7 +1027,7 @@ SYSCALL_DECL3(getdents, int, fd, struct dirent*, dirp, int, buf_size)
         bytes = err;
 
     kfree(buf);
-    fput(file);
+    fput_pos(file, pos_locked);
     return bytes;
 }
 
@@ -1658,6 +1655,7 @@ struct iovec {
 
 SYSCALL_DECL3(readv, int, fd, const struct iovec __user *, iov, int, iovcnt)
 {
+    bool pos_locked;
     struct file *file;
     struct iovec kiov;
     ssize_t total = 0;
@@ -1665,18 +1663,18 @@ SYSCALL_DECL3(readv, int, fd, const struct iovec __user *, iov, int, iovcnt)
     if (iovcnt < 0 || iovcnt > 1024)
         return -EINVAL;
 
-    file = fget_handle(fd);
+    file = fget_pos(fd, &pos_locked);
     if (IS_ERR(file))
         return PTR_ERR(file);
 
     if ((file->f_mode & O_ACCMODE) == O_WRONLY) {
-        fput(file);
+        fput_pos(file, pos_locked);
         return -EBADF;
     }
 
     for (int i = 0; i < iovcnt; i++) {
         if (copy_from_user(&kiov, &iov[i], sizeof(kiov))) {
-            fput(file);
+            fput_pos(file, pos_locked);
             return -EFAULT;
         }
         if (!kiov.iov_len)
@@ -1684,7 +1682,7 @@ SYSCALL_DECL3(readv, int, fd, const struct iovec __user *, iov, int, iovcnt)
 
         unsigned char *kbuf = kmalloc(kiov.iov_len);
         if (!kbuf) {
-            fput(file);
+            fput_pos(file, pos_locked);
             return total > 0 ? total : -ENOMEM;
         }
 
@@ -1692,25 +1690,26 @@ SYSCALL_DECL3(readv, int, fd, const struct iovec __user *, iov, int, iovcnt)
         if (bytes > 0) {
             if (copy_to_user(kiov.iov_base, kbuf, bytes)) {
                 kfree(kbuf);
-                fput(file);
+                fput_pos(file, pos_locked);
                 return total > 0 ? total : -EFAULT;
             }
             total += bytes;
         }
         kfree(kbuf);
         if (bytes < 0) {
-            fput(file);
+            fput_pos(file, pos_locked);
             return total > 0 ? total : bytes;
         }
         if ((size_t)bytes < kiov.iov_len)
             break;
     }
-    fput(file);
+    fput_pos(file, pos_locked);
     return total;
 }
 
 SYSCALL_DECL3(writev, int, fd, const struct iovec __user *, iov, int, iovcnt)
 {
+    bool pos_locked;
     struct file *file;
     struct iovec kiov;
     ssize_t total = 0;
@@ -1718,18 +1717,18 @@ SYSCALL_DECL3(writev, int, fd, const struct iovec __user *, iov, int, iovcnt)
     if (iovcnt < 0 || iovcnt > 1024)
         return -EINVAL;
 
-    file = fget_handle(fd);
+    file = fget_pos(fd, &pos_locked);
     if (IS_ERR(file))
         return PTR_ERR(file);
 
     if ((file->f_mode & O_ACCMODE) == O_RDONLY) {
-        fput(file);
+        fput_pos(file, pos_locked);
         return -EBADF;
     }
 
     for (int i = 0; i < iovcnt; i++) {
         if (copy_from_user(&kiov, &iov[i], sizeof(kiov))) {
-            fput(file);
+            fput_pos(file, pos_locked);
             return -EFAULT;
         }
         if (!kiov.iov_len)
@@ -1737,13 +1736,13 @@ SYSCALL_DECL3(writev, int, fd, const struct iovec __user *, iov, int, iovcnt)
 
         unsigned char *kbuf = kmalloc(kiov.iov_len);
         if (!kbuf) {
-            fput(file);
+            fput_pos(file, pos_locked);
             return total > 0 ? total : -ENOMEM;
         }
 
         if (copy_from_user(kbuf, kiov.iov_base, kiov.iov_len)) {
             kfree(kbuf);
-            fput(file);
+            fput_pos(file, pos_locked);
             return total > 0 ? total : -EFAULT;
         }
 
@@ -1752,13 +1751,13 @@ SYSCALL_DECL3(writev, int, fd, const struct iovec __user *, iov, int, iovcnt)
         if (bytes > 0)
             total += bytes;
         if (bytes < 0) {
-            fput(file);
+            fput_pos(file, pos_locked);
             return total > 0 ? total : bytes;
         }
         if ((size_t)bytes < kiov.iov_len)
             break;
     }
-    fput(file);
+    fput_pos(file, pos_locked);
     return total;
 }
 

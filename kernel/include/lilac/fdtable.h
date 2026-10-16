@@ -23,6 +23,8 @@ struct fdtable {
 struct fdtable * alloc_fdtable(unsigned int size);
 struct file * fget_handle(int fd);
 struct file * fd_remove(struct fdtable *files, int fd);
+struct file * fget_pos(int fd, bool *locked);
+void fput_pos(struct file *file, bool locked);
 int get_next_fd(struct fdtable *, struct file *);
 int get_fd_exact_replace(struct fdtable *files, int fd, struct file *file);
 int get_fd_start_at(struct fdtable *files, int start, struct file *file);
