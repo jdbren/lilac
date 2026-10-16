@@ -4,12 +4,15 @@
 
 SYSCALL_DECL3(ioctl, int, fd, unsigned long, op, void *, argp)
 {
-    struct file *f = get_file_handle(fd);
+    long ret = 0;
+    struct file *f = fget_handle(fd);
     if (IS_ERR(f))
         return PTR_ERR(f);
 
     if (!f->f_op->ioctl)
-        return -ENOTTY;
-
-    return f->f_op->ioctl(f, op, argp);
+        ret = -ENOTTY;
+    else
+        ret = f->f_op->ioctl(f, op, argp);
+    fput(f);
+    return ret;
 }

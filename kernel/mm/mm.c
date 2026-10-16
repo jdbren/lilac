@@ -414,6 +414,7 @@ SYSCALL_DECL6(mmap, void*, addr, size_t, length, int, prot,
     struct vm_desc *vma = NULL;
     uintptr_t pgaddr = PAGE_ROUND_DOWN(addr);
     int num_pages = PAGE_ROUND_UP(length + (addr - pgaddr)) / PAGE_SIZE;
+    struct file *file = NULL;
 
     klog(LOG_DEBUG, "mmap (addr: %p, length: %lu, prot: 0x%x, flags: 0x%x, fd: %d,"
         " offset: %ld)\n", addr, length, prot, flags, fd, offset);
@@ -475,9 +476,10 @@ SYSCALL_DECL6(mmap, void*, addr, size_t, length, int, prot,
         goto free_vma;
     }
 
-    struct file *file = get_file_handle(fd);
-    if (IS_ERR_OR_NULL(file)) {
-        ret = -EBADF;
+    file = fget_handle(fd);
+    if (IS_ERR(file)) {
+        ret = PTR_ERR(file);
+        file = NULL;
         goto free_vma;
     }
 
@@ -504,6 +506,8 @@ free_vma:
 out:
 success:
     mmap_write_unlock(current->mm);
+    if (file)
+        fput(file);
     return ret;
 }
 

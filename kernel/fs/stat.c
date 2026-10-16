@@ -104,12 +104,13 @@ SYSCALL_DECL2(lstat, const char*, path, struct stat*, buf)
 SYSCALL_DECL2(fstat, int, fd, struct stat*, buf)
 {
     struct stat st;
-    struct file *f = get_file_handle(fd);
-    if (IS_ERR_OR_NULL(f))
-        return -EBADF;
     if (!access_ok(buf, sizeof(struct stat)))
         return -EFAULT;
+    struct file *f = fget_handle(fd);
+    if (IS_ERR(f))
+        return PTR_ERR(f);
     int err = vfs_stat(f, &st);
+    fput(f);
     if (err < 0)
         return err;
     return copy_to_user(buf, &st, sizeof(st));
@@ -138,7 +139,7 @@ SYSCALL_DECL4(fstatat, int, dirfd, const char*, path, struct stat*, buf, int, fl
             err = stat_inode(cwd->d_inode, &st);
             dput(cwd);
         } else {
-            struct file *f = get_file_inc_ref(dirfd);
+            struct file *f = fget_handle(dirfd);
             if (IS_ERR(f))
                 return PTR_ERR(f);
             err = vfs_stat(f, &st);
@@ -220,7 +221,7 @@ static long set_times(struct inode *inode, const struct timespec *times)
 
 static long set_times_fd(int fd, const struct timespec *times)
 {
-    struct file *f = get_file_inc_ref(fd);
+    struct file *f = fget_handle(fd);
     if (IS_ERR(f))
         return PTR_ERR(f);
     struct inode *inode = f->f_inode;

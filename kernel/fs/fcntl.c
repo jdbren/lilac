@@ -8,10 +8,11 @@
 
 SYSCALL_DECL3(fcntl, int, fd, int, cmd, unsigned long, arg)
 {
-    struct file *f = get_file_handle(fd);
+    struct file *f = fget_handle(fd);
     if (IS_ERR(f))
         return PTR_ERR(f);
     int new_fd;
+    long ret = 0;
 
 #ifdef DEBUG_FCNTL
     klog(LOG_DEBUG, "fcntl fd=%d, cmd=%d, arg=%lu\n", fd, cmd, arg);
@@ -21,39 +22,52 @@ SYSCALL_DECL3(fcntl, int, fd, int, cmd, unsigned long, arg)
         case F_DUPFD:
         case F_DUPFD_CLOEXEC:
             if (fd < 0)
-                return -EBADF;
+                ret = -EBADF;
             if ((int)arg < 0)
-                return -EINVAL;
-            if (arg == 0)
-                return vfs_dupf(fd);
+                ret = -EINVAL;
+            if (ret)
+                break;
 
+            if (arg == 0) {
+                ret = vfs_dupf(fd);
+                break;
+            }
+
+            // the new fd holds its own reference
             fget(f);
             new_fd = get_fd_start_at(current->files, arg, f);
             if (new_fd < 0) {
                 fput(f);
-                return new_fd;
+                ret = new_fd;
+                break;
             }
 
             if (cmd == F_DUPFD_CLOEXEC)
                 set_cloexec(current->files, new_fd);
 
-            return new_fd;
+            ret = new_fd;
+            break;
         case F_GETFL:
-            return f->f_mode;
+            ret = f->f_mode;
+            break;
         case F_SETFL:
-            f->f_mode = (f->f_mode & O_ACCMODE) | (arg & ~(O_ACCMODE|O_CREAT|O_EXCL|O_NOCTTY|O_TRUNC|O_CLOEXEC));
-            return 0;
+            f->f_mode = (f->f_mode & O_ACCMODE) |
+                (arg & ~(O_ACCMODE|O_CREAT|O_EXCL|O_NOCTTY|O_TRUNC|O_CLOEXEC));
+            break;
         case F_GETFD:
-            return is_cloexec(current->files, fd) ? FD_CLOEXEC : 0;
+            ret = is_cloexec(current->files, fd) ? FD_CLOEXEC : 0;
+            break;
         case F_SETFD:
             if (arg & FD_CLOEXEC)
                 set_cloexec(current->files, fd);
             else
                 clear_cloexec(current->files, fd);
-            return 0;
+            break;
         default:
-            return -EINVAL;
+            ret = -EINVAL;
     }
+    fput(f);
+    return ret;
 }
 
 static long do_faccessat(int dirfd, const char *pathname, int mode)
