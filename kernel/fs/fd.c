@@ -146,6 +146,27 @@ unlock:
     return fd;
 }
 
+// fget_handle for syscalls that use f_pos (locks the file position)
+struct file * fget_pos(int fd, bool *locked)
+{
+    struct file *file = fget_handle(fd);
+    if (IS_ERR(file))
+        return file;
+
+    struct inode *inode = file->f_inode;
+    *locked = inode && (S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode));
+    if (*locked)
+        mutex_lock(&file->f_pos_lock);
+    return file;
+}
+
+void fput_pos(struct file *file, bool locked)
+{
+    if (locked)
+        mutex_unlock(&file->f_pos_lock);
+    fput(file);
+}
+
 struct file * fd_remove(struct fdtable *files, int fd)
 {
     struct file *file = NULL;
