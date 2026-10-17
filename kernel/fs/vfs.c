@@ -811,7 +811,7 @@ SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
     klog(LOG_DEBUG, "syscall read: Reading from fd %d\n", fd);
 #endif
 
-    file = fget_pos(fd, &pos_locked);
+    file = fget_handle(fd);
     if (IS_ERR(file)) {
 #ifdef DEBUG_VFS
         klog(LOG_DEBUG, "syscall read: Invalid fd %d\n", fd);
@@ -820,27 +820,29 @@ SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
     }
 
     if ((file->f_mode & O_ACCMODE) == O_WRONLY) {
-        fput_pos(file, pos_locked);
+        fput(file);
         return -EBADF;
     }
 
     if (count == 0) {
-        fput_pos(file, pos_locked);
+        fput(file);
         return 0;
     }
 
     kbuf = kmalloc(count);
     if (!kbuf) {
-        fput_pos(file, pos_locked);
+        fput(file);
         return -ENOMEM;
     }
 
+    pos_locked = file_pos_lock(file);
     bytes = vfs_read(file, kbuf, count);
+    file_pos_unlock(file, pos_locked);
     if (bytes > 0 && copy_to_user(buf, kbuf, bytes))
         bytes = -EFAULT;
 
     kfree(kbuf);
-    fput_pos(file, pos_locked);
+    fput(file);
     return bytes;
 }
 
@@ -918,7 +920,7 @@ SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
     klog(LOG_DEBUG, "syscall write: Writing to fd %d\n", fd);
 #endif
 
-    file = fget_pos(fd, &pos_locked);
+    file = fget_handle(fd);
     if (IS_ERR(file)) {
 #ifdef DEBUG_VFS
         klog(LOG_DEBUG, "syscall write: Invalid fd %d\n", fd);
@@ -927,31 +929,33 @@ SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
     }
 
     if ((file->f_mode & O_ACCMODE) == O_RDONLY) {
-        fput_pos(file, pos_locked);
+        fput(file);
         return -EBADF;
     }
 
     if (count == 0) {
-        fput_pos(file, pos_locked);
+        fput(file);
         return 0;
     }
 
     kbuf = kmalloc(count);
     if (!kbuf) {
-        fput_pos(file, pos_locked);
+        fput(file);
         return -ENOMEM;
     }
 
     err = copy_from_user(kbuf, buf, count);
     if (err) {
         kfree(kbuf);
-        fput_pos(file, pos_locked);
+        fput(file);
         return err;
     }
 
+    pos_locked = file_pos_lock(file);
     bytes = vfs_write(file, kbuf, count);
+    file_pos_unlock(file, pos_locked);
     kfree(kbuf);
-    fput_pos(file, pos_locked);
+    fput(file);
     return bytes;
 }
 
@@ -1021,7 +1025,7 @@ ssize_t vfs_getdents(struct file *file, struct dirent *dirp, int buf_size)
 SYSCALL_DECL3(getdents, int, fd, struct dirent*, dirp, int, buf_size)
 {
     bool pos_locked;
-    struct file *file = fget_pos(fd, &pos_locked);
+    struct file *file = fget_handle(fd);
     unsigned char *buf;
     ssize_t bytes;
 #ifdef DEBUG_VFS
@@ -1031,17 +1035,19 @@ SYSCALL_DECL3(getdents, int, fd, struct dirent*, dirp, int, buf_size)
         return PTR_ERR(file);
 
     if (buf_size > 0x8000) {
-        fput_pos(file, pos_locked);
+        fput(file);
         return -EINVAL;
     }
 
     buf = kzmalloc(buf_size);
     if (!buf) {
-        fput_pos(file, pos_locked);
+        fput(file);
         return -ENOMEM;
     }
 
+    pos_locked = file_pos_lock(file);
     bytes = vfs_getdents(file, (struct dirent *)buf, buf_size);
+    file_pos_unlock(file, pos_locked);
     long err = 0;
     if (bytes > 0)
         err = copy_to_user(dirp, buf, bytes);
@@ -1049,7 +1055,7 @@ SYSCALL_DECL3(getdents, int, fd, struct dirent*, dirp, int, buf_size)
         bytes = err;
 
     kfree(buf);
-    fput_pos(file, pos_locked);
+    fput(file);
     return bytes;
 }
 
@@ -1715,15 +1721,17 @@ ssize_t iov_copy_from_user(const struct iovec __user *uiov, int iovcnt, struct i
     return total;
 }
 
-// Copy the user buffers into kbuf, which holds the total length
-int iov_gather(void *kbuf, const struct iovec *iov, int iovcnt)
+// Copy the first len bytes of the user buffers into kbuf
+int iov_gather(void *kbuf, const struct iovec *iov, int iovcnt, size_t len)
 {
-    for (int i = 0; i < iovcnt; i++) {
-        if (!iov[i].iov_len)
+    for (int i = 0; i < iovcnt && len; i++) {
+        size_t n = MIN(iov[i].iov_len, len);
+        if (!n)
             continue;
-        if (copy_from_user(kbuf, iov[i].iov_base, iov[i].iov_len))
+        if (copy_from_user(kbuf, iov[i].iov_base, n))
             return -EFAULT;
-        kbuf = (u8 *)kbuf + iov[i].iov_len;
+        kbuf = (u8 *)kbuf + n;
+        len -= n;
     }
     return 0;
 }
@@ -1743,13 +1751,14 @@ ssize_t iov_scatter(const struct iovec *iov, int iovcnt, const void *kbuf, size_
     return done;
 }
 
+// readv/writev transfer at most MAX_BUFFER bytes per call and return a short count
 SYSCALL_DECL3(readv, int, fd, const struct iovec __user *, uiov, int, iovcnt)
 {
     bool pos_locked;
-    struct iovec *iov;
+    struct iovec *iov = NULL;
     void *kbuf;
 
-    struct file *file = fget_pos(fd, &pos_locked);
+    struct file *file = fget_handle(fd);
     if (IS_ERR(file))
         return PTR_ERR(file);
 
@@ -1758,35 +1767,34 @@ SYSCALL_DECL3(readv, int, fd, const struct iovec __user *, uiov, int, iovcnt)
         goto out;
     ret = iov_copy_from_user(uiov, iovcnt, &iov);
     if (ret <= 0)
-        goto out;
-    if (ret > MAX_BUFFER) {
-        ret = -EINVAL;
-        goto out;
-    }
+        goto free_iov;
 
-    kbuf = kmalloc(ret);
+    size_t len = MIN((size_t)ret, MAX_BUFFER);
+    kbuf = kmalloc(len);
     if (!kbuf) {
         ret = -ENOMEM;
         goto free_iov;
     }
-    ret = vfs_read(file, kbuf, ret);
+    pos_locked = file_pos_lock(file);
+    ret = vfs_read(file, kbuf, len);
+    file_pos_unlock(file, pos_locked);
     if (ret > 0)
         ret = iov_scatter(iov, iovcnt, kbuf, ret);
     kfree(kbuf);
 free_iov:
     kfree(iov);
 out:
-    fput_pos(file, pos_locked);
+    fput(file);
     return ret;
 }
 
 SYSCALL_DECL3(writev, int, fd, const struct iovec __user *, uiov, int, iovcnt)
 {
     bool pos_locked;
-    struct iovec *iov;
+    struct iovec *iov = NULL;
     void *kbuf;
 
-    struct file *file = fget_pos(fd, &pos_locked);
+    struct file *file = fget_handle(fd);
     if (IS_ERR(file))
         return PTR_ERR(file);
 
@@ -1795,27 +1803,26 @@ SYSCALL_DECL3(writev, int, fd, const struct iovec __user *, uiov, int, iovcnt)
         goto out;
     ret = iov_copy_from_user(uiov, iovcnt, &iov);
     if (ret <= 0)
-        goto out;
-    if (ret > MAX_BUFFER) {
-        ret = -EINVAL;
-        goto out;
-    }
+        goto free_iov;
 
-    kbuf = kmalloc(ret);
+    size_t len = MIN((size_t)ret, MAX_BUFFER);
+    kbuf = kmalloc(len);
     if (!kbuf) {
         ret = -ENOMEM;
         goto free_iov;
     }
 
-    size_t len = ret;
-    ret = iov_gather(kbuf, iov, iovcnt);
-    if (!ret)
+    ret = iov_gather(kbuf, iov, iovcnt, len);
+    if (!ret) {
+        pos_locked = file_pos_lock(file);
         ret = vfs_write(file, kbuf, len);
+        file_pos_unlock(file, pos_locked);
+    }
     kfree(kbuf);
 free_iov:
     kfree(iov);
 out:
-    fput_pos(file, pos_locked);
+    fput(file);
     return ret;
 }
 

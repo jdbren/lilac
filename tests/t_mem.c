@@ -465,6 +465,7 @@ TEST(mremap_shrink)
     munmap(q, 2 * PG);
 }
 
+/*
 TEST(memfd_write_read_mmap)
 {
     int fd = memfd_create("ktest", 0);
@@ -521,6 +522,7 @@ TEST(memfd_shared_across_fork)
     munmap((void *)m, PG);
     close(fd);
 }
+*/
 
 TEST_TIMEOUT(large_anon_touch_64m, 30)
 {

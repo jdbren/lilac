@@ -5,6 +5,7 @@
 #include "ktest.h"
 #include <dirent.h>
 #include <strings.h>
+#include <sys/mman.h>
 #include <sys/syscall.h>
 #include <sys/time.h>
 #include <sys/uio.h>
@@ -811,6 +812,32 @@ FSTEST(hard_link)
     EXPECT_EQ(sb.st_nlink, 1);
 }
 
+/* each name holds its own inode reference; dropping both must not free an open file */
+FSTEST(hard_link_unlink_both_open)
+{
+    char *a = pj(dir, "orig"), *b = pj(dir, "alias");
+    create_file(a, "linked", 6);
+    int lr = link(a, b);
+    skip_if_no_links(fs, lr);
+    EXPECT_OK(lr);
+    int fd = ASSERT_OK(open(b, O_RDONLY));
+    EXPECT_OK(unlink(a));
+    EXPECT_OK(unlink(b));
+    /* reuse whatever a wrongly freed inode left behind */
+    char name[16];
+    for (int i = 0; i < 32; i++) {
+        snprintf(name, sizeof(name), "churn%d", i);
+        create_file(pj(dir, name), "XXXXXXXX", 8);
+    }
+    struct stat st;
+    EXPECT_OK(fstat(fd, &st));
+    EXPECT_EQ(st.st_nlink, 0);
+    char buf[8] = {0};
+    EXPECT_EQ(read(fd, buf, sizeof(buf)), 6);
+    EXPECT_STREQ(buf, "linked");
+    close(fd);
+}
+
 FSTEST(symlink_readlink)
 {
     char *target = pj(dir, "target"), *ln = pj(dir, "ln");
@@ -1060,6 +1087,42 @@ FSTEST(readv_writev)
     EXPECT_EQ(memcmp(a, "hello", 5), 0);
     EXPECT_EQ(memcmp(b, " vectored ", 10), 0);
     EXPECT_STREQ(c, "world");
+    close(fd);
+}
+
+/*
+ * The user buffer is a file mapping of the same open file, so the copy faults
+ * pages in through that file while the syscall is in progress.
+ */
+FSTEST(read_write_own_mapping)
+{
+    enum { LEN = 2 * 4096 };
+    char *f = pj(dir, "selfmap");
+    static char pat[LEN];
+    for (int i = 0; i < LEN; i++)
+        pat[i] = 'a' + i % 23;
+    create_file(f, pat, LEN);
+    int fd = ASSERT_OK(open(f, O_RDWR));
+
+    char *m = mmap(NULL, LEN, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+    ASSERT_PTR(m);
+    EXPECT_EQ(read(fd, m, LEN), LEN);
+    EXPECT_EQ(memcmp(m, pat, LEN), 0);
+    munmap(m, LEN);
+
+    m = mmap(NULL, LEN, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+    ASSERT_PTR(m);
+    EXPECT_EQ(lseek(fd, 0, SEEK_SET), 0);
+    EXPECT_EQ(write(fd, m, LEN), LEN);
+    munmap(m, LEN);
+
+    m = mmap(NULL, LEN, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+    ASSERT_PTR(m);
+    EXPECT_EQ(lseek(fd, 0, SEEK_SET), 0);
+    struct iovec iov[2] = { { m, LEN / 2 }, { m + LEN / 2, LEN / 2 } };
+    EXPECT_EQ(readv(fd, iov, 2), LEN);
+    EXPECT_EQ(memcmp(m, pat, LEN), 0);
+    munmap(m, LEN);
     close(fd);
 }
 

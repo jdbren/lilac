@@ -138,10 +138,13 @@ tmpfs_link(struct dentry *old_d, struct inode *dir, struct dentry *new_d)
     if (S_ISDIR(old_inode->i_mode))
         return -EPERM;
 
+    iget(old_inode); // the new entry
     int err = tmpfs_add_entry(dir, new_d, old_inode,
         S_ISLNK(old_inode->i_mode) ? TMPFS_SYMLINK : TMPFS_FILE);
-    if (err)
+    if (err) {
+        iput(old_inode);
         return err;
+    }
     iget(old_inode); // the new dentry
     old_inode->i_nlink++;
     new_d->d_inode = old_inode;
