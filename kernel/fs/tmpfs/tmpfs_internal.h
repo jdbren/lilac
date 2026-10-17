@@ -31,4 +31,6 @@ extern const struct super_operations tmpfs_sops;
 extern const struct inode_operations tmpfs_iops;
 extern const struct file_operations tmpfs_fops;
 
+struct inode * tmpfs_new_inode(struct super_block *sb, umode_t mode, void *priv);
+
 #endif

@@ -17,19 +17,21 @@ static int unique_ino(void)
 
 static struct inode* tmpfs_alloc_inode(struct super_block *sb)
 {
-    struct inode *inode = kzmalloc(sizeof(struct inode));
-    if (!inode) {
-        klog(LOG_ERROR, "tmpfs_alloc_inode: Out of memory allocating inode\n");
-        return ERR_PTR(-ENOMEM);
-    }
+    return kzmalloc(sizeof(struct inode));
+}
+
+struct inode * tmpfs_new_inode(struct super_block *sb, umode_t mode, void *priv)
+{
+    struct inode *inode = alloc_inode(sb);
+    if (!inode)
+        return NULL;
 
     inode->i_ino = unique_ino();
-    inode->i_sb = sb;
-    rwsem_init(&inode->i_rwsem);
+    inode->i_mode = mode;
     inode->i_op = &tmpfs_iops;
-    inode->i_count = 1;
+    inode->i_fop = &tmpfs_fops;
+    inode->i_private = priv;
     inode->i_atime = inode->i_mtime = inode->i_ctime = get_unix_time();
-    inode->i_nlink = 1;
     acquire_lock(&sb->s_lock);
     list_add_tail(&inode->i_list, &sb->s_inodes);
     release_lock(&sb->s_lock);
@@ -65,22 +67,21 @@ struct dentry* tmpfs_init(void *device, struct super_block *sb)
         klog(LOG_ERROR, "tmpfs_init: Failed to allocate root dentry\n");
         return ERR_PTR(-ENOMEM);
     }
-    struct inode *root_inode = tmpfs_alloc_inode(sb);
-    if (IS_ERR_OR_NULL(root_inode)) {
-        klog(LOG_ERROR, "tmpfs_init: Failed to allocate root inode\n");
-        kfree(root_dentry);
-        return ERR_CAST(root_inode);
-    }
     struct tmpfs_dir *root_dir = kzmalloc(sizeof(struct tmpfs_dir));
     if (!root_dir) {
         klog(LOG_ERROR, "tmpfs_init: Failed to allocate root tmpfs_dir\n");
-        tmpfs_destroy_inode(root_inode);
+        kfree(root_dentry);
+        return ERR_PTR(-ENOMEM);
+    }
+    struct inode *root_inode = tmpfs_new_inode(sb,
+        S_IFDIR|S_IREAD|S_IWRITE|S_IEXEC, root_dir);
+    if (!root_inode) {
+        klog(LOG_ERROR, "tmpfs_init: Failed to allocate root inode\n");
+        kfree(root_dir);
         kfree(root_dentry);
         return ERR_PTR(-ENOMEM);
     }
 
-    root_inode->i_private = root_dir;
-    root_inode->i_mode = S_IFDIR|S_IREAD|S_IWRITE|S_IEXEC;
     root_dentry->d_count = 1;
     mutex_init(&root_dentry->d_lock);
     root_dentry->d_sb = sb;
@@ -138,15 +139,12 @@ struct file * tmpfs_anon_file(const char *name)
         return ERR_PTR(-ENOMEM);
     }
 
-    struct inode *inode = tmpfs_alloc_inode(sb);
-    if (IS_ERR(inode)) {
+    struct inode *inode = tmpfs_new_inode(sb, S_IFREG|S_IREAD|S_IWRITE, file_info);
+    if (!inode) {
         kfree(file_info->data);
         kfree(file_info);
-        return ERR_CAST(inode);
+        return ERR_PTR(-ENOMEM);
     }
-    inode->i_private = file_info;
-    inode->i_mode = S_IFREG | S_IREAD | S_IWRITE;
-    inode->i_size = 0;
     inode->i_nlink = 0;
 
     char dname[NAME_MAX];
@@ -159,7 +157,7 @@ struct file * tmpfs_anon_file(const char *name)
     }
     dentry->d_inode = inode;
 
-    struct file *file = alloc_file(dentry);
+    struct file *file = alloc_file(dentry, inode);
     dput(dentry);
     if (!file)
         return ERR_PTR(-ENOMEM);

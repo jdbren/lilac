@@ -67,7 +67,7 @@ static void root_init(struct block_device *bdev, enum fs_type type)
     root_disk->mnt_sb = sb;
 
     root_dentry = root_disk->init_fs(bdev, sb);
-    if (!root_dentry)
+    if (IS_ERR_OR_NULL(root_dentry))
         kerror("Failed to initialize root dentry\n");
     root_disk->mnt_root = root_dentry;
 
@@ -357,6 +357,10 @@ again:
         err = -EINVAL;
         goto out;
     }
+    if (IS_RDONLY(old_dir)) {
+        err = -EROFS;
+        goto out;
+    }
     if (!old_dir->i_op->rename) {
         err = -EPERM;
         goto out;
@@ -472,8 +476,10 @@ long vfs_ftruncate(struct file *f, loff_t length)
         return -EBADF;
     // if (inode->i_flags & S_APPEND)
     //     return -EPERM;
-    if (!inode->i_op || !inode->i_op->truncate)
+    if (IS_RDONLY(inode))
         return -EROFS;
+    if (!inode->i_op->truncate)
+        return -EPERM;
     if ((unsigned long long)length > inode->i_sb->s_maxbytes)
         return -EFBIG;
 
@@ -580,8 +586,10 @@ static int create_file_at(struct dentry *new_d, umode_t mode)
         err = 1;
     else if (IS_DEADDIR(dir))
         err = -ENOENT;
-    else if (!dir->i_op->create)
+    else if (IS_RDONLY(dir))
         err = -EROFS;
+    else if (!dir->i_op->create)
+        err = -EPERM;
     else
         err = dir->i_op->create(dir, new_d, mode);
     unlock_parent(parent);
@@ -644,8 +652,10 @@ static struct file *vfs_open_dentry(struct dentry *dentry, const char *path,
         klog(LOG_DEBUG, "VFS: Not a directory: %s\n", path);
         return ERR_PTR(-ENOTDIR);
     }
+    if ((flags & O_ACCMODE) != O_RDONLY && S_ISREG(inode->i_mode) && IS_RDONLY(inode))
+        return ERR_PTR(-EROFS);
 
-    new_file = alloc_file(dentry);
+    new_file = alloc_file(dentry, inode);
     if (IS_ERR_OR_NULL(new_file))
         return ERR_PTR(-ENOMEM);
 
@@ -725,27 +735,34 @@ SYSCALL_DECL4(openat, int, dirfd, const char*, path, int, flags, int, mode)
     return do_openat(dirfd, path, flags, mode);
 }
 
+static inline bool is_reg(const struct inode *inode)
+{
+    return S_ISREG(inode->i_mode);
+}
+
 ssize_t vfs_read_at(struct file *file, void *buf, size_t count, unsigned long pos)
 {
-    if (file->f_dentry) {
-        struct inode *inode = file->f_dentry->d_inode;
-        if (S_ISDIR(inode->i_mode))
-            return -EISDIR;
+    struct inode *inode = file->f_inode;
+    ssize_t bytes;
 
-        if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode))
-            return inode->i_fop->read(file, buf, count);
+    if (inode && S_ISDIR(inode->i_mode))
+        return -EISDIR;
+    if (!file->f_op->read)
+        return -EINVAL;
+    if (inode && !is_reg(inode))
+        return file->f_op->read(file, buf, count);
 
-        if (pos >= inode->i_size)
-            return 0;
-    }
-
-    // f_op->read reads at f_pos, so hold the lock across the swap; the file
-    // may be shared (e.g. a mapping inherited across fork)
     mutex_lock(&file->f_pos_lock);
-    unsigned long old_pos = file->f_pos;
-    file->f_pos = pos;
-    ssize_t bytes = file->f_op->read(file, buf, count);
-    file->f_pos = old_pos;
+    inode_lock_shared(inode);
+    if (inode && pos >= (unsigned long)inode->i_size) {
+        bytes = 0;
+    } else {
+        unsigned long old_pos = file->f_pos;
+        file->f_pos = pos;
+        bytes = file->f_op->read(file, buf, count);
+        file->f_pos = old_pos;
+    }
+    inode_unlock_shared(inode);
     mutex_unlock(&file->f_pos_lock);
 
     return bytes;
@@ -753,29 +770,33 @@ ssize_t vfs_read_at(struct file *file, void *buf, size_t count, unsigned long po
 
 ssize_t vfs_read(struct file *file, void *buf, size_t count)
 {
-    if (file->f_dentry) {
-        struct inode *inode = file->f_dentry->d_inode;
-        if (S_ISDIR(inode->i_mode))
-            return -EISDIR;
+    struct inode *inode = file->f_inode;
+    ssize_t bytes;
 
-        if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode))
-            return inode->i_fop->read(file, buf, count);
-
-        if (file->f_pos >= inode->i_size)
-            return 0;
-    }
+    if (inode && S_ISDIR(inode->i_mode))
+        return -EISDIR;
+    if (!file->f_op->read)
+        return -EINVAL;
+    if (inode && !is_reg(inode))
+        return file->f_op->read(file, buf, count);
 
 #ifdef DEBUG_VFS
     klog(LOG_DEBUG, "vfs_read: Reading %lu bytes from file %s at pos %lu\n",
-        count, file->f_dentry ? file->f_dentry->d_name : "unknown", file->f_pos);
+        count, file->f_dentry ? file->f_dentry->d_name.data : "unknown", file->f_pos);
 #endif
 
-    ssize_t bytes = file->f_op->read(file, buf, count);
-    if (bytes > 0)
-        file->f_pos += bytes;
+    inode_lock_shared(inode);
+    if (inode && file->f_pos >= inode->i_size) {
+        bytes = 0;
+    } else {
+        bytes = file->f_op->read(file, buf, count);
+        if (bytes > 0)
+            file->f_pos += bytes;
+    }
+    inode_unlock_shared(inode);
 #ifdef DEBUG_VFS
     klog(LOG_DEBUG, "vfs_read: Read %ld bytes from file %s at pos %lu\n",
-        bytes, file->f_dentry ? file->f_dentry->d_name : "unknown", file->f_pos);
+        bytes, file->f_dentry ? file->f_dentry->d_name.data : "unknown", file->f_pos);
 #endif
     return bytes;
 }
@@ -837,13 +858,13 @@ static ssize_t write_limit(struct file *file, unsigned long pos, size_t count)
 
 ssize_t vfs_write_at(struct file *file, const void *buf, size_t count, unsigned long pos)
 {
-    if (file->f_dentry) {
-        struct inode *inode = file->f_dentry->d_inode;
-        if (S_ISDIR(inode->i_mode))
-            return -EISDIR;
-        if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode))
-            return inode->i_fop->write(file, buf, count);
-    }
+    struct inode *inode = file->f_inode;
+    if (inode && S_ISDIR(inode->i_mode))
+        return -EISDIR;
+    if (!file->f_op->write)
+        return -EINVAL;
+    if (inode && !is_reg(inode))
+        return file->f_op->write(file, buf, count);
 
     ssize_t bytes = write_limit(file, pos, count);
     if (bytes <= 0)
@@ -865,14 +886,13 @@ ssize_t vfs_write_at(struct file *file, const void *buf, size_t count, unsigned 
 
 ssize_t vfs_write(struct file *file, const void *buf, size_t count)
 {
-    if (file->f_dentry) {
-        struct inode *inode = file->f_dentry->d_inode;
-        if (S_ISDIR(inode->i_mode))
-            return -EISDIR;
-        if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode)) {
-            return inode->i_fop->write(file, buf, count);
-        }
-    }
+    struct inode *inode = file->f_inode;
+    if (inode && S_ISDIR(inode->i_mode))
+        return -EISDIR;
+    if (!file->f_op->write)
+        return -EINVAL;
+    if (inode && !is_reg(inode))
+        return file->f_op->write(file, buf, count);
 
     inode_lock(file->f_inode);
     if ((file->f_mode & O_APPEND))
@@ -987,6 +1007,8 @@ ssize_t vfs_getdents(struct file *file, struct dirent *dirp, int buf_size)
     inode_lock_shared(inode);
     if (IS_DEADDIR(inode))
         dir_cnt = -ENOENT;
+    else if (!file->f_op->readdir)
+        dir_cnt = -ENOTDIR;
     else
         dir_cnt = file->f_op->readdir(file, dirp, dir_cnt);
     inode_unlock_shared(inode);
@@ -1051,8 +1073,6 @@ static int vfs_do_mkdir(struct dentry * parent_d, const char *name, umode_t mode
         return -ENOENT;
     if (!S_ISDIR(parent_i->i_mode))
         return -ENOTDIR;
-    if (parent_i->i_op->mkdir == NULL)
-        return -EPERM;
 
     struct dentry *new_dentry, *parent;
     int err;
@@ -1079,6 +1099,10 @@ again:
         err = -EEXIST;
     else if (IS_DEADDIR(dir))
         err = -ENOENT;
+    else if (IS_RDONLY(dir))
+        err = -EROFS;
+    else if (!dir->i_op->mkdir)
+        err = -EPERM;
     else
         err = dir->i_op->mkdir(dir, new_dentry, mode);
     unlock_parent(parent);
@@ -1291,7 +1315,9 @@ again:
         err = -ENOTDIR;
     else if (dentry->d_mount)
         err = -EBUSY;
-    else if (dir->i_op->rmdir == NULL)
+    else if (IS_RDONLY(dir))
+        err = -EROFS;
+    else if (!dir->i_op->rmdir)
         err = -EPERM;
     else
         err = dir->i_op->rmdir(dir, dentry);
@@ -1332,7 +1358,9 @@ again:
         return PTR_ERR(parent);
     }
     struct inode *dir = parent->d_inode;
-    if (!dir->i_op->unlink)
+    if (IS_RDONLY(dir))
+        err = -EROFS;
+    else if (!dir->i_op->unlink)
         err = -EPERM;
     else
         err = dir->i_op->unlink(dir, dentry);
@@ -1430,6 +1458,10 @@ again:
         err = -EEXIST;
     else if (IS_DEADDIR(dir))
         err = -ENOENT;
+    else if (dir->i_sb != old_inode->i_sb)
+        err = -EXDEV;
+    else if (IS_RDONLY(dir))
+        err = -EROFS;
     else if (!dir->i_op->link)
         err = -EPERM;
     else
@@ -1522,6 +1554,8 @@ again:
         err = -EEXIST;
     else if (IS_DEADDIR(dir))
         err = -ENOENT;
+    else if (IS_RDONLY(dir))
+        err = -EROFS;
     else if (!dir->i_op->symlink)
         err = -EPERM;
     else
@@ -1618,11 +1652,8 @@ static long do_readlinkat(int dirfd, const char *path, char *buf, int bufsize)
             err = PTR_ERR(lnk);
             goto error;
         }
-        int len = strlen(lnk);
-        if (len > bufsize) {
-            err = -ERANGE;
-            goto error;
-        }
+        // readlink(2) truncates to the buffer
+        int len = MIN((int)strlen(lnk), bufsize);
         err = copy_to_user(buf, lnk, len);
         if (err < 0)
             goto error;

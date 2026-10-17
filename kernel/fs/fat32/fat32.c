@@ -534,9 +534,8 @@ struct dentry *fat32_init(void *dev, struct super_block *sb)
     struct inode *root_inode;
     struct dentry *root_dentry;
 
-    if (!fat_disk || !fat_inode) {
-        kerror("Out of memory allocating FAT32 structures\n");
-    }
+    if (!fat_disk || !fat_inode)
+        goto error_nomem;
 
     // Initialize the FAT32 disk info
     fat_disk->base_lba = bdev->first_sector_lba;
@@ -547,37 +546,38 @@ struct dentry *fat32_init(void *dev, struct super_block *sb)
         goto error;
     disk_init(fat_disk);
 
+    // Initialize the super block
+    sb->s_blocksize = fat_disk->bytes_per_clst;
+    sb->s_maxbytes = 0xFFFFFFFF;
+    sb->s_type = MSDOS;
+    sb->s_op = &fat_sops;
+    sb->s_bdev = bdev;
+    sb->s_fs_info = fat_disk;
+    sb->s_active = true;
+
     // Initialize the root inode
-    root_inode = fat_alloc_inode(sb);
-    root_inode->i_ino = 1;
-    root_inode->i_nlink = 1;
-    root_inode->i_private = fat_inode;
-    root_inode->i_mode |= S_IFDIR;
     fat_inode->entry.cl_low = fat_disk->root_start & 0xFFFF;
     fat_inode->entry.cl_high = fat_disk->root_start >> 16;
     fat_inode->entry.attributes = FAT_DIR_ATTR;
+    root_inode = fat_new_inode(sb, fat_inode);
+    if (!root_inode)
+        goto error_nomem;
+    root_inode->i_ino = 1;
 
     // Initialize the dentry
     root_dentry = kzmalloc(sizeof(struct dentry));
     if (!root_dentry) {
-        kerror("Out of memory allocating FAT32 root dentry\n");
+        root_inode->i_private = NULL;
+        destroy_inode(root_inode);
+        goto error_nomem;
     }
     root_dentry->d_sb = sb;
     root_dentry->d_inode = root_inode;
     root_dentry->d_count = 1;
     mutex_init(&root_dentry->d_lock);
 
-    // Initialize the super block
-    sb->s_blocksize = fat_disk->bytes_per_clst;
-    sb->s_maxbytes = 0xFFFFFFFF;
-    sb->s_type = MSDOS;
-    sb->s_op = &fat_sops;
     sb->s_root = root_dentry;
-    sb->s_bdev = bdev;
-    atomic_store(&sb->s_active, true);
-    INIT_LIST_HEAD(&sb->s_inodes);
     list_add(&root_inode->i_list, &sb->s_inodes);
-    sb->s_fs_info = fat_disk;
     strncpy(bdev->name, (const char*)fat_disk->bpb.extended_section.volume_label, 11);
 
     // Read the FAT table
@@ -599,10 +599,14 @@ struct dentry *fat32_init(void *dev, struct super_block *sb)
 
     return root_dentry;
 
+error_nomem:
+    kfree(fat_disk);
+    kfree(fat_inode);
+    return ERR_PTR(-ENOMEM);
 error:
     kfree(fat_disk);
     kfree(fat_inode);
-    return NULL;
+    return ERR_PTR(-EINVAL);
 }
 
 #ifdef DEBUG_FAT

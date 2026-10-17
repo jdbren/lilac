@@ -367,7 +367,7 @@ void destroy_inode(struct inode *inode);
 void iget(struct inode *inode);
 void iput(struct inode *inode);
 
-struct file * alloc_file(struct dentry *d);
+struct file * alloc_file(struct dentry *d, struct inode *i);
 void fget(struct file *file);
 void fput(struct file *file);
 

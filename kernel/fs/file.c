@@ -3,7 +3,7 @@
 #include <lilac/log.h>
 #include <mm/kmalloc.h>
 
-struct file * alloc_file(struct dentry *d)
+struct file * alloc_file(struct dentry *d, struct inode *i)
 {
     struct file *file = kzmalloc(sizeof(*file));
     if (!file)
@@ -16,7 +16,7 @@ struct file * alloc_file(struct dentry *d)
     if (d)
         dget(d);
     file->f_dentry = d;
-    file->f_inode = d ? d->d_inode : NULL;
+    file->f_inode = d ? d->d_inode : i;
     return file;
 }
 

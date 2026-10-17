@@ -147,6 +147,8 @@ int ext2_readdir(struct file *file, struct dirent *dirp, unsigned int count)
                 filled++;
             }
             file->f_pos += ext2_rec_len_from_disk(de->rec_len);
+            if (de->inode)
+                dirp[filled - 1].d_off = file->f_pos;
         }
         brelease(bio);
     }

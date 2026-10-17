@@ -271,8 +271,8 @@ SYSCALL_DECL1(pipe, int, pipefd[2])
     if (IS_ERR(p))
         return PTR_ERR(p);
 
-    struct file *read_end = alloc_file(NULL);
-    struct file *write_end = alloc_file(NULL);
+    struct file *read_end = alloc_file(NULL, p->p_inode);
+    struct file *write_end = alloc_file(NULL, p->p_inode);
     if (!read_end || !write_end) {
         destroy_pipe(p);
         kfree(read_end);

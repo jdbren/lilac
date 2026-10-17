@@ -18,14 +18,7 @@ struct inode * ext2_alloc_inode(struct super_block *sb)
         return ERR_PTR(-ENOMEM);
     }
 
-    inode->i_sb = sb;
     inode->i_private = ei;
-    inode->i_count = 1;
-    rwsem_init(&inode->i_rwsem);
-    acquire_lock(&sb->s_lock);
-    list_add_tail(&inode->i_list, &sb->s_inodes);
-    release_lock(&sb->s_lock);
-
     return inode;
 }
 
@@ -166,6 +159,7 @@ struct inode *ext2_iget(struct super_block *sb, unsigned long ino)
     // if (!(inode->i_state & I_NEW))
     //     return inode;
 
+    inode->i_ino = ino;
     ei = EXT2_I(inode);
     ei->i_block_alloc_info = NULL;
 
@@ -268,6 +262,9 @@ struct inode *ext2_iget(struct super_block *sb, unsigned long ino)
 
     bdrop(bh);
     // unlock_new_inode(inode);
+    acquire_lock(&sb->s_lock);
+    list_add_tail(&inode->i_list, &sb->s_inodes);
+    release_lock(&sb->s_lock);
     return inode;
 
 bad_inode:
