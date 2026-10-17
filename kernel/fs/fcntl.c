@@ -5,6 +5,21 @@
 #include <lilac/sched.h>
 #include <lilac/uaccess.h>
 
+static long do_fd_ioctl(struct fdtable *files, int fd, int cmd, unsigned long arg)
+{
+    long ret = 0;
+    acquire_lock(&files->lock);
+    if ((unsigned)fd >= files->max || !files->fdarray[fd])
+        ret = -EBADF;
+    else if (cmd == F_GETFD)
+        ret = is_cloexec(files, fd) ? FD_CLOEXEC : 0;
+    else if (arg & FD_CLOEXEC)
+        set_cloexec(files, fd);
+    else
+        clear_cloexec(files, fd);
+    release_lock(&files->lock);
+    return ret;
+}
 
 SYSCALL_DECL3(fcntl, int, fd, int, cmd, unsigned long, arg)
 {
@@ -21,12 +36,10 @@ SYSCALL_DECL3(fcntl, int, fd, int, cmd, unsigned long, arg)
     switch (cmd) {
         case F_DUPFD:
         case F_DUPFD_CLOEXEC:
-            if (fd < 0)
-                ret = -EBADF;
-            if (arg >= FD_MAX)
+            if (arg >= FD_MAX) {
                 ret = -EINVAL;
-            if (ret)
                 break;
+            }
 
             new_fd = get_unused_fd_from(arg,
                 cmd == F_DUPFD_CLOEXEC ? O_CLOEXEC : 0);
@@ -46,13 +59,8 @@ SYSCALL_DECL3(fcntl, int, fd, int, cmd, unsigned long, arg)
                 (arg & ~(O_ACCMODE|O_CREAT|O_EXCL|O_NOCTTY|O_TRUNC|O_CLOEXEC));
             break;
         case F_GETFD:
-            ret = is_cloexec(current->files, fd) ? FD_CLOEXEC : 0;
-            break;
         case F_SETFD:
-            if (arg & FD_CLOEXEC)
-                set_cloexec(current->files, fd);
-            else
-                clear_cloexec(current->files, fd);
+            ret = do_fd_ioctl(current->files, fd, cmd, arg);
             break;
         default:
             ret = -EINVAL;

@@ -53,47 +53,6 @@ static void copy_fs_info(struct fs_info *dst, struct fs_info *src)
     release_lock(&src->lock);
 }
 
-static int copy_files(struct fdtable *dst, struct fdtable *src)
-{
-    kfree(dst->fdarray);
-    kfree(dst->open_fds);
-    kfree(dst->close_on_exec);
-    dst->fdarray = NULL;
-    dst->open_fds = NULL;
-    dst->close_on_exec = NULL;
-
-    acquire_lock(&src->lock);
-
-    dst->fdarray = kcalloc(src->max, sizeof(struct file*));
-    dst->open_fds = kcalloc(BITS_TO_LONGS(src->max), sizeof(unsigned long));
-    dst->close_on_exec = kcalloc(BITS_TO_LONGS(src->max), sizeof(unsigned long));
-    if (!dst->fdarray || !dst->open_fds || !dst->close_on_exec) {
-        kfree(dst->fdarray);
-        kfree(dst->open_fds);
-        kfree(dst->close_on_exec);
-        dst->fdarray = NULL;
-        dst->open_fds = NULL;
-        dst->close_on_exec = NULL;
-        release_lock(&src->lock);
-        return -ENOMEM;
-    }
-
-    dst->max = src->max;
-    for (size_t i = 0; i < src->max; i++) {
-        dst->fdarray[i] = src->fdarray[i];
-        if (dst->fdarray[i]) {
-            fget(dst->fdarray[i]);
-            __set_bit(dst->open_fds, i);
-        }
-    }
-
-    memcpy(dst->close_on_exec, src->close_on_exec,
-        BITS_TO_LONGS(src->max) * sizeof(unsigned long));
-
-    release_lock(&src->lock);
-    return 0;
-}
-
 static void copy_sighandlers(struct sighandlers *dst, struct sighandlers *src)
 {
     for (int i = 0; i < _NSIG; i++)
@@ -257,8 +216,9 @@ static struct task * clone_process(struct clone_args *args)
     if (flags & CLONE_FILES) {
         child->files->ref_count++;
     } else {
-        child->files = alloc_fdtable(cur->files->max);
-        copy_files(child->files, cur->files);
+        child->files = dup_fdtable(cur->files);
+        if (!child->files)
+            panic("Failed to copy fd table for child process\n");
     }
 
     if (flags & CLONE_SIGHAND) {
