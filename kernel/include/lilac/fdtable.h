@@ -27,6 +27,8 @@ struct file * fget_handle(int fd);
 struct file * fd_remove(struct fdtable *files, int fd);
 struct file * fget_pos(int fd, bool *locked);
 void fput_pos(struct file *file, bool locked);
+bool file_pos_lock(struct file *file);
+void file_pos_unlock(struct file *file, bool locked);
 int get_unused_fd_flags(unsigned int flags);
 int get_unused_fd_from(int start, unsigned int flags);
 void fd_install(int fd, struct file *file);
