@@ -1092,9 +1092,14 @@ FSTEST(fcntl_dupfd)
     EXPECT_GE(d2, 30);
     EXPECT_TRUE(fcntl(d2, F_GETFD) & FD_CLOEXEC);
     EXPECT_TRUE(!(fcntl(d, F_GETFD) & FD_CLOEXEC));
+    // A minimum of 0 still sets close-on-exec
+    int d3 = EXPECT_OK(fcntl(fd, F_DUPFD_CLOEXEC, 0));
+    EXPECT_TRUE(fcntl(d3, F_GETFD) & FD_CLOEXEC);
+    EXPECT_ERR(fcntl(fd, F_DUPFD, 1 << 20), EINVAL);
     close(fd);
     close(d);
     close(d2);
+    close(d3);
 }
 
 static int helper_fd_open(int fd)

@@ -123,6 +123,7 @@ syscall_table:
 	sc_tbl_entry getrusage	# 104
 	sc_tbl_entry utimes		# 105
 	sc_tbl_entry utimensat	# 106
+	sc_tbl_entry pipe2		# 107
 /*
 	sc_tbl_entry chmod		# 30
 	sc_tbl_entry chown		# 31

@@ -707,15 +707,13 @@ static long do_openat(int dirfd, const char *path, int flags, int mode)
         goto error;
     }
 
-    fd = get_next_fd(current->files, f);
+    fd = get_unused_fd_flags(flags);
     if (fd < 0) {
         klog(LOG_DEBUG, "No available file descriptors for %s\n", path_buf);
         fput(f);
         goto error;
     }
-
-    if (flags & O_CLOEXEC)
-        set_cloexec(current->files, fd);
+    fd_install(fd, f);
 
 #ifdef DEBUG_VFS
     klog(LOG_DEBUG, "VFS: Opened file %s with fd %d\n", path_buf, fd);

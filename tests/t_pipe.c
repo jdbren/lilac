@@ -247,6 +247,120 @@ TEST(pipe2_flags)
     EXPECT_TRUE(fcntl(p[1], F_GETFL) & O_NONBLOCK);
 }
 
+TEST(pipe2_invalid_flags)
+{
+    int p[2];
+    EXPECT_ERR(pipe2(p, O_APPEND), EINVAL);
+}
+
+TEST(blocking_large_write_completes)
+{
+    /* a blocking write larger than the buffer returns only once it's all in */
+    enum { LEN = 64 * 1024 };
+    int p[2];
+    ASSERT_OK(pipe(p));
+    pid_t pid = ASSERT_OK(fork());
+    if (pid == 0) {
+        close(p[0]);
+        static unsigned char buf[LEN];
+        for (int i = 0; i < LEN; i++)
+            buf[i] = i * 7;
+        _exit(write(p[1], buf, LEN) == LEN ? 0 : 1);
+    }
+    close(p[1]);
+    static unsigned char got[LEN];
+    EXPECT_EQ(ktest_read_all(p[0], got, LEN), LEN);
+    int bad = 0;
+    for (int i = 0; i < LEN; i++)
+        bad += got[i] != (unsigned char)(i * 7);
+    EXPECT_EQ(bad, 0);
+    int st;
+    EXPECT_TRUE((st = ktest_wait_timeout(pid, 5)) != -1 && WIFEXITED(st));
+    EXPECT_EQ(WEXITSTATUS(st), 0);
+}
+
+TEST(nonblocking_small_write_all_or_nothing)
+{
+    /* a write <= PIPE_BUF that doesn't fit fails instead of writing part */
+    int p[2];
+    ASSERT_OK(pipe2(p, O_NONBLOCK));
+    char buf[4096] = {0};
+    ASSERT_EQ(write(p[1], buf, 4000), 4000);
+    EXPECT_ERR(write(p[1], buf, 200), EAGAIN);
+    EXPECT_EQ(write(p[1], buf, 96), 96);
+    EXPECT_ERR(write(p[1], buf, 1), EAGAIN);
+    EXPECT_EQ(read(p[0], buf, sizeof(buf)), 4096);
+}
+
+TEST(nonblocking_large_write_partial)
+{
+    /* a write > PIPE_BUF on a non-blocking pipe writes what fits */
+    int p[2];
+    ASSERT_OK(pipe2(p, O_NONBLOCK));
+    static char buf[3 * 4096];
+    ASSERT_EQ(write(p[1], buf, 100), 100);
+    EXPECT_EQ(write(p[1], buf, sizeof(buf)), 4096 - 100);
+}
+
+TEST(sigpipe_after_partial_write)
+{
+    /* a reader leaving mid-write: the writer gets the count so far and SIGPIPE */
+    int p[2];
+    ASSERT_OK(pipe(p));
+    pid_t pid = ASSERT_OK(fork());
+    if (pid == 0) {
+        signal(SIGPIPE, SIG_IGN);
+        close(p[0]);
+        static char buf[64 * 1024];
+        ssize_t r = write(p[1], buf, sizeof(buf));
+        _exit(r > 0 && r < (ssize_t)sizeof(buf) ? 0 : 1);
+    }
+    close(p[1]);
+    char buf[100];
+    EXPECT_EQ(ktest_read_all(p[0], buf, sizeof(buf)), (ssize_t)sizeof(buf));
+    close(p[0]);
+    int st;
+    EXPECT_TRUE((st = ktest_wait_timeout(pid, 5)) != -1 && WIFEXITED(st));
+    EXPECT_EQ(WEXITSTATUS(st), 0);
+}
+
+/* Fill the fd table up to one free slot; returns that slot */
+static int fill_fds_but_one(int base)
+{
+    int last = -1;
+    for (;;) {
+        int fd = dup(base);
+        if (fd < 0)
+            break;
+        last = fd;
+    }
+    if (last >= 0)
+        close(last);
+    return last;
+}
+
+TEST(emfile_installs_neither_end)
+{
+    int base = ASSERT_OK(open("/dev/null", O_RDONLY));
+    int free_fd = fill_fds_but_one(base);
+    ASSERT_GE(free_fd, 0);
+    int p[2] = { -1, -1 };
+    EXPECT_ERR(pipe(p), EMFILE);
+    /* the one free slot must still be free, not holding a freed read end */
+    EXPECT_ERR(fcntl(free_fd, F_GETFD), EBADF);
+    EXPECT_EQ(dup(base), free_fd);
+}
+
+TEST(efault_installs_neither_end)
+{
+    int before = ASSERT_OK(open("/dev/null", O_RDONLY));
+    close(before);
+    EXPECT_ERR(pipe((int *)8), EFAULT);
+    /* no fds were left behind */
+    EXPECT_ERR(fcntl(before, F_GETFD), EBADF);
+    EXPECT_ERR(fcntl(before + 1, F_GETFD), EBADF);
+}
+
 TEST(redirect_stdout_of_exec)
 {
     char out[64];
