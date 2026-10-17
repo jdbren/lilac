@@ -474,7 +474,7 @@ long vfs_ftruncate(struct file *f, loff_t length)
         return -EISDIR;
     if (!S_ISREG(inode->i_mode))
         return -EINVAL;
-    if ((f->f_mode & O_ACCMODE) == O_RDONLY)
+    if (!file_writable(f))
         return -EBADF;
     // if (inode->i_flags & S_APPEND)
     //     return -EPERM;
@@ -646,14 +646,14 @@ static struct file *vfs_open_dentry(struct dentry *dentry, const char *path,
         return ERR_PTR(-EEXIST);
     }
 
-    if (S_ISDIR(inode->i_mode) && (flags & O_ACCMODE) != O_RDONLY) {
+    if (S_ISDIR(inode->i_mode) && (OPEN_FMODE(flags) & FMODE_WRITE)) {
         klog(LOG_DEBUG, "VFS: Cannot open directory %s with write access\n", path);
         return ERR_PTR(-EISDIR);
     } else if (!S_ISDIR(inode->i_mode) && flags & O_DIRECTORY) {
         klog(LOG_DEBUG, "VFS: Not a directory: %s\n", path);
         return ERR_PTR(-ENOTDIR);
     }
-    if ((flags & O_ACCMODE) != O_RDONLY && S_ISREG(inode->i_mode) && IS_RDONLY(inode))
+    if ((OPEN_FMODE(flags) & FMODE_WRITE) && S_ISREG(inode->i_mode) && IS_RDONLY(inode))
         return ERR_PTR(-EROFS);
 
     new_file = alloc_file(dentry, inode);
@@ -673,7 +673,7 @@ static struct file *vfs_open_dentry(struct dentry *dentry, const char *path,
     new_file->f_mode = flags & ~(O_CREAT|O_EXCL|O_NOCTTY|O_TRUNC|O_CLOEXEC);
 
     if ((flags & O_TRUNC) && S_ISREG(inode->i_mode) &&
-            (flags & O_ACCMODE) != O_RDONLY && inode->i_size > 0) {
+            (OPEN_FMODE(flags) & FMODE_WRITE) && inode->i_size > 0) {
         err = vfs_ftruncate(new_file, 0);
         if (err < 0) {
             vfs_close(new_file);
@@ -822,7 +822,7 @@ SYSCALL_DECL3(read, int, fd, void*, buf, size_t, count)
         return PTR_ERR(file);
     }
 
-    if ((file->f_mode & O_ACCMODE) == O_WRONLY) {
+    if (!file_readable(file)) {
         fput(file);
         return -EBADF;
     }
@@ -927,7 +927,7 @@ SYSCALL_DECL3(write, int, fd, const void*, buf, size_t, count)
         return PTR_ERR(file);
     }
 
-    if ((file->f_mode & O_ACCMODE) == O_RDONLY) {
+    if (!file_writable(file)) {
         fput(file);
         return -EBADF;
     }
@@ -1763,7 +1763,7 @@ SYSCALL_DECL3(readv, int, fd, const struct iovec __user *, uiov, int, iovcnt)
         return PTR_ERR(file);
 
     ssize_t ret = -EBADF;
-    if ((file->f_mode & O_ACCMODE) == O_WRONLY)
+    if (!file_readable(file))
         goto out;
     ret = iov_copy_from_user(uiov, iovcnt, &iov);
     if (ret <= 0)
@@ -1799,7 +1799,7 @@ SYSCALL_DECL3(writev, int, fd, const struct iovec __user *, uiov, int, iovcnt)
         return PTR_ERR(file);
 
     ssize_t ret = -EBADF;
-    if ((file->f_mode & O_ACCMODE) == O_RDONLY)
+    if (!file_writable(file))
         goto out;
     ret = iov_copy_from_user(uiov, iovcnt, &iov);
     if (ret <= 0)
@@ -1841,7 +1841,7 @@ SYSCALL_DECL4(pread64, int, fd, void*, buf, size_t, count, off_t, offset)
     struct file *file = fget_handle(fd);
     if (IS_ERR(file))
         return PTR_ERR(file);
-    if ((file->f_mode & O_ACCMODE) == O_WRONLY)
+    if (!file_readable(file))
         ret = -EBADF;
     else if (!file_is_seekable(file))
         ret = -ESPIPE;
@@ -1875,7 +1875,7 @@ SYSCALL_DECL4(pwrite64, int, fd, const void*, buf, size_t, count, off_t, offset)
     struct file *file = fget_handle(fd);
     if (IS_ERR(file))
         return PTR_ERR(file);
-    if ((file->f_mode & O_ACCMODE) == O_RDONLY)
+    if (!file_writable(file))
         ret = -EBADF;
     else if (!file_is_seekable(file))
         ret = -ESPIPE;

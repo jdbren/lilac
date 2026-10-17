@@ -447,7 +447,7 @@ int tty_ioctl(struct file *f, int op, void *argp)
             return -EFAULT;
         return tcsetpgrp(tty, pgrp);
     case TIOCSTI: {
-        if (current->ctty != tty || (f->f_mode & O_ACCMODE) == O_WRONLY)
+        if (current->ctty != tty || !file_readable(f))
             return -EPERM;
         u8 c;
         if (get_user(c, (u8*)argp))

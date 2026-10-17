@@ -377,6 +377,21 @@ static inline struct file * get_file(struct file *filp)
     return filp;
 }
 
+// Map the O_ACCMODE bits of open flags to a read/write bitmask
+#define FMODE_READ          0x1
+#define FMODE_WRITE         0x2
+#define OPEN_FMODE(flags)   (((flags) + 1) & O_ACCMODE)
+
+static inline bool file_readable(const struct file *f)
+{
+    return OPEN_FMODE(f->f_mode) & FMODE_READ;
+}
+
+static inline bool file_writable(const struct file *f)
+{
+    return OPEN_FMODE(f->f_mode) & FMODE_WRITE;
+}
+
 void anon_fs_init(void);
 struct inode * new_anon_inode(umode_t mode, const struct file_operations *fops);
 struct file * alloc_anon_file(struct inode *inode, int flags, void *priv);

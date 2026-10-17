@@ -52,6 +52,15 @@ extern "C" {
 #define S_IREAD  0400 /* Read by owner.  */
 #define S_IWRITE 0200 /* Write by owner.  */
 #define S_IEXEC  0100 /* Execute by owner.  */
+#define S_IRGRP  0040 /* Read by group.  */
+#define S_IWGRP  0020 /* Write by group.  */
+#define S_IXGRP  0010 /* Execute by group.  */
+#define S_IROTH  0004 /* Read by others.  */
+#define S_IWOTH  0002 /* Write by others.  */
+#define S_IXOTH  0001 /* Execute by others.  */
+#define S_IRWXU  0700 /* Read, write, execute by owner. */
+#define S_IRWXG  0070 /* Read, write, execute by group. */
+#define S_IRWXO  0007 /* Read, write, execute by others. */
 
 /* XXX close on exec request; must match UF_EXCLOSE in user.h */
 #define	FD_CLOEXEC	1	/* posix */

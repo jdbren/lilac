@@ -483,9 +483,8 @@ SYSCALL_DECL6(mmap, void*, addr, size_t, length, int, prot,
         goto free_vma;
     }
 
-    int mode = file->f_mode & O_ACCMODE;
-    if (((mode == O_WRONLY) && (mflags & VM_READ)) ||
-        ((mode == O_RDONLY) && (mflags & VM_WRITE))) {
+    if (((mflags & VM_READ) && !file_readable(file)) ||
+        ((mflags & VM_WRITE) && !file_writable(file))) {
         ret = -EACCES;
         goto free_vma;
     }
