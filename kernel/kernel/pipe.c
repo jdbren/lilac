@@ -8,6 +8,8 @@
 #include <lilac/timer.h>
 #include <lilac/sched.h>
 
+#define PIPE_BUF 4096
+
 ssize_t pipe_read(struct file *f, void *buf, size_t count);
 ssize_t pipe_write(struct file *f, const void *buf, size_t count);
 int pipe_close(struct inode *i, struct file *f);
@@ -54,6 +56,7 @@ struct pipe_buf * create_pipe(size_t buf_size)
     p->buffer = get_free_pages(buf_size / PAGE_SIZE, 0);
     if (!p->buffer) {
         klog(LOG_ERROR, "Failed to allocate pipe buffer\n");
+        kfree(p->p_inode);
         kfree(p);
         return ERR_PTR(-ENOMEM);
     }
@@ -155,46 +158,52 @@ ssize_t pipe_write(struct file *f, const void *buf, size_t count)
         klog(LOG_ERROR, "pipe_write: Invalid pipe buffer\n");
         return -EIO;
     }
-
-    if (pipe->n_readers == 0) {
-        klog(LOG_WARN, "pipe_write: No readers, cannot write\n");
-        do_raise(current, SIGPIPE);
-        return -EPIPE;
-    }
 #ifdef DEBUG_PIPE
     klog(LOG_DEBUG, "pipe_write: Writing %lu bytes to pipe %p\n", count, pipe);
 #endif
-    acquire_lock(&pipe->lock);
-    while (pipe->data_size == pipe->buf_size) {
-        release_lock(&pipe->lock);
-        if (f->f_mode & O_NONBLOCK)
-            return -EAGAIN;
-        int err = wait_event_interruptible(pipe->write_wq,
-                READ_ONCE(pipe->data_size) < pipe->buf_size ||
-                READ_ONCE(pipe->n_readers) == 0);
-        if (err)
-            return err;
-        if (READ_ONCE(pipe->n_readers) == 0) {
-            klog(LOG_WARN, "pipe_write: No readers after wake, raising SIGPIPE\n");
-            do_raise(current, SIGPIPE);
-            return -EPIPE;
-        }
+
+    // Free space needed before copying: all of a small write, any for a large one
+    const unsigned int min_space = count <= PIPE_BUF ? MIN(count, pipe->buf_size) : 1;
+    size_t written = 0;
+    ssize_t err = 0;
+
+    while (written < count) {
         acquire_lock(&pipe->lock);
+
+        if (pipe->n_readers == 0) {
+            release_lock(&pipe->lock);
+            do_raise(current, SIGPIPE);
+            err = -EPIPE;
+            break;
+        }
+
+        unsigned int space = pipe->buf_size - pipe->data_size;
+        if (space < min_space) {
+            release_lock(&pipe->lock);
+            if (f->f_mode & O_NONBLOCK) {
+                err = -EAGAIN;
+                break;
+            }
+            err = wait_event_interruptible(pipe->write_wq,
+                    pipe->buf_size - READ_ONCE(pipe->data_size) >= min_space ||
+                    READ_ONCE(pipe->n_readers) == 0);
+            if (err)
+                break;
+            continue;
+        }
+
+        unsigned int pos = pipe->idx.write_pos;
+        unsigned int n = MIN(count - written, space);
+        ring_copy_in(pipe, pos, (const u8 *)buf + written, n);
+        pipe->idx.write_pos = (pos + n) % pipe->buf_size;
+        pipe->data_size += n;
+        written += n;
+        release_lock(&pipe->lock);
+
+        wake_all(&pipe->read_wq);
     }
-    int pos = pipe->idx.write_pos;
-    unsigned int to_write = MIN(count, pipe->buf_size - pipe->data_size);
-    ring_copy_in(pipe, pos, buf, to_write);
-    pipe->idx.write_pos = (pos + to_write) % pipe->buf_size;
-    pipe->data_size += to_write;
-    release_lock(&pipe->lock);
 
-    wake_all(&pipe->read_wq);
-
-    if (to_write != count) {
-        klog(LOG_DEBUG, "pipe_write: Partial write (%d of %lu bytes)\n", to_write, count);
-    }
-
-    return to_write;
+    return written ? (ssize_t)written : err;
 }
 
 int pipe_close(struct inode *i, struct file *f)
@@ -218,14 +227,13 @@ int pipe_close(struct inode *i, struct file *f)
             wake_all(&p->write_wq);
     }
 
-    p->files--;
+    unsigned int files = --p->files;
     release_lock(&p->lock);
 
-    klog(LOG_DEBUG, "pipe_close: Closed pipe %p, remaining files: %u\n", p, p->files);
+    klog(LOG_DEBUG, "pipe_close: Closed pipe %p, remaining files: %u\n", p, files);
 
-    if (p->files == 0) {
+    if (files == 0)
         destroy_pipe(p);
-    }
 
     return 0;
 }
@@ -262,48 +270,73 @@ poll_mask_t pipe_poll(struct file *f, struct poll_request *pollreq)
     return mask;
 }
 
-SYSCALL_DECL1(pipe, int, pipefd[2])
+static long do_pipe2(int __user *pipefd, int flags)
 {
+    struct file *read_end, *write_end;
+    struct pipe_buf *p;
+    int rfd, wfd;
+    long err;
+
+    if (flags & ~(O_CLOEXEC | O_NONBLOCK))
+        return -EINVAL;
     if (!access_ok(pipefd, 2 * sizeof(int)))
         return -EFAULT;
 
-    struct pipe_buf *p = create_pipe(PAGE_SIZE);
+    p = create_pipe(PAGE_SIZE);
     if (IS_ERR(p))
         return PTR_ERR(p);
 
-    struct file *read_end = alloc_file(NULL, p->p_inode);
-    struct file *write_end = alloc_file(NULL, p->p_inode);
+    read_end = alloc_file(NULL, p->p_inode);
+    write_end = alloc_file(NULL, p->p_inode);
     if (!read_end || !write_end) {
-        destroy_pipe(p);
-        kfree(read_end);
-        kfree(write_end);
-        return -ENOMEM;
+        err = -ENOMEM;
+        goto free_files;
     }
 
     read_end->f_op = &pipe_fops;
-    read_end->f_mode = O_RDONLY;
-    read_end->f_inode = p->p_inode;
-
+    read_end->f_mode = O_RDONLY | (flags & O_NONBLOCK);
     write_end->f_op = &pipe_fops;
-    write_end->f_mode = O_WRONLY;
-    write_end->f_inode = p->p_inode;
+    write_end->f_mode = O_WRONLY | (flags & O_NONBLOCK);
 
-    int rfd = get_next_fd(current->files, read_end);
-    int wfd = get_next_fd(current->files, write_end);
-    if (rfd < 0 || wfd < 0) {
-        destroy_pipe(p);
-        kfree(read_end);
-        kfree(write_end);
-        return -EMFILE;
+    // Reserve both fds and copy them out before either becomes visible
+    rfd = get_unused_fd_flags(flags);
+    if (rfd < 0) {
+        err = rfd;
+        goto free_files;
+    }
+    wfd = get_unused_fd_flags(flags);
+    if (wfd < 0) {
+        err = wfd;
+        goto put_rfd;
     }
 
     if (put_user(rfd, &pipefd[0]) || put_user(wfd, &pipefd[1])) {
-        destroy_pipe(p);
-        kfree(read_end);
-        kfree(write_end);
-        return -EFAULT;
+        err = -EFAULT;
+        goto put_wfd;
     }
 
+    fd_install(rfd, read_end);
+    fd_install(wfd, write_end);
     klog(LOG_DEBUG, "pipe: Created pipe with fds %d (read) and %d (write)\n", rfd, wfd);
     return 0;
+
+put_wfd:
+    put_unused_fd(wfd);
+put_rfd:
+    put_unused_fd(rfd);
+free_files:
+    kfree(read_end);
+    kfree(write_end);
+    destroy_pipe(p);
+    return err;
+}
+
+SYSCALL_DECL1(pipe, int __user *, pipefd)
+{
+    return do_pipe2(pipefd, 0);
+}
+
+SYSCALL_DECL2(pipe2, int __user *, pipefd, int, flags)
+{
+    return do_pipe2(pipefd, flags);
 }

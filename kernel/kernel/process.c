@@ -379,6 +379,7 @@ static void do_close_on_exec(struct task *p)
         if (files->fdarray[i] && is_cloexec(files, i)) {
             file = files->fdarray[i];
             files->fdarray[i] = NULL;
+            __clear_bit(files->open_fds, i);
         }
         release_lock(&files->lock);
         if (file)

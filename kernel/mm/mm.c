@@ -818,13 +818,12 @@ SYSCALL_DECL2(memfd_create, const char *, name, unsigned int, flags)
     if (IS_ERR(f))
         return PTR_ERR(f);
 
-    fd = get_next_fd(current->files, f);
+    fd = get_unused_fd_flags((flags & MFD_CLOEXEC) ? O_CLOEXEC : 0);
     if (fd < 0) {
         fput(f);
         return fd;
     }
-    if (flags & MFD_CLOEXEC)
-        set_cloexec(current->files, fd);
+    fd_install(fd, f);
 
     return fd;
 }

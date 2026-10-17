@@ -23,28 +23,19 @@ SYSCALL_DECL3(fcntl, int, fd, int, cmd, unsigned long, arg)
         case F_DUPFD_CLOEXEC:
             if (fd < 0)
                 ret = -EBADF;
-            if ((int)arg < 0)
+            if (arg >= FD_MAX)
                 ret = -EINVAL;
             if (ret)
                 break;
 
-            if (arg == 0) {
-                ret = vfs_dupf(fd);
-                break;
-            }
-
-            // the new fd holds its own reference
-            fget(f);
-            new_fd = get_fd_start_at(current->files, arg, f);
+            new_fd = get_unused_fd_from(arg,
+                cmd == F_DUPFD_CLOEXEC ? O_CLOEXEC : 0);
             if (new_fd < 0) {
-                fput(f);
                 ret = new_fd;
                 break;
             }
-
-            if (cmd == F_DUPFD_CLOEXEC)
-                set_cloexec(current->files, new_fd);
-
+            // the new fd holds its own reference
+            fd_install(new_fd, get_file(f));
             ret = new_fd;
             break;
         case F_GETFL:

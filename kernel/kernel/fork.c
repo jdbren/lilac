@@ -55,25 +55,25 @@ static void copy_fs_info(struct fs_info *dst, struct fs_info *src)
 
 static int copy_files(struct fdtable *dst, struct fdtable *src)
 {
-    if (dst->fdarray)
-        kfree(dst->fdarray);
-    if (dst->close_on_exec)
-        kfree(dst->close_on_exec);
+    kfree(dst->fdarray);
+    kfree(dst->open_fds);
+    kfree(dst->close_on_exec);
     dst->fdarray = NULL;
+    dst->open_fds = NULL;
     dst->close_on_exec = NULL;
 
     acquire_lock(&src->lock);
 
     dst->fdarray = kcalloc(src->max, sizeof(struct file*));
-    if (dst->fdarray == NULL) {
-        release_lock(&src->lock);
-        return -ENOMEM;
-    }
-
+    dst->open_fds = kcalloc(BITS_TO_LONGS(src->max), sizeof(unsigned long));
     dst->close_on_exec = kcalloc(BITS_TO_LONGS(src->max), sizeof(unsigned long));
-    if (dst->close_on_exec == NULL) {
+    if (!dst->fdarray || !dst->open_fds || !dst->close_on_exec) {
         kfree(dst->fdarray);
+        kfree(dst->open_fds);
+        kfree(dst->close_on_exec);
         dst->fdarray = NULL;
+        dst->open_fds = NULL;
+        dst->close_on_exec = NULL;
         release_lock(&src->lock);
         return -ENOMEM;
     }
@@ -83,6 +83,7 @@ static int copy_files(struct fdtable *dst, struct fdtable *src)
         dst->fdarray[i] = src->fdarray[i];
         if (dst->fdarray[i]) {
             fget(dst->fdarray[i]);
+            __set_bit(dst->open_fds, i);
         }
     }
 
@@ -435,6 +436,7 @@ static void cleanup_fs(struct fs_info *fs, struct fdtable *files)
             }
         }
         kfree(files->fdarray);
+        kfree(files->open_fds);
         kfree(files->close_on_exec);
         kfree(files);
     }
