@@ -1752,7 +1752,6 @@ ssize_t iov_scatter(const struct iovec *iov, int iovcnt, const void *kbuf, size_
     return done;
 }
 
-// readv/writev transfer at most MAX_BUFFER bytes per call and return a short count
 SYSCALL_DECL3(readv, int, fd, const struct iovec __user *, uiov, int, iovcnt)
 {
     bool pos_locked;
