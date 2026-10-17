@@ -522,9 +522,8 @@ SYSCALL_DECL1(fsync, int, fd)
     struct file *file = fget_handle(fd);
     if (IS_ERR(file))
         return PTR_ERR(file);
-    long ret = 0;
     fput(file);
-    return ret;
+    return 0;
 }
 
 SYSCALL_DECL3(lseek, int, fd, off_t, offset, int, whence)
@@ -735,9 +734,15 @@ SYSCALL_DECL4(openat, int, dirfd, const char*, path, int, flags, int, mode)
     return do_openat(dirfd, path, flags, mode);
 }
 
-static inline bool is_reg(const struct inode *inode)
+// Returns 0 for reg i/o. 1 for direct i/o, or a negative error.
+static int rw_verify(struct file *file, bool write)
 {
-    return S_ISREG(inode->i_mode);
+    struct inode *inode = file->f_inode;
+    if (inode && S_ISDIR(inode->i_mode))
+        return -EISDIR;
+    if (write ? !file->f_op->write : !file->f_op->read)
+        return -EINVAL;
+    return !inode || !S_ISREG(inode->i_mode);
 }
 
 ssize_t vfs_read_at(struct file *file, void *buf, size_t count, unsigned long pos)
@@ -745,16 +750,15 @@ ssize_t vfs_read_at(struct file *file, void *buf, size_t count, unsigned long po
     struct inode *inode = file->f_inode;
     ssize_t bytes;
 
-    if (inode && S_ISDIR(inode->i_mode))
-        return -EISDIR;
-    if (!file->f_op->read)
-        return -EINVAL;
-    if (inode && !is_reg(inode))
+    int err = rw_verify(file, false);
+    if (err < 0)
+        return err;
+    if (err)
         return file->f_op->read(file, buf, count);
 
     mutex_lock(&file->f_pos_lock);
     inode_lock_shared(inode);
-    if (inode && pos >= (unsigned long)inode->i_size) {
+    if (pos >= (unsigned long)inode->i_size) {
         bytes = 0;
     } else {
         unsigned long old_pos = file->f_pos;
@@ -773,11 +777,10 @@ ssize_t vfs_read(struct file *file, void *buf, size_t count)
     struct inode *inode = file->f_inode;
     ssize_t bytes;
 
-    if (inode && S_ISDIR(inode->i_mode))
-        return -EISDIR;
-    if (!file->f_op->read)
-        return -EINVAL;
-    if (inode && !is_reg(inode))
+    int err = rw_verify(file, false);
+    if (err < 0)
+        return err;
+    if (err)
         return file->f_op->read(file, buf, count);
 
 #ifdef DEBUG_VFS
@@ -786,7 +789,7 @@ ssize_t vfs_read(struct file *file, void *buf, size_t count)
 #endif
 
     inode_lock_shared(inode);
-    if (inode && file->f_pos >= inode->i_size) {
+    if (file->f_pos >= inode->i_size) {
         bytes = 0;
     } else {
         bytes = file->f_op->read(file, buf, count);
@@ -860,12 +863,10 @@ static ssize_t write_limit(struct file *file, unsigned long pos, size_t count)
 
 ssize_t vfs_write_at(struct file *file, const void *buf, size_t count, unsigned long pos)
 {
-    struct inode *inode = file->f_inode;
-    if (inode && S_ISDIR(inode->i_mode))
-        return -EISDIR;
-    if (!file->f_op->write)
-        return -EINVAL;
-    if (inode && !is_reg(inode))
+    int err = rw_verify(file, true);
+    if (err < 0)
+        return err;
+    if (err)
         return file->f_op->write(file, buf, count);
 
     ssize_t bytes = write_limit(file, pos, count);
@@ -888,12 +889,10 @@ ssize_t vfs_write_at(struct file *file, const void *buf, size_t count, unsigned 
 
 ssize_t vfs_write(struct file *file, const void *buf, size_t count)
 {
-    struct inode *inode = file->f_inode;
-    if (inode && S_ISDIR(inode->i_mode))
-        return -EISDIR;
-    if (!file->f_op->write)
-        return -EINVAL;
-    if (inode && !is_reg(inode))
+    int err = rw_verify(file, true);
+    if (err < 0)
+        return err;
+    if (err)
         return file->f_op->write(file, buf, count);
 
     inode_lock(file->f_inode);
@@ -1252,11 +1251,13 @@ int vfs_dupf(int fd)
     struct file *f = fget_handle(fd);
     if (IS_ERR(f))
         return PTR_ERR(f);
-    int new_fd = get_next_fd(current->files, f);
+    int new_fd = get_unused_fd_flags(0);
     if (new_fd < 0) {
         klog(LOG_ERROR, "VFS: vfs_dupf failed to get new fd\n");
         fput(f);
+        return new_fd;
     }
+    fd_install(new_fd, f);
     return new_fd;
 }
 

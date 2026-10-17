@@ -26,6 +26,27 @@ struct fdtable * alloc_fdtable(unsigned int size)
     return files;
 }
 
+struct fdtable * dup_fdtable(struct fdtable *src)
+{
+    acquire_lock(&src->lock);
+    struct fdtable *dst = alloc_fdtable(src->max);
+    if (!dst) {
+        release_lock(&src->lock);
+        return NULL;
+    }
+    for (size_t i = 0; i < src->max; i++) {
+        dst->fdarray[i] = src->fdarray[i];
+        if (dst->fdarray[i]) {
+            fget(dst->fdarray[i]);
+            __set_bit(dst->open_fds, i);
+        }
+    }
+    memcpy(dst->close_on_exec, src->close_on_exec,
+        BITS_TO_LONGS(src->max) * sizeof(unsigned long));
+    release_lock(&src->lock);
+    return dst;
+}
+
 static int __set_fdtsize(struct fdtable *files, unsigned int size)
 {
     if (size <= files->max)
@@ -148,23 +169,6 @@ int get_fd_exact_replace(struct fdtable *files, int fd, struct file *file)
         vfs_close(oldf);
 
     return fd;
-}
-
-int get_fd_start_at(struct fdtable *files, int start, struct file *file)
-{
-    acquire_lock(&files->lock);
-    int fd = __alloc_fd(files, start, 0);
-    if (fd >= 0)
-        files->fdarray[fd] = file;
-    release_lock(&files->lock);
-    return fd;
-}
-
-int get_next_fd(struct fdtable *files, struct file *file)
-{
-    if (!files || !file)
-        return -EINVAL;
-    return get_fd_start_at(files, 0, file);
 }
 
 bool file_pos_lock(struct file *file)
