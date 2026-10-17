@@ -28,9 +28,7 @@ void fget(struct file *file)
 void fput(struct file *file)
 {
     struct dentry *dentry = file->f_dentry;
-    struct inode *inode = NULL;
-    if (dentry)
-        inode = dentry->d_inode;
+    struct inode *inode = file->f_inode;
 #ifdef DEBUG_VFS_FULL
     klog(LOG_DEBUG, "fput: file = %p, count = %d\n", file, file->f_count - 1);
 #endif
@@ -45,5 +43,7 @@ void fput(struct file *file)
     kfree(file);
 
     if (dentry)
-        dput(dentry);
+        dput(dentry); // dentry holds the inode
+    else if (inode)
+        iput(inode);
 }

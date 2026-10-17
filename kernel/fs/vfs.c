@@ -120,6 +120,8 @@ void fs_init(void)
     if (!get_root_fstype(boot_info.mbd.cmdline, root_fstype))
         kerror("Failed to get root filesystem type from boot args\n");
 
+    anon_fs_init();
+
     if (scan_partitions(NULL))
         kerror("Partition scan failed\n");
     bdev = get_bdev_by_uuid(root_uuid);
