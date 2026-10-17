@@ -134,7 +134,7 @@ ssize_t pipe_write(struct file *f, const void *buf, size_t count)
     klog(LOG_DEBUG, "pipe_write: Writing %lu bytes to pipe %p\n", count, pipe);
 #endif
 
-    // Free space needed before copying: all of a small write, any for a large one
+    // all of a small write, any for a large one
     const unsigned int min_space = count <= PIPE_BUF ? MIN(count, pipe->buf_size) : 1;
     size_t written = 0;
     ssize_t err = 0;
