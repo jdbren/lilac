@@ -184,16 +184,15 @@ int pipe_close(struct inode *i, struct file *f)
         return -EINVAL;
 
     struct pipe_buf *p = f->f_inode->i_pipe;
-    mode_t accmode = f->f_mode & O_ACCMODE;
     acquire_lock(&p->lock);
 
-    if (accmode == O_WRONLY || accmode == O_RDWR) {
+    if (file_writable(f)) {
         p->n_writers--;
         // Blocked readers must see EOF
         if (p->n_writers == 0)
             wake_all(&p->read_wq);
     }
-    if (accmode == O_RDONLY || accmode == O_RDWR) {
+    if (file_readable(f)) {
         p->n_readers--;
         if (p->n_readers == 0)
             wake_all(&p->write_wq);
@@ -215,24 +214,23 @@ poll_mask_t pipe_poll(struct file *f, struct poll_request *pollreq)
     poll_mask_t mask;
     struct pipe_buf *pipe = f->f_inode->i_pipe;
     unsigned int size;
-    mode_t accmode = f->f_mode & O_ACCMODE;
 
-    if (accmode == O_RDONLY || accmode == O_RDWR)
+    if (file_readable(f))
         poll_wait(f, &pipe->read_wq, pollreq);
-    if (accmode == O_WRONLY || accmode == O_RDWR)
+    if (file_writable(f))
         poll_wait(f, &pipe->write_wq, pollreq);
 
     size = READ_ONCE(pipe->data_size);
 
     mask = 0;
-    if (accmode == O_RDONLY || accmode == O_RDWR) {
+    if (file_readable(f)) {
         if (size != 0)
             mask |= POLLIN | POLLRDNORM;
         if (!pipe->n_writers) // && f->f_pipe != pipe->w_counter)
             mask |= POLLHUP;
     }
 
-    if (accmode == O_WRONLY || accmode == O_RDWR) {
+    if (file_writable(f)) {
         if (size < pipe->buf_size)
             mask |= POLLOUT | POLLWRNORM;
         if (!pipe->n_readers)
