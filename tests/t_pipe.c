@@ -1,6 +1,8 @@
 // Pipes: data transfer, EOF, EPIPE/SIGPIPE, blocking, nonblocking, redirection.
 #include "ktest.h"
 #include <poll.h>
+#include <limits.h>
+#include <sys/uio.h>
 
 TEST(basic_transfer)
 {
@@ -377,6 +379,64 @@ TEST(efault_installs_neither_end)
     /* no fds were left behind */
     EXPECT_ERR(fcntl(before, F_GETFD), EBADF);
     EXPECT_ERR(fcntl(before + 1, F_GETFD), EBADF);
+}
+
+TEST(writev_is_one_atomic_write)
+{
+    /* the iovecs together are one write <= PIPE_BUF: all of it or EAGAIN */
+    int p[2];
+    ASSERT_OK(pipe2(p, O_NONBLOCK));
+    static char buf[4096];
+    ASSERT_EQ(write(p[1], buf, 4000), 4000);
+    struct iovec iov[4] = {
+        { buf, 50 }, { buf, 50 }, { buf, 50 }, { buf, 50 },
+    };
+    EXPECT_ERR(writev(p[1], iov, 4), EAGAIN);
+    EXPECT_EQ(read(p[0], buf, sizeof(buf)), 4000);
+    EXPECT_EQ(writev(p[1], iov, 4), 200);
+}
+
+TEST(readv_fills_across_iovecs)
+{
+    int p[2];
+    ASSERT_OK(pipe(p));
+    ASSERT_EQ(write(p[1], "abcdefghij", 10), 10);
+    char a[3] = {0}, b[4] = {0}, c[8] = {0};
+    struct iovec iov[3] = { { a, 3 }, { b, 4 }, { c, 8 } };
+    EXPECT_EQ(readv(p[0], iov, 3), 10);
+    EXPECT_EQ(memcmp(a, "abc", 3), 0);
+    EXPECT_EQ(memcmp(b, "defg", 4), 0);
+    EXPECT_EQ(memcmp(c, "hij", 3), 0);
+}
+
+TEST(empty_null_iovecs_skipped)
+{
+    /* musl's stdio passes { NULL, 0 } entries */
+    int p[2];
+    ASSERT_OK(pipe(p));
+    struct iovec w[3] = { { NULL, 0 }, { "hi", 2 }, { NULL, 0 } };
+    EXPECT_EQ(writev(p[1], w, 3), 2);
+    char buf[4] = {0};
+    struct iovec r[2] = { { NULL, 0 }, { buf, sizeof(buf) } };
+    EXPECT_EQ(readv(p[0], r, 2), 2);
+    EXPECT_STREQ(buf, "hi");
+}
+
+TEST(iovec_count_limits)
+{
+    int p[2];
+    ASSERT_OK(pipe(p));
+    static struct iovec iov[1025];
+    char c = 'x';
+    for (int i = 0; i < 1025; i++)
+        iov[i] = (struct iovec){ &c, 1 };
+    EXPECT_ERR(writev(p[1], iov, 1025), EINVAL);
+    EXPECT_ERR(writev(p[1], iov, -1), EINVAL);
+    EXPECT_EQ(writev(p[1], iov, 0), 0);
+    EXPECT_EQ(writev(p[1], iov, 1024), 1024);
+    /* lengths that overflow ssize_t */
+    struct iovec big[2] = { { &c, SSIZE_MAX }, { &c, 2 } };
+    EXPECT_ERR(writev(p[1], big, 2), EINVAL);
 }
 
 TEST(redirect_stdout_of_exec)

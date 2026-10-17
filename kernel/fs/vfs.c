@@ -1684,112 +1684,139 @@ struct iovec {
     size_t iov_len; /* Length of data.  */
 };
 
-SYSCALL_DECL3(readv, int, fd, const struct iovec __user *, iov, int, iovcnt)
+#define UIO_MAXIOV 1024
+#define MAX_BUFFER 0x1000000
+
+ssize_t iov_copy_from_user(const struct iovec __user *uiov, int iovcnt, struct iovec **out)
 {
-    bool pos_locked;
-    struct file *file;
-    struct iovec kiov;
-    ssize_t total = 0;
-
-    if (iovcnt < 0 || iovcnt > 1024)
+    *out = NULL;
+    if (iovcnt < 0 || iovcnt > UIO_MAXIOV)
         return -EINVAL;
+    if (iovcnt == 0)
+        return 0;
 
-    file = fget_pos(fd, &pos_locked);
-    if (IS_ERR(file))
-        return PTR_ERR(file);
-
-    if ((file->f_mode & O_ACCMODE) == O_WRONLY) {
-        fput_pos(file, pos_locked);
-        return -EBADF;
+    struct iovec *iov = kmalloc(iovcnt * sizeof(*iov));
+    if (!iov)
+        return -ENOMEM;
+    if (copy_from_user(iov, uiov, iovcnt * sizeof(*iov))) {
+        kfree(iov);
+        return -EFAULT;
     }
 
+    ssize_t total = 0;
     for (int i = 0; i < iovcnt; i++) {
-        if (copy_from_user(&kiov, &iov[i], sizeof(kiov))) {
-            fput_pos(file, pos_locked);
-            return -EFAULT;
+        if (iov[i].iov_len > (size_t)(SSIZE_MAX - total)) {
+            kfree(iov);
+            return -EINVAL;
         }
-        if (!kiov.iov_len)
-            continue;
-
-        unsigned char *kbuf = kmalloc(kiov.iov_len);
-        if (!kbuf) {
-            fput_pos(file, pos_locked);
-            return total > 0 ? total : -ENOMEM;
-        }
-
-        ssize_t bytes = vfs_read(file, kbuf, kiov.iov_len);
-        if (bytes > 0) {
-            if (copy_to_user(kiov.iov_base, kbuf, bytes)) {
-                kfree(kbuf);
-                fput_pos(file, pos_locked);
-                return total > 0 ? total : -EFAULT;
-            }
-            total += bytes;
-        }
-        kfree(kbuf);
-        if (bytes < 0) {
-            fput_pos(file, pos_locked);
-            return total > 0 ? total : bytes;
-        }
-        if ((size_t)bytes < kiov.iov_len)
-            break;
+        total += iov[i].iov_len;
     }
-    fput_pos(file, pos_locked);
+    *out = iov;
     return total;
 }
 
-SYSCALL_DECL3(writev, int, fd, const struct iovec __user *, iov, int, iovcnt)
+// Copy the user buffers into kbuf, which holds the total length
+int iov_gather(void *kbuf, const struct iovec *iov, int iovcnt)
+{
+    for (int i = 0; i < iovcnt; i++) {
+        if (!iov[i].iov_len)
+            continue;
+        if (copy_from_user(kbuf, iov[i].iov_base, iov[i].iov_len))
+            return -EFAULT;
+        kbuf = (u8 *)kbuf + iov[i].iov_len;
+    }
+    return 0;
+}
+
+// Copy len bytes of kbuf out to the user buffers; returns the bytes copied
+ssize_t iov_scatter(const struct iovec *iov, int iovcnt, const void *kbuf, size_t len)
+{
+    size_t done = 0;
+    for (int i = 0; i < iovcnt && done < len; i++) {
+        size_t n = MIN(iov[i].iov_len, len - done);
+        if (!n)
+            continue;
+        if (copy_to_user(iov[i].iov_base, (const u8 *)kbuf + done, n))
+            return done ? (ssize_t)done : -EFAULT;
+        done += n;
+    }
+    return done;
+}
+
+SYSCALL_DECL3(readv, int, fd, const struct iovec __user *, uiov, int, iovcnt)
 {
     bool pos_locked;
-    struct file *file;
-    struct iovec kiov;
-    ssize_t total = 0;
+    struct iovec *iov;
+    void *kbuf;
 
-    if (iovcnt < 0 || iovcnt > 1024)
-        return -EINVAL;
-
-    file = fget_pos(fd, &pos_locked);
+    struct file *file = fget_pos(fd, &pos_locked);
     if (IS_ERR(file))
         return PTR_ERR(file);
 
-    if ((file->f_mode & O_ACCMODE) == O_RDONLY) {
-        fput_pos(file, pos_locked);
-        return -EBADF;
+    ssize_t ret = -EBADF;
+    if ((file->f_mode & O_ACCMODE) == O_WRONLY)
+        goto out;
+    ret = iov_copy_from_user(uiov, iovcnt, &iov);
+    if (ret <= 0)
+        goto out;
+    if (ret > MAX_BUFFER) {
+        ret = -EINVAL;
+        goto out;
     }
 
-    for (int i = 0; i < iovcnt; i++) {
-        if (copy_from_user(&kiov, &iov[i], sizeof(kiov))) {
-            fput_pos(file, pos_locked);
-            return -EFAULT;
-        }
-        if (!kiov.iov_len)
-            continue;
-
-        unsigned char *kbuf = kmalloc(kiov.iov_len);
-        if (!kbuf) {
-            fput_pos(file, pos_locked);
-            return total > 0 ? total : -ENOMEM;
-        }
-
-        if (copy_from_user(kbuf, kiov.iov_base, kiov.iov_len)) {
-            kfree(kbuf);
-            fput_pos(file, pos_locked);
-            return total > 0 ? total : -EFAULT;
-        }
-
-        ssize_t bytes = vfs_write(file, kbuf, kiov.iov_len);
-        kfree(kbuf);
-        if (bytes > 0)
-            total += bytes;
-        if (bytes < 0) {
-            fput_pos(file, pos_locked);
-            return total > 0 ? total : bytes;
-        }
-        if ((size_t)bytes < kiov.iov_len)
-            break;
+    kbuf = kmalloc(ret);
+    if (!kbuf) {
+        ret = -ENOMEM;
+        goto free_iov;
     }
+    ret = vfs_read(file, kbuf, ret);
+    if (ret > 0)
+        ret = iov_scatter(iov, iovcnt, kbuf, ret);
+    kfree(kbuf);
+free_iov:
+    kfree(iov);
+out:
     fput_pos(file, pos_locked);
-    return total;
+    return ret;
+}
+
+SYSCALL_DECL3(writev, int, fd, const struct iovec __user *, uiov, int, iovcnt)
+{
+    bool pos_locked;
+    struct iovec *iov;
+    void *kbuf;
+
+    struct file *file = fget_pos(fd, &pos_locked);
+    if (IS_ERR(file))
+        return PTR_ERR(file);
+
+    ssize_t ret = -EBADF;
+    if ((file->f_mode & O_ACCMODE) == O_RDONLY)
+        goto out;
+    ret = iov_copy_from_user(uiov, iovcnt, &iov);
+    if (ret <= 0)
+        goto out;
+    if (ret > MAX_BUFFER) {
+        ret = -EINVAL;
+        goto out;
+    }
+
+    kbuf = kmalloc(ret);
+    if (!kbuf) {
+        ret = -ENOMEM;
+        goto free_iov;
+    }
+
+    size_t len = ret;
+    ret = iov_gather(kbuf, iov, iovcnt);
+    if (!ret)
+        ret = vfs_write(file, kbuf, len);
+    kfree(kbuf);
+free_iov:
+    kfree(iov);
+out:
+    fput_pos(file, pos_locked);
+    return ret;
 }
 
 // Positional I/O only makes sense on seekable files
