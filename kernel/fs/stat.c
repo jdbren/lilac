@@ -20,9 +20,7 @@ static int stat_inode(const struct inode *i_ptr, struct stat *st)
     st->st_gid = 0;
     st->st_rdev = i_ptr->i_rdev;
     st->st_size = i_ptr->i_size;
-    if (i_ptr->i_sb)
-        st->st_blksize = i_ptr->i_sb->s_blocksize;
-    st->st_blksize = 512;
+    st->st_blksize = i_ptr->i_sb ? i_ptr->i_sb->s_blocksize : 512;
     st->st_blocks = i_ptr->i_blocks;
     st->st_atim = (struct timespec){i_ptr->i_atime, 0};
     st->st_mtim = (struct timespec){i_ptr->i_mtime, 0};

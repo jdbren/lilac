@@ -207,6 +207,7 @@ extern const struct inode_operations fat_iops;
 
 struct inode *fat_alloc_inode(struct super_block *sb);
 void fat_destroy_inode(struct inode *inode);
+struct inode *fat_new_inode(struct super_block *sb, struct fat_inode *info);
 struct inode *fat_build_inode(struct super_block *sb, struct fat_inode *info);
 
 void get_fat_name(char fatname[12], const struct dentry *find);

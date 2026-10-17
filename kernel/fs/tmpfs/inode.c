@@ -25,7 +25,7 @@ static struct dentry *tmpfs_lookup(struct inode *dir, struct dentry *dentry,
         if (!lstrcmp_cstr(&dentry->d_name, entry->name)) {
             iget(entry->inode);
             dentry->d_inode = entry->inode;
-            return dentry;
+            return NULL;
         }
         entry++;
     }
@@ -40,66 +40,65 @@ tmpfs_get_link(struct dentry *resolve_d, struct inode *sym_i)
     return (const char*)tmp_inode->data;
 }
 
-static int
-tmpfs_create(struct inode *parent, struct dentry *new_dentry, umode_t mode)
+static int tmpfs_dir_append(struct tmpfs_dir *dir, const struct tmpfs_entry *e);
+
+static int tmpfs_add_entry(struct inode *dir, struct dentry *dentry,
+    struct inode *inode, unsigned short type)
 {
-    struct inode *new_inode = parent->i_sb->s_op->alloc_inode(parent->i_sb);
-    struct tmpfs_file *file_info = kzmalloc(sizeof(*file_info));
+    struct tmpfs_entry entry = { .inode = inode, .type = type };
+    strncpy(entry.name, dentry->d_name.data, sizeof(entry.name) - 1);
+    return tmpfs_dir_append((struct tmpfs_dir*)dir->i_private, &entry);
+}
 
-    new_inode->i_private = file_info;
-    new_inode->i_mode = mode | S_IFREG;
-    file_info->data = kmalloc(4096);
-    new_inode->i_size = 0;
-    new_inode->i_count = 1;
-    new_inode->i_ctime = new_inode->i_mtime = new_inode->i_atime = get_unix_time();
-    iget(new_inode); // for the new dentry
-    new_dentry->d_inode = new_inode;
-
-    struct tmpfs_dir *parent_dir = (struct tmpfs_dir*)parent->i_private;
-    parent_dir->num_entries++;
-    parent_dir->children = krealloc(parent_dir->children,
-        parent_dir->num_entries * sizeof(struct tmpfs_entry));
-
-    struct tmpfs_entry *new_entry = parent_dir->children +
-        parent_dir->num_entries - 1;
-    memset(new_entry, 0, sizeof(*new_entry));
-    new_entry->inode = new_inode;
-    strcpy(new_entry->name, new_dentry->d_name.data);
-    new_entry->type = TMPFS_FILE;
-
+static int tmpfs_instantiate(struct inode *dir, struct dentry *dentry,
+    struct inode *inode, unsigned short type)
+{
+    int err = tmpfs_add_entry(dir, dentry, inode, type);
+    if (err) {
+        iput(inode);
+        return err;
+    }
+    iget(inode);
+    dentry->d_inode = inode;
+    dir->i_mtime = dir->i_ctime = inode->i_ctime;
     return 0;
+}
+
+static int
+tmpfs_create(struct inode *dir, struct dentry *new_dentry, umode_t mode)
+{
+    struct tmpfs_file *file_info = kzmalloc(sizeof(*file_info));
+    if (!file_info)
+        return -ENOMEM;
+    file_info->data = kmalloc(4096);
+    if (!file_info->data) {
+        kfree(file_info);
+        return -ENOMEM;
+    }
+
+    struct inode *inode = tmpfs_new_inode(dir->i_sb, mode | S_IFREG, file_info);
+    if (!inode) {
+        kfree(file_info->data);
+        kfree(file_info);
+        return -ENOMEM;
+    }
+    return tmpfs_instantiate(dir, new_dentry, inode, TMPFS_FILE);
 }
 
 static int tmpfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 {
-    struct inode *new_inode;
-    struct tmpfs_dir *parent = (struct tmpfs_dir*)dir->i_private;
     struct tmpfs_dir *new_dir = kzmalloc(sizeof(struct tmpfs_dir));
     if (!new_dir) {
         klog(LOG_ERROR, "tmpfs_mkdir: Out of memory allocating tmpfs_dir\n");
         return -ENOMEM;
     }
 
-    new_dir->num_entries = 0;
-    new_dir->children = kzmalloc(4096);
-
-    new_inode = dir->i_sb->s_op->alloc_inode(dir->i_sb);
-    new_inode->i_private = new_dir;
-    new_inode->i_mode = mode | S_IFDIR;
-    new_inode->i_ctime = new_inode->i_mtime = new_inode->i_atime = get_unix_time();
-    iget(new_inode); // for the dentry
-    dentry->d_inode = new_inode;
-
-    parent->num_entries++;
-    parent->children = krealloc(parent->children,
-        parent->num_entries * sizeof(struct tmpfs_entry));
-
-    struct tmpfs_entry *new_entry = parent->children + parent->num_entries - 1;
-    new_entry->inode = new_inode;
-    strcpy(new_entry->name, dentry->d_name.data);
-    new_entry->type = TMPFS_DIR;
-
-    return 0;
+    struct inode *inode = tmpfs_new_inode(dir->i_sb, mode | S_IFDIR, new_dir);
+    if (!inode) {
+        kfree(new_dir);
+        return -ENOMEM;
+    }
+    return tmpfs_instantiate(dir, dentry, inode, TMPFS_DIR);
 }
 
 static int tmpfs_rmdir(struct inode *dir, struct dentry *dentry)
@@ -139,21 +138,14 @@ tmpfs_link(struct dentry *old_d, struct inode *dir, struct dentry *new_d)
     if (S_ISDIR(old_inode->i_mode))
         return -EPERM;
 
-    iget(old_inode);
-    old_inode->i_nlink++;
+    int err = tmpfs_add_entry(dir, new_d, old_inode,
+        S_ISLNK(old_inode->i_mode) ? TMPFS_SYMLINK : TMPFS_FILE);
+    if (err)
+        return err;
     iget(old_inode); // the new dentry
+    old_inode->i_nlink++;
     new_d->d_inode = old_inode;
-
-    struct tmpfs_dir *dir_info = (struct tmpfs_dir*)dir->i_private;
-    dir_info->num_entries++;
-    dir_info->children = krealloc(dir_info->children,
-        dir_info->num_entries * sizeof(struct tmpfs_entry));
-
-    struct tmpfs_entry *new_entry = dir_info->children + dir_info->num_entries - 1;
-    memset(new_entry, 0, sizeof(*new_entry));
-    new_entry->inode = old_inode;
-    strcpy(new_entry->name, new_d->d_name.data);
-    new_entry->type = S_ISDIR(old_inode->i_mode) ? TMPFS_DIR : TMPFS_FILE;
+    old_inode->i_ctime = dir->i_mtime = dir->i_ctime = get_unix_time();
 
     return 0;
 }
@@ -186,33 +178,25 @@ static int tmpfs_unlink(struct inode *dir, struct dentry *dentry)
 static int
 tmpfs_symlink(struct inode *dir, struct dentry *link_d, const char *target)
 {
-    struct inode *new_inode = dir->i_sb->s_op->alloc_inode(dir->i_sb);
-    struct tmpfs_file *file_info = kzmalloc(sizeof(*file_info));
-
-    new_inode->i_private = file_info;
-    new_inode->i_mode = S_IFLNK | 0777;
     size_t target_len = strlen(target);
+    struct tmpfs_file *file_info = kzmalloc(sizeof(*file_info));
+    if (!file_info)
+        return -ENOMEM;
     file_info->data = kmalloc(target_len + 1);
+    if (!file_info->data) {
+        kfree(file_info);
+        return -ENOMEM;
+    }
     memcpy(file_info->data, target, target_len + 1);
-    new_inode->i_size = target_len;
-    new_inode->i_count = 1;
-    new_inode->i_ctime = new_inode->i_mtime = new_inode->i_atime = get_unix_time();
-    iget(new_inode);
-    link_d->d_inode = new_inode;
 
-    struct tmpfs_dir *parent_dir = (struct tmpfs_dir*)dir->i_private;
-    parent_dir->num_entries++;
-    parent_dir->children = krealloc(parent_dir->children,
-        parent_dir->num_entries * sizeof(struct tmpfs_entry));
-
-    struct tmpfs_entry *new_entry = parent_dir->children +
-        parent_dir->num_entries - 1;
-    memset(new_entry, 0, sizeof(*new_entry));
-    new_entry->inode = new_inode;
-    strcpy(new_entry->name, link_d->d_name.data);
-    new_entry->type = TMPFS_SYMLINK;
-
-    return 0;
+    struct inode *inode = tmpfs_new_inode(dir->i_sb, S_IFLNK | 0777, file_info);
+    if (!inode) {
+        kfree(file_info->data);
+        kfree(file_info);
+        return -ENOMEM;
+    }
+    inode->i_size = target_len;
+    return tmpfs_instantiate(dir, link_d, inode, TMPFS_SYMLINK);
 }
 
 static int tmpfs_readlink(struct dentry *dentry, char __user *buf, int bufsize)

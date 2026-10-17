@@ -87,6 +87,12 @@ void destroy_inode(struct inode *inode)
 {
     struct super_block *sb = inode->i_sb;
 
+    if (inode->i_list.next && !list_empty(&inode->i_list)) {
+        acquire_lock(&sb->s_lock);
+        list_del_init(&inode->i_list);
+        release_lock(&sb->s_lock);
+    }
+
     if (sb->s_op->destroy_inode) {
         sb->s_op->destroy_inode(inode);
     } else {

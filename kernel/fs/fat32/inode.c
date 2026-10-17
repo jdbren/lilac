@@ -12,19 +12,7 @@
 
 struct inode *fat_alloc_inode(struct super_block *sb)
 {
-    struct inode *new_node = kzmalloc(sizeof(struct inode));
-    if (!new_node) {
-        klog(LOG_ERROR, "fat_alloc_inode: Out of memory allocating inode\n");
-        return ERR_PTR(-ENOMEM);
-    }
-
-    new_node->i_sb = sb;
-    new_node->i_op = &fat_iops;
-    new_node->i_count = 1;
-    rwsem_init(&new_node->i_rwsem);
-    new_node->i_mode = 0777;
-
-    return new_node;
+    return kzmalloc(sizeof(struct inode));
 }
 
 void fat_destroy_inode(struct inode *inode)
@@ -36,9 +24,20 @@ void fat_destroy_inode(struct inode *inode)
         fat_release_clusters(inode);
     if (inode->i_private)
         kfree(inode->i_private);
-    if (inode->i_list.next)
-        list_del_init(&inode->i_list);
     kfree(inode);
+}
+
+struct inode *fat_new_inode(struct super_block *sb, struct fat_inode *info)
+{
+    struct inode *inode = alloc_inode(sb);
+    if (!inode)
+        return NULL;
+    inode->i_op = &fat_iops;
+    inode->i_fop = &fat_fops;
+    inode->i_mode = 0777 |
+        (info->entry.attributes & FAT_DIR_ATTR ? S_IFDIR : S_IFREG);
+    inode->i_private = info;
+    return inode;
 }
 
 static int unique_ino(void)
@@ -75,19 +74,15 @@ struct inode *fat_build_inode(struct super_block *sb, struct fat_inode *info)
     if (inode)
         return inode;
 
-    inode = fat_alloc_inode(sb);
-    if (IS_ERR(inode)) {
-        return inode;
-    }
+    inode = fat_new_inode(sb, info);
+    if (!inode)
+        return ERR_PTR(-ENOMEM);
 
     inode->i_ino = unique_ino();
     inode->i_size = info->entry.file_size;
     inode->i_atime = fat_time_to_unix(info->entry.last_access_date, 0);
     inode->i_mtime = fat_time_to_unix(info->entry.last_write_date, info->entry.last_write_time);
     inode->i_ctime = fat_time_to_unix(info->entry.creation_date, info->entry.creation_time);
-    inode->i_private = info;
-    inode->i_mode |= info->entry.attributes & FAT_DIR_ATTR ? S_IFDIR : S_IFREG;
-    inode->i_nlink = 1;
 
     acquire_lock(&sb->s_lock);
     list_add_tail(&inode->i_list, &sb->s_inodes);

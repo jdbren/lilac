@@ -2210,6 +2210,109 @@ TEST(ext2_utimes_erofs)
     close(fd);
 }
 
+/* ================= VFS / filesystem contract ================= */
+
+TEST(ext2_changes_erofs)
+{
+    if (!ext2_mounted())
+        SKIP("ext2 not mounted");
+    EXPECT_ERR(open("/mnt/bin/echo", O_WRONLY), EROFS);
+    EXPECT_ERR(open("/mnt/bin/echo", O_RDWR | O_TRUNC), EROFS);
+    EXPECT_ERR(open("/mnt/ktest_new", O_CREAT | O_WRONLY, 0644), EROFS);
+    EXPECT_ERR(mkdir("/mnt/ktest_dir", 0755), EROFS);
+    EXPECT_ERR(mkdir("/mnt/bin", 0755), EEXIST);
+    EXPECT_ERR(unlink("/mnt/bin/echo"), EROFS);
+    EXPECT_ERR(rmdir("/mnt/lost+found"), EROFS);
+    EXPECT_ERR(rename("/mnt/bin/echo", "/mnt/bin/echo2"), EROFS);
+    EXPECT_ERR(symlink("echo", "/mnt/bin/ktest_ln"), EROFS);
+    EXPECT_ERR(truncate("/mnt/bin/echo", 0), EROFS);
+    // opening for reading still works
+    int fd = open("/mnt/bin/echo", O_RDONLY);
+    EXPECT_GE(fd, 0);
+    close(fd);
+}
+
+TEST(ext2_inode_numbers)
+{
+    if (!ext2_mounted())
+        SKIP("ext2 not mounted");
+    struct stat root, bin, echo;
+    ASSERT_OK(stat("/mnt", &root));
+    ASSERT_OK(stat("/mnt/bin", &bin));
+    ASSERT_OK(stat("/mnt/bin/echo", &echo));
+    EXPECT_EQ(root.st_ino, 2); // EXT2_ROOT_INO
+    EXPECT_NE(bin.st_ino, 0);
+    EXPECT_NE(echo.st_ino, 0);
+    EXPECT_NE(bin.st_ino, echo.st_ino);
+}
+
+TEST(link_across_filesystems_exdev)
+{
+    char *dir = ktest_mkdtemp("/tmp");
+    ASSERT_TRUE(dir != NULL);
+    char *src = pj(dir, "src");
+    create_file(src, "x", 1);
+    struct stat st;
+    if (stat("/ktest", &st) != 0)
+        ASSERT_OK(mkdir("/ktest", 0755));
+    EXPECT_ERR(link(src, "/ktest/ktest_xdev_link"), EXDEV);
+    EXPECT_ERR(rename(src, "/ktest/ktest_xdev_rename"), EXDEV);
+}
+
+TEST(device_missing_ops_einval)
+{
+    // the framebuffer only mmaps; the keyboard only reads
+    char buf[16];
+    int fd = open("/dev/fb0", O_RDWR);
+    if (fd >= 0) {
+        EXPECT_ERR(read(fd, buf, sizeof(buf)), EINVAL);
+        EXPECT_ERR(write(fd, buf, sizeof(buf)), EINVAL);
+        close(fd);
+    }
+    fd = open("/dev/kbd0", O_RDWR);
+    if (fd >= 0) {
+        EXPECT_ERR(write(fd, buf, sizeof(buf)), EINVAL);
+        close(fd);
+    }
+}
+
+TEST(dev_readdir_types)
+{
+    DIR *d = opendir("/dev");
+    ASSERT_TRUE(d != NULL);
+    struct dirent *e;
+    bool found = false;
+    while ((e = readdir(d)))
+        if (!strcmp(e->d_name, "null")) {
+            found = true;
+            EXPECT_EQ(e->d_type, DT_CHR);
+        }
+    closedir(d);
+    EXPECT_TRUE(found);
+}
+
+FSTEST(readlink_truncates)
+{
+    char *ln = pj(dir, "ln");
+    int sr = symlink("abcdefgh", ln);
+    skip_if_no_links(fs, sr);
+    ASSERT_OK(sr);
+    char buf[8] = {0};
+    EXPECT_EQ(readlink(ln, buf, 3), 3);
+    EXPECT_EQ(memcmp(buf, "abc", 3), 0);
+    EXPECT_EQ(buf[3], 0);
+}
+
+FSTEST(stat_blksize)
+{
+    char *f = pj(dir, "f");
+    create_file(f, "x", 1);
+    struct stat st;
+    ASSERT_OK(stat(f, &st));
+    EXPECT_GE(st.st_blksize, 512);
+    EXPECT_EQ(st.st_blksize & (st.st_blksize - 1), 0);
+}
+
 /* ================= utimensat / futimens ================= */
 
 static struct stat stat_of(const char *path)
