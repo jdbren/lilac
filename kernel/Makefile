@@ -109,6 +109,7 @@ fs/vfs.o \
 fs/sb.o \
 fs/file.o \
 fs/inode.o \
+fs/anon.o \
 fs/dcache.o \
 fs/mount.o \
 fs/stat.o \

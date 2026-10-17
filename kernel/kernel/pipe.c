@@ -22,21 +22,6 @@ static const struct file_operations pipe_fops = {
     .poll = pipe_poll,
 };
 
-struct inode * pipe_alloc_inode()
-{
-    struct inode *ino = kzmalloc(sizeof(*ino));
-    if (!ino)
-        return NULL;
-    ino->i_mode = S_IFIFO|S_IREAD|S_IWRITE;
-    ino->i_count = 1;
-    rwsem_init(&ino->i_rwsem);
-    ino->i_nlink = 1;
-    ino->i_atime = ino->i_ctime = ino->i_mtime = get_unix_time();
-    ino->i_fop = &pipe_fops;
-    ino->i_size = PAGE_SIZE;
-    return ino;
-}
-
 struct pipe_buf * create_pipe(size_t buf_size)
 {
     buf_size = PAGE_ROUND_UP(buf_size);
@@ -47,22 +32,12 @@ struct pipe_buf * create_pipe(size_t buf_size)
         return ERR_PTR(-ENOMEM);
     }
 
-    p->p_inode = pipe_alloc_inode();
-    if (IS_ERR_OR_NULL(p->p_inode)) {
-        kfree(p);
-        return ERR_PTR(-ENOMEM);
-    }
-
     p->buffer = get_free_pages(buf_size / PAGE_SIZE, 0);
     if (!p->buffer) {
         klog(LOG_ERROR, "Failed to allocate pipe buffer\n");
-        kfree(p->p_inode);
         kfree(p);
         return ERR_PTR(-ENOMEM);
     }
-
-    p->p_inode->i_pipe = p;
-    p->p_inode->i_size = buf_size;
 
     p->buf_size = buf_size;
     INIT_LIST_HEAD(&p->read_wq.task_list);
@@ -83,9 +58,6 @@ void destroy_pipe(struct pipe_buf *p)
 #ifdef DEBUG_PIPE
     klog(LOG_DEBUG, "Destroying pipe %p\n", p);
 #endif
-    if (p->p_inode)
-        kfree(p->p_inode);
-
     if (p->buffer)
         free_pages(p->buffer, p->buf_size / PAGE_SIZE);
 
@@ -273,6 +245,7 @@ poll_mask_t pipe_poll(struct file *f, struct poll_request *pollreq)
 static long do_pipe2(int __user *pipefd, int flags)
 {
     struct file *read_end, *write_end;
+    struct inode *inode;
     struct pipe_buf *p;
     int rfd, wfd;
     long err;
@@ -286,17 +259,23 @@ static long do_pipe2(int __user *pipefd, int flags)
     if (IS_ERR(p))
         return PTR_ERR(p);
 
-    read_end = alloc_file(NULL, p->p_inode);
-    write_end = alloc_file(NULL, p->p_inode);
+    inode = new_anon_inode(S_IFIFO|S_IREAD|S_IWRITE, &pipe_fops);
+    if (!inode) {
+        destroy_pipe(p);
+        return -ENOMEM;
+    }
+    inode->i_pipe = p;
+    inode->i_size = p->buf_size;
+    p->p_inode = inode;
+
+    // One inode reference for each end
+    iget(inode);
+    read_end = alloc_anon_file(inode, O_RDONLY | flags, p);
+    write_end = alloc_anon_file(inode, O_WRONLY | flags, p);
     if (!read_end || !write_end) {
         err = -ENOMEM;
         goto free_files;
     }
-
-    read_end->f_op = &pipe_fops;
-    read_end->f_mode = O_RDONLY | (flags & O_NONBLOCK);
-    write_end->f_op = &pipe_fops;
-    write_end->f_mode = O_WRONLY | (flags & O_NONBLOCK);
 
     // Reserve both fds and copy them out before either becomes visible
     rfd = get_unused_fd_flags(flags);
@@ -327,6 +306,8 @@ put_rfd:
 free_files:
     kfree(read_end);
     kfree(write_end);
+    iput(inode);
+    iput(inode);
     destroy_pipe(p);
     return err;
 }

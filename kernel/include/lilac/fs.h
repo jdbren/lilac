@@ -377,6 +377,10 @@ static inline struct file * get_file(struct file *filp)
     return filp;
 }
 
+void anon_fs_init(void);
+struct inode * new_anon_inode(umode_t mode, const struct file_operations *fops);
+struct file * alloc_anon_file(struct inode *inode, int flags, void *priv);
+
 typedef struct dentry *(*fs_init_func_t)(void*, struct super_block*);
 
 struct dentry * get_root_dentry(void);

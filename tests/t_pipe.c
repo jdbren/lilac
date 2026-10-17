@@ -28,6 +28,24 @@ TEST(pipe_fds_distinct_and_typed)
     EXPECT_ERR(read(p[1], &c, 1), EBADF);
 }
 
+TEST(fstat_identity)
+{
+    /* both ends are one inode; each pipe is its own, on a real device */
+    int a[2], b[2];
+    ASSERT_OK(pipe(a));
+    ASSERT_OK(pipe(b));
+    struct stat r, w, other;
+    ASSERT_OK(fstat(a[0], &r));
+    ASSERT_OK(fstat(a[1], &w));
+    ASSERT_OK(fstat(b[0], &other));
+    EXPECT_NE(r.st_ino, 0);
+    EXPECT_NE(r.st_dev, 0);
+    EXPECT_EQ(r.st_ino, w.st_ino);
+    EXPECT_EQ(r.st_dev, w.st_dev);
+    EXPECT_NE(r.st_ino, other.st_ino);
+    EXPECT_EQ(r.st_dev, other.st_dev);
+}
+
 TEST(partial_reads_preserve_order)
 {
     int p[2];
