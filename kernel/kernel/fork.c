@@ -217,8 +217,6 @@ static struct task * clone_process(struct clone_args *args)
         child->files->ref_count++;
     } else {
         child->files = dup_fdtable(cur->files);
-        if (!child->files)
-            panic("Failed to copy fd table for child process\n");
     }
 
     if (flags & CLONE_SIGHAND) {

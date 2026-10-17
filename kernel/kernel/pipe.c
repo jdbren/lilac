@@ -277,7 +277,6 @@ static long do_pipe2(int __user *pipefd, int flags)
         goto free_files;
     }
 
-    // Reserve both fds and copy them out before either becomes visible
     rfd = get_unused_fd_flags(flags);
     if (rfd < 0) {
         err = rfd;

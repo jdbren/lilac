@@ -1,5 +1,3 @@
-// Inodes for files with no name (pipes, later sockets): one internal
-// superblock, mounted nowhere, so they get a real st_dev and st_ino.
 #include <lilac/fs.h>
 #include <lilac/panic.h>
 #include <lilac/timer.h>
