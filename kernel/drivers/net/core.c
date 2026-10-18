@@ -5,15 +5,23 @@
 #include <lilac/uaccess.h>
 #include <mm/kmalloc.h>
 
+static struct file * get_socket_file(int sockfd)
+{
+    struct file *file = fget_handle(sockfd);
+    if (IS_ERR(file))
+        return file;
+    if (!file->f_inode || !S_ISSOCK(file->f_inode->i_mode))
+        return ERR_PTR(-ENOTSOCK);
+    return file;
+}
+
 static struct socket * alloc_socket(int domain, int type)
 {
-    struct socket *sock = kmalloc(sizeof(struct socket));
+    struct socket *sock = kzmalloc(sizeof(struct socket));
     if (!sock)
         return NULL;
-    sock->state = SS_FREE;
     sock->domain = domain;
     sock->type = type;
-    sock->file = NULL;
     return sock;
 }
 
@@ -35,9 +43,7 @@ SYSCALL_DECL3(socket, int, domain, int, type, int, protocol)
     struct file *file;
     struct inode *inode;
 
-    if (domain <= 0 || domain > AF_MAX)
-        return -EINVAL;
-    if (type <= 0 || type > SOCK_MAX)
+    if ((unsigned)domain > AF_MAX || (unsigned)type > SOCK_MAX)
         return -EINVAL;
 
     fd = get_unused_fd();
@@ -79,56 +85,56 @@ err_sock:
     return err;
 }
 
-static char * get_user_sockaddr(const struct sockaddr *addr, socklen_t addrlen)
+static int get_user_sockaddr(ksockaddr_t *ksockaddr, const struct sockaddr *addr,
+                             socklen_t addrlen)
 {
-    if (addrlen < sizeof(struct sockaddr) || addrlen > MAX_SOCKADDR_LEN)
-        return ERR_PTR(-EINVAL);
+    if (addrlen < sizeof(struct sockaddr) + 1 || addrlen > __MAX_SOCKADDR_LEN)
+        return -EINVAL;
 
-    const int bytes = addrlen - sizeof(addr->sa_family);
+    if (copy_from_user(ksockaddr, addr, addrlen))
+        return -EFAULT;
 
-    char *ksockaddr = kmalloc(bytes + 1);
-    if (!ksockaddr)
-        return ERR_PTR(-ENOMEM);
-
-    if (copy_from_user(ksockaddr, addr->sa_data, bytes)) {
-        kfree(ksockaddr);
-        return ERR_PTR(-EFAULT);
-    }
-    ksockaddr[bytes] = '\0';
-
-    return ksockaddr;
+    ksockaddr->sa_data[addrlen - sizeof(sa_family_t)] = '\0';
+    return 0;
 }
 
 SYSCALL_DECL3(bind, int, sockfd, const struct sockaddr *, addr, socklen_t, addrlen)
 {
     struct file *file;
-    struct inode *inode;
     struct socket *sock;
+    ksockaddr_t ksockaddr;
     int err;
 
-    file = fget_handle(sockfd);
-    if (IS_ERR_OR_NULL(file))
-        return -EBADF;
-    inode = file->f_inode;
-    if (!inode || !S_ISSOCK(inode->i_mode)) {
-        err = -ENOTSOCK;
-        goto out;
-    }
-
+    file = get_socket_file(sockfd);
+    if (IS_ERR(file))
+        return PTR_ERR(file);
     sock = file->f_data;
-    if (!sock) {
-        err = -ENOTSOCK;
-        goto out;
-    }
 
-    char *ksockaddr = get_user_sockaddr(addr, addrlen);
-    if (IS_ERR(ksockaddr)) {
-        err = PTR_ERR(ksockaddr);
+    if ((err = get_user_sockaddr(&ksockaddr, addr, addrlen)) < 0)
         goto out;
-    }
 
-    err = sock->sock_ops->bind(sock, ksockaddr, addrlen - sizeof(addr->sa_family));
-    kfree(ksockaddr);
+    err = sock->sock_ops->bind(sock, &ksockaddr, addrlen);
+out:
+    fput(file);
+    return err;
+}
+
+SYSCALL_DECL3(connect, int, sockfd, const struct sockaddr *, addr, socklen_t, addrlen)
+{
+    struct file *file;
+    struct socket *sock;
+    ksockaddr_t ksockaddr;
+    int err;
+
+    file = get_socket_file(sockfd);
+    if (IS_ERR(file))
+        return PTR_ERR(file);
+    sock = file->f_data;
+
+    if ((err = get_user_sockaddr(&ksockaddr, addr, addrlen)) < 0)
+        goto out;
+
+    err = sock->sock_ops->connect(sock, &ksockaddr, addrlen);
 out:
     fput(file);
     return err;
