@@ -1,6 +1,8 @@
 #ifndef LILAC_SOCKET_H
 #define LILAC_SOCKET_H
 
+#include <lilac/uaccess.h>
+
 #define AF_LOCAL    1
 #define AF_UNIX     AF_LOCAL
 #define AF_INET     2
@@ -40,6 +42,10 @@ struct socket;
 struct socket_ops {
     int (*bind)(struct socket *sock, ksockaddr_t *addr, socklen_t addrlen);
     int (*connect)(struct socket *sock, ksockaddr_t *addr, socklen_t addrlen);
+    int (*listen)(struct socket *sock, int backlog);
+    int (*accept)(struct socket *sock, struct socket *newsock);
+    ssize_t (*send)(struct socket *sock, const void __user *buf, size_t len, int flags);
+    ssize_t (*recv)(struct socket *sock, void __user *buf, size_t len, int flags);
 };
 
 struct socket {

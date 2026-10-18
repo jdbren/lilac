@@ -265,6 +265,12 @@ SYSCALL_DECL3(waitpid, int, pid, int*, status, int, options)
     return ret;
 }
 
+void waitqueue_init(struct waitqueue *wq)
+{
+    spin_lock_init(&wq->lock);
+    INIT_LIST_HEAD(&wq->task_list);
+}
+
 void wait_ev_queue(struct waitqueue *wq, struct wq_entry *wait)
 {
     unsigned long flags;

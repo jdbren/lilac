@@ -52,6 +52,7 @@ struct wq_entry {
 
 #define WQ_ENTRY_EMPTY(name) (list_empty(&name.entry))
 
+void waitqueue_init(struct waitqueue *wq);
 void prepare_wait(struct waitqueue *wq, struct wq_entry *wait, u8 state);
 void end_wait(struct waitqueue *wq, struct wq_entry *wait);
 void wait_ev_queue(struct waitqueue *wq, struct wq_entry *wait);
