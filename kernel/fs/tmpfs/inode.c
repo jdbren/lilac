@@ -10,6 +10,8 @@
 
 static int tmpfs_open(struct inode *inode, struct file *file)
 {
+    if (S_ISSOCK(inode->i_mode))
+        return -ENXIO;
     file->f_op = &tmpfs_fops;
     return 0;
 }
@@ -83,6 +85,22 @@ tmpfs_create(struct inode *dir, struct dentry *new_dentry, umode_t mode)
         return -ENOMEM;
     }
     return tmpfs_instantiate(dir, new_dentry, inode, TMPFS_FILE);
+}
+
+static int tmpfs_mknod(struct inode *dir, struct dentry *dentry, umode_t mode, dev_t dev)
+{
+    if (S_ISREG(mode))
+        return tmpfs_create(dir, dentry, mode & ~S_IFMT);
+    // TODO: FIFO support?
+    if (!S_ISSOCK(mode))
+        return -EPERM;
+
+    struct inode *inode = tmpfs_new_inode(dir->i_sb, mode, NULL);
+    if (!inode)
+        return -ENOMEM;
+    inode->i_fop = NULL;
+    inode->i_rdev = dev;
+    return tmpfs_instantiate(dir, dentry, inode, TMPFS_SPECIAL);
 }
 
 static int tmpfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
@@ -297,6 +315,7 @@ const struct inode_operations tmpfs_iops = {
     .get_link = tmpfs_get_link,
     .create = tmpfs_create,
     .mkdir = tmpfs_mkdir,
+    .mknod = tmpfs_mknod,
     .rmdir = tmpfs_rmdir,
     .link = tmpfs_link,
     .unlink = tmpfs_unlink,

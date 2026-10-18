@@ -60,9 +60,7 @@ struct inode {
 
     union {
         struct pipe_buf *i_pipe;
-        // struct cdev    *i_cdev;
         char            *i_link;
-        // unsigned        i_dir_seq;
     };
 
     void *i_private; /* fs or device private pointer */
@@ -281,6 +279,8 @@ ssize_t vfs_getdents(struct file *file, struct dirent *dirp, int buf_size);
 int vfs_create(const char *path, umode_t mode);
 int vfs_mkdir(const char *path, umode_t mode);
 int vfs_mkdirat(struct dentry *base, const char *path, umode_t mode);
+int vfs_mknod(const char *path, umode_t mode, dev_t dev);
+int vfs_mknodat(struct dentry *base, const char *path, umode_t mode, dev_t dev);
 int vfs_mount(struct block_device *srcdev, const char *target,
         const char *filesystemtype, unsigned long mountflags,
         const void *data);

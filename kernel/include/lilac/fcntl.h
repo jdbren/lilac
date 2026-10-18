@@ -52,6 +52,9 @@ extern "C" {
 #define S_IREAD  0400 /* Read by owner.  */
 #define S_IWRITE 0200 /* Write by owner.  */
 #define S_IEXEC  0100 /* Execute by owner.  */
+#define S_IRUSR  0400 /* Read by owner.  */
+#define S_IWUSR  0200 /* Write by owner.  */
+#define S_IXUSR  0100 /* Execute by owner.  */
 #define S_IRGRP  0040 /* Read by group.  */
 #define S_IWGRP  0020 /* Write by group.  */
 #define S_IXGRP  0010 /* Execute by group.  */

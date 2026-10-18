@@ -9,6 +9,7 @@
 #define TMPFS_DIR       2
 #define TMPFS_SYMLINK   3
 #define TMPFS_PIPE      4
+#define TMPFS_SPECIAL   5
 
 struct tmpfs_entry {
     struct inode *inode;

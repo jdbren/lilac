@@ -3,6 +3,8 @@
 #include <lilac/timer.h>
 
 static const struct super_operations anon_sops;
+static const struct inode_operations anon_iops;
+static const struct file_operations anon_fops;
 static struct super_block *anon_sb;
 
 void anon_fs_init(void)
@@ -22,7 +24,8 @@ struct inode * new_anon_inode(umode_t mode, const struct file_operations *fops)
         return NULL;
     inode->i_ino = next_ino++;
     inode->i_mode = mode;
-    inode->i_fop = fops;
+    inode->i_fop = fops ? fops : &anon_fops;
+    inode->i_op = &anon_iops;
     inode->i_atime = inode->i_mtime = inode->i_ctime = get_unix_time();
     return inode;
 }
