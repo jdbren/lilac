@@ -41,6 +41,7 @@ int unix_create_socket(struct socket *sock, int type)
 
     sock->priv = usock;
     sock->sock_ops = ops;
+    sock->state = SS_UNCONNECTED;
     return 0;
 }
 
@@ -63,13 +64,13 @@ static struct dentry * create_socket_dev(const char *addr)
     return d;
 }
 
-int unix_bind_socket(struct socket *sock, char *addr, unsigned int addrlen)
+int unix_bind_socket(struct socket *sock, ksockaddr_t *addr, unsigned int addrlen)
 {
     struct unix_sock *usock = sock->priv;
     struct dentry *d;
     int err = 0;
 
-    if (addr[0] == '\0')
+    if (addr->sa_family != AF_UNIX || addr->sa_data[0] == '\0')
         return -EINVAL;
 
     mutex_lock(&usock->bind_lock);
@@ -78,7 +79,7 @@ int unix_bind_socket(struct socket *sock, char *addr, unsigned int addrlen)
         goto out;
     }
 
-    d = create_socket_dev(addr);
+    d = create_socket_dev(addr->sa_data);
     if (IS_ERR(d)) {
         err = PTR_ERR(d);
         goto out;

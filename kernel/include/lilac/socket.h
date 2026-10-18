@@ -19,10 +19,27 @@ typedef enum {
     SS_DISCONNECTING    /* in process of disconnecting  */
 } socket_state;
 
+typedef unsigned short sa_family_t;
+typedef unsigned socklen_t;
+#define __MAX_SOCKADDR_LEN 127
+#define MAX_SOCKADDR_DATA_LEN (__MAX_SOCKADDR_LEN - sizeof(sa_family_t))
+
+struct sockaddr {
+    sa_family_t sa_family;
+    char sa_data[];
+};
+
+typedef struct {
+    sa_family_t sa_family;
+    char sa_data[MAX_SOCKADDR_DATA_LEN];
+    char __null_pad;
+} ksockaddr_t;
+
 struct socket;
 
 struct socket_ops {
-    int (*bind)(struct socket *sock, char *addr, unsigned addrlen);
+    int (*bind)(struct socket *sock, ksockaddr_t *addr, socklen_t addrlen);
+    int (*connect)(struct socket *sock, ksockaddr_t *addr, socklen_t addrlen);
 };
 
 struct socket {
@@ -32,14 +49,6 @@ struct socket {
     struct file *file;
     const struct socket_ops *sock_ops;
     void *priv;
-};
-
-typedef unsigned socklen_t;
-#define MAX_SOCKADDR_LEN 128
-
-struct sockaddr {
-    unsigned short sa_family;
-    char sa_data[];
 };
 
 int unix_create_socket(struct socket *sock, int type);
