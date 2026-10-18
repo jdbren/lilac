@@ -25,6 +25,10 @@ int get_dirname(char *restrict dst, const char *restrict path, size_t size)
         return -EINVAL;
 
     len = strlen(path);
+    if (len == 0) {
+        *dst = '\0';
+        return -ENOENT;
+    }
 
     /* Strip trailing slashes (leave one if root) */
     while (len > 1 && path[len - 1] == '/')

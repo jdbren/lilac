@@ -597,8 +597,7 @@ static int create_file_at(struct dentry *new_d, umode_t mode)
     return err;
 }
 
-static struct file *vfs_open_dentry(struct dentry *dentry, const char *path,
-    int flags, int mode);
+static struct file *vfs_open_dentry(struct dentry *dentry, int flags, int mode);
 
 struct file *vfs_open(const char *path, int flags, int mode)
 {
@@ -613,17 +612,17 @@ struct file *vfs_openat(struct dentry *base, const char *path, int flags, int mo
         struct dentry *dentry = vfs_lookup_at(base, path, !(flags & O_NOFOLLOW));
         if (IS_ERR(dentry))
             return ERR_CAST(dentry);
-        file = vfs_open_dentry(dentry, path, flags, mode);
+        file = vfs_open_dentry(dentry, flags, mode);
         dput(dentry);
     } while (!file);
     return file;
 }
 
-static struct file *vfs_open_dentry(struct dentry *dentry, const char *path,
-    int flags, int mode)
+static struct file *vfs_open_dentry(struct dentry *dentry, int flags, int mode)
 {
     struct inode *inode;
     struct file *new_file;
+    const char *path = dentry->d_name.data;
     long err;
     inode = dentry->d_inode;
     if (inode && S_ISLNK(inode->i_mode))
@@ -1129,8 +1128,6 @@ int vfs_mkdirat(struct dentry *base, const char *path, umode_t mode)
     klog(LOG_DEBUG, "VFS: Creating directory %s with mode %o\n", path, mode);
 #endif
 
-    if (*path == '\0')
-        return -ENOENT;
     struct dentry *parent_d = get_parent_dentry(path, base);
     if (IS_ERR(parent_d))
         return PTR_ERR(parent_d);
@@ -1205,13 +1202,109 @@ SYSCALL_DECL2(create, const char*, path, umode_t, mode)
     return err;
 }
 
-int mknod(const char *pathname, int mode, dev_t dev)
+static int vfs_do_mknod(struct dentry *parent_d, const char *name,
+        umode_t mode, dev_t dev)
 {
-    return -ENOSYS;
+    struct inode *parent_i = parent_d->d_inode;
+    if (!parent_i)
+        return -ENOENT;
+    if (!S_ISDIR(parent_i->i_mode))
+        return -ENOTDIR;
+
+    struct dentry *new_dentry, *parent;
+    int err;
+again:
+    new_dentry = lookup_path_from_flags(parent_d, name, 0);
+    if (IS_ERR(new_dentry))
+        return PTR_ERR(new_dentry);
+
+    parent = lock_parent(new_dentry);
+    if (!parent) {
+        dput(new_dentry);
+        goto again;
+    } else if (IS_ERR(parent)) {
+        dput(new_dentry);
+        return PTR_ERR(parent);
+    }
+
+    struct inode *dir = parent->d_inode;
+    if (new_dentry->d_inode)
+        err = -EEXIST;
+    else if (IS_DEADDIR(dir))
+        err = -ENOENT;
+    else if (IS_RDONLY(dir))
+        err = -EROFS;
+    else if (!dir->i_op->mknod)
+        err = -EPERM;
+    else
+        err = dir->i_op->mknod(dir, new_dentry, mode, dev);
+    unlock_parent(parent);
+    dput(new_dentry);
+    return err;
 }
-SYSCALL_DECL3(mknod, const char*, pathname, int, mode, dev_t, dev)
+
+// Create a filesystem node of any non-directory type; a type of 0 means S_IFREG
+int vfs_mknodat(struct dentry *base, const char *path, umode_t mode, dev_t dev)
 {
-    return mknod(pathname, mode, dev);
+    int err;
+    char name[NAME_MAX];
+
+    switch (mode & S_IFMT) {
+    case 0:
+        mode |= S_IFREG;
+        break;
+    case S_IFREG: case S_IFCHR:
+    case S_IFBLK: case S_IFIFO:
+    case S_IFSOCK:
+        break;
+    case S_IFDIR:
+        return -EPERM;
+    default:
+        return -EINVAL;
+    }
+
+    struct dentry *parent_d = get_parent_dentry(path, base);
+    if (IS_ERR(parent_d))
+        return PTR_ERR(parent_d);
+
+    if ((err = get_basename(name, path, NAME_MAX)))
+        goto error;
+
+    err = vfs_do_mknod(parent_d, name, mode, dev);
+error:
+    dput(parent_d);
+    return err;
+}
+
+int vfs_mknod(const char *path, umode_t mode, dev_t dev)
+{
+    return vfs_mknodat(NULL, path, mode, dev);
+}
+
+static long do_sys_mknodat(int dirfd, const char *path, umode_t mode, dev_t dev)
+{
+    char *path_buf;
+    struct dentry *base;
+    long err;
+
+    path_buf = get_user_path(path);
+    if (IS_ERR(path_buf))
+        return PTR_ERR(path_buf);
+
+    base = dirfd_base(dirfd, path_buf);
+    if (IS_ERR(base)) {
+        err = PTR_ERR(base);
+    } else {
+        err = vfs_mknodat(base, path_buf, mode, dev);
+        put_base(base);
+    }
+    kfree(path_buf);
+    return err;
+}
+
+SYSCALL_DECL3(mknod, const char*, pathname, umode_t, mode, dev_t, dev)
+{
+    return do_sys_mknodat(AT_FDCWD, pathname, mode, dev);
 }
 
 int vfs_dup(int oldfd, int newfd)
