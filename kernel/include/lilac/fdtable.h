@@ -2,6 +2,7 @@
 #define _LILAC_FDTABLE_H
 
 #include <lilac/bitmap.h>
+#include <lilac/sync.h>
 
 struct file;
 

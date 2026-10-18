@@ -127,6 +127,8 @@ drivers/framebuffer.o \
 drivers/kmsg.o \
 drivers/mem.o \
 drivers/vga.o \
+drivers/net/core.o \
+drivers/net/unix.o \
 drivers/tty/core.o \
 drivers/tty/fbcon.o \
 drivers/tty/ldisc.o \
