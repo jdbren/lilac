@@ -227,8 +227,13 @@ ssize_t unix_recv_dgram(struct socket *sock, void __user* buf, size_t len, int f
     acquire_lock(&usock->rx_lock);
     if (list_empty(&usock->rx_queue)) {
         release_lock(&usock->rx_lock);
-        return -EAGAIN;
+        int err = wait_event_interruptible(usock->rx_wq, !list_empty(&usock->rx_queue));
+        if (err)
+            return err;
+    } else {
+        release_lock(&usock->rx_lock);
     }
+
     msg = list_first_entry(&usock->rx_queue, struct unix_msg, list);
     list_del(&msg->list);
     usock->rx_bytes -= sizeof(*msg) + msg->len;
@@ -248,6 +253,8 @@ out:
 static const struct socket_ops unix_dgram_ops = {
     .bind = unix_bind_socket,
     .connect = unix_connect_dgram,
+    .listen = sock_no_listen,
+    .accept = sock_no_accept,
     .send = unix_send_dgram,
     .recv = unix_recv_dgram,
 };

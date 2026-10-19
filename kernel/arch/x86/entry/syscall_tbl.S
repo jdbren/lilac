@@ -124,6 +124,13 @@ syscall_table:
 	sc_tbl_entry utimes		# 105
 	sc_tbl_entry utimensat	# 106
 	sc_tbl_entry pipe2		# 107
+	sc_tbl_entry socket		# 108
+	sc_tbl_entry connect	# 109
+	sc_tbl_entry accept		# 110
+	sc_tbl_entry sendto		# 111
+	sc_tbl_entry recvfrom	# 112
+	sc_tbl_entry bind		# 113
+	sc_tbl_entry listen		# 114
 /*
 	sc_tbl_entry chmod		# 30
 	sc_tbl_entry chown		# 31

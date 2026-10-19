@@ -139,3 +139,75 @@ out:
     fput(file);
     return err;
 }
+
+SYSCALL_DECL2(listen, int, sockfd, int, backlog)
+{
+    struct file *file;
+    struct socket *sock;
+    int err;
+
+    file = get_socket_file(sockfd);
+    if (IS_ERR(file))
+        return PTR_ERR(file);
+    sock = file->f_data;
+
+    err = sock->sock_ops->listen(sock, backlog);
+    fput(file);
+    return err;
+}
+
+SYSCALL_DECL3(accept, int, sockfd, struct sockaddr *, addr, socklen_t *, addrlen)
+{
+    return -ENOSYS;
+}
+
+SYSCALL_DECL4(send, int, sockfd, const void *, buf, size_t, len, int, flags)
+{
+    struct file *file;
+    struct socket *sock;
+    int err;
+
+    file = get_socket_file(sockfd);
+    if (IS_ERR(file))
+        return PTR_ERR(file);
+    sock = file->f_data;
+
+    err = sock->sock_ops->send(sock, buf, len, flags);
+    fput(file);
+    return err;
+}
+
+SYSCALL_DECL4(recv, int, sockfd, void *, buf, size_t, len, int, flags)
+{
+    struct file *file;
+    struct socket *sock;
+    int err;
+
+    file = get_socket_file(sockfd);
+    if (IS_ERR(file))
+        return PTR_ERR(file);
+    sock = file->f_data;
+
+    err = sock->sock_ops->recv(sock, buf, len, flags);
+    fput(file);
+    return err;
+}
+
+SYSCALL_DECL6(sendto, int, sockfd, const void *, buf, size_t, len, int, flags,
+              const struct sockaddr *, dest_addr, socklen_t, addrlen)
+{
+    if (dest_addr)
+        return -EOPNOTSUPP;
+    return sys_send(sockfd, buf, len, flags);
+}
+
+SYSCALL_DECL6(recvfrom, int, sockfd, void *, buf, size_t, len, int, flags,
+              struct sockaddr *, src_addr, socklen_t *, addrlen)
+{
+    long ret = sys_recv(sockfd, buf, len, flags);
+    if (ret >= 0 && src_addr && addrlen) {
+        if (put_user((socklen_t)0, addrlen))
+            return -EFAULT;
+    }
+    return ret;
+}
