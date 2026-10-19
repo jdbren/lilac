@@ -59,4 +59,14 @@ struct socket {
 
 int unix_create_socket(struct socket *sock, int type);
 
+static inline int sock_no_listen(struct socket *sock, int backlog)
+{
+    return -EOPNOTSUPP;
+}
+
+static inline int sock_no_accept(struct socket *sock, struct socket *newsock)
+{
+    return -EOPNOTSUPP;
+}
+
 #endif
