@@ -22,6 +22,9 @@ static struct socket * alloc_socket(int domain, int type)
         return NULL;
     sock->domain = domain;
     sock->type = type;
+    sock->cstate = C_CLOSE;
+    sock->state = SS_FREE;
+    spin_lock_init(&sock->lock);
     return sock;
 }
 
