@@ -46,6 +46,8 @@ struct socket_ops {
     int (*accept)(struct socket *sock, struct socket *newsock);
     ssize_t (*send)(struct socket *sock, const void __user *buf, size_t len, int flags);
     ssize_t (*recv)(struct socket *sock, void __user *buf, size_t len, int flags);
+
+    int (*getname)(struct socket *sock, ksockaddr_t *addr, int peer);
 };
 
 struct socket {

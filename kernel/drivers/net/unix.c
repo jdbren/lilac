@@ -13,15 +13,22 @@ static spinlock_t unix_sockets_lock = SPINLOCK_INIT;
 #define UNIX_DGRAM_MAX (1 << 16)
 #define UNIX_RCVBUF (1 << 18)
 
+struct unix_addr {
+    atomic_uint refcount;
+    int len;
+    ksockaddr_t ksock_addr;
+};
+
 struct unix_msg {
     struct list_head list;
     size_t len;
-    ksockaddr_t from;
+    struct unix_addr *from;
     char data[];
 };
 
 struct unix_sock {
     struct socket *sock;
+    struct unix_addr *addr;      // address this socket is bound to
     struct dentry *bound;        // NULL if unbound
     mutex_t bind_lock;           // serializes bind on this socket
     struct unix_sock *peer;      // for connected sockets
@@ -30,7 +37,7 @@ struct unix_sock {
 
     spinlock_t rx_lock;
     struct waitqueue rx_wq;     // readers blocked on an empty queue
-    struct waitqueue tx_wq;     // writers blocked on a full queue (the peer waits here)
+    struct waitqueue tx_wq;     // writers blocked on a full queue
     union {
         struct {                // SOCK_DGRAM
             struct list_head rx_queue;
@@ -128,9 +135,49 @@ static struct dentry * create_socket_dev(const char *addr)
     return d;
 }
 
+static struct unix_addr * build_unix_addr(const ksockaddr_t *addr)
+{
+    struct unix_addr *uaddr = kzmalloc(sizeof(struct unix_addr));
+    if (!uaddr)
+        return NULL;
+    uaddr->refcount = 1;
+    uaddr->len = offsetof(ksockaddr_t, sa_data) + strlen(addr->sa_data) + 1;
+    memcpy(&uaddr->ksock_addr, addr, sizeof(ksockaddr_t));
+    return uaddr;
+}
+
+static void unix_addr_put(struct unix_addr *uaddr)
+{
+    if (uaddr && --uaddr->refcount == 0)
+        kfree(uaddr);
+}
+
+static int unix_getname(struct socket *sock, ksockaddr_t *addr, int peer)
+{
+    struct unix_sock *usock = sock->priv;
+    struct unix_addr *uaddr;
+
+    if (peer) {
+        if (!usock->peer)
+            return -ENOTCONN;
+        uaddr = usock->peer->addr;
+    } else {
+        uaddr = usock->addr;
+    }
+
+    if (!uaddr) {
+        addr->sa_family = AF_UNIX;
+        addr->sa_data[0] = '\0';
+        return sizeof(sa_family_t);
+    }
+    memcpy(addr, &uaddr->ksock_addr, sizeof(ksockaddr_t));
+    return uaddr->len;
+}
+
 int unix_bind_socket(struct socket *sock, ksockaddr_t *addr, unsigned int addrlen)
 {
     struct unix_sock *usock = sock->priv;
+    struct unix_addr *uaddr;
     struct dentry *d;
     int err = 0;
 
@@ -143,11 +190,19 @@ int unix_bind_socket(struct socket *sock, ksockaddr_t *addr, unsigned int addrle
         goto out;
     }
 
+    uaddr = build_unix_addr(addr);
+    if (!uaddr) {
+        err = -ENOMEM;
+        goto out;
+    }
+
     d = create_socket_dev(addr->sa_data);
     if (IS_ERR(d)) {
+        unix_addr_put(uaddr);
         err = PTR_ERR(d);
         goto out;
     }
+    usock->addr = uaddr;
     usock->bound = d;
 
     acquire_lock(&unix_sockets_lock);
@@ -186,6 +241,7 @@ ssize_t unix_send_dgram(struct socket *sock, const void __user *buf, size_t len,
 {
     struct unix_sock *usock = sock->priv;
     struct unix_sock *peer = usock->peer;
+    struct unix_addr *from = usock->addr;
     struct unix_msg *msg;
 
     if (!peer)
@@ -201,12 +257,15 @@ ssize_t unix_send_dgram(struct socket *sock, const void __user *buf, size_t len,
         return -EFAULT;
     }
     msg->len = len;
-    msg->from = (ksockaddr_t) { .sa_family = AF_UNIX, .sa_data = { 0 } };
+    if (from)
+        from->refcount++;
+    msg->from = from;
     INIT_LIST_HEAD(&msg->list);
 
     acquire_lock(&peer->rx_lock);
     if (peer->rx_bytes + sizeof(*msg) + len > UNIX_RCVBUF) {
         release_lock(&peer->rx_lock);
+        unix_addr_put(msg->from);
         kfree(msg);
         return -EAGAIN;
     }
@@ -246,6 +305,7 @@ ssize_t unix_recv_dgram(struct socket *sock, void __user* buf, size_t len, int f
     }
     ret = n;
 out:
+    unix_addr_put(msg->from);
     kfree(msg);
     return ret;
 }
@@ -257,10 +317,12 @@ static const struct socket_ops unix_dgram_ops = {
     .accept = sock_no_accept,
     .send = unix_send_dgram,
     .recv = unix_recv_dgram,
+    .getname = unix_getname,
 };
 
 
 
 static const struct socket_ops unix_stream_ops = {
     .bind = unix_bind_socket,
+    .getname = unix_getname,
 };
