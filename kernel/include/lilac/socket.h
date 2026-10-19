@@ -13,6 +13,10 @@
 #define SOCK_RAW        3
 #define SOCK_MAX        3
 
+#define SOCK_RDM       4
+#define SOCK_SEQPACKET 5
+#define SOCK_DCCP      6
+
 typedef enum {
     SS_FREE,            /* not allocated                */
     SS_UNCONNECTED,     /* unconnected to any socket    */
@@ -20,6 +24,12 @@ typedef enum {
     SS_CONNECTED,       /* connected to socket          */
     SS_DISCONNECTING    /* in process of disconnecting  */
 } socket_state;
+
+enum {
+    C_ESTABLISHED = 1,
+    C_LISTEN,
+    C_CLOSE
+};
 
 typedef unsigned short sa_family_t;
 typedef unsigned socklen_t;
@@ -52,6 +62,8 @@ struct socket_ops {
 
 struct socket {
     socket_state state;
+    spinlock_t lock;
+    unsigned char cstate;
     short domain;
     short type;
     struct file *file;

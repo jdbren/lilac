@@ -320,9 +320,37 @@ static const struct socket_ops unix_dgram_ops = {
     .getname = unix_getname,
 };
 
+static int unix_listen(struct socket *sock, int backlog)
+{
+    int err;
+    struct unix_sock *u = sock->priv;
 
+    err = -EOPNOTSUPP;
+    if (sock->type != SOCK_STREAM && sock->type != SOCK_SEQPACKET)
+        goto out;	/* Only stream/seqpacket sockets accept */
+    err = -EINVAL;
+    if (!READ_ONCE(u->addr))
+        goto out;	/* No listens on an unbound socket */
+
+    acquire_lock(&sock->lock);
+    err = -EINVAL;
+    if (sock->cstate != C_CLOSE && sock->cstate != C_LISTEN)
+        goto out_unlock;
+    if (backlog > u->max_backlog)
+        wake_all(&u->tx_wq);
+    u->max_backlog = backlog;
+    WRITE_ONCE(sock->cstate, C_LISTEN);
+
+    err = 0;
+
+out_unlock:
+    release_lock(&sock->lock);
+out:
+    return err;
+}
 
 static const struct socket_ops unix_stream_ops = {
     .bind = unix_bind_socket,
+    .listen = unix_listen,
     .getname = unix_getname,
 };
