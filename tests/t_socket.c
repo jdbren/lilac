@@ -1,0 +1,661 @@
+// AF_UNIX sockets: bind, datagram transfer, stream listen/connect/accept, close.
+#include "ktest.h"
+#include <sys/socket.h>
+#include <sys/un.h>
+
+/* Unique socket path in a fresh directory, so tests never collide. */
+static void tmp_addr(struct sockaddr_un *a)
+{
+    char *dir = ktest_mkdtemp("/tmp");
+    ASSERT_PTR(dir);
+    memset(a, 0, sizeof(*a));
+    a->sun_family = AF_UNIX;
+    snprintf(a->sun_path, sizeof(a->sun_path), "%s/s", dir);
+    free(dir);
+}
+
+#define SA(a) ((struct sockaddr *)(a))
+
+static int bound_sock(int type, const struct sockaddr_un *a)
+{
+    int fd = ASSERT_OK(socket(AF_UNIX, type, 0));
+    ASSERT_OK(bind(fd, SA(a), sizeof(*a)));
+    return fd;
+}
+
+static int listener(const struct sockaddr_un *a, int backlog)
+{
+    int fd = bound_sock(SOCK_STREAM, a);
+    ASSERT_OK(listen(fd, backlog));
+    return fd;
+}
+
+static int connected(int type, const struct sockaddr_un *a)
+{
+    int fd = ASSERT_OK(socket(AF_UNIX, type, 0));
+    ASSERT_OK(connect(fd, SA(a), sizeof(*a)));
+    return fd;
+}
+
+static void on_alarm(int sig)
+{
+    (void)sig;
+}
+
+/* SIGALRM in secs, without SA_RESTART so blocking calls fail with EINTR */
+static void arm_interrupt(int secs)
+{
+    struct sigaction sa = { .sa_handler = on_alarm };
+    sigemptyset(&sa.sa_mask);
+    ASSERT_OK(sigaction(SIGALRM, &sa, NULL));
+    alarm(secs);
+}
+
+/* ---- common ---- */
+
+TEST(create_and_close)
+{
+    int s = ASSERT_OK(socket(AF_UNIX, SOCK_STREAM, 0));
+    int d = ASSERT_OK(socket(AF_UNIX, SOCK_DGRAM, 0));
+    struct stat st;
+    EXPECT_OK(fstat(s, &st));
+    EXPECT_TRUE(S_ISSOCK(st.st_mode));
+    EXPECT_OK(fstat(d, &st));
+    EXPECT_TRUE(S_ISSOCK(st.st_mode));
+    EXPECT_OK(close(s));
+    EXPECT_OK(close(d));
+}
+
+TEST(bad_type)
+{
+    EXPECT_ERR(socket(AF_UNIX, 99, 0), EINVAL);
+}
+
+TEST(not_a_socket)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int p[2];
+    ASSERT_OK(pipe(p));
+    /* repeated: each call used to leak a reference on the pipe file */
+    for (int i = 0; i < 200; i++) {
+        EXPECT_ERR(bind(p[0], SA(&a), sizeof(a)), ENOTSOCK);
+        EXPECT_ERR(connect(p[0], SA(&a), sizeof(a)), ENOTSOCK);
+        EXPECT_ERR(listen(p[0], 1), ENOTSOCK);
+    }
+    close(p[1]);
+    char c;
+    EXPECT_EQ(read(p[0], &c, 1), 0); /* writer gone: EOF, not a hang */
+    close(p[0]);
+}
+
+TEST(many_sockets)
+{
+    for (int i = 0; i < 500; i++) {
+        int fd = ASSERT_OK(socket(AF_UNIX, i & 1 ? SOCK_DGRAM : SOCK_STREAM, 0));
+        ASSERT_OK(close(fd));
+    }
+}
+
+TEST(bind_creates_node)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int fd = bound_sock(SOCK_DGRAM, &a);
+    struct stat st;
+    ASSERT_OK(stat(a.sun_path, &st));
+    EXPECT_TRUE(S_ISSOCK(st.st_mode));
+    close(fd);
+    /* the node outlives the socket */
+    EXPECT_OK(stat(a.sun_path, &st));
+}
+
+TEST(bind_path_in_use)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int fd = bound_sock(SOCK_DGRAM, &a);
+    int fd2 = ASSERT_OK(socket(AF_UNIX, SOCK_DGRAM, 0));
+    EXPECT_ERR(bind(fd2, SA(&a), sizeof(a)), EADDRINUSE);
+    close(fd);
+    /* still in use after close until unlinked */
+    EXPECT_ERR(bind(fd2, SA(&a), sizeof(a)), EADDRINUSE);
+    ASSERT_OK(unlink(a.sun_path));
+    EXPECT_OK(bind(fd2, SA(&a), sizeof(a)));
+    close(fd2);
+}
+
+TEST(bind_twice)
+{
+    struct sockaddr_un a, b;
+    tmp_addr(&a);
+    tmp_addr(&b);
+    int fd = bound_sock(SOCK_DGRAM, &a);
+    EXPECT_ERR(bind(fd, SA(&b), sizeof(b)), EINVAL);
+    close(fd);
+}
+
+/* ---- datagram ---- */
+
+TEST(dgram_roundtrip)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int rx = bound_sock(SOCK_DGRAM, &a);
+    int tx = connected(SOCK_DGRAM, &a);
+
+    const char *msgs[] = { "hello", "x", "third message" };
+    for (int i = 0; i < 3; i++)
+        EXPECT_EQ(send(tx, msgs[i], strlen(msgs[i]), 0), (long)strlen(msgs[i]));
+
+    /* boundaries preserved, in order */
+    for (int i = 0; i < 3; i++) {
+        char buf[64] = {0};
+        EXPECT_EQ(recv(rx, buf, sizeof(buf), 0), (long)strlen(msgs[i]));
+        EXPECT_STREQ(buf, msgs[i]);
+    }
+    close(tx);
+    close(rx);
+}
+
+TEST(dgram_truncates)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int rx = bound_sock(SOCK_DGRAM, &a);
+    int tx = connected(SOCK_DGRAM, &a);
+
+    send(tx, "0123456789", 10, 0);
+    send(tx, "ab", 2, 0);
+    char buf[8] = {0};
+    EXPECT_EQ(recv(rx, buf, 4, 0), 4);
+    EXPECT_EQ(memcmp(buf, "0123", 4), 0);
+    /* the rest of the first datagram is discarded */
+    EXPECT_EQ(recv(rx, buf, sizeof(buf), 0), 2);
+    EXPECT_EQ(memcmp(buf, "ab", 2), 0);
+    close(tx);
+    close(rx);
+}
+
+TEST(dgram_send_unconnected)
+{
+    int fd = ASSERT_OK(socket(AF_UNIX, SOCK_DGRAM, 0));
+    EXPECT_ERR(send(fd, "x", 1, 0), ENOTCONN);
+    close(fd);
+}
+
+TEST(dgram_connect_regular_file)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int f = ASSERT_OK(open(a.sun_path, O_CREAT | O_WRONLY, 0644));
+    close(f);
+    int fd = ASSERT_OK(socket(AF_UNIX, SOCK_DGRAM, 0));
+    EXPECT_ERR(connect(fd, SA(&a), sizeof(a)), ECONNREFUSED);
+    close(fd);
+}
+
+TEST(dgram_connect_stream)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 1);
+    int fd = ASSERT_OK(socket(AF_UNIX, SOCK_DGRAM, 0));
+    EXPECT_ERR(connect(fd, SA(&a), sizeof(a)), EPROTOTYPE);
+    close(fd);
+    close(l);
+}
+
+TEST(dgram_peer_closed)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int rx = bound_sock(SOCK_DGRAM, &a);
+    int tx = connected(SOCK_DGRAM, &a);
+    /* unread messages are freed with the receiver */
+    for (int i = 0; i < 4; i++)
+        EXPECT_EQ(send(tx, "queued", 6, 0), 6);
+    close(rx);
+    EXPECT_ERR(send(tx, "x", 1, 0), ECONNREFUSED);
+    close(tx);
+}
+
+TEST(dgram_reconnect)
+{
+    struct sockaddr_un a, b;
+    tmp_addr(&a);
+    tmp_addr(&b);
+    int ra = bound_sock(SOCK_DGRAM, &a);
+    int rb = bound_sock(SOCK_DGRAM, &b);
+    int tx = connected(SOCK_DGRAM, &a);
+    ASSERT_OK(connect(tx, SA(&b), sizeof(b)));
+    EXPECT_EQ(send(tx, "b", 1, 0), 1);
+    char c = 0;
+    EXPECT_EQ(recv(rb, &c, 1, 0), 1);
+    EXPECT_EQ(c, 'b');
+    /* the old peer dies cleanly once nothing points at it */
+    close(ra);
+    close(tx);
+    close(rb);
+}
+
+TEST(dgram_recv_blocks)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int rx = bound_sock(SOCK_DGRAM, &a);
+
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        usleep(100000);
+        int tx = socket(AF_UNIX, SOCK_DGRAM, 0);
+        if (tx < 0 || connect(tx, SA(&a), sizeof(a)) < 0)
+            _exit(1);
+        _exit(send(tx, "late", 4, 0) == 4 ? 0 : 2);
+    }
+
+    char buf[8] = {0};
+    long long t0 = ktest_now_ns();
+    EXPECT_EQ(recv(rx, buf, sizeof(buf), 0), 4);
+    EXPECT_GE(ktest_now_ns() - t0, 50000000LL);
+    EXPECT_EQ(memcmp(buf, "late", 4), 0);
+    int st = ktest_wait_timeout(pid, 5);
+    EXPECT_TRUE(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    close(rx);
+}
+
+TEST(dgram_recv_eintr)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int rx = bound_sock(SOCK_DGRAM, &a);
+    arm_interrupt(1);
+    char c;
+    EXPECT_ERR(recv(rx, &c, 1, 0), EINTR);
+    close(rx);
+}
+
+/* ---- stream: setup errors ---- */
+
+TEST(listen_unbound)
+{
+    int fd = ASSERT_OK(socket(AF_UNIX, SOCK_STREAM, 0));
+    EXPECT_ERR(listen(fd, 1), EINVAL);
+    close(fd);
+}
+
+TEST(listen_dgram)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int fd = bound_sock(SOCK_DGRAM, &a);
+    EXPECT_ERR(listen(fd, 1), EOPNOTSUPP);
+    close(fd);
+}
+
+TEST(accept_not_listening)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int fd = bound_sock(SOCK_STREAM, &a);
+    EXPECT_ERR(accept(fd, NULL, NULL), EINVAL);
+    close(fd);
+}
+
+TEST(connect_not_listening)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int srv = bound_sock(SOCK_STREAM, &a);
+    int fd = ASSERT_OK(socket(AF_UNIX, SOCK_STREAM, 0));
+    EXPECT_ERR(connect(fd, SA(&a), sizeof(a)), ECONNREFUSED);
+    close(fd);
+    close(srv);
+}
+
+TEST(connect_dgram_target)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int d = bound_sock(SOCK_DGRAM, &a);
+    int fd = ASSERT_OK(socket(AF_UNIX, SOCK_STREAM, 0));
+    EXPECT_ERR(connect(fd, SA(&a), sizeof(a)), EPROTOTYPE);
+    close(fd);
+    close(d);
+}
+
+TEST(connect_self_listener)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 1);
+    EXPECT_ERR(connect(l, SA(&a), sizeof(a)), EINVAL);
+    close(l);
+}
+
+TEST(connect_after_listener_closed)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 1);
+    close(l);
+    int fd = ASSERT_OK(socket(AF_UNIX, SOCK_STREAM, 0));
+    EXPECT_ERR(connect(fd, SA(&a), sizeof(a)), ECONNREFUSED);
+    close(fd);
+}
+
+/* ---- stream: connect/accept ---- */
+
+TEST(connect_accept)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 4);
+    int c = connected(SOCK_STREAM, &a);
+    int s = ASSERT_OK(accept(l, NULL, NULL));
+    EXPECT_NE(s, l);
+    EXPECT_NE(s, c);
+    struct stat st;
+    EXPECT_OK(fstat(s, &st));
+    EXPECT_TRUE(S_ISSOCK(st.st_mode));
+    close(s);
+    close(c);
+    close(l);
+}
+
+TEST(connect_twice)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 4);
+    int c = connected(SOCK_STREAM, &a);
+    EXPECT_ERR(connect(c, SA(&a), sizeof(a)), EISCONN);
+    close(c);
+    close(l);
+}
+
+TEST(accept_fifo_order)
+{
+    struct sockaddr_un a, ca, cb;
+    tmp_addr(&a);
+    tmp_addr(&ca);
+    tmp_addr(&cb);
+    int l = listener(&a, 4);
+    int c1 = bound_sock(SOCK_STREAM, &ca);
+    int c2 = bound_sock(SOCK_STREAM, &cb);
+    ASSERT_OK(connect(c1, SA(&a), sizeof(a)));
+    ASSERT_OK(connect(c2, SA(&a), sizeof(a)));
+
+    struct sockaddr_un peer;
+    socklen_t len = sizeof(peer);
+    int s1 = ASSERT_OK(accept(l, SA(&peer), &len));
+    EXPECT_STREQ(peer.sun_path, ca.sun_path);
+    len = sizeof(peer);
+    int s2 = ASSERT_OK(accept(l, SA(&peer), &len));
+    EXPECT_STREQ(peer.sun_path, cb.sun_path);
+    close(s1);
+    close(s2);
+    close(c1);
+    close(c2);
+    close(l);
+}
+
+TEST(accept_addr_unnamed_peer)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 4);
+    int c = connected(SOCK_STREAM, &a);
+    struct sockaddr_un peer;
+    memset(&peer, 0x7f, sizeof(peer));
+    socklen_t len = sizeof(peer);
+    int s = ASSERT_OK(accept(l, SA(&peer), &len));
+    EXPECT_EQ(len, sizeof(sa_family_t));
+    EXPECT_EQ(peer.sun_family, AF_UNIX);
+    close(s);
+    close(c);
+    close(l);
+}
+
+TEST(accept_addr_named_peer)
+{
+    struct sockaddr_un a, ca;
+    tmp_addr(&a);
+    tmp_addr(&ca);
+    int l = listener(&a, 4);
+    int c = bound_sock(SOCK_STREAM, &ca);
+    ASSERT_OK(connect(c, SA(&a), sizeof(a)));
+    struct sockaddr_un peer = {0};
+    socklen_t len = sizeof(peer);
+    int s = ASSERT_OK(accept(l, SA(&peer), &len));
+    EXPECT_EQ(len, offsetof(struct sockaddr_un, sun_path) + strlen(ca.sun_path) + 1);
+    EXPECT_STREQ(peer.sun_path, ca.sun_path);
+    close(s);
+    close(c);
+    close(l);
+}
+
+TEST(connect_accept_cross_process)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 4);
+
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        close(l);
+        int c = socket(AF_UNIX, SOCK_STREAM, 0);
+        if (c < 0 || connect(c, SA(&a), sizeof(a)) < 0)
+            _exit(1);
+        close(c);
+        _exit(0);
+    }
+
+    int s = ASSERT_OK(accept(l, NULL, NULL));
+    int st = ktest_wait_timeout(pid, 5);
+    EXPECT_TRUE(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    close(s);
+    close(l);
+}
+
+TEST(accept_blocks)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 4);
+
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        close(l);
+        usleep(100000);
+        int c = socket(AF_UNIX, SOCK_STREAM, 0);
+        _exit(c >= 0 && connect(c, SA(&a), sizeof(a)) == 0 ? 0 : 1);
+    }
+
+    long long t0 = ktest_now_ns();
+    int s = ASSERT_OK(accept(l, NULL, NULL));
+    EXPECT_GE(ktest_now_ns() - t0, 50000000LL);
+    int st = ktest_wait_timeout(pid, 5);
+    EXPECT_TRUE(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    close(s);
+    close(l);
+}
+
+TEST(accept_eintr)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 4);
+    arm_interrupt(1);
+    EXPECT_ERR(accept(l, NULL, NULL), EINTR);
+    close(l);
+}
+
+/* ---- stream: backlog ---- */
+
+TEST(backlog_full_blocks_connect)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 0); /* one pending connection fits */
+    int c1 = connected(SOCK_STREAM, &a);
+
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        int c2 = socket(AF_UNIX, SOCK_STREAM, 0);
+        _exit(c2 >= 0 && connect(c2, SA(&a), sizeof(a)) == 0 ? 0 : 1);
+    }
+
+    usleep(200000);
+    EXPECT_EQ(waitpid(pid, NULL, WNOHANG), 0); /* still blocked */
+    int s1 = ASSERT_OK(accept(l, NULL, NULL)); /* frees a slot */
+    int st = ktest_wait_timeout(pid, 5);
+    EXPECT_TRUE(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    int s2 = ASSERT_OK(accept(l, NULL, NULL));
+    close(s1);
+    close(s2);
+    close(c1);
+    close(l);
+}
+
+TEST(backlog_connect_eintr)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 0);
+    int c1 = connected(SOCK_STREAM, &a);
+    int c2 = ASSERT_OK(socket(AF_UNIX, SOCK_STREAM, 0));
+    arm_interrupt(1);
+    EXPECT_ERR(connect(c2, SA(&a), sizeof(a)), EINTR);
+    close(c2);
+    close(c1);
+    close(l);
+}
+
+TEST(listener_close_wakes_connector)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 0);
+    int c1 = connected(SOCK_STREAM, &a);
+
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        close(l); /* only the parent's copy keeps the listener open */
+        int c2 = socket(AF_UNIX, SOCK_STREAM, 0);
+        if (c2 < 0)
+            _exit(1);
+        if (connect(c2, SA(&a), sizeof(a)) == 0)
+            _exit(2);
+        _exit(errno == ECONNREFUSED ? 0 : 3);
+    }
+
+    usleep(200000);
+    EXPECT_EQ(waitpid(pid, NULL, WNOHANG), 0);
+    close(l);
+    int st = ktest_wait_timeout(pid, 5);
+    EXPECT_TRUE(WIFEXITED(st));
+    EXPECT_EQ(WEXITSTATUS(st), 0);
+    close(c1);
+}
+
+/* ---- stream: close ordering ---- */
+
+TEST(close_listener_with_pending)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 8);
+    int c[4];
+    for (int i = 0; i < 4; i++)
+        c[i] = connected(SOCK_STREAM, &a);
+    close(l);
+    for (int i = 0; i < 4; i++)
+        EXPECT_OK(close(c[i]));
+}
+
+TEST(close_clients_before_listener)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 8);
+    for (int i = 0; i < 4; i++)
+        close(connected(SOCK_STREAM, &a));
+    /* the dead clients' connections are still queued */
+    for (int i = 0; i < 4; i++) {
+        int s = ASSERT_OK(accept(l, NULL, NULL));
+        EXPECT_OK(close(s));
+    }
+    close(l);
+}
+
+TEST(close_accepted_first)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 4);
+    int c = connected(SOCK_STREAM, &a);
+    int s = ASSERT_OK(accept(l, NULL, NULL));
+    EXPECT_OK(close(s));
+    EXPECT_OK(close(l));
+    EXPECT_OK(close(c));
+}
+
+TEST(close_client_first)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 4);
+    int c = connected(SOCK_STREAM, &a);
+    int s = ASSERT_OK(accept(l, NULL, NULL));
+    EXPECT_OK(close(c));
+    EXPECT_OK(close(l));
+    EXPECT_OK(close(s));
+}
+
+TEST(close_shared_by_fork)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 4);
+    int c = connected(SOCK_STREAM, &a);
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        close(c);
+        close(l);
+        _exit(0);
+    }
+    int st = ktest_wait_timeout(pid, 5);
+    EXPECT_TRUE(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    /* the child's close dropped only its file references */
+    EXPECT_ERR(connect(c, SA(&a), sizeof(a)), EISCONN);
+    int s = ASSERT_OK(accept(l, NULL, NULL));
+    close(s);
+    close(c);
+    close(l);
+}
+
+TEST_TIMEOUT(connect_close_stress, 30)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 8);
+    for (int i = 0; i < 200; i++) {
+        int c = connected(SOCK_STREAM, &a);
+        int s = ASSERT_OK(accept(l, NULL, NULL));
+        if (i & 1) {
+            close(c);
+            close(s);
+        } else {
+            close(s);
+            close(c);
+        }
+    }
+    close(l);
+}
