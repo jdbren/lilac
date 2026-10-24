@@ -22,7 +22,6 @@ static struct socket * alloc_socket(int domain, int type)
         return NULL;
     sock->domain = domain;
     sock->type = type;
-    sock->cstate = C_CLOSE;
     sock->state = SS_FREE;
     spin_lock_init(&sock->lock);
     return sock;
@@ -36,6 +35,14 @@ static int init_socket(struct socket *sock, int domain, int type)
     default:
         return -EINVAL;
     }
+}
+
+void init_sock_internal(struct socket *sock, struct sock_internal *si)
+{
+    sock->si = si;
+    si->sock = sock;
+    spin_lock_init(&si->lock);
+    si->cstate = C_CLOSE;
 }
 
 static struct file * alloc_socket_file(struct socket *sock)
@@ -221,7 +228,7 @@ SYSCALL_DECL3(accept, int, sockfd, struct sockaddr *, addr, socklen_t *, addrlen
         goto free_sock;
     }
 
-    err = init_socket(new_sock, new_sock->domain, new_sock->type);
+    err = init_socket(new_sock, sock->domain, sock->type);
     if (err < 0)
         goto put_newfile;
 
@@ -230,7 +237,7 @@ SYSCALL_DECL3(accept, int, sockfd, struct sockaddr *, addr, socklen_t *, addrlen
         goto put_newfile;
 
     if (addr && addrlen) {
-        err = copy_sockaddr_to_user(sock, addr, addrlen);
+        err = copy_sockaddr_to_user(new_sock, addr, addrlen);
         if (err < 0) {
             err = -ECONNABORTED;
             goto put_newfile;
