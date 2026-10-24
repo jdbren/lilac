@@ -239,7 +239,7 @@ int unix_bind_socket(struct socket *sock, ksockaddr_t *addr, unsigned int addrle
 
     mutex_lock(&usock->bind_lock);
     if (usock->bound) {
-        err = -EADDRINUSE;
+        err = -EINVAL;
         goto out;
     }
 
@@ -362,13 +362,12 @@ ssize_t unix_recv_dgram(struct socket *sock, void __user* buf, size_t len, int f
     ssize_t ret = 0;
 
     acquire_lock(&usock->rx_lock);
-    if (list_empty(&usock->rx_queue)) {
+    while (list_empty(&usock->rx_queue)) {
         release_lock(&usock->rx_lock);
         int err = wait_event_interruptible(usock->rx_wq, !list_empty(&usock->rx_queue));
         if (err)
             return err;
-    } else {
-        release_lock(&usock->rx_lock);
+        acquire_lock(&usock->rx_lock);
     }
 
     msg = list_first_entry(&usock->rx_queue, struct unix_msg, list);
