@@ -10,8 +10,10 @@ static struct file * get_socket_file(int sockfd)
     struct file *file = fget_handle(sockfd);
     if (IS_ERR(file))
         return file;
-    if (!file->f_inode || !S_ISSOCK(file->f_inode->i_mode))
+    if (!file->f_inode || !S_ISSOCK(file->f_inode->i_mode)) {
+        fput(file);
         return ERR_PTR(-ENOTSOCK);
+    }
     return file;
 }
 
@@ -37,18 +39,40 @@ static int init_socket(struct socket *sock, int domain, int type)
     }
 }
 
-void init_sock_internal(struct socket *sock, struct sock_internal *si)
+static void sock_destruct(struct sock_internal *si)
+{
+    kfree(si);
+}
+
+void init_sock_internal(struct socket *sock, struct sock_internal *si, int type)
 {
     if (sock)
         sock->si = si;
     si->sock = sock;
+    si->refcount = 1;
     spin_lock_init(&si->lock);
     si->cstate = C_CLOSE;
+    si->type = type;
+    si->destruct = sock_destruct;
 }
+
+static int socket_release(struct inode *inode, struct file *file)
+{
+    struct socket *sock = file->f_data;
+
+    if (sock->si)
+        sock->sock_ops->release(sock);
+    kfree(sock);
+    return 0;
+}
+
+static const struct file_operations socket_fops = {
+    .release = socket_release,
+};
 
 static struct file * alloc_socket_file(struct socket *sock)
 {
-    struct inode *inode = new_anon_inode(S_IFSOCK | S_IREAD | S_IWRITE, NULL);
+    struct inode *inode = new_anon_inode(S_IFSOCK | S_IREAD | S_IWRITE, &socket_fops);
     if (!inode)
         return ERR_PTR(-ENOMEM);
 
@@ -84,22 +108,22 @@ SYSCALL_DECL3(socket, int, domain, int, type, int, protocol)
     file = alloc_socket_file(sock);
     if (IS_ERR(file)) {
         err = PTR_ERR(file);
-        goto err_sock;
+        kfree(sock);
+        goto err_fd;
     }
 
     err = init_socket(sock, domain, type);
     if (err) {
         fput(file);
-        goto err_sock;
+        goto err_fd;
     }
 
     sock->file = file;
     fd_install(fd, file);
     return fd;
 
-err_sock:
-    put_unused_fd(fd);
-    kfree(sock);
+err_fd:
+    put_unused_fd(fd); // also frees sock
     return err;
 }
 
@@ -226,7 +250,8 @@ SYSCALL_DECL3(accept, int, sockfd, struct sockaddr *, addr, socklen_t *, addrlen
     newfile = alloc_socket_file(new_sock);
     if (IS_ERR(newfile)) {
         err = PTR_ERR(newfile);
-        goto free_sock;
+        kfree(new_sock);
+        goto put_file;
     }
 
     err = ops->accept(sock, new_sock);
@@ -248,8 +273,6 @@ SYSCALL_DECL3(accept, int, sockfd, struct sockaddr *, addr, socklen_t *, addrlen
 
 put_newfile:
     fput(newfile);
-free_sock:
-    kfree(new_sock);
 put_file:
     fput(file);
 free_fd:

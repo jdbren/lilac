@@ -1,3 +1,5 @@
+#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
+
 #include <lilac/socket.h>
 #include <lilac/fs.h>
 #include <lilac/fcntl.h>
@@ -6,8 +8,6 @@
 #include <lib/hashtable.h>
 
 #include <asm/barrier.h>
-
-#pragma GCC diagnostic ignored "-Wanalyzer-malloc-leak"
 
 DEFINE_HASHTABLE(unix_sockets, 8);
 static spinlock_t unix_sockets_lock = SPINLOCK_INIT;
@@ -33,7 +33,7 @@ struct unix_sock {
     struct unix_addr *addr;      // address this socket is bound to
     struct dentry *bound;        // NULL if unbound
     mutex_t bind_lock;           // bind sleeps in vfs_mknod
-    struct unix_sock *peer;      // for connected sockets
+    struct unix_sock *peer;      // ref for connected sockets
 
     struct hlist_node hlist;
 
@@ -55,10 +55,23 @@ struct unix_sock {
     };
 };
 
-static struct unix_sock * sock_unix(struct socket *sock)
+static inline struct unix_sock * sock_unix(struct socket *sock)
 {
     return container_of(sock->si, struct unix_sock, si);
 }
+
+static inline void unix_sock_hold(struct unix_sock *u)
+{
+    sock_hold(&u->si);
+}
+
+static inline void unix_sock_put(struct unix_sock *u)
+{
+    sock_put(&u->si);
+}
+
+static void unix_addr_put(struct unix_addr *);
+static void unix_sock_free(struct sock_internal *);
 
 static const struct socket_ops unix_stream_ops;
 static const struct socket_ops unix_dgram_ops;
@@ -77,7 +90,8 @@ static struct unix_sock * __unix_create_sock(struct socket *sock, int type)
     if (!usock)
         return ERR_PTR(-ENOMEM);
 
-    init_sock_internal(sock, &usock->si);
+    init_sock_internal(sock, &usock->si, type);
+    usock->si.destruct = unix_sock_free;
 
     mutex_init(&usock->bind_lock);
     INIT_HLIST_NODE(&usock->hlist);
@@ -109,6 +123,24 @@ int unix_create_socket(struct socket *sock, int type)
     return 0;
 }
 
+static void unix_sock_free(struct sock_internal *si)
+{
+    struct unix_sock *u = container_of(si, struct unix_sock, si);
+    struct unix_msg *msg, *tmp;
+
+    if (si->type == SOCK_DGRAM) {
+        list_for_each_entry_safe(msg, tmp, &u->rx_queue, list) {
+            list_del(&msg->list);
+            unix_addr_put(msg->from);
+            kfree(msg);
+        }
+    }
+    unix_addr_put(u->addr);
+    if (u->bound)
+        dput(u->bound);
+    kfree(u);
+}
+
 static struct unix_sock * unix_find_socket(const ksockaddr_t *addr)
 {
     struct unix_sock *target_un;
@@ -125,6 +157,7 @@ static struct unix_sock * unix_find_socket(const ksockaddr_t *addr)
     // find the peer socket by its address and establish the connection
     hash_for_each_possible(unix_sockets, target_un, hlist, (unsigned long)target->d_inode) {
         if (target_un->bound && target->d_inode == target_un->bound->d_inode) {
+            unix_sock_hold(target_un);
             release_lock(&unix_sockets_lock);
             dput(target);
             return target_un;
@@ -239,7 +272,7 @@ out:
 
 int unix_connect_dgram(struct socket *sock, ksockaddr_t *addr, unsigned int addrlen)
 {
-    struct unix_sock *usock = sock_unix(sock), *target_un;
+    struct unix_sock *usock = sock_unix(sock), *target_un, *old;
 
     if (addr->sa_family != AF_UNIX || addr->sa_data[0] == '\0')
         return -EINVAL;
@@ -248,33 +281,54 @@ int unix_connect_dgram(struct socket *sock, ksockaddr_t *addr, unsigned int addr
     if (IS_ERR(target_un))
         return PTR_ERR(target_un);
 
-    if (target_un->si.sock->type != SOCK_DGRAM)
+    if (target_un->si.type != SOCK_DGRAM) {
+        unix_sock_put(target_un);
         return -EPROTOTYPE;
+    }
 
+    acquire_lock(&usock->si.lock);
+    old = usock->peer;
     usock->peer = target_un;
     sock->state = SS_CONNECTED;
+    release_lock(&usock->si.lock);
 
+    if (old)
+        unix_sock_put(old);
     return 0;
 }
 
 ssize_t unix_send_dgram(struct socket *sock, const void __user *buf, size_t len, int flags)
 {
     struct unix_sock *usock = sock_unix(sock);
-    struct unix_sock *peer = usock->peer;
+    struct unix_sock *peer;
     struct unix_addr *from = usock->addr;
     struct unix_msg *msg;
+    ssize_t ret;
 
-    if (!peer)
-        return -ENOTCONN;
     if (len > UNIX_DGRAM_MAX)
         return -EMSGSIZE;
 
+    acquire_lock(&usock->si.lock);
+    peer = usock->peer;
+    if (peer)
+        unix_sock_hold(peer);
+    release_lock(&usock->si.lock);
+    if (!peer)
+        return -ENOTCONN;
+
+    // A message that races with the peer closing is freed with it
+    ret = -ECONNREFUSED;
+    if (peer->si.dead)
+        goto out_put;
+
+    ret = -ENOMEM;
     msg = kmalloc(sizeof(*msg) + len);
     if (!msg)
-        return -ENOMEM;
+        goto out_put;
     if (copy_from_user(msg->data, buf, len)) {
         kfree(msg);
-        return -EFAULT;
+        ret = -EFAULT;
+        goto out_put;
     }
     msg->len = len;
     if (from)
@@ -287,14 +341,18 @@ ssize_t unix_send_dgram(struct socket *sock, const void __user *buf, size_t len,
         release_lock(&peer->rx_lock);
         unix_addr_put(msg->from);
         kfree(msg);
-        return -EAGAIN;
+        ret = -EAGAIN;
+        goto out_put;
     }
     list_add_tail(&msg->list, &peer->rx_queue);
     peer->rx_bytes += sizeof(*msg) + len;
     release_lock(&peer->rx_lock);
     wake_all(&peer->rx_wq);
+    ret = len;
 
-    return len;
+out_put:
+    unix_sock_put(peer);
+    return ret;
 }
 
 ssize_t unix_recv_dgram(struct socket *sock, void __user* buf, size_t len, int flags)
@@ -330,6 +388,57 @@ out:
     return ret;
 }
 
+static void unix_release_sock(struct unix_sock *u)
+{
+    struct sock_internal *si = &u->si;
+    struct unix_sock *peer, *embryo, *tmp;
+    LIST_HEAD(pending);
+
+    // no new lookups
+    acquire_lock(&unix_sockets_lock);
+    hash_del(&u->hlist);
+    release_lock(&unix_sockets_lock);
+
+    acquire_lock(&si->lock);
+    si->dead = 1;
+    si->shutdown = 1;
+    si->sock = NULL;
+    peer = u->peer;
+    u->peer = NULL;
+    if (u->si.type == SOCK_STREAM && si->cstate == C_LISTEN) {
+        list_splice_init(&u->backlog, &pending);
+        u->backlog_count = 0;
+    }
+    WRITE_ONCE(si->cstate, C_CLOSE);
+    release_lock(&si->lock);
+
+    if (u->si.type == SOCK_STREAM) {
+        wake_all(&u->peer_wq);  // blocked connectors see C_CLOSE and fail
+        if (peer) {
+            acquire_lock(&peer->si.lock);
+            peer->si.shutdown = 1;
+            release_lock(&peer->si.lock);
+        }
+    }
+    if (peer)
+        unix_sock_put(peer);
+
+    // never-accepted connections
+    list_for_each_entry_safe(embryo, tmp, &pending, backlog) {
+        list_del_init(&embryo->backlog);
+        unix_release_sock(embryo);
+    }
+
+    unix_sock_put(u);
+}
+
+static int unix_release(struct socket *sock)
+{
+    unix_release_sock(sock_unix(sock));
+    sock->si = NULL;
+    return 0;
+}
+
 static const struct socket_ops unix_dgram_ops = {
     .bind = unix_bind_socket,
     .connect = unix_connect_dgram,
@@ -337,6 +446,7 @@ static const struct socket_ops unix_dgram_ops = {
     .accept = sock_no_accept,
     .send = unix_send_dgram,
     .recv = unix_recv_dgram,
+    .release = unix_release,
     .getname = unix_getname,
 };
 

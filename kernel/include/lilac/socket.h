@@ -57,6 +57,7 @@ struct socket_ops {
     int (*accept)(struct socket *sock, struct socket *newsock);
     ssize_t (*send)(struct socket *sock, const void __user *buf, size_t len, int flags);
     ssize_t (*recv)(struct socket *sock, void __user *buf, size_t len, int flags);
+    int (*release)(struct socket *sock);
     // kernel ops
     int (*getname)(struct socket *sock, ksockaddr_t *addr, int peer);
 };
@@ -72,16 +73,30 @@ struct socket {
 };
 
 struct sock_internal {
-    struct socket *sock;
+    struct socket *sock; // NULL if closed
+    atomic_uint refcount;
     spinlock_t lock;
     unsigned char cstate;
+    short type;
+    void (*destruct)(struct sock_internal *si);
     struct {
         unsigned dead :1;
         unsigned shutdown :1;
     };
 };
 
-void init_sock_internal(struct socket *sock, struct sock_internal *si);
+static inline void sock_hold(struct sock_internal *si)
+{
+    si->refcount++;
+}
+
+static inline void sock_put(struct sock_internal *si)
+{
+    if (--si->refcount == 0)
+        si->destruct(si);
+}
+
+void init_sock_internal(struct socket *sock, struct sock_internal *si, int type);
 
 int unix_create_socket(struct socket *sock, int type);
 
