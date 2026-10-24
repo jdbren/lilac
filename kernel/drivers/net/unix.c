@@ -29,28 +29,28 @@ struct unix_msg {
 };
 
 struct unix_sock {
-    struct sock_internal si;
+    struct sock_internal si;     // si.lock: cstate, peer
     struct unix_addr *addr;      // address this socket is bound to
     struct dentry *bound;        // NULL if unbound
-    mutex_t bind_lock;           // serializes bind on this socket
+    mutex_t bind_lock;           // bind sleeps in vfs_mknod
     struct unix_sock *peer;      // for connected sockets
 
     struct hlist_node hlist;
 
-    spinlock_t rx_lock;
-    struct waitqueue rx_wq;     // readers blocked on an empty queue
     union {
         struct {                // SOCK_DGRAM
             struct list_head rx_queue;
             size_t rx_bytes;    // queued bytes incl. unix_msg headers, capped at UNIX_RCVBUF
+            struct waitqueue rx_wq;     // readers blocked on an empty queue
+            spinlock_t rx_lock;
         };
         struct {                // SOCK_STREAM
             struct pipe_buf *rx_buf;
-            struct waitqueue peer_wq;   // blocked
-            struct list_head backlog;   // pending connections (listener)
+            struct waitqueue accept_wq; // acceptors waiting for a connection
+            struct waitqueue peer_wq;   // connectors waiting for backlog room
+            struct list_head backlog;   // listener: queue head and pending link
             int backlog_count;
             int max_backlog;
-            spinlock_t ss_lock;
         };
     };
 };
@@ -81,21 +81,23 @@ static struct unix_sock * __unix_create_sock(struct socket *sock, int type)
 
     mutex_init(&usock->bind_lock);
     INIT_HLIST_NODE(&usock->hlist);
-    spin_lock_init(&usock->rx_lock);
-    waitqueue_init(&usock->rx_wq);
 
     if (type == SOCK_DGRAM) {
         INIT_LIST_HEAD(&usock->rx_queue);
+        spin_lock_init(&usock->rx_lock);
+        waitqueue_init(&usock->rx_wq);
         usock->rx_bytes = 0;
     } else {
         usock->rx_buf = NULL;
         INIT_LIST_HEAD(&usock->backlog);
+        waitqueue_init(&usock->accept_wq);
         waitqueue_init(&usock->peer_wq);
-        spin_lock_init(&usock->ss_lock);
     }
 
-    sock->sock_ops = ops;
-    sock->state = SS_UNCONNECTED;
+    if (sock) {
+        sock->sock_ops = ops;
+        sock->state = SS_UNCONNECTED;
+    }
     return usock;
 }
 
@@ -351,7 +353,7 @@ static int unix_listen(struct socket *sock, int backlog)
     if (!READ_ONCE(u->addr))
         goto out;	/* No listens on an unbound socket */
 
-    acquire_lock(&sock->lock);
+    acquire_lock(&si->lock);
     err = -EINVAL;
     if (si->cstate != C_CLOSE && si->cstate != C_LISTEN)
         goto out_unlock;
@@ -363,7 +365,10 @@ static int unix_listen(struct socket *sock, int backlog)
     err = 0;
 
 out_unlock:
-    release_lock(&sock->lock);
+    release_lock(&si->lock);
+out:
+    return err;
+}
 out:
     return err;
 }
