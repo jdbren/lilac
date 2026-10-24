@@ -48,6 +48,7 @@ typedef struct {
 } ksockaddr_t;
 
 struct socket;
+struct sock_internal;
 
 struct socket_ops {
     int (*bind)(struct socket *sock, ksockaddr_t *addr, socklen_t addrlen);
@@ -56,20 +57,31 @@ struct socket_ops {
     int (*accept)(struct socket *sock, struct socket *newsock);
     ssize_t (*send)(struct socket *sock, const void __user *buf, size_t len, int flags);
     ssize_t (*recv)(struct socket *sock, void __user *buf, size_t len, int flags);
-
+    // kernel ops
     int (*getname)(struct socket *sock, ksockaddr_t *addr, int peer);
 };
 
 struct socket {
+    struct sock_internal *si;
     socket_state state;
     spinlock_t lock;
-    unsigned char cstate;
     short domain;
     short type;
     struct file *file;
     const struct socket_ops *sock_ops;
-    void *priv;
 };
+
+struct sock_internal {
+    struct socket *sock;
+    spinlock_t lock;
+    unsigned char cstate;
+    struct {
+        unsigned dead :1;
+        unsigned shutdown :1;
+    };
+};
+
+void init_sock_internal(struct socket *sock, struct sock_internal *si);
 
 int unix_create_socket(struct socket *sock, int type);
 

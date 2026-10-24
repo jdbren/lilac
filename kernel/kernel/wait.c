@@ -316,14 +316,21 @@ int default_wake_function(struct wq_entry *wait, int key)
     return 1;
 }
 
+static inline int __wake_uninterruptible(struct wq_entry *wait, int key)
+{
+    if (wait->wakeup)
+        return wait->wakeup(wait, key);
+    return default_wake_function(wait, key);
+}
+
 /*
  * Caller holds wq->lock with interrupts off
  */
 static inline int __wake_entry(struct wq_entry *wait, int key)
 {
-    if (wait->wakeup)
-        return wait->wakeup(wait, key);
-    return default_wake_function(wait, key);
+    if (READ_ONCE(wait->task->state) == TASK_UNINTERRUPTIBLE)
+        return 0;
+    return __wake_uninterruptible(wait, key);
 }
 
 static void wakeup_by_pid_on(int pid, struct waitqueue *wq)
