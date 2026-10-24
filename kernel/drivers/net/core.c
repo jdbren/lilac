@@ -39,7 +39,8 @@ static int init_socket(struct socket *sock, int domain, int type)
 
 void init_sock_internal(struct socket *sock, struct sock_internal *si)
 {
-    sock->si = si;
+    if (sock)
+        sock->si = si;
     si->sock = sock;
     spin_lock_init(&si->lock);
     si->cstate = C_CLOSE;
@@ -227,10 +228,6 @@ SYSCALL_DECL3(accept, int, sockfd, struct sockaddr *, addr, socklen_t *, addrlen
         err = PTR_ERR(newfile);
         goto free_sock;
     }
-
-    err = init_socket(new_sock, sock->domain, sock->type);
-    if (err < 0)
-        goto put_newfile;
 
     err = ops->accept(sock, new_sock);
     if (err < 0)
