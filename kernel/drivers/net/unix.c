@@ -478,6 +478,146 @@ out_unlock:
 out:
     return err;
 }
+
+static int unix_accept(struct socket *sock, struct socket *newsock)
+{
+    struct unix_sock *u = sock_unix(sock), *peer = NULL;
+    struct sock_internal *si = &u->si;
+    int err = -EOPNOTSUPP;
+
+    if (sock->type != SOCK_STREAM && sock->type != SOCK_SEQPACKET)
+        goto out;
+
+    err = -EINVAL;
+    if (READ_ONCE(si->cstate) != C_LISTEN)
+        goto out;
+
+    acquire_lock(&si->lock);
+    while (list_empty(&u->backlog)) {
+        release_lock(&si->lock);
+        err = wait_event_interruptible(u->accept_wq, !list_empty(&u->backlog));
+        if (err)
+            goto out;
+        acquire_lock(&si->lock);
+    }
+
+    peer = list_first_entry(&u->backlog, struct unix_sock, backlog);
+    list_del_init(&peer->backlog);
+    u->backlog_count--;
+    release_lock(&si->lock);
+
+    wake_all(&u->peer_wq);
+
+    newsock->si = &peer->si;
+    peer->si.sock = newsock;
+    newsock->state = SS_CONNECTED;
+    return 0;
+out:
+    return err;
+}
+
+static int unix_connect_stream(struct socket *sock, ksockaddr_t *addr, socklen_t addrlen)
+{
+    struct sock_internal *si = sock->si, *newsi = NULL, *other = NULL;
+    struct unix_sock *u = sock_unix(sock), *newu, *otheru;
+    int err;
+
+    if (addr->sa_family != AF_UNIX || addr->sa_data[0] == '\0')
+        return -EINVAL;
+
+    // create new sock for complete connection
+    newu = __unix_create_sock(NULL, sock->type);
+    if (IS_ERR(newu)) {
+        err = PTR_ERR(newu);
+        goto out;
+    }
+    newsi = &newu->si;
+
+restart:
+    // Find listening sock
+    otheru = unix_find_socket(addr);
+    if (IS_ERR(otheru)) {
+        err = PTR_ERR(otheru);
+        goto out_free;
+    }
+
+    other = &otheru->si;
+    acquire_lock(&other->lock);
+
+    // closed after the lookup found it
+    if (other->dead) {
+        release_lock(&other->lock);
+        unix_sock_put(otheru);
+        goto restart;
+    }
+
+    if (other == si) {
+        err = -EINVAL;
+        goto out_unlock;
+    }
+
+    if (otheru->si.type != sock->type) {
+        err = -EPROTOTYPE;
+        goto out_unlock;
+    }
+
+    if (other->cstate != C_LISTEN || other->shutdown) {
+        err = -ECONNREFUSED;
+        goto out_unlock;
+    }
+
+    if (READ_ONCE(otheru->backlog_count) > otheru->max_backlog) {
+        release_lock(&other->lock);
+        err = wait_event_interruptible(otheru->peer_wq,
+            READ_ONCE(otheru->backlog_count) <= READ_ONCE(otheru->max_backlog) ||
+            READ_ONCE(other->cstate) != C_LISTEN);
+        unix_sock_put(otheru);
+        if (err)
+            goto out_free;
+        goto restart;
+    }
+
+    acquire_lock(&si->lock);
+
+    if (unlikely(si->cstate != C_CLOSE)) {
+        err = si->cstate == C_ESTABLISHED ? -EISCONN : -EINVAL;
+        release_lock(&si->lock);
+        goto out_unlock;
+    }
+
+    unix_sock_hold(u);
+    newu->peer = u;
+    newsi->cstate = C_ESTABLISHED;
+
+    if (otheru->bound) {
+        dget(otheru->bound);
+        newu->bound = otheru->bound;
+    }
+    otheru->addr->refcount++;
+    smp_store_release(&newu->addr, otheru->addr);
+
+    WRITE_ONCE(si->cstate, C_ESTABLISHED);
+
+    unix_sock_hold(newu);
+    u->peer = newu;
+    sock->state = SS_CONNECTED;
+
+    release_lock(&si->lock);
+
+    list_add_tail(&newu->backlog, &otheru->backlog);
+    otheru->backlog_count++;
+    release_lock(&other->lock);
+
+    wake_all(&otheru->accept_wq);
+
+    unix_sock_put(otheru);
+    return 0;
+
+out_unlock:
+    release_lock(&other->lock);
+    unix_sock_put(otheru);
+out_free:
+    unix_sock_put(newu);
 out:
     return err;
 }
@@ -485,5 +625,8 @@ out:
 static const struct socket_ops unix_stream_ops = {
     .bind = unix_bind_socket,
     .listen = unix_listen,
+    .accept = unix_accept,
+    .connect = unix_connect_stream,
+    .release = unix_release,
     .getname = unix_getname,
 };
