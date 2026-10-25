@@ -2,6 +2,8 @@
 #include "ktest.h"
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <poll.h>
+#include <sys/select.h>
 
 /* Unique socket path in a fresh directory, so tests never collide. */
 static void tmp_addr(struct sockaddr_un *a)
@@ -1034,4 +1036,554 @@ TEST_TIMEOUT(stream_close_wakes_writer, 10)
 
     int st = ktest_wait_timeout(pid, 5);
     EXPECT_TRUE(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+}
+
+/* ---- read/write ---- */
+
+TEST(stream_read_write)
+{
+    int c, s;
+    stream_pair(&c, &s);
+    char buf[16] = {0};
+    EXPECT_EQ(write(c, "hello", 5), 5);
+    EXPECT_EQ(read(s, buf, sizeof(buf)), 5);
+    EXPECT_EQ(memcmp(buf, "hello", 5), 0);
+    /* mixes with send/recv on the same stream */
+    EXPECT_EQ(send(s, "ab", 2, 0), 2);
+    EXPECT_EQ(write(s, "cd", 2), 2);
+    EXPECT_EQ(read(c, buf, sizeof(buf)), 4);
+    EXPECT_EQ(memcmp(buf, "abcd", 4), 0);
+    close(c);
+    EXPECT_EQ(read(s, buf, sizeof(buf)), 0);
+    close(s);
+}
+
+TEST(stream_write_after_peer_close)
+{
+    int c, s;
+    stream_pair(&c, &s);
+    signal(SIGPIPE, SIG_IGN);
+    close(s);
+    EXPECT_ERR(write(c, "x", 1), EPIPE);
+    close(c);
+}
+
+TEST(stream_read_unconnected)
+{
+    int fd = ASSERT_OK(socket(AF_UNIX, SOCK_STREAM, 0));
+    char c;
+    EXPECT_ERR(read(fd, &c, 1), ENOTCONN);
+    EXPECT_ERR(write(fd, "x", 1), ENOTCONN);
+    close(fd);
+}
+
+TEST(dgram_read_write)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int rx = bound_sock(SOCK_DGRAM, &a);
+    int tx = connected(SOCK_DGRAM, &a);
+    EXPECT_EQ(write(tx, "one", 3), 3);
+    EXPECT_EQ(write(tx, "two", 3), 3);
+    char buf[16] = {0};
+    /* boundaries still preserved */
+    EXPECT_EQ(read(rx, buf, sizeof(buf)), 3);
+    EXPECT_EQ(memcmp(buf, "one", 3), 0);
+    EXPECT_EQ(read(rx, buf, sizeof(buf)), 3);
+    EXPECT_EQ(memcmp(buf, "two", 3), 0);
+    close(tx);
+    close(rx);
+}
+
+TEST(dgram_write_unconnected)
+{
+    int fd = ASSERT_OK(socket(AF_UNIX, SOCK_DGRAM, 0));
+    EXPECT_ERR(write(fd, "x", 1), ENOTCONN);
+    close(fd);
+}
+
+/* a socket as a child's stdout */
+TEST(stream_as_stdout)
+{
+    int c, s;
+    stream_pair(&c, &s);
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        dup2(c, STDOUT_FILENO);
+        close(c);
+        close(s);
+        printf("from child\n");
+        fflush(stdout);
+        _exit(0);
+    }
+    close(c);
+    char buf[32] = {0};
+    size_t got = 0;
+    ssize_t r;
+    while ((r = read(s, buf + got, sizeof(buf) - 1 - got)) > 0)
+        got += r;
+    EXPECT_EQ(r, 0);
+    EXPECT_STREQ(buf, "from child\n");
+    int st = ktest_wait_timeout(pid, 5);
+    EXPECT_TRUE(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    close(s);
+}
+
+/* ---- socketpair ---- */
+
+TEST(socketpair_stream)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_STREAM, 0, sv));
+    EXPECT_NE(sv[0], sv[1]);
+    char buf[16] = {0};
+    EXPECT_EQ(write(sv[0], "abc", 3), 3);
+    EXPECT_EQ(read(sv[1], buf, sizeof(buf)), 3);
+    EXPECT_EQ(memcmp(buf, "abc", 3), 0);
+    EXPECT_EQ(send(sv[1], "xyz", 3, 0), 3);
+    EXPECT_EQ(recv(sv[0], buf, sizeof(buf), 0), 3);
+    EXPECT_EQ(memcmp(buf, "xyz", 3), 0);
+    close(sv[0]);
+    EXPECT_EQ(read(sv[1], buf, sizeof(buf)), 0);
+    close(sv[1]);
+}
+
+TEST(socketpair_stream_epipe)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_STREAM, 0, sv));
+    signal(SIGPIPE, SIG_IGN);
+    close(sv[1]);
+    EXPECT_ERR(write(sv[0], "x", 1), EPIPE);
+    close(sv[0]);
+}
+
+TEST(socketpair_dgram)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_DGRAM, 0, sv));
+    char buf[16] = {0};
+    EXPECT_EQ(send(sv[0], "one", 3, 0), 3);
+    EXPECT_EQ(send(sv[0], "two", 3, 0), 3);
+    EXPECT_EQ(recv(sv[1], buf, sizeof(buf), 0), 3);
+    EXPECT_EQ(memcmp(buf, "one", 3), 0);
+    EXPECT_EQ(recv(sv[1], buf, sizeof(buf), 0), 3);
+    EXPECT_EQ(memcmp(buf, "two", 3), 0);
+    EXPECT_EQ(send(sv[1], "back", 4, 0), 4);
+    EXPECT_EQ(recv(sv[0], buf, sizeof(buf), 0), 4);
+    EXPECT_EQ(memcmp(buf, "back", 4), 0);
+    close(sv[1]);
+    EXPECT_ERR(send(sv[0], "x", 1, 0), ECONNREFUSED);
+    close(sv[0]);
+}
+
+/* the usual parent/child channel */
+TEST(socketpair_fork)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_STREAM, 0, sv));
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        close(sv[0]);
+        char c;
+        if (read(sv[1], &c, 1) != 1)
+            _exit(1);
+        c++;
+        _exit(write(sv[1], &c, 1) == 1 ? 0 : 2);
+    }
+    close(sv[1]);
+    char c = 'a';
+    EXPECT_EQ(write(sv[0], &c, 1), 1);
+    EXPECT_EQ(read(sv[0], &c, 1), 1);
+    EXPECT_EQ(c, 'b');
+    int st = ktest_wait_timeout(pid, 5);
+    EXPECT_TRUE(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    close(sv[0]);
+}
+
+TEST(socketpair_errors)
+{
+    int sv[2];
+    EXPECT_ERR(socketpair(AF_UNIX, 99, 0, sv), EINVAL);
+    int *volatile bad = (int *)8; /* volatile: keeps gcc from flagging it */
+    EXPECT_ERR(socketpair(AF_UNIX, SOCK_STREAM, 0, bad), EFAULT);
+    /* the pair is already connected */
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_STREAM, 0, sv));
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 1);
+    EXPECT_ERR(connect(sv[0], SA(&a), sizeof(a)), EISCONN);
+    close(l);
+    close(sv[0]);
+    close(sv[1]);
+}
+
+TEST(socketpair_many)
+{
+    for (int i = 0; i < 300; i++) {
+        int sv[2];
+        ASSERT_OK(socketpair(AF_UNIX, i & 1 ? SOCK_DGRAM : SOCK_STREAM, 0, sv));
+        if (i & 2) {
+            close(sv[0]);
+            close(sv[1]);
+        } else {
+            close(sv[1]);
+            close(sv[0]);
+        }
+    }
+}
+
+/* ---- shutdown ---- */
+
+TEST(shutdown_wr)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_STREAM, 0, sv));
+    signal(SIGPIPE, SIG_IGN);
+    EXPECT_EQ(write(sv[0], "last", 4), 4);
+    ASSERT_OK(shutdown(sv[0], SHUT_WR));
+    EXPECT_ERR(write(sv[0], "x", 1), EPIPE);
+    /* the peer drains, then sees EOF */
+    char buf[8] = {0};
+    EXPECT_EQ(read(sv[1], buf, sizeof(buf)), 4);
+    EXPECT_EQ(memcmp(buf, "last", 4), 0);
+    EXPECT_EQ(read(sv[1], buf, sizeof(buf)), 0);
+    /* the other direction still works */
+    EXPECT_EQ(write(sv[1], "back", 4), 4);
+    EXPECT_EQ(read(sv[0], buf, sizeof(buf)), 4);
+    EXPECT_EQ(memcmp(buf, "back", 4), 0);
+    close(sv[0]);
+    close(sv[1]);
+}
+
+TEST(shutdown_rd)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_STREAM, 0, sv));
+    signal(SIGPIPE, SIG_IGN);
+    ASSERT_OK(shutdown(sv[0], SHUT_RD));
+    char c;
+    EXPECT_EQ(read(sv[0], &c, 1), 0);
+    EXPECT_ERR(write(sv[1], "x", 1), EPIPE);
+    /* sv[0] can still send */
+    EXPECT_EQ(write(sv[0], "y", 1), 1);
+    EXPECT_EQ(read(sv[1], &c, 1), 1);
+    EXPECT_EQ(c, 'y');
+    close(sv[0]);
+    close(sv[1]);
+}
+
+TEST(shutdown_rdwr)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_STREAM, 0, sv));
+    signal(SIGPIPE, SIG_IGN);
+    ASSERT_OK(shutdown(sv[1], SHUT_RDWR));
+    char c;
+    EXPECT_EQ(read(sv[0], &c, 1), 0);
+    EXPECT_EQ(read(sv[1], &c, 1), 0);
+    EXPECT_ERR(write(sv[0], "x", 1), EPIPE);
+    EXPECT_ERR(write(sv[1], "x", 1), EPIPE);
+    /* again is fine */
+    EXPECT_OK(shutdown(sv[1], SHUT_RDWR));
+    close(sv[0]);
+    close(sv[1]);
+}
+
+TEST(shutdown_errors)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_STREAM, 0, sv));
+    EXPECT_ERR(shutdown(sv[0], 3), EINVAL);
+    EXPECT_ERR(shutdown(sv[0], -1), EINVAL);
+    int p[2];
+    ASSERT_OK(pipe(p));
+    EXPECT_ERR(shutdown(p[0], SHUT_RD), ENOTSOCK);
+    EXPECT_ERR(shutdown(1000, SHUT_RD), EBADF);
+    close(p[0]);
+    close(p[1]);
+    close(sv[0]);
+    close(sv[1]);
+}
+
+TEST_TIMEOUT(shutdown_wakes_reader, 10)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_STREAM, 0, sv));
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        usleep(100000);
+        _exit(shutdown(sv[1], SHUT_WR) == 0 ? 0 : 1);
+    }
+    char c;
+    EXPECT_EQ(read(sv[0], &c, 1), 0);
+    int st = ktest_wait_timeout(pid, 5);
+    EXPECT_TRUE(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    close(sv[0]);
+    close(sv[1]);
+}
+
+TEST_TIMEOUT(shutdown_wakes_writer, 10)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_STREAM, 0, sv));
+    signal(SIGPIPE, SIG_IGN);
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        usleep(100000);
+        _exit(shutdown(sv[1], SHUT_RD) == 0 ? 0 : 1);
+    }
+    static char big[BIG_LEN];
+    ssize_t r = send(sv[0], big, sizeof(big), 0);
+    /* what fit before the reader shut down */
+    EXPECT_GT(r, 0);
+    EXPECT_LT(r, (ssize_t)sizeof(big));
+    EXPECT_ERR(send(sv[0], big, 1, 0), EPIPE);
+    int st = ktest_wait_timeout(pid, 5);
+    EXPECT_TRUE(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    close(sv[0]);
+    close(sv[1]);
+}
+
+TEST(dgram_pair_close_eof)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_DGRAM, 0, sv));
+    EXPECT_EQ(send(sv[0], "q", 1, 0), 1);
+    close(sv[0]);
+    char c;
+    /* queued datagrams first */
+    EXPECT_EQ(recv(sv[1], &c, 1, 0), 1);
+    EXPECT_EQ(recv(sv[1], &c, 1, 0), 0);
+    close(sv[1]);
+}
+
+TEST_TIMEOUT(dgram_pair_close_wakes_reader, 10)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_DGRAM, 0, sv));
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        usleep(100000);
+        _exit(0); /* drops the last reference to sv[0] */
+    }
+    close(sv[0]);
+    char c;
+    EXPECT_EQ(recv(sv[1], &c, 1, 0), 0);
+    ktest_wait_timeout(pid, 5);
+    close(sv[1]);
+}
+
+/* a one-way connection is not a hangup for the receiver */
+TEST(dgram_oneway_close_no_eof)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int rx = bound_sock(SOCK_DGRAM, &a);
+    int tx = connected(SOCK_DGRAM, &a);
+    close(tx);
+    arm_interrupt(1);
+    char c;
+    EXPECT_ERR(recv(rx, &c, 1, 0), EINTR);
+    close(rx);
+}
+
+TEST(dgram_shutdown_rd)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_DGRAM, 0, sv));
+    ASSERT_OK(shutdown(sv[1], SHUT_RD));
+    char c;
+    EXPECT_EQ(recv(sv[1], &c, 1, 0), 0);
+    EXPECT_ERR(send(sv[0], "x", 1, 0), EPIPE);
+    /* only sv[1]'s side: it can still send */
+    EXPECT_EQ(send(sv[1], "y", 1, 0), 1);
+    EXPECT_EQ(recv(sv[0], &c, 1, 0), 1);
+    close(sv[0]);
+    close(sv[1]);
+}
+
+/* ---- poll ---- */
+
+static short poll1(int fd, short events, int timeout_ms)
+{
+    struct pollfd p = { .fd = fd, .events = events };
+    int r = poll(&p, 1, timeout_ms);
+    EXPECT_GE(r, 0);
+    return r > 0 ? p.revents : 0;
+}
+
+TEST(poll_stream)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_STREAM, 0, sv));
+    /* writable, not readable */
+    EXPECT_EQ(poll1(sv[0], POLLIN | POLLOUT, 0), POLLOUT);
+    write(sv[1], "x", 1);
+    EXPECT_EQ(poll1(sv[0], POLLIN | POLLOUT, 0), POLLIN | POLLOUT);
+    char c;
+    read(sv[0], &c, 1);
+    EXPECT_EQ(poll1(sv[0], POLLIN, 0), 0);
+    close(sv[0]);
+    close(sv[1]);
+}
+
+TEST_TIMEOUT(poll_stream_wakes_on_data, 10)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_STREAM, 0, sv));
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        usleep(100000);
+        _exit(write(sv[1], "x", 1) == 1 ? 0 : 1);
+    }
+    long long t0 = ktest_now_ns();
+    EXPECT_EQ(poll1(sv[0], POLLIN, 5000), POLLIN);
+    EXPECT_GE(ktest_now_ns() - t0, 50000000LL);
+    int st = ktest_wait_timeout(pid, 5);
+    EXPECT_TRUE(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    close(sv[0]);
+    close(sv[1]);
+}
+
+TEST_TIMEOUT(poll_stream_full_then_drained, 10)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_STREAM, 0, sv));
+    /* fill the peer's ring */
+    static char big[BIG_LEN];
+    arm_interrupt(1);
+    ssize_t filled = send(sv[0], big, sizeof(big), 0);
+    ASSERT_GT(filled, 0);
+    EXPECT_EQ(poll1(sv[0], POLLOUT, 0), 0);
+
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        usleep(100000);
+        char buf[512];
+        _exit(read(sv[1], buf, sizeof(buf)) > 0 ? 0 : 1);
+    }
+    /* the reader draining wakes the writer's poll */
+    EXPECT_EQ(poll1(sv[0], POLLOUT, 5000), POLLOUT);
+    int st = ktest_wait_timeout(pid, 5);
+    EXPECT_TRUE(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    close(sv[0]);
+    close(sv[1]);
+}
+
+TEST(poll_stream_peer_closed)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_STREAM, 0, sv));
+    close(sv[1]);
+    short r = poll1(sv[0], POLLIN | POLLOUT | POLLRDHUP, 0);
+    EXPECT_TRUE(r & POLLHUP);
+    EXPECT_TRUE(r & POLLIN);
+    EXPECT_TRUE(r & POLLRDHUP);
+    close(sv[0]);
+}
+
+TEST(poll_stream_shut_wr)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_STREAM, 0, sv));
+    ASSERT_OK(shutdown(sv[1], SHUT_WR));
+    /* half-closed: EOF readable, but not a full hangup */
+    short r = poll1(sv[0], POLLIN | POLLRDHUP, 0);
+    EXPECT_TRUE(r & POLLIN);
+    EXPECT_TRUE(r & POLLRDHUP);
+    EXPECT_TRUE(!(r & POLLHUP));
+    close(sv[0]);
+    close(sv[1]);
+}
+
+TEST_TIMEOUT(poll_stream_close_wakes, 10)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_STREAM, 0, sv));
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        usleep(100000);
+        _exit(0); /* drops the last reference to sv[1] */
+    }
+    close(sv[1]);
+    EXPECT_TRUE(poll1(sv[0], POLLIN, 5000) & POLLHUP);
+    ktest_wait_timeout(pid, 5);
+    close(sv[0]);
+}
+
+TEST(poll_unconnected_stream)
+{
+    int fd = ASSERT_OK(socket(AF_UNIX, SOCK_STREAM, 0));
+    EXPECT_TRUE(poll1(fd, POLLIN | POLLOUT, 0) & POLLHUP);
+    close(fd);
+}
+
+TEST_TIMEOUT(poll_listener, 10)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 4);
+    EXPECT_EQ(poll1(l, POLLIN | POLLOUT, 0), 0);
+
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        usleep(100000);
+        int c = socket(AF_UNIX, SOCK_STREAM, 0);
+        _exit(c >= 0 && connect(c, SA(&a), sizeof(a)) == 0 ? 0 : 1);
+    }
+    EXPECT_EQ(poll1(l, POLLIN, 5000), POLLIN);
+    int s = ASSERT_OK(accept(l, NULL, NULL));
+    EXPECT_EQ(poll1(l, POLLIN, 0), 0);
+    int st = ktest_wait_timeout(pid, 5);
+    EXPECT_TRUE(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    close(s);
+    close(l);
+}
+
+TEST_TIMEOUT(poll_dgram, 10)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_DGRAM, 0, sv));
+    EXPECT_EQ(poll1(sv[1], POLLIN | POLLOUT, 0), POLLOUT);
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        usleep(100000);
+        _exit(send(sv[0], "d", 1, 0) == 1 ? 0 : 1);
+    }
+    EXPECT_EQ(poll1(sv[1], POLLIN, 5000), POLLIN);
+    char c;
+    EXPECT_EQ(recv(sv[1], &c, 1, 0), 1);
+    EXPECT_EQ(poll1(sv[1], POLLIN, 0), 0);
+    int st = ktest_wait_timeout(pid, 5);
+    EXPECT_TRUE(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    close(sv[0]);
+    EXPECT_TRUE(poll1(sv[1], POLLIN, 0) & POLLHUP);
+    close(sv[1]);
+}
+
+/* select goes through the same ->poll */
+TEST(select_socket)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_STREAM, 0, sv));
+    write(sv[1], "x", 1);
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    FD_SET(sv[0], &rfds);
+    struct timeval tv = { 1, 0 };
+    EXPECT_EQ(select(sv[0] + 1, &rfds, NULL, NULL, &tv), 1);
+    EXPECT_TRUE(FD_ISSET(sv[0], &rfds));
+    close(sv[0]);
+    close(sv[1]);
 }
