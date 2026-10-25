@@ -18,8 +18,13 @@ union pipe_index {
 struct pipe_buf {
     char *buffer;               // data buffer
     unsigned int buf_size;      // size of buffer
+    spinlock_t data_lock;
     union pipe_index idx;       // read and write positions in buffer
     unsigned int data_size;     // amount of data currently in buffer
+};
+
+struct pipe {
+    struct pipe_buf pb;
     struct inode *p_inode;
     struct waitqueue read_wq;   // wait queue for readers
     struct waitqueue write_wq;  // wait queue for writers
@@ -28,5 +33,20 @@ struct pipe_buf {
     unsigned int n_readers;     // number of readers
     unsigned int n_writers;     // number of writers
 };
+
+int pipe_buf_init(struct pipe_buf *p, size_t buf_size);
+void pipe_buf_free(struct pipe_buf *p);
+unsigned int pipe_buf_out(struct pipe_buf *p, void *buf, size_t count);
+unsigned int pipe_buf_in(struct pipe_buf *p, const void *buf, size_t count);
+
+static inline bool pipe_buf_empty(struct pipe_buf *p)
+{
+    return p->data_size == 0;
+}
+
+static inline bool pipe_buf_full(struct pipe_buf *p)
+{
+    return p->data_size == p->buf_size;
+}
 
 #endif // LILAC_PIPE_H

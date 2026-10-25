@@ -38,6 +38,8 @@ extern int arch_cmpxchg8_user(long long __user *ptr, long long oldval,
 static __must_check inline
 int copy_to_user(void *dst, const void *src, size_t size)
 {
+    if (!size)
+        return 0;
     if (!access_ok(dst, size)) {
         klog(LOG_WARN, "copy_to_user: dst not accessible: %p\n", dst);
         return -EFAULT;
@@ -51,6 +53,8 @@ int copy_to_user(void *dst, const void *src, size_t size)
 static __must_check inline
 int copy_from_user(void *dst, const void *src, size_t size)
 {
+    if (!size)
+        return 0;
     if (!access_ok(src, size)) {
         klog(LOG_WARN, "copy_from_user: src not accessible: %p\n", src);
         return -EFAULT;

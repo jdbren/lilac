@@ -59,10 +59,8 @@ struct inode {
     const struct file_operations *i_fop;
 
     union {
-        struct pipe_buf *i_pipe;
-        // struct cdev    *i_cdev;
-        char            *i_link;
-        // unsigned        i_dir_seq;
+        struct pipe  *i_pipe;
+        char         *i_link;
     };
 
     void *i_private; /* fs or device private pointer */
@@ -281,6 +279,8 @@ ssize_t vfs_getdents(struct file *file, struct dirent *dirp, int buf_size);
 int vfs_create(const char *path, umode_t mode);
 int vfs_mkdir(const char *path, umode_t mode);
 int vfs_mkdirat(struct dentry *base, const char *path, umode_t mode);
+int vfs_mknod(const char *path, umode_t mode, dev_t dev);
+int vfs_mknodat(struct dentry *base, const char *path, umode_t mode, dev_t dev);
 int vfs_mount(struct block_device *srcdev, const char *target,
         const char *filesystemtype, unsigned long mountflags,
         const void *data);
@@ -375,6 +375,21 @@ static inline struct file * get_file(struct file *filp)
 {
     fget(filp);
     return filp;
+}
+
+// Map the O_ACCMODE bits of open flags to a read/write bitmask
+#define FMODE_READ          0x1
+#define FMODE_WRITE         0x2
+#define OPEN_FMODE(flags)   (((flags) + 1) & O_ACCMODE)
+
+static inline bool file_readable(const struct file *f)
+{
+    return OPEN_FMODE(f->f_mode) & FMODE_READ;
+}
+
+static inline bool file_writable(const struct file *f)
+{
+    return OPEN_FMODE(f->f_mode) & FMODE_WRITE;
 }
 
 void anon_fs_init(void);

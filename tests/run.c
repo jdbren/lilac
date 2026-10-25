@@ -27,6 +27,7 @@ static const char *suites[] = {
     "thread",
     "time",
     "misc",
+    "socket",
     "zz_hazard", /* last: may take the kernel down */
 };
 

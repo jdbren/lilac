@@ -3,6 +3,7 @@
 
 #include <lilac/types.h>
 #include <user/poll.h>
+#include <asm/barrier.h>
 
 #define FD_SETSIZE 1024
 
@@ -45,8 +46,7 @@ static inline void poll_wait(struct file * filp, struct waitqueue *wait_address,
 {
     if (p && p->qproc) {
         p->qproc(filp, wait_address, p);
-
-        // smp_mb();
+        smp_mb();
     }
 }
 

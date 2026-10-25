@@ -2,6 +2,7 @@
 #define _LILAC_FDTABLE_H
 
 #include <lilac/bitmap.h>
+#include <lilac/sync.h>
 
 struct file;
 
@@ -26,14 +27,21 @@ struct fdtable * alloc_fdtable(unsigned int size);
 struct fdtable * dup_fdtable(struct fdtable *src);
 struct file * fget_handle(int fd);
 struct file * fd_remove(struct fdtable *files, int fd);
+void fd_install(int fd, struct file *file);
+void put_unused_fd(int fd);
+
 struct file * fget_pos(int fd, bool *locked);
 void fput_pos(struct file *file, bool locked);
 bool file_pos_lock(struct file *file);
 void file_pos_unlock(struct file *file, bool locked);
+
 int get_unused_fd_flags(unsigned int flags);
 int get_unused_fd_from(int start, unsigned int flags);
-void fd_install(int fd, struct file *file);
-void put_unused_fd(int fd);
 int get_fd_exact_replace(struct fdtable *files, int fd, struct file *file);
+
+static inline int get_unused_fd(void)
+{
+    return get_unused_fd_flags(0);
+}
 
 #endif
