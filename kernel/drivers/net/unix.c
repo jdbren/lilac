@@ -358,6 +358,9 @@ ssize_t unix_sendto_dgram(struct socket *sock, const void __user *buf, size_t le
     ret = -ECONNREFUSED;
     if (peer->si.dead)
         goto out_put;
+    ret = -EPIPE;
+    if (peer->si.shutdown & RCV_SHUTDOWN)
+        goto out_put;
 
     ret = -ENOMEM;
     msg = kmalloc(sizeof(*msg) + len);
@@ -403,7 +406,10 @@ ssize_t unix_recvfrom_dgram(struct socket *sock, void __user *buf, size_t len,
     acquire_lock(&usock->rx_lock);
     while (list_empty(&usock->rx_queue)) {
         release_lock(&usock->rx_lock);
-        int err = wait_event_interruptible(usock->si.read_wq, !list_empty(&usock->rx_queue));
+        if (usock->si.shutdown & RCV_SHUTDOWN)
+            return 0;
+        int err = wait_event_interruptible(usock->si.read_wq,
+            !list_empty(&usock->rx_queue) || (usock->si.shutdown & RCV_SHUTDOWN));
         if (err)
             return err;
         acquire_lock(&usock->rx_lock);
@@ -441,7 +447,7 @@ static void unix_release_sock(struct unix_sock *u)
 
     acquire_lock(&si->lock);
     si->dead = 1;
-    si->shutdown = 1;
+    si->shutdown = SHUTDOWN_MASK;
     si->sock = NULL;
     peer = u->peer;
     u->peer = NULL;
@@ -455,15 +461,15 @@ static void unix_release_sock(struct unix_sock *u)
     if (u->si.type == SOCK_STREAM) {
         wake_all(&u->peer_wq);  // blocked connectors see C_CLOSE and fail
         wake_all(&si->write_wq);
-        if (peer) {
-            acquire_lock(&peer->si.lock);
-            peer->si.shutdown = 1;
-            release_lock(&peer->si.lock);
-            wake_all(&peer->si.read_wq);
-        }
     }
-    if (peer)
+    if (peer) {
+        acquire_lock(&peer->si.lock);
+        if (u->si.type == SOCK_STREAM || peer->peer == u)
+            peer->si.shutdown = SHUTDOWN_MASK;
+        release_lock(&peer->si.lock);
+        wake_all(&peer->si.read_wq);
         unix_sock_put(peer);
+    }
 
     // never-accepted connections
     list_for_each_entry_safe(embryo, tmp, &pending, backlog) {
@@ -492,6 +498,43 @@ static int unix_socketpair(struct socket *sock1, struct socket *sock2)
     return 0;
 }
 
+static int unix_shutdown(struct socket *sock, int how)
+{
+    struct unix_sock *u = sock_unix(sock), *peer;
+    int mode, peer_mode = 0;
+
+    if (how < SHUT_RD || how > SHUT_RDWR)
+        return -EINVAL;
+    mode = how + 1; // SHUT_RD -> RCV_SHUTDOWN, SHUT_WR -> SEND_SHUTDOWN
+
+    acquire_lock(&u->si.lock);
+    u->si.shutdown |= mode;
+    peer = u->peer;
+    if (peer)
+        unix_sock_hold(peer);
+    release_lock(&u->si.lock);
+
+    wake_all(&u->si.read_wq);
+    wake_all(&u->si.write_wq);
+
+    if (!peer)
+        return 0;
+
+    if (u->si.type == SOCK_STREAM) {
+        if (mode & RCV_SHUTDOWN)
+            peer_mode |= SEND_SHUTDOWN;
+        if (mode & SEND_SHUTDOWN)
+            peer_mode |= RCV_SHUTDOWN;
+        acquire_lock(&peer->si.lock);
+        peer->si.shutdown |= peer_mode;
+        release_lock(&peer->si.lock);
+        wake_all(&peer->si.read_wq);
+        wake_all(&peer->si.write_wq);
+    }
+    unix_sock_put(peer);
+    return 0;
+}
+
 static int unix_release(struct socket *sock)
 {
     unix_release_sock(sock_unix(sock));
@@ -507,6 +550,7 @@ static const struct socket_ops unix_dgram_ops = {
     .socketpair = unix_socketpair,
     .sendto = unix_sendto_dgram,
     .recvfrom = unix_recvfrom_dgram,
+    .shutdown = unix_shutdown,
     .release = unix_release,
     .getname = unix_getname,
 };
@@ -684,6 +728,13 @@ out:
     return err;
 }
 
+// we stopped sending, or the peer stopped receiving
+static inline bool unix_stream_send_closed(struct unix_sock *u, struct unix_sock *peer)
+{
+    return (u->si.shutdown & SEND_SHUTDOWN) || peer->si.dead ||
+        (peer->si.shutdown & RCV_SHUTDOWN);
+}
+
 ssize_t unix_stream_send(struct socket *sock, const void __user *buf, size_t len, int flags)
 {
     struct unix_sock *usock = sock_unix(sock), *peer;
@@ -717,7 +768,7 @@ ssize_t unix_stream_send(struct socket *sock, const void __user *buf, size_t len
             }
         }
 
-        if (peer->si.dead || usock->si.shutdown) {
+        if (unix_stream_send_closed(usock, peer)) {
             err = -EPIPE;
             do_raise(current, SIGPIPE);
             break;
@@ -727,7 +778,7 @@ ssize_t unix_stream_send(struct socket *sock, const void __user *buf, size_t len
         if (pipe_buf_full(&peer->ring)) {
             release_lock(&peer->ring.data_lock);
             if ((err = wait_event_interruptible(peer->si.write_wq,
-                    !pipe_buf_full(&peer->ring) || peer->si.dead)))
+                    !pipe_buf_full(&peer->ring) || unix_stream_send_closed(usock, peer))))
                 break;
         } else {
             unsigned int n = pipe_buf_in(&peer->ring, kbuf + off, chunk - off);
@@ -763,13 +814,13 @@ ssize_t unix_stream_recv(struct socket *sock, void __user *buf, size_t len, int 
     for (;;) {
         acquire_lock(&usock->ring.data_lock);
         if (pipe_buf_empty(&usock->ring)) {
-            if (usock->si.shutdown) {
+            if (usock->si.shutdown & RCV_SHUTDOWN) {
                 release_lock(&usock->ring.data_lock);
                 break;
             }
             release_lock(&usock->ring.data_lock);
             err = wait_event_interruptible(usock->si.read_wq,
-                !pipe_buf_empty(&usock->ring) || usock->si.shutdown);
+                !pipe_buf_empty(&usock->ring) || (usock->si.shutdown & RCV_SHUTDOWN));
             if (err) break;
         } else {
             unsigned int n = pipe_buf_out(&usock->ring, kbuf, len);
@@ -807,6 +858,7 @@ static const struct socket_ops unix_stream_ops = {
     .socketpair = unix_socketpair,
     .sendto = unix_stream_sendto,
     .recvfrom = unix_stream_recvfrom,
+    .shutdown = unix_shutdown,
     .release = unix_release,
     .getname = unix_getname,
 };
