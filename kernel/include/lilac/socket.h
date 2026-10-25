@@ -55,8 +55,10 @@ struct socket_ops {
     int (*connect)(struct socket *sock, ksockaddr_t *addr, socklen_t addrlen);
     int (*listen)(struct socket *sock, int backlog);
     int (*accept)(struct socket *sock, struct socket *newsock);
-    ssize_t (*send)(struct socket *sock, const void __user *buf, size_t len, int flags);
-    ssize_t (*recv)(struct socket *sock, void __user *buf, size_t len, int flags);
+    ssize_t (*sendto)(struct socket *sock, const void __user *buf, size_t len,
+        int flags, ksockaddr_t *addr, socklen_t addrlen);
+    ssize_t (*recvfrom)(struct socket *sock, void __user *buf, size_t len,
+        int flags, ksockaddr_t *srcaddr, socklen_t *addrlen);
     int (*release)(struct socket *sock);
     // kernel ops
     int (*getname)(struct socket *sock, ksockaddr_t *addr, int peer);
