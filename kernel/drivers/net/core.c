@@ -54,6 +54,8 @@ void init_sock_internal(struct socket *sock, struct sock_internal *si, int type)
     si->cstate = C_CLOSE;
     si->type = type;
     si->destruct = sock_destruct;
+    waitqueue_init(&si->read_wq);
+    waitqueue_init(&si->write_wq);
 }
 
 static int socket_release(struct inode *inode, struct file *file)

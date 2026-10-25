@@ -22,6 +22,28 @@ static const struct file_operations pipe_fops = {
     .poll = pipe_poll,
 };
 
+int pipe_buf_init(struct pipe_buf *p, size_t buf_size)
+{
+    p->buffer = get_free_pages(buf_size / PAGE_SIZE, 0);
+    if (!p->buffer) {
+        klog(LOG_ERROR, "Failed to allocate pipe buffer\n");
+        return -ENOMEM;
+    }
+
+    p->buf_size = buf_size;
+    p->idx.read_pos = 0;
+    p->idx.write_pos = 0;
+    p->data_size = 0;
+    return 0;
+}
+
+void pipe_buf_free(struct pipe_buf *p)
+{
+    if (p->buffer)
+        free_pages(p->buffer, p->buf_size / PAGE_SIZE);
+    p->buffer = NULL;
+}
+
 struct pipe * create_pipe(size_t buf_size)
 {
     buf_size = PAGE_ROUND_UP(buf_size);
@@ -32,14 +54,11 @@ struct pipe * create_pipe(size_t buf_size)
         return ERR_PTR(-ENOMEM);
     }
 
-    p->pb.buffer = get_free_pages(buf_size / PAGE_SIZE, 0);
-    if (!p->pb.buffer) {
-        klog(LOG_ERROR, "Failed to allocate pipe buffer\n");
+    if (pipe_buf_init(&p->pb, buf_size)) {
         kfree(p);
         return ERR_PTR(-ENOMEM);
     }
 
-    p->pb.buf_size = buf_size;
     INIT_LIST_HEAD(&p->read_wq.task_list);
     INIT_LIST_HEAD(&p->write_wq.task_list);
     p->n_readers = 1;
@@ -58,9 +77,7 @@ void destroy_pipe(struct pipe *p)
 #ifdef DEBUG_PIPE
     klog(LOG_DEBUG, "Destroying pipe %p\n", p);
 #endif
-    if (p->pb.buffer)
-        free_pages(p->pb.buffer, p->pb.buf_size / PAGE_SIZE);
-
+    pipe_buf_free(&p->pb);
     kfree(p);
 }
 
