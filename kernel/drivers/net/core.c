@@ -105,11 +105,36 @@ static struct file * alloc_socket_file(struct socket *sock)
     return file;
 }
 
+// alloc socket and file
+static struct file * create_socket_file(int domain, int type)
+{
+    struct socket *sock;
+    struct file *file;
+    int err;
+
+    sock = alloc_socket(domain, type);
+    if (!sock)
+        return ERR_PTR(-ENOMEM);
+
+    file = alloc_socket_file(sock);
+    if (IS_ERR(file)) {
+        kfree(sock);
+        return file;
+    }
+
+    err = init_socket(sock, domain, type);
+    if (err) {
+        fput(file); // also frees sock
+        return ERR_PTR(err);
+    }
+
+    sock->file = file;
+    return file;
+}
+
 SYSCALL_DECL3(socket, int, domain, int, type, int, protocol)
 {
     int fd;
-    int err = 0;
-    struct socket *sock;
     struct file *file;
 
     if ((unsigned)domain > AF_MAX || (unsigned)type > SOCK_MAX)
@@ -119,31 +144,74 @@ SYSCALL_DECL3(socket, int, domain, int, type, int, protocol)
     if (fd < 0)
         return -EMFILE;
 
-    sock = alloc_socket(domain, type);
-    if (!sock) {
-        put_unused_fd(fd);
-        return -ENOMEM;
-    }
-
-    file = alloc_socket_file(sock);
+    file = create_socket_file(domain, type);
     if (IS_ERR(file)) {
-        err = PTR_ERR(file);
-        kfree(sock);
-        goto err_fd;
+        put_unused_fd(fd);
+        return PTR_ERR(file);
     }
 
-    err = init_socket(sock, domain, type);
-    if (err) {
-        fput(file);
-        goto err_fd;
-    }
-
-    sock->file = file;
     fd_install(fd, file);
     return fd;
+}
 
-err_fd:
-    put_unused_fd(fd); // also frees sock
+SYSCALL_DECL4(socketpair, int, domain, int, type, int, protocol, int __user *, sv)
+{
+    struct file *f0, *f1;
+    struct socket *s0, *s1;
+    int fd0, fd1;
+    long err;
+
+    if ((unsigned)domain > AF_MAX || (unsigned)type > SOCK_MAX)
+        return -EINVAL;
+    if (!access_ok(sv, 2 * sizeof(int)))
+        return -EFAULT;
+
+    f0 = create_socket_file(domain, type);
+    if (IS_ERR(f0))
+        return PTR_ERR(f0);
+    f1 = create_socket_file(domain, type);
+    if (IS_ERR(f1)) {
+        err = PTR_ERR(f1);
+        goto put_f0;
+    }
+    s0 = f0->f_data;
+    s1 = f1->f_data;
+
+    err = -EOPNOTSUPP;
+    if (!s0->sock_ops->socketpair)
+        goto put_f1;
+    err = s0->sock_ops->socketpair(s0, s1);
+    if (err)
+        goto put_f1;
+
+    fd0 = get_unused_fd();
+    if (fd0 < 0) {
+        err = -EMFILE;
+        goto put_f1;
+    }
+    fd1 = get_unused_fd();
+    if (fd1 < 0) {
+        err = -EMFILE;
+        goto put_fd0;
+    }
+
+    if (put_user(fd0, &sv[0]) || put_user(fd1, &sv[1])) {
+        err = -EFAULT;
+        goto put_fd1;
+    }
+
+    fd_install(fd0, f0);
+    fd_install(fd1, f1);
+    return 0;
+
+put_fd1:
+    put_unused_fd(fd1);
+put_fd0:
+    put_unused_fd(fd0);
+put_f1:
+    fput(f1);
+put_f0:
+    fput(f0);
     return err;
 }
 

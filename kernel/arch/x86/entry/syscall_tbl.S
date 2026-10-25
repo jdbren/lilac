@@ -131,6 +131,7 @@ syscall_table:
 	sc_tbl_entry recvfrom	# 112
 	sc_tbl_entry bind		# 113
 	sc_tbl_entry listen		# 114
+	sc_tbl_entry socketpair	# 115
 /*
 	sc_tbl_entry chmod		# 30
 	sc_tbl_entry chown		# 31

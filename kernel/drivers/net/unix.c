@@ -474,6 +474,24 @@ static void unix_release_sock(struct unix_sock *u)
     unix_sock_put(u);
 }
 
+static int unix_socketpair(struct socket *sock1, struct socket *sock2)
+{
+    struct unix_sock *u1 = sock_unix(sock1), *u2 = sock_unix(sock2);
+
+    unix_sock_hold(u1);
+    unix_sock_hold(u2);
+    u1->peer = u2;
+    u2->peer = u1;
+
+    if (sock1->type == SOCK_STREAM) {
+        u1->si.cstate = C_ESTABLISHED;
+        u2->si.cstate = C_ESTABLISHED;
+    }
+    sock1->state = SS_CONNECTED;
+    sock2->state = SS_CONNECTED;
+    return 0;
+}
+
 static int unix_release(struct socket *sock)
 {
     unix_release_sock(sock_unix(sock));
@@ -486,6 +504,7 @@ static const struct socket_ops unix_dgram_ops = {
     .connect = unix_connect_dgram,
     .listen = sock_no_listen,
     .accept = sock_no_accept,
+    .socketpair = unix_socketpair,
     .sendto = unix_sendto_dgram,
     .recvfrom = unix_recvfrom_dgram,
     .release = unix_release,
@@ -785,6 +804,7 @@ static const struct socket_ops unix_stream_ops = {
     .listen = unix_listen,
     .accept = unix_accept,
     .connect = unix_connect_stream,
+    .socketpair = unix_socketpair,
     .sendto = unix_stream_sendto,
     .recvfrom = unix_stream_recvfrom,
     .release = unix_release,
