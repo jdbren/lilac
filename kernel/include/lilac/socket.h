@@ -47,6 +47,26 @@ typedef struct {
     char __null_pad;
 } ksockaddr_t;
 
+#define MSG_KERNEL  (1u << 31) // kernel ptr
+
+static inline int sock_copy_from(void *dst, const void __user *src, size_t n, int flags)
+{
+    if (flags & MSG_KERNEL) {
+        memcpy(dst, src, n);
+        return 0;
+    }
+    return copy_from_user(dst, src, n) ? -EFAULT : 0;
+}
+
+static inline int sock_copy_to(void __user *dst, const void *src, size_t n, int flags)
+{
+    if (flags & MSG_KERNEL) {
+        memcpy(dst, src, n);
+        return 0;
+    }
+    return copy_to_user(dst, src, n) ? -EFAULT : 0;
+}
+
 struct socket;
 struct sock_internal;
 

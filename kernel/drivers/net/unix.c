@@ -363,7 +363,7 @@ ssize_t unix_sendto_dgram(struct socket *sock, const void __user *buf, size_t le
     msg = kmalloc(sizeof(*msg) + len);
     if (!msg)
         goto out_put;
-    if (copy_from_user(msg->data, buf, len)) {
+    if (sock_copy_from(msg->data, buf, len, flags)) {
         kfree(msg);
         ret = -EFAULT;
         goto out_put;
@@ -415,7 +415,7 @@ ssize_t unix_recvfrom_dgram(struct socket *sock, void __user *buf, size_t len,
     release_lock(&usock->rx_lock);
 
     size_t n = len < msg->len ? len : msg->len;
-    if (copy_to_user(buf, msg->data, n)) {
+    if (sock_copy_to(buf, msg->data, n, flags)) {
         ret = -EFAULT;
         goto out;
     }
@@ -692,7 +692,7 @@ ssize_t unix_stream_send(struct socket *sock, const void __user *buf, size_t len
         if (off == chunk) {
             chunk = MIN(len - sent, UNIX_STREAM_CHUNK);
             off = 0;
-            if (copy_from_user(kbuf, (const char __user *)buf + sent, chunk)) {
+            if (sock_copy_from(kbuf, (const char __user *)buf + sent, chunk, flags)) {
                 err = -EFAULT;
                 break;
             }
@@ -756,7 +756,7 @@ ssize_t unix_stream_recv(struct socket *sock, void __user *buf, size_t len, int 
             unsigned int n = pipe_buf_out(&usock->ring, kbuf, len);
             release_lock(&usock->ring.data_lock);
             wake_all(&usock->si.write_wq);
-            if (copy_to_user(buf, kbuf, n))
+            if (sock_copy_to(buf, kbuf, n, flags))
                 err = -EFAULT;
             else
                 recvd = n;

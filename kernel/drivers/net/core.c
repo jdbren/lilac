@@ -68,7 +68,25 @@ static int socket_release(struct inode *inode, struct file *file)
     return 0;
 }
 
+static ssize_t socket_read(struct file *file, void *buf, size_t count)
+{
+    struct socket *sock = file->f_data;
+    if (!sock->sock_ops->recvfrom)
+        return -EOPNOTSUPP;
+    return sock->sock_ops->recvfrom(sock, buf, count, MSG_KERNEL, NULL, NULL);
+}
+
+static ssize_t socket_write(struct file *file, const void *buf, size_t count)
+{
+    struct socket *sock = file->f_data;
+    if (!sock->sock_ops->sendto)
+        return -EOPNOTSUPP;
+    return sock->sock_ops->sendto(sock, buf, count, MSG_KERNEL, NULL, 0);
+}
+
 static const struct file_operations socket_fops = {
+    .read = socket_read,
+    .write = socket_write,
     .release = socket_release,
 };
 
@@ -309,7 +327,7 @@ SYSCALL_DECL6(sendto, int, sockfd, const void *, buf, size_t, len, int, flags,
         kaddr = &ksockaddr;
     }
 
-    ret = sock->sock_ops->sendto(sock, buf, len, flags, kaddr, addrlen);
+    ret = sock->sock_ops->sendto(sock, buf, len, flags & ~MSG_KERNEL, kaddr, addrlen);
 out:
     fput(file);
     return ret;
@@ -333,7 +351,7 @@ SYSCALL_DECL6(recvfrom, int, sockfd, void *, buf, size_t, len, int, flags,
     if (!sock->sock_ops->recvfrom)
         goto out;
 
-    ret = sock->sock_ops->recvfrom(sock, buf, len, flags,
+    ret = sock->sock_ops->recvfrom(sock, buf, len, flags & ~MSG_KERNEL,
         want_addr ? &kaddr : NULL, &klen);
     if (ret >= 0 && want_addr) {
         int err = put_user_sockaddr(&kaddr, klen, src_addr, addrlen);
