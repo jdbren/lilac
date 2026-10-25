@@ -148,7 +148,11 @@ static struct unix_sock * unix_find_socket(const ksockaddr_t *addr)
 
     if (IS_ERR(target))
         return ERR_CAST(target);
-    if (!target->d_inode || !S_ISSOCK(target->d_inode->i_mode)) {
+    if (!target->d_inode) {
+        dput(target);
+        return ERR_PTR(-ENOENT);
+    }
+    if (!S_ISSOCK(target->d_inode->i_mode)) {
         dput(target);
         return ERR_PTR(-ECONNREFUSED);
     }
@@ -205,19 +209,8 @@ static void unix_addr_put(struct unix_addr *uaddr)
         kfree(uaddr);
 }
 
-static int unix_getname(struct socket *sock, ksockaddr_t *addr, int peer)
+static int unix_fill_addr(ksockaddr_t *addr, const struct unix_addr *uaddr)
 {
-    struct unix_sock *usock = sock_unix(sock);
-    struct unix_addr *uaddr;
-
-    if (peer) {
-        if (!usock->peer)
-            return -ENOTCONN;
-        uaddr = usock->peer->addr;
-    } else {
-        uaddr = usock->addr;
-    }
-
     if (!uaddr) {
         addr->sa_family = AF_UNIX;
         addr->sa_data[0] = '\0';
@@ -225,6 +218,18 @@ static int unix_getname(struct socket *sock, ksockaddr_t *addr, int peer)
     }
     memcpy(addr, &uaddr->ksock_addr, sizeof(ksockaddr_t));
     return uaddr->len;
+}
+
+static int unix_getname(struct socket *sock, ksockaddr_t *addr, int peer)
+{
+    struct unix_sock *usock = sock_unix(sock);
+
+    if (peer) {
+        if (!usock->peer)
+            return -ENOTCONN;
+        return unix_fill_addr(addr, usock->peer->addr);
+    }
+    return unix_fill_addr(addr, usock->addr);
 }
 
 int unix_bind_socket(struct socket *sock, ksockaddr_t *addr, unsigned int addrlen)
@@ -297,7 +302,30 @@ int unix_connect_dgram(struct socket *sock, ksockaddr_t *addr, unsigned int addr
     return 0;
 }
 
-ssize_t unix_send_dgram(struct socket *sock, const void __user *buf, size_t len, int flags)
+static struct unix_sock * get_sendto_peer(struct unix_sock *usock, ksockaddr_t *addr)
+{
+    struct unix_sock *peer, *peer_peer;
+    if (addr->sa_family != AF_UNIX || addr->sa_data[0] == '\0')
+        return ERR_PTR(-EINVAL);
+    peer = unix_find_socket(addr);
+    if (IS_ERR(peer))
+        return peer;
+
+    if (peer->si.type != SOCK_DGRAM)
+        return ERR_PTR(-EPROTOTYPE);
+
+    // a connected socket only accepts datagrams from its peer
+    acquire_lock(&peer->si.lock);
+    peer_peer = peer->peer;
+    release_lock(&peer->si.lock);
+    if (peer_peer && peer_peer != usock)
+        return ERR_PTR(-EPERM);
+
+    return peer;
+}
+
+ssize_t unix_sendto_dgram(struct socket *sock, const void __user *buf, size_t len,
+    int flags, ksockaddr_t *addr, socklen_t addrlen)
 {
     struct unix_sock *usock = sock_unix(sock);
     struct unix_sock *peer;
@@ -308,13 +336,19 @@ ssize_t unix_send_dgram(struct socket *sock, const void __user *buf, size_t len,
     if (len > UNIX_DGRAM_MAX)
         return -EMSGSIZE;
 
-    acquire_lock(&usock->si.lock);
-    peer = usock->peer;
-    if (peer)
-        unix_sock_hold(peer);
-    release_lock(&usock->si.lock);
-    if (!peer)
-        return -ENOTCONN;
+    if (addr) {
+        peer = get_sendto_peer(usock, addr);
+        if (IS_ERR(peer))
+            return PTR_ERR(peer);
+    } else {
+        acquire_lock(&usock->si.lock);
+        peer = usock->peer;
+        if (peer)
+            unix_sock_hold(peer);
+        release_lock(&usock->si.lock);
+        if (!peer)
+            return -ENOTCONN;
+    }
 
     // A message that races with the peer closing is freed with it
     ret = -ECONNREFUSED;
@@ -355,7 +389,8 @@ out_put:
     return ret;
 }
 
-ssize_t unix_recv_dgram(struct socket *sock, void __user* buf, size_t len, int flags)
+ssize_t unix_recvfrom_dgram(struct socket *sock, void __user *buf, size_t len,
+    int flags, ksockaddr_t *srcaddr, socklen_t *addrlen)
 {
     struct unix_sock *usock = sock_unix(sock);
     struct unix_msg *msg;
@@ -381,6 +416,8 @@ ssize_t unix_recv_dgram(struct socket *sock, void __user* buf, size_t len, int f
         goto out;
     }
     ret = n;
+    if (srcaddr)
+        *addrlen = unix_fill_addr(srcaddr, msg->from);
 out:
     unix_addr_put(msg->from);
     kfree(msg);
@@ -443,8 +480,8 @@ static const struct socket_ops unix_dgram_ops = {
     .connect = unix_connect_dgram,
     .listen = sock_no_listen,
     .accept = sock_no_accept,
-    .send = unix_send_dgram,
-    .recv = unix_recv_dgram,
+    .sendto = unix_sendto_dgram,
+    .recvfrom = unix_recvfrom_dgram,
     .release = unix_release,
     .getname = unix_getname,
 };

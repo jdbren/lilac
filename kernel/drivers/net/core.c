@@ -198,26 +198,31 @@ SYSCALL_DECL2(listen, int, sockfd, int, backlog)
     return err;
 }
 
+static int put_user_sockaddr(const ksockaddr_t *kaddr, socklen_t len,
+    struct sockaddr __user *addr, socklen_t __user *addrlen)
+{
+    socklen_t ulen;
+
+    if (get_user(ulen, addrlen))
+        return -EFAULT;
+    if (copy_to_user(addr, kaddr, MIN(len, ulen)))
+        return -EFAULT;
+    if (put_user(len, addrlen))
+        return -EFAULT;
+    return 0;
+}
+
 static int copy_sockaddr_to_user(struct socket *sock,
     struct sockaddr __user *addr, socklen_t __user *addrlen)
 {
     ksockaddr_t kaddr;
-    socklen_t klen;
     int actual_len;
-
-    if (get_user(klen, addrlen))
-        return -EFAULT;
 
     actual_len = sock->sock_ops->getname(sock, &kaddr, 1);
     if (actual_len < 0)
         return actual_len;
 
-    if (copy_to_user(addr, &kaddr, MIN((socklen_t)actual_len, klen)))
-        return -EFAULT;
-    if (put_user(actual_len, addrlen))
-        return -EFAULT;
-
-    return 0;
+    return put_user_sockaddr(&kaddr, actual_len, addr, addrlen);
 }
 
 SYSCALL_DECL3(accept, int, sockfd, struct sockaddr *, addr, socklen_t *, addrlen)
@@ -280,53 +285,60 @@ free_fd:
     return err;
 }
 
-SYSCALL_DECL4(send, int, sockfd, const void *, buf, size_t, len, int, flags)
-{
-    struct file *file;
-    struct socket *sock;
-    int err;
-
-    file = get_socket_file(sockfd);
-    if (IS_ERR(file))
-        return PTR_ERR(file);
-    sock = file->f_data;
-
-    err = sock->sock_ops->send(sock, buf, len, flags);
-    fput(file);
-    return err;
-}
-
-SYSCALL_DECL4(recv, int, sockfd, void *, buf, size_t, len, int, flags)
-{
-    struct file *file;
-    struct socket *sock;
-    int err;
-
-    file = get_socket_file(sockfd);
-    if (IS_ERR(file))
-        return PTR_ERR(file);
-    sock = file->f_data;
-
-    err = sock->sock_ops->recv(sock, buf, len, flags);
-    fput(file);
-    return err;
-}
-
 SYSCALL_DECL6(sendto, int, sockfd, const void *, buf, size_t, len, int, flags,
               const struct sockaddr *, dest_addr, socklen_t, addrlen)
 {
-    if (dest_addr)
-        return -EOPNOTSUPP;
-    return sys_send(sockfd, buf, len, flags);
+    struct file *file;
+    struct socket *sock;
+    ksockaddr_t ksockaddr, *kaddr = NULL;
+    long ret = -EOPNOTSUPP;
+
+    file = get_socket_file(sockfd);
+    if (IS_ERR(file))
+        return PTR_ERR(file);
+    sock = file->f_data;
+
+    if (!sock->sock_ops->sendto)
+        goto out;
+
+    if (dest_addr && addrlen) {
+        if ((ret = get_user_sockaddr(&ksockaddr, dest_addr, addrlen)) < 0)
+            goto out;
+        kaddr = &ksockaddr;
+    }
+
+    ret = sock->sock_ops->sendto(sock, buf, len, flags, kaddr, addrlen);
+out:
+    fput(file);
+    return ret;
 }
 
 SYSCALL_DECL6(recvfrom, int, sockfd, void *, buf, size_t, len, int, flags,
               struct sockaddr *, src_addr, socklen_t *, addrlen)
 {
-    long ret = sys_recv(sockfd, buf, len, flags);
-    if (ret >= 0 && src_addr && addrlen) {
-        if (put_user((socklen_t)0, addrlen))
-            return -EFAULT;
+    struct file *file;
+    struct socket *sock;
+    ksockaddr_t kaddr;
+    socklen_t klen = 0;
+    bool want_addr = src_addr && addrlen;
+    long ret = -EOPNOTSUPP;
+
+    file = get_socket_file(sockfd);
+    if (IS_ERR(file))
+        return PTR_ERR(file);
+    sock = file->f_data;
+
+    if (!sock->sock_ops->recvfrom)
+        goto out;
+
+    ret = sock->sock_ops->recvfrom(sock, buf, len, flags,
+        want_addr ? &kaddr : NULL, &klen);
+    if (ret >= 0 && want_addr) {
+        int err = put_user_sockaddr(&kaddr, klen, src_addr, addrlen);
+        if (err)
+            ret = err;
     }
+out:
+    fput(file);
     return ret;
 }
