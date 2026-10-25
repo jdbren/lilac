@@ -72,6 +72,7 @@ static inline void unix_sock_put(struct unix_sock *u)
 
 static void unix_addr_put(struct unix_addr *);
 static void unix_sock_free(struct sock_internal *);
+static poll_mask_t unix_poll(struct socket *, struct file *, struct poll_request *);
 
 static const struct socket_ops unix_stream_ops;
 static const struct socket_ops unix_dgram_ops;
@@ -551,6 +552,7 @@ static const struct socket_ops unix_dgram_ops = {
     .sendto = unix_sendto_dgram,
     .recvfrom = unix_recvfrom_dgram,
     .shutdown = unix_shutdown,
+    .poll = unix_poll,
     .release = unix_release,
     .getname = unix_getname,
 };
@@ -850,6 +852,53 @@ ssize_t unix_stream_recvfrom(struct socket *sock, void __user *buf, size_t len,
     return unix_stream_recv(sock, buf, len, flags);
 }
 
+static poll_mask_t unix_poll(struct socket *sock, struct file *file, struct poll_request *pr)
+{
+    struct unix_sock *u = sock_unix(sock), *peer;
+    struct sock_internal *si = &u->si;
+    poll_mask_t mask = 0;
+    unsigned shutdown, cstate;
+
+    if (si->type == SOCK_STREAM && READ_ONCE(si->cstate) == C_LISTEN) {
+        poll_wait(file, &u->accept_wq, pr);
+        if (!list_empty(&u->backlog)) // listen
+            mask |= POLLIN | POLLRDNORM;
+        return mask;
+    }
+
+    poll_wait(file, &si->read_wq, pr);
+
+    acquire_lock(&si->lock);
+    shutdown = si->shutdown;
+    cstate = si->cstate;
+    peer = u->peer;
+    release_lock(&si->lock);
+
+    if (shutdown == SHUTDOWN_MASK)
+        mask |= POLLHUP;
+    if (shutdown & RCV_SHUTDOWN)
+        mask |= POLLRDHUP | POLLIN | POLLRDNORM;
+
+    if (si->type == SOCK_DGRAM) {
+        if (!list_empty(&u->rx_queue)) // recv
+            mask |= POLLIN | POLLRDNORM;
+        // send doesn't block
+        return mask | POLLOUT | POLLWRNORM;
+    }
+
+    // SOCK_STREAM
+    if (!pipe_buf_empty(&u->ring))
+        mask |= POLLIN | POLLRDNORM;
+
+    if (cstate != C_ESTABLISHED || !peer)
+        return mask | POLLHUP | POLLOUT | POLLWRNORM;
+
+    poll_wait(file, &peer->si.write_wq, pr);
+    if (!pipe_buf_full(&peer->ring) || unix_stream_send_closed(u, peer))
+        mask |= POLLOUT | POLLWRNORM;
+    return mask;
+}
+
 static const struct socket_ops unix_stream_ops = {
     .bind = unix_bind_socket,
     .listen = unix_listen,
@@ -859,6 +908,7 @@ static const struct socket_ops unix_stream_ops = {
     .sendto = unix_stream_sendto,
     .recvfrom = unix_stream_recvfrom,
     .shutdown = unix_shutdown,
+    .poll = unix_poll,
     .release = unix_release,
     .getname = unix_getname,
 };

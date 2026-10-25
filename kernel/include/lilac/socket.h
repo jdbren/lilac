@@ -2,6 +2,7 @@
 #define LILAC_SOCKET_H
 
 #include <lilac/uaccess.h>
+#include <fs/select.h>
 
 #define AF_LOCAL    1
 #define AF_UNIX     AF_LOCAL
@@ -90,6 +91,7 @@ struct socket_ops {
     ssize_t (*recvfrom)(struct socket *sock, void __user *buf, size_t len,
         int flags, ksockaddr_t *srcaddr, socklen_t *addrlen);
     int (*shutdown)(struct socket *sock, int how);
+    poll_mask_t (*poll)(struct socket *sock, struct file *file, struct poll_request *pr);
     int (*release)(struct socket *sock);
     // kernel ops
     int (*getname)(struct socket *sock, ksockaddr_t *addr, int peer);

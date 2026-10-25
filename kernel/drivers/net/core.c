@@ -84,9 +84,18 @@ static ssize_t socket_write(struct file *file, const void *buf, size_t count)
     return sock->sock_ops->sendto(sock, buf, count, MSG_KERNEL, NULL, 0);
 }
 
+static poll_mask_t socket_poll(struct file *file, struct poll_request *pr)
+{
+    struct socket *sock = file->f_data;
+    if (!sock->sock_ops->poll)
+        return 0;
+    return sock->sock_ops->poll(sock, file, pr);
+}
+
 static const struct file_operations socket_fops = {
     .read = socket_read,
     .write = socket_write,
+    .poll = socket_poll,
     .release = socket_release,
 };
 
