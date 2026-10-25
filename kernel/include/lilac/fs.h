@@ -59,8 +59,8 @@ struct inode {
     const struct file_operations *i_fop;
 
     union {
-        struct pipe_buf *i_pipe;
-        char            *i_link;
+        struct pipe  *i_pipe;
+        char         *i_link;
     };
 
     void *i_private; /* fs or device private pointer */
