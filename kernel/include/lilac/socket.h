@@ -81,6 +81,8 @@ struct sock_internal {
     unsigned char cstate;
     short type;
     void (*destruct)(struct sock_internal *si);
+    struct waitqueue read_wq;
+    struct waitqueue write_wq;
     struct {
         unsigned dead :1;
         unsigned shutdown :1;
