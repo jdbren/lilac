@@ -75,6 +75,7 @@ struct socket_ops {
     int (*connect)(struct socket *sock, ksockaddr_t *addr, socklen_t addrlen);
     int (*listen)(struct socket *sock, int backlog);
     int (*accept)(struct socket *sock, struct socket *newsock);
+    int (*socketpair)(struct socket *sock1, struct socket *sock2);
     ssize_t (*sendto)(struct socket *sock, const void __user *buf, size_t len,
         int flags, ksockaddr_t *addr, socklen_t addrlen);
     ssize_t (*recvfrom)(struct socket *sock, void __user *buf, size_t len,
