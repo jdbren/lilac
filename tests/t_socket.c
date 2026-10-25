@@ -276,6 +276,109 @@ TEST(dgram_recv_eintr)
     close(rx);
 }
 
+TEST(dgram_sendto_recvfrom)
+{
+    struct sockaddr_un a, b;
+    tmp_addr(&a);
+    tmp_addr(&b);
+    int rx = bound_sock(SOCK_DGRAM, &a);
+    int tx = bound_sock(SOCK_DGRAM, &b);
+
+    /* no connect needed */
+    EXPECT_EQ(sendto(tx, "hi", 2, 0, SA(&a), sizeof(a)), 2);
+
+    struct sockaddr_un from;
+    memset(&from, 0, sizeof(from));
+    socklen_t fromlen = sizeof(from);
+    char buf[8] = {0};
+    EXPECT_EQ(recvfrom(rx, buf, sizeof(buf), 0, SA(&from), &fromlen), 2);
+    EXPECT_EQ(memcmp(buf, "hi", 2), 0);
+    EXPECT_EQ(from.sun_family, AF_UNIX);
+    EXPECT_STREQ(from.sun_path, b.sun_path);
+    EXPECT_EQ(fromlen, (socklen_t)(offsetof(struct sockaddr_un, sun_path)
+                                   + strlen(b.sun_path) + 1));
+
+    /* reply to the reported address */
+    EXPECT_EQ(sendto(rx, "ok", 2, 0, SA(&from), fromlen), 2);
+    EXPECT_EQ(recv(tx, buf, sizeof(buf), 0), 2);
+    EXPECT_EQ(memcmp(buf, "ok", 2), 0);
+    close(tx);
+    close(rx);
+}
+
+TEST(dgram_recvfrom_unbound_sender)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int rx = bound_sock(SOCK_DGRAM, &a);
+    int tx = ASSERT_OK(socket(AF_UNIX, SOCK_DGRAM, 0));
+    EXPECT_EQ(sendto(tx, "x", 1, 0, SA(&a), sizeof(a)), 1);
+
+    struct sockaddr_un from;
+    memset(&from, 0xff, sizeof(from));
+    socklen_t fromlen = sizeof(from);
+    char c;
+    EXPECT_EQ(recvfrom(rx, &c, 1, 0, SA(&from), &fromlen), 1);
+    EXPECT_EQ(fromlen, (socklen_t)sizeof(sa_family_t));
+    EXPECT_EQ(from.sun_family, AF_UNIX);
+    close(tx);
+    close(rx);
+}
+
+TEST(dgram_recvfrom_short_addrlen)
+{
+    struct sockaddr_un a, b;
+    tmp_addr(&a);
+    tmp_addr(&b);
+    int rx = bound_sock(SOCK_DGRAM, &a);
+    int tx = bound_sock(SOCK_DGRAM, &b);
+    EXPECT_EQ(sendto(tx, "x", 1, 0, SA(&a), sizeof(a)), 1);
+
+    char raw[sizeof(struct sockaddr_un)];
+    memset(raw, 0x5a, sizeof(raw));
+    socklen_t fromlen = 4;
+    char c;
+    EXPECT_EQ(recvfrom(rx, &c, 1, 0, SA(raw), &fromlen), 1);
+    /* full length reported, only 4 bytes written */
+    EXPECT_GT(fromlen, (socklen_t)4);
+    EXPECT_EQ(raw[4], 0x5a);
+    close(tx);
+    close(rx);
+}
+
+TEST(dgram_sendto_connected_elsewhere)
+{
+    struct sockaddr_un a, b;
+    tmp_addr(&a);
+    tmp_addr(&b);
+    int ra = bound_sock(SOCK_DGRAM, &a);
+    int rb = bound_sock(SOCK_DGRAM, &b);
+    /* a only accepts from b once connected to it */
+    ASSERT_OK(connect(ra, SA(&b), sizeof(b)));
+    int tx = ASSERT_OK(socket(AF_UNIX, SOCK_DGRAM, 0));
+    EXPECT_ERR(sendto(tx, "x", 1, 0, SA(&a), sizeof(a)), EPERM);
+    EXPECT_EQ(sendto(rb, "y", 1, 0, SA(&a), sizeof(a)), 1);
+    char c = 0;
+    EXPECT_EQ(recv(ra, &c, 1, 0), 1);
+    EXPECT_EQ(c, 'y');
+    close(tx);
+    close(ra);
+    close(rb);
+}
+
+TEST(dgram_sendto_errors)
+{
+    struct sockaddr_un a, missing;
+    tmp_addr(&a);
+    tmp_addr(&missing);
+    int l = listener(&a, 1);
+    int tx = ASSERT_OK(socket(AF_UNIX, SOCK_DGRAM, 0));
+    EXPECT_ERR(sendto(tx, "x", 1, 0, SA(&a), sizeof(a)), EPROTOTYPE);
+    EXPECT_ERR(sendto(tx, "x", 1, 0, SA(&missing), sizeof(missing)), ENOENT);
+    close(tx);
+    close(l);
+}
+
 /* ---- stream: setup errors ---- */
 
 TEST(listen_unbound)
