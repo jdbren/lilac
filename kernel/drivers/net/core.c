@@ -430,3 +430,21 @@ out:
     fput(file);
     return ret;
 }
+
+SYSCALL_DECL2(shutdown, int, sockfd, int, how)
+{
+    struct file *file;
+    struct socket *sock;
+    long err;
+
+    file = get_socket_file(sockfd);
+    if (IS_ERR(file))
+        return PTR_ERR(file);
+    sock = file->f_data;
+
+    err = -EOPNOTSUPP;
+    if (sock->sock_ops->shutdown)
+        err = sock->sock_ops->shutdown(sock, how);
+    fput(file);
+    return err;
+}

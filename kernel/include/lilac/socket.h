@@ -25,6 +25,15 @@ typedef enum {
     SS_DISCONNECTING    /* in process of disconnecting  */
 } socket_state;
 
+#define SHUT_RD     0
+#define SHUT_WR     1
+#define SHUT_RDWR   2
+
+// sock_internal.shutdown bits
+#define RCV_SHUTDOWN    1
+#define SEND_SHUTDOWN   2
+#define SHUTDOWN_MASK   3
+
 enum {
     C_ESTABLISHED = 1,
     C_LISTEN,
@@ -80,6 +89,7 @@ struct socket_ops {
         int flags, ksockaddr_t *addr, socklen_t addrlen);
     ssize_t (*recvfrom)(struct socket *sock, void __user *buf, size_t len,
         int flags, ksockaddr_t *srcaddr, socklen_t *addrlen);
+    int (*shutdown)(struct socket *sock, int how);
     int (*release)(struct socket *sock);
     // kernel ops
     int (*getname)(struct socket *sock, ksockaddr_t *addr, int peer);
@@ -106,7 +116,7 @@ struct sock_internal {
     struct waitqueue write_wq;
     struct {
         unsigned dead :1;
-        unsigned shutdown :1;
+        unsigned shutdown :2;  // RCV_SHUTDOWN | SEND_SHUTDOWN
     };
 };
 
