@@ -762,3 +762,276 @@ TEST_TIMEOUT(connect_close_stress, 30)
     }
     close(l);
 }
+
+/* ---- stream: data transfer ---- */
+
+/* Connected pair: *c is the client, *s the accepted end. */
+static void stream_pair(int *c, int *s)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 4);
+    *c = connected(SOCK_STREAM, &a);
+    *s = ASSERT_OK(accept(l, NULL, NULL));
+    close(l);
+}
+
+TEST(stream_roundtrip)
+{
+    int c, s;
+    stream_pair(&c, &s);
+    char buf[16] = {0};
+    EXPECT_EQ(send(c, "ping", 4, 0), 4);
+    EXPECT_EQ(recv(s, buf, sizeof(buf), 0), 4);
+    EXPECT_EQ(memcmp(buf, "ping", 4), 0);
+    EXPECT_EQ(send(s, "pong!", 5, 0), 5);
+    EXPECT_EQ(recv(c, buf, sizeof(buf), 0), 5);
+    EXPECT_EQ(memcmp(buf, "pong!", 5), 0);
+    close(c);
+    close(s);
+}
+
+TEST(stream_send_before_accept)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 4);
+    int c = connected(SOCK_STREAM, &a);
+    EXPECT_EQ(send(c, "early", 5, 0), 5);
+    int s = ASSERT_OK(accept(l, NULL, NULL));
+    char buf[8] = {0};
+    EXPECT_EQ(recv(s, buf, sizeof(buf), 0), 5);
+    EXPECT_EQ(memcmp(buf, "early", 5), 0);
+    close(c);
+    close(s);
+    close(l);
+}
+
+TEST(stream_no_boundaries)
+{
+    int c, s;
+    stream_pair(&c, &s);
+    send(c, "abc", 3, 0);
+    send(c, "def", 3, 0);
+    char buf[16] = {0};
+    /* both sends arrive as one run of bytes */
+    EXPECT_EQ(recv(s, buf, sizeof(buf), 0), 6);
+    EXPECT_EQ(memcmp(buf, "abcdef", 6), 0);
+    close(c);
+    close(s);
+}
+
+TEST(stream_partial_recv)
+{
+    int c, s;
+    stream_pair(&c, &s);
+    send(c, "0123456789", 10, 0);
+    char buf[16] = {0};
+    EXPECT_EQ(recv(s, buf, 4, 0), 4);
+    EXPECT_EQ(memcmp(buf, "0123", 4), 0);
+    /* unlike dgram, the rest is kept */
+    EXPECT_EQ(recv(s, buf, sizeof(buf), 0), 6);
+    EXPECT_EQ(memcmp(buf, "456789", 6), 0);
+    close(c);
+    close(s);
+}
+
+TEST(stream_not_connected)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int fd = ASSERT_OK(socket(AF_UNIX, SOCK_STREAM, 0));
+    char c;
+    EXPECT_ERR(send(fd, "x", 1, 0), ENOTCONN);
+    EXPECT_ERR(recv(fd, &c, 1, 0), ENOTCONN);
+    int l = listener(&a, 1);
+    EXPECT_ERR(send(l, "x", 1, 0), ENOTCONN);
+    EXPECT_ERR(recv(l, &c, 1, 0), ENOTCONN);
+    close(l);
+    close(fd);
+}
+
+#define BIG_LEN (256 * 1024)
+
+static unsigned char pattern(size_t i)
+{
+    return (unsigned char)(i * 7 + i / 251);
+}
+
+/* larger than the ring: the writer must block and resume */
+TEST_TIMEOUT(stream_large_transfer, 30)
+{
+    int c, s;
+    stream_pair(&c, &s);
+
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        close(s);
+        static unsigned char out[BIG_LEN];
+        for (size_t i = 0; i < BIG_LEN; i++)
+            out[i] = pattern(i);
+        size_t off = 0;
+        while (off < BIG_LEN) {
+            size_t n = BIG_LEN - off < 7000 ? BIG_LEN - off : 7000;
+            ssize_t r = send(c, out + off, n, 0);
+            if (r <= 0)
+                _exit(1);
+            off += r;
+        }
+        _exit(0);
+    }
+    close(c);
+
+    static unsigned char in[BIG_LEN];
+    size_t got = 0;
+    while (got < BIG_LEN) {
+        ssize_t r = recv(s, in + got, BIG_LEN - got, 0);
+        ASSERT_GT(r, 0);
+        got += r;
+    }
+    size_t bad = 0;
+    for (size_t i = 0; i < BIG_LEN; i++)
+        if (in[i] != pattern(i))
+            bad++;
+    EXPECT_EQ(bad, (size_t)0);
+    int st = ktest_wait_timeout(pid, 10);
+    EXPECT_TRUE(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    close(s);
+}
+
+TEST(stream_recv_blocks)
+{
+    int c, s;
+    stream_pair(&c, &s);
+
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        usleep(100000);
+        _exit(send(c, "late", 4, 0) == 4 ? 0 : 1);
+    }
+
+    char buf[8] = {0};
+    long long t0 = ktest_now_ns();
+    EXPECT_EQ(recv(s, buf, sizeof(buf), 0), 4);
+    EXPECT_GE(ktest_now_ns() - t0, 50000000LL);
+    EXPECT_EQ(memcmp(buf, "late", 4), 0);
+    int st = ktest_wait_timeout(pid, 5);
+    EXPECT_TRUE(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    close(c);
+    close(s);
+}
+
+TEST(stream_recv_eintr)
+{
+    int c, s;
+    stream_pair(&c, &s);
+    arm_interrupt(1);
+    char ch;
+    EXPECT_ERR(recv(s, &ch, 1, 0), EINTR);
+    close(c);
+    close(s);
+}
+
+/* interrupted after some bytes went out: the partial count, not EINTR */
+TEST_TIMEOUT(stream_send_eintr_partial, 10)
+{
+    int c, s;
+    stream_pair(&c, &s);
+    static char big[BIG_LEN];
+    arm_interrupt(1);
+    ssize_t r = send(c, big, sizeof(big), 0);
+    EXPECT_GT(r, 0);
+    EXPECT_LT(r, (ssize_t)sizeof(big));
+    close(c);
+    close(s);
+}
+
+TEST(stream_eof_drains_first)
+{
+    int c, s;
+    stream_pair(&c, &s);
+    EXPECT_EQ(send(c, "bye", 3, 0), 3);
+    close(c);
+    char buf[8] = {0};
+    /* queued data before EOF */
+    EXPECT_EQ(recv(s, buf, sizeof(buf), 0), 3);
+    EXPECT_EQ(memcmp(buf, "bye", 3), 0);
+    EXPECT_EQ(recv(s, buf, sizeof(buf), 0), 0);
+    EXPECT_EQ(recv(s, buf, sizeof(buf), 0), 0);
+    close(s);
+}
+
+TEST_TIMEOUT(stream_close_wakes_reader, 10)
+{
+    int c, s;
+    stream_pair(&c, &s);
+
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        usleep(100000);
+        _exit(0); /* drops the last reference to c */
+    }
+    close(c);
+
+    char ch;
+    EXPECT_EQ(recv(s, &ch, 1, 0), 0);
+    ktest_wait_timeout(pid, 5);
+    close(s);
+}
+
+TEST(stream_send_after_peer_close)
+{
+    int c, s;
+    stream_pair(&c, &s);
+    signal(SIGPIPE, SIG_IGN);
+    close(s);
+    EXPECT_ERR(send(c, "x", 1, 0), EPIPE);
+    close(c);
+}
+
+TEST(stream_sigpipe)
+{
+    int c, s;
+    stream_pair(&c, &s);
+    close(s);
+
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        signal(SIGPIPE, SIG_DFL);
+        send(c, "x", 1, 0);
+        _exit(0);
+    }
+    int st = ktest_wait_timeout(pid, 5);
+    EXPECT_TRUE(WIFSIGNALED(st) && WTERMSIG(st) == SIGPIPE);
+    close(c);
+}
+
+/* writer blocked on a full ring must wake when the reader goes away */
+TEST_TIMEOUT(stream_close_wakes_writer, 10)
+{
+    int c, s;
+    stream_pair(&c, &s);
+
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        close(s);
+        signal(SIGPIPE, SIG_IGN);
+        static char big[BIG_LEN];
+        ssize_t r = send(c, big, sizeof(big), 0);
+        /* partial count for what fit, then EPIPE */
+        if (r <= 0 || r >= (ssize_t)sizeof(big))
+            _exit(1);
+        _exit(send(c, big, 1, 0) < 0 && errno == EPIPE ? 0 : 2);
+    }
+    close(c);
+    usleep(200000);
+    close(s);
+
+    int st = ktest_wait_timeout(pid, 5);
+    EXPECT_TRUE(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+}
