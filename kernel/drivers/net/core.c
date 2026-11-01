@@ -413,8 +413,8 @@ SYSCALL_DECL6(sendto, int, sockfd, const void *, buf, size_t, len, int, flags,
         kaddr = &ksockaddr;
     }
 
-    ret = sock->sock_ops->sendto(sock, buf, len,
-        sock_file_flags(file, flags & ~MSG_KERNEL), kaddr, addrlen);
+    flags = sock_file_flags(file, flags & ~MSG_KERNEL);
+    ret = sock->sock_ops->sendto(sock, buf, len, flags, kaddr, addrlen);
 out:
     fput(file);
     return ret;
@@ -438,8 +438,9 @@ SYSCALL_DECL6(recvfrom, int, sockfd, void *, buf, size_t, len, int, flags,
     if (!sock->sock_ops->recvfrom)
         goto out;
 
-    ret = sock->sock_ops->recvfrom(sock, buf, len,
-        sock_file_flags(file, flags & ~MSG_KERNEL), want_addr ? &kaddr : NULL, &klen);
+    flags = sock_file_flags(file, flags & ~MSG_KERNEL);
+    ret = sock->sock_ops->recvfrom(sock, buf, len, flags, want_addr ? &kaddr : NULL, &klen);
+
     if (ret >= 0 && want_addr) {
         int err = put_user_sockaddr(&kaddr, klen, src_addr, addrlen);
         if (err)
