@@ -491,8 +491,10 @@ static void unix_release_sock(struct unix_sock *u)
     WRITE_ONCE(si->cstate, C_CLOSE);
     release_lock(&si->lock);
 
-    if (u->si.type == SOCK_STREAM)
+    if (u->si.type == SOCK_STREAM) {
         wake_all(&u->peer_wq);  // blocked connectors see C_CLOSE and fail
+        wake_all(&u->accept_wq);
+    }
     wake_all(&si->write_wq);
     if (peer) {
         acquire_lock(&peer->si.lock);
@@ -548,6 +550,8 @@ static int unix_shutdown(struct socket *sock, int how)
 
     wake_all(&u->si.read_wq);
     wake_all(&u->si.write_wq);
+    if (u->si.type == SOCK_STREAM)
+        wake_all(&u->accept_wq);
 
     if (!peer)
         return 0;
@@ -637,11 +641,19 @@ static int unix_accept(struct socket *sock, struct socket *newsock, int flags)
 
     acquire_lock(&si->lock);
     while (list_empty(&u->backlog)) {
+        // pending connections stay acceptable after shutdown
+        err = -EINVAL;
+        if ((si->shutdown & RCV_SHUTDOWN) || si->cstate != C_LISTEN) {
+            release_lock(&si->lock);
+            goto out;
+        }
         release_lock(&si->lock);
         err = -EAGAIN;
         if (flags & MSG_DONTWAIT)
             goto out;
-        err = wait_event_interruptible(u->accept_wq, !list_empty(&u->backlog));
+        err = wait_event_interruptible(u->accept_wq, !list_empty(&u->backlog) ||
+            (si->shutdown & RCV_SHUTDOWN) ||
+            READ_ONCE(si->cstate) != C_LISTEN);
         if (err)
             goto out;
         acquire_lock(&si->lock);
