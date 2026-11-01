@@ -608,10 +608,11 @@ static int unix_listen(struct socket *sock, int backlog)
     err = -EINVAL;
     if (si->cstate != C_CLOSE && si->cstate != C_LISTEN)
         goto out_unlock;
-    if (backlog > u->max_backlog)
-        wake_all(&u->peer_wq);
-    u->max_backlog = backlog;
+    bool grew = backlog > u->max_backlog;
+    WRITE_ONCE(u->max_backlog, backlog);
     WRITE_ONCE(si->cstate, C_LISTEN);
+    if (grew)
+        wake_all(&u->peer_wq);
 
     err = 0;
 
