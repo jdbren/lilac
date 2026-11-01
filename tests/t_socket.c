@@ -1587,3 +1587,154 @@ TEST(select_socket)
     close(sv[0]);
     close(sv[1]);
 }
+
+/* ---- nonblocking, flags, limits ---- */
+
+static void set_nonblock(int fd)
+{
+    ASSERT_OK(fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK));
+}
+
+TEST(nonblock_stream_recv)
+{
+    int sv[2];
+    char c;
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_STREAM, 0, sv));
+    EXPECT_ERR(recv(sv[0], &c, 1, MSG_DONTWAIT), EAGAIN);
+    set_nonblock(sv[0]);
+    EXPECT_ERR(read(sv[0], &c, 1), EAGAIN);
+    write(sv[1], "x", 1);
+    EXPECT_EQ(read(sv[0], &c, 1), 1);
+    close(sv[0]);
+    close(sv[1]);
+}
+
+TEST(nonblock_stream_send_full)
+{
+    int sv[2];
+    static char big[BIG_LEN];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_STREAM, 0, sv));
+    set_nonblock(sv[0]);
+    ssize_t r = send(sv[0], big, sizeof(big), 0);
+    EXPECT_TRUE(r > 0 && r < (ssize_t)sizeof(big)); /* what fit */
+    EXPECT_ERR(send(sv[0], big, 1, 0), EAGAIN);
+    close(sv[0]);
+    close(sv[1]);
+}
+
+TEST(nonblock_dgram_recv)
+{
+    int sv[2];
+    char c;
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_DGRAM, 0, sv));
+    EXPECT_ERR(recv(sv[0], &c, 1, MSG_DONTWAIT), EAGAIN);
+    close(sv[0]);
+    close(sv[1]);
+}
+
+TEST(nonblock_accept)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 1);
+    set_nonblock(l);
+    EXPECT_ERR(accept(l, NULL, NULL), EAGAIN);
+    int c = connected(SOCK_STREAM, &a);
+    int s = ASSERT_OK(accept(l, NULL, NULL));
+    close(s);
+    close(c);
+    close(l);
+}
+
+TEST(nonblock_connect_backlog_full)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 0);
+    int c1 = connected(SOCK_STREAM, &a);
+    int c2 = ASSERT_OK(socket(AF_UNIX, SOCK_STREAM, 0));
+    set_nonblock(c2);
+    EXPECT_ERR(connect(c2, SA(&a), sizeof(a)), EAGAIN);
+    close(c2);
+    close(c1);
+    close(l);
+}
+
+TEST(stream_msg_nosignal)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_STREAM, 0, sv));
+    close(sv[1]);
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0) {
+        signal(SIGPIPE, SIG_DFL);
+        _exit(send(sv[0], "x", 1, MSG_NOSIGNAL) < 0 && errno == EPIPE ? 0 : 1);
+    }
+    int st = ktest_wait_timeout(pid, 5);
+    EXPECT_TRUE(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    close(sv[0]);
+}
+
+TEST(listen_negative_backlog)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, -1);
+    int c = connected(SOCK_STREAM, &a);
+    int s = ASSERT_OK(accept(l, NULL, NULL));
+    close(s);
+    close(c);
+    close(l);
+}
+
+TEST(sockaddr_storage_len)
+{
+    struct sockaddr_un a;
+    struct sockaddr_storage ss = {0};
+    tmp_addr(&a);
+    memcpy(&ss, &a, sizeof(a));
+    int fd = ASSERT_OK(socket(AF_UNIX, SOCK_DGRAM, 0));
+    EXPECT_OK(bind(fd, SA(&ss), sizeof(ss)));
+    int c = ASSERT_OK(socket(AF_UNIX, SOCK_DGRAM, 0));
+    EXPECT_EQ(sendto(c, "x", 1, 0, SA(&ss), sizeof(ss)), 1);
+    close(c);
+    close(fd);
+}
+
+TEST(dgram_shut_wr_send)
+{
+    int sv[2];
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_DGRAM, 0, sv));
+    ASSERT_OK(shutdown(sv[0], SHUT_WR));
+    EXPECT_ERR(send(sv[0], "x", 1, 0), EPIPE);
+    close(sv[0]);
+    close(sv[1]);
+}
+
+/* a full receive queue blocks a sender and clears POLLOUT until drained */
+TEST_TIMEOUT(dgram_full_blocks_send, 15)
+{
+    int sv[2];
+    char buf[1] = { 0 };
+    ASSERT_OK(socketpair(AF_UNIX, SOCK_DGRAM, 0, sv));
+    int n = 0;
+    while (send(sv[0], buf, sizeof(buf), MSG_DONTWAIT) == sizeof(buf))
+        n++;
+    EXPECT_EQ(errno, EAGAIN);
+    EXPECT_GT(n, 0);
+    EXPECT_EQ(poll1(sv[0], POLLOUT, 0), 0);
+
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0)
+        _exit(send(sv[0], buf, sizeof(buf), 0) == sizeof(buf) ? 0 : 1);
+
+    usleep(200000);
+    EXPECT_EQ(waitpid(pid, NULL, WNOHANG), 0); /* still blocked */
+    EXPECT_EQ(recv(sv[1], buf, sizeof(buf), 0), (ssize_t)sizeof(buf));
+    int st = ktest_wait_timeout(pid, 5);
+    EXPECT_TRUE(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    close(sv[0]);
+    close(sv[1]);
+}

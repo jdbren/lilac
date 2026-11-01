@@ -44,6 +44,7 @@ enum {
 typedef unsigned short sa_family_t;
 typedef unsigned socklen_t;
 #define __MAX_SOCKADDR_LEN 127
+#define SOCKADDR_STORAGE_LEN 128  // largest addrlen userspace may pass
 #define MAX_SOCKADDR_DATA_LEN (__MAX_SOCKADDR_LEN - sizeof(sa_family_t))
 
 struct sockaddr {
@@ -57,7 +58,11 @@ typedef struct {
     char __null_pad;
 } ksockaddr_t;
 
-#define MSG_KERNEL  (1u << 31) // kernel ptr
+#define MSG_DONTWAIT    0x0040
+#define MSG_NOSIGNAL    0x4000
+#define MSG_KERNEL      (1u << 31) // kernel ptr
+
+#define SOMAXCONN   4096
 
 static inline int sock_copy_from(void *dst, const void __user *src, size_t n, int flags)
 {
@@ -82,9 +87,9 @@ struct sock_internal;
 
 struct socket_ops {
     int (*bind)(struct socket *sock, ksockaddr_t *addr, socklen_t addrlen);
-    int (*connect)(struct socket *sock, ksockaddr_t *addr, socklen_t addrlen);
+    int (*connect)(struct socket *sock, ksockaddr_t *addr, socklen_t addrlen, int flags);
     int (*listen)(struct socket *sock, int backlog);
-    int (*accept)(struct socket *sock, struct socket *newsock);
+    int (*accept)(struct socket *sock, struct socket *newsock, int flags);
     int (*socketpair)(struct socket *sock1, struct socket *sock2);
     ssize_t (*sendto)(struct socket *sock, const void __user *buf, size_t len,
         int flags, ksockaddr_t *addr, socklen_t addrlen);
@@ -142,7 +147,7 @@ static inline int sock_no_listen(struct socket *sock, int backlog)
     return -EOPNOTSUPP;
 }
 
-static inline int sock_no_accept(struct socket *sock, struct socket *newsock)
+static inline int sock_no_accept(struct socket *sock, struct socket *newsock, int flags)
 {
     return -EOPNOTSUPP;
 }
