@@ -768,6 +768,40 @@ TEST_TIMEOUT(connect_close_stress, 30)
 /* ---- stream: data transfer ---- */
 
 /* Connected pair: *c is the client, *s the accepted end. */
+TEST_TIMEOUT(accept_woken_by_shutdown, 15)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 1);
+
+    pid_t pid = fork();
+    ASSERT_GE(pid, 0);
+    if (pid == 0)
+        _exit(accept(l, NULL, NULL) < 0 && errno == EINVAL ? 0 : 1);
+
+    usleep(200000);
+    EXPECT_EQ(waitpid(pid, NULL, WNOHANG), 0); /* still blocked */
+    ASSERT_OK(shutdown(l, SHUT_RDWR));
+    int st = ktest_wait_timeout(pid, 5);
+    EXPECT_TRUE(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    close(l);
+}
+
+TEST(accept_pending_after_shutdown)
+{
+    struct sockaddr_un a;
+    tmp_addr(&a);
+    int l = listener(&a, 1);
+    int c = connected(SOCK_STREAM, &a);
+
+    ASSERT_OK(shutdown(l, SHUT_RDWR));
+    int s = ASSERT_OK(accept(l, NULL, NULL));
+    EXPECT_ERR(accept(l, NULL, NULL), EINVAL);
+    close(s);
+    close(c);
+    close(l);
+}
+
 static void stream_pair(int *c, int *s)
 {
     struct sockaddr_un a;
