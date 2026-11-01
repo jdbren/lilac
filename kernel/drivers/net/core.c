@@ -1,4 +1,5 @@
 #include <lilac/socket.h>
+#include <lilac/fcntl.h>
 #include <lilac/fdtable.h>
 #include <lilac/fs.h>
 #include <lilac/syscall.h>
@@ -58,6 +59,11 @@ void init_sock_internal(struct socket *sock, struct sock_internal *si, int type)
     waitqueue_init(&si->write_wq);
 }
 
+static inline int sock_file_flags(struct file *file, int flags)
+{
+    return (file->f_mode & O_NONBLOCK) ? flags | MSG_DONTWAIT : flags;
+}
+
 static int socket_release(struct inode *inode, struct file *file)
 {
     struct socket *sock = file->f_data;
@@ -73,7 +79,8 @@ static ssize_t socket_read(struct file *file, void *buf, size_t count)
     struct socket *sock = file->f_data;
     if (!sock->sock_ops->recvfrom)
         return -EOPNOTSUPP;
-    return sock->sock_ops->recvfrom(sock, buf, count, MSG_KERNEL, NULL, NULL);
+    return sock->sock_ops->recvfrom(sock, buf, count,
+        sock_file_flags(file, MSG_KERNEL), NULL, NULL);
 }
 
 static ssize_t socket_write(struct file *file, const void *buf, size_t count)
@@ -81,7 +88,8 @@ static ssize_t socket_write(struct file *file, const void *buf, size_t count)
     struct socket *sock = file->f_data;
     if (!sock->sock_ops->sendto)
         return -EOPNOTSUPP;
-    return sock->sock_ops->sendto(sock, buf, count, MSG_KERNEL, NULL, 0);
+    return sock->sock_ops->sendto(sock, buf, count,
+        sock_file_flags(file, MSG_KERNEL), NULL, 0);
 }
 
 static poll_mask_t socket_poll(struct file *file, struct poll_request *pr)
@@ -227,13 +235,14 @@ put_f0:
 static int get_user_sockaddr(ksockaddr_t *ksockaddr, const struct sockaddr *addr,
                              socklen_t addrlen)
 {
-    if (addrlen < sizeof(struct sockaddr) + 1 || addrlen > __MAX_SOCKADDR_LEN)
+    if (addrlen < sizeof(struct sockaddr) + 1 || addrlen > SOCKADDR_STORAGE_LEN)
         return -EINVAL;
 
+    addrlen = MIN(addrlen, __MAX_SOCKADDR_LEN);
     if (copy_from_user(ksockaddr, addr, addrlen))
         return -EFAULT;
 
-    ksockaddr->sa_data[addrlen - sizeof(sa_family_t)] = '\0';
+    ((char *)ksockaddr)[addrlen] = '\0';
     return 0;
 }
 
@@ -273,7 +282,7 @@ SYSCALL_DECL3(connect, int, sockfd, const struct sockaddr *, addr, socklen_t, ad
     if ((err = get_user_sockaddr(&ksockaddr, addr, addrlen)) < 0)
         goto out;
 
-    err = sock->sock_ops->connect(sock, &ksockaddr, addrlen);
+    err = sock->sock_ops->connect(sock, &ksockaddr, addrlen, sock_file_flags(file, 0));
 out:
     fput(file);
     return err;
@@ -356,7 +365,7 @@ SYSCALL_DECL3(accept, int, sockfd, struct sockaddr *, addr, socklen_t *, addrlen
         goto put_file;
     }
 
-    err = ops->accept(sock, new_sock);
+    err = ops->accept(sock, new_sock, sock_file_flags(file, 0));
     if (err < 0)
         goto put_newfile;
 
@@ -404,7 +413,8 @@ SYSCALL_DECL6(sendto, int, sockfd, const void *, buf, size_t, len, int, flags,
         kaddr = &ksockaddr;
     }
 
-    ret = sock->sock_ops->sendto(sock, buf, len, flags & ~MSG_KERNEL, kaddr, addrlen);
+    ret = sock->sock_ops->sendto(sock, buf, len,
+        sock_file_flags(file, flags & ~MSG_KERNEL), kaddr, addrlen);
 out:
     fput(file);
     return ret;
@@ -428,8 +438,8 @@ SYSCALL_DECL6(recvfrom, int, sockfd, void *, buf, size_t, len, int, flags,
     if (!sock->sock_ops->recvfrom)
         goto out;
 
-    ret = sock->sock_ops->recvfrom(sock, buf, len, flags & ~MSG_KERNEL,
-        want_addr ? &kaddr : NULL, &klen);
+    ret = sock->sock_ops->recvfrom(sock, buf, len,
+        sock_file_flags(file, flags & ~MSG_KERNEL), want_addr ? &kaddr : NULL, &klen);
     if (ret >= 0 && want_addr) {
         int err = put_user_sockaddr(&kaddr, klen, src_addr, addrlen);
         if (err)

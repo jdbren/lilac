@@ -91,6 +91,11 @@ static struct unix_sock * __unix_create_sock(struct socket *sock, int type)
     if (!usock)
         return ERR_PTR(-ENOMEM);
 
+    if (type == SOCK_STREAM && pipe_buf_init(&usock->ring, PAGE_SIZE << 2)) {
+        kfree(usock);
+        return ERR_PTR(-ENOMEM);
+    }
+
     init_sock_internal(sock, &usock->si, type);
     usock->si.destruct = unix_sock_free;
 
@@ -105,10 +110,6 @@ static struct unix_sock * __unix_create_sock(struct socket *sock, int type)
         INIT_LIST_HEAD(&usock->backlog);
         waitqueue_init(&usock->accept_wq);
         waitqueue_init(&usock->peer_wq);
-        if (pipe_buf_init(&usock->ring, PAGE_SIZE << 2)) {
-            kfree(usock);
-            return ERR_PTR(-ENOMEM);
-        }
     }
 
     if (sock) {
@@ -280,7 +281,7 @@ out:
 // DATAGRAM
 //
 
-int unix_connect_dgram(struct socket *sock, ksockaddr_t *addr, unsigned int addrlen)
+int unix_connect_dgram(struct socket *sock, ksockaddr_t *addr, unsigned int addrlen, int flags)
 {
     struct unix_sock *usock = sock_unix(sock), *target_un, *old;
 
@@ -316,17 +317,35 @@ static struct unix_sock * get_sendto_peer(struct unix_sock *usock, ksockaddr_t *
     if (IS_ERR(peer))
         return peer;
 
-    if (peer->si.type != SOCK_DGRAM)
+    if (peer->si.type != SOCK_DGRAM) {
+        unix_sock_put(peer);
         return ERR_PTR(-EPROTOTYPE);
+    }
 
     // a connected socket only accepts datagrams from its peer
     acquire_lock(&peer->si.lock);
     peer_peer = peer->peer;
     release_lock(&peer->si.lock);
-    if (peer_peer && peer_peer != usock)
+    if (peer_peer && peer_peer != usock) {
+        unix_sock_put(peer);
         return ERR_PTR(-EPERM);
+    }
 
     return peer;
+}
+
+static inline int unix_dgram_peer_closed(struct unix_sock *peer)
+{
+    if (peer->si.dead)
+        return -ECONNREFUSED;
+    if (peer->si.shutdown & RCV_SHUTDOWN)
+        return -EPIPE;
+    return 0;
+}
+
+static inline bool unix_dgram_has_room(struct unix_sock *u, size_t size)
+{
+    return READ_ONCE(u->rx_bytes) + size <= UNIX_RCVBUF;
 }
 
 ssize_t unix_sendto_dgram(struct socket *sock, const void __user *buf, size_t len,
@@ -355,12 +374,11 @@ ssize_t unix_sendto_dgram(struct socket *sock, const void __user *buf, size_t le
             return -ENOTCONN;
     }
 
-    // A message that races with the peer closing is freed with it
-    ret = -ECONNREFUSED;
-    if (peer->si.dead)
+    ret = unix_dgram_peer_closed(peer);
+    if (ret)
         goto out_put;
     ret = -EPIPE;
-    if (peer->si.shutdown & RCV_SHUTDOWN)
+    if (usock->si.shutdown & SEND_SHUTDOWN)
         goto out_put;
 
     ret = -ENOMEM;
@@ -379,13 +397,24 @@ ssize_t unix_sendto_dgram(struct socket *sock, const void __user *buf, size_t le
     INIT_LIST_HEAD(&msg->list);
 
     acquire_lock(&peer->rx_lock);
-    if (peer->rx_bytes + sizeof(*msg) + len > UNIX_RCVBUF) {
+    while (peer->rx_bytes + sizeof(*msg) + len > UNIX_RCVBUF) {
         release_lock(&peer->rx_lock);
-        unix_addr_put(msg->from);
-        kfree(msg);
         ret = -EAGAIN;
-        goto out_put;
+        if (!(flags & MSG_DONTWAIT)) {
+            ret = wait_event_interruptible(peer->si.write_wq,
+                unix_dgram_has_room(peer, sizeof(*msg) + len) ||
+                unix_dgram_peer_closed(peer));
+        }
+        if (!ret)
+            ret = unix_dgram_peer_closed(peer);
+        if (ret) {
+            unix_addr_put(msg->from);
+            kfree(msg);
+            goto out_put;
+        }
+        acquire_lock(&peer->rx_lock);
     }
+
     list_add_tail(&msg->list, &peer->rx_queue);
     peer->rx_bytes += sizeof(*msg) + len;
     release_lock(&peer->rx_lock);
@@ -409,6 +438,8 @@ ssize_t unix_recvfrom_dgram(struct socket *sock, void __user *buf, size_t len,
         release_lock(&usock->rx_lock);
         if (usock->si.shutdown & RCV_SHUTDOWN)
             return 0;
+        if (flags & MSG_DONTWAIT)
+            return -EAGAIN;
         int err = wait_event_interruptible(usock->si.read_wq,
             !list_empty(&usock->rx_queue) || (usock->si.shutdown & RCV_SHUTDOWN));
         if (err)
@@ -420,6 +451,7 @@ ssize_t unix_recvfrom_dgram(struct socket *sock, void __user *buf, size_t len,
     list_del(&msg->list);
     usock->rx_bytes -= sizeof(*msg) + msg->len;
     release_lock(&usock->rx_lock);
+    wake_all(&usock->si.write_wq);
 
     size_t n = len < msg->len ? len : msg->len;
     if (sock_copy_to(buf, msg->data, n, flags)) {
@@ -459,10 +491,9 @@ static void unix_release_sock(struct unix_sock *u)
     WRITE_ONCE(si->cstate, C_CLOSE);
     release_lock(&si->lock);
 
-    if (u->si.type == SOCK_STREAM) {
+    if (u->si.type == SOCK_STREAM)
         wake_all(&u->peer_wq);  // blocked connectors see C_CLOSE and fail
-        wake_all(&si->write_wq);
-    }
+    wake_all(&si->write_wq);
     if (peer) {
         acquire_lock(&peer->si.lock);
         if (u->si.type == SOCK_STREAM || peer->peer == u)
@@ -565,10 +596,13 @@ static int unix_listen(struct socket *sock, int backlog)
 
     err = -EOPNOTSUPP;
     if (sock->type != SOCK_STREAM && sock->type != SOCK_SEQPACKET)
-        goto out;	/* Only stream/seqpacket sockets accept */
+        goto out;   /* Only stream/seqpacket sockets accept */
     err = -EINVAL;
     if (!READ_ONCE(u->addr))
-        goto out;	/* No listens on an unbound socket */
+        goto out;   /* No listens on an unbound socket */
+
+    if ((unsigned)backlog > SOMAXCONN)
+        backlog = SOMAXCONN;
 
     acquire_lock(&si->lock);
     err = -EINVAL;
@@ -587,7 +621,7 @@ out:
     return err;
 }
 
-static int unix_accept(struct socket *sock, struct socket *newsock)
+static int unix_accept(struct socket *sock, struct socket *newsock, int flags)
 {
     struct unix_sock *u = sock_unix(sock), *peer = NULL;
     struct sock_internal *si = &u->si;
@@ -603,6 +637,9 @@ static int unix_accept(struct socket *sock, struct socket *newsock)
     acquire_lock(&si->lock);
     while (list_empty(&u->backlog)) {
         release_lock(&si->lock);
+        err = -EAGAIN;
+        if (flags & MSG_DONTWAIT)
+            goto out;
         err = wait_event_interruptible(u->accept_wq, !list_empty(&u->backlog));
         if (err)
             goto out;
@@ -624,7 +661,26 @@ out:
     return err;
 }
 
-static int unix_connect_stream(struct socket *sock, ksockaddr_t *addr, socklen_t addrlen)
+// Lock two sockets in address order, so connects that cross can't deadlock
+static void unix_lock_pair(struct sock_internal *a, struct sock_internal *b)
+{
+    if (a > b) {
+        struct sock_internal *t = a;
+        a = b;
+        b = t;
+    }
+    acquire_lock(&a->lock);
+    acquire_lock(&b->lock);
+}
+
+static void unix_unlock_pair(struct sock_internal *a, struct sock_internal *b)
+{
+    release_lock(&a->lock);
+    release_lock(&b->lock);
+}
+
+static int unix_connect_stream(struct socket *sock, ksockaddr_t *addr, socklen_t addrlen,
+    int flags)
 {
     struct sock_internal *si = sock->si, *newsi = NULL, *other = NULL;
     struct unix_sock *u = sock_unix(sock), *newu, *otheru;
@@ -650,22 +706,27 @@ restart:
     }
 
     other = &otheru->si;
-    acquire_lock(&other->lock);
+    if (other == si) {
+        err = -EINVAL;
+        goto out_put;
+    }
+
+    unix_lock_pair(si, other);
 
     // closed after the lookup found it
     if (other->dead) {
-        release_lock(&other->lock);
+        unix_unlock_pair(si, other);
         unix_sock_put(otheru);
         goto restart;
     }
 
-    if (other == si) {
-        err = -EINVAL;
+    if (otheru->si.type != sock->type) {
+        err = -EPROTOTYPE;
         goto out_unlock;
     }
 
-    if (otheru->si.type != sock->type) {
-        err = -EPROTOTYPE;
+    if (unlikely(si->cstate != C_CLOSE)) {
+        err = si->cstate == C_ESTABLISHED ? -EISCONN : -EINVAL;
         goto out_unlock;
     }
 
@@ -674,23 +735,18 @@ restart:
         goto out_unlock;
     }
 
-    if (READ_ONCE(otheru->backlog_count) > otheru->max_backlog) {
-        release_lock(&other->lock);
-        err = wait_event_interruptible(otheru->peer_wq,
-            READ_ONCE(otheru->backlog_count) <= READ_ONCE(otheru->max_backlog) ||
-            READ_ONCE(other->cstate) != C_LISTEN);
+    if (otheru->backlog_count > otheru->max_backlog) {
+        unix_unlock_pair(si, other);
+        err = -EAGAIN;
+        if (!(flags & MSG_DONTWAIT)) {
+            err = wait_event_interruptible(otheru->peer_wq,
+                READ_ONCE(otheru->backlog_count) <= READ_ONCE(otheru->max_backlog) ||
+                READ_ONCE(other->cstate) != C_LISTEN);
+        }
         unix_sock_put(otheru);
         if (err)
             goto out_free;
         goto restart;
-    }
-
-    acquire_lock(&si->lock);
-
-    if (unlikely(si->cstate != C_CLOSE)) {
-        err = si->cstate == C_ESTABLISHED ? -EISCONN : -EINVAL;
-        release_lock(&si->lock);
-        goto out_unlock;
     }
 
     unix_sock_hold(u);
@@ -710,11 +766,9 @@ restart:
     u->peer = newu;
     sock->state = SS_CONNECTED;
 
-    release_lock(&si->lock);
-
     list_add_tail(&newu->backlog, &otheru->backlog);
     otheru->backlog_count++;
-    release_lock(&other->lock);
+    unix_unlock_pair(si, other);
 
     wake_all(&otheru->accept_wq);
 
@@ -722,7 +776,8 @@ restart:
     return 0;
 
 out_unlock:
-    release_lock(&other->lock);
+    unix_unlock_pair(si, other);
+out_put:
     unix_sock_put(otheru);
 out_free:
     unix_sock_put(newu);
@@ -772,13 +827,18 @@ ssize_t unix_stream_send(struct socket *sock, const void __user *buf, size_t len
 
         if (unix_stream_send_closed(usock, peer)) {
             err = -EPIPE;
-            do_raise(current, SIGPIPE);
+            if (!sent && !(flags & MSG_NOSIGNAL))
+                do_raise(current, SIGPIPE);
             break;
         }
 
         acquire_lock(&peer->ring.data_lock);
         if (pipe_buf_full(&peer->ring)) {
             release_lock(&peer->ring.data_lock);
+            if (flags & MSG_DONTWAIT) {
+                err = -EAGAIN;
+                break;
+            }
             if ((err = wait_event_interruptible(peer->si.write_wq,
                     !pipe_buf_full(&peer->ring) || unix_stream_send_closed(usock, peer))))
                 break;
@@ -821,6 +881,10 @@ ssize_t unix_stream_recv(struct socket *sock, void __user *buf, size_t len, int 
                 break;
             }
             release_lock(&usock->ring.data_lock);
+            if (flags & MSG_DONTWAIT) {
+                err = -EAGAIN;
+                break;
+            }
             err = wait_event_interruptible(usock->si.read_wq,
                 !pipe_buf_empty(&usock->ring) || (usock->si.shutdown & RCV_SHUTDOWN));
             if (err) break;
@@ -882,8 +946,20 @@ static poll_mask_t unix_poll(struct socket *sock, struct file *file, struct poll
     if (si->type == SOCK_DGRAM) {
         if (!list_empty(&u->rx_queue)) // recv
             mask |= POLLIN | POLLRDNORM;
-        // send doesn't block
-        return mask | POLLOUT | POLLWRNORM;
+        acquire_lock(&si->lock);
+        peer = u->peer;
+        if (peer)
+            unix_sock_hold(peer);
+        release_lock(&si->lock);
+        if (!peer)
+            return mask | POLLOUT | POLLWRNORM;
+        poll_wait(file, &peer->si.write_wq, pr);
+        bool can_write = unix_dgram_has_room(peer, sizeof(struct unix_msg) + 1) ||
+            unix_dgram_peer_closed(peer);
+        if (can_write)
+            mask |= POLLOUT | POLLWRNORM;
+        unix_sock_put(peer);
+        return mask;
     }
 
     // SOCK_STREAM
